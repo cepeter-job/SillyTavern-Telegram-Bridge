@@ -48,6 +48,7 @@ def enforce_runtime_permissions(*, app_settings: AppSettings) -> None:
         app_settings.log_file.parent,
         app_settings.bridge_home / "backups",
         app_settings.character_backup_dir,
+        app_settings.codex_oauth_file.parent,
     }
     enforce_prompt_permissions = app_settings.enforce_prompt_permissions
     if app_settings.system_prompts_dir.exists() and (
@@ -66,6 +67,8 @@ def enforce_runtime_permissions(*, app_settings: AppSettings) -> None:
         app_settings.log_file,
         app_settings.provider_config_file,
         app_settings.model_cache_file,
+        app_settings.codex_oauth_file,
+        app_settings.codex_oauth_file.with_name(app_settings.codex_oauth_file.name + ".lock"),
     }
     if app_settings.system_prompts_dir.exists() and (
         enforce_prompt_permissions or app_settings.system_prompts_dir.is_relative_to(app_settings.bridge_home.parent)

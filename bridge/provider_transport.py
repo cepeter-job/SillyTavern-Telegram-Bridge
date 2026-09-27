@@ -9,6 +9,7 @@ import time
 import urllib.parse
 import urllib.request
 
+from bridge.codex_transport import generate_codex_response
 from bridge.config import GENERATION_DEFAULTS
 from bridge.limits import DEFAULT_MAX_TOKENS
 from bridge.model_router import ModelRouter
@@ -403,6 +404,18 @@ def generate_provider_text(
     transport = str(spec.get("transport") or "chat_completions")
     generation = dict(GENERATION_DEFAULTS)
     generation.update(settings or {})
+    if transport == "openai_codex":
+        return generate_codex_response(
+            actual_model,
+            messages,
+            generation,
+            spec,
+            session_id,
+            request_timeout=request_timeout,
+            stream_callback=stream_callback,
+            cancel_event=cancel_event,
+            app_settings=app_settings,
+        )
     if transport == "opencode_muse":
         return opencode_muse_generate(
             actual_model,

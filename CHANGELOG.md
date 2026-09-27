@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Add a native OpenAI Codex OAuth provider transport with device login, privately stored rotating credentials, required account/residency headers, Responses SSE handling, static model routing, and CLI status/logout controls.
+
 ### Fixed
 
 - Make separate Light Novel choice generation more resilient with a 60-second provider timeout, one bounded retry for transient provider/empty-content failures, and sanitized stage/model/status/parser diagnostics while preserving strict choice validation and the committed story.

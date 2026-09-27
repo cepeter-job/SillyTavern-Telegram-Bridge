@@ -42,9 +42,9 @@ success. **No silent overwrites. Ever.**
 ### 🔌 Providers and generation
 
 A private provider catalog drives model selection. You can use
-OpenAI-compatible Chat Completions, Anthropic Messages, the keyless OpenCode
-Muse `/responses` transport, or an opt-in image provider — all from the same
-panel.
+OpenAI-compatible Chat Completions, native OpenAI Codex OAuth, Anthropic
+Messages, the keyless OpenCode Muse `/responses` transport, or an opt-in image
+provider — all from the same panel.
 
 Beyond basic generation, the bridge handles:
 

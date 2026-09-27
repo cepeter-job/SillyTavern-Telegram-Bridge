@@ -9,6 +9,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from bridge.codex_auth import auth_status
 from bridge.network_security import strict_urlopen, validate_provider_endpoint
 from bridge.provider_catalog import load_provider_catalog
 from bridge.provider_transport import opencode_muse_headers
@@ -41,6 +42,10 @@ def refresh_model_catalog(force: bool = False, *, app_settings: AppSettings) -> 
         if cached_models and not spec.get("models"):
             spec["models"] = cached_models
         if not spec.get("discover_models"):
+            continue
+        if str(spec.get("transport") or "") == "openai_codex":
+            if not spec.get("models"):
+                failed += 1
             continue
         if (
             not force
@@ -115,10 +120,17 @@ def provider_health_checks(provider_id: str | None = None, *, app_settings: AppS
             results.append((current_id, str(spec.get("name") or current_id), "not configured"))
             continue
         validate_provider_endpoint(endpoint, environ=app_settings.environ)
+        transport = str(spec.get("transport") or "")
+        if transport == "openai_codex":
+            state = auth_status(app_settings.codex_oauth_file)
+            status = "authenticated" if state["authenticated"] else "not logged in"
+            if state["authenticated"] and state["expiring"]:
+                status = "authenticated (refresh needed)"
+            results.append((current_id, str(spec.get("name") or current_id), status))
+            continue
         configured_key_env = spec.get("api_key_env")
         key_env = str(configured_key_env or "LLM_API_KEY")
         key = app_settings.environ.get(key_env, "")
-        transport = str(spec.get("transport") or "")
         if not key and (not configured_key_env or key_env == "LLM_API_KEY"):
             key = app_settings.environ.get("LLM_API_KEY", "")
         if configured_key_env and not key and transport != "opencode_muse":
@@ -168,7 +180,14 @@ def provider_health_checks(provider_id: str | None = None, *, app_settings: AppS
 def get_model_groups(*, app_settings: AppSettings) -> dict[str, tuple[str, list[tuple[str, str]], bool]]:
     """Read every bridge provider/model group; mark bridge-supported providers."""
     groups: dict[str, tuple[str, list[tuple[str, str]], bool]] = {}
-    supported_adapters = {"chat_completions", "openai", "openai_compatible", "anthropic_messages", "opencode_muse"}
+    supported_adapters = {
+        "chat_completions",
+        "openai",
+        "openai_compatible",
+        "anthropic_messages",
+        "opencode_muse",
+        "openai_codex",
+    }
     try:
         config, _, _ = refresh_model_catalog(app_settings=app_settings)
         providers = config.get("providers") or {}

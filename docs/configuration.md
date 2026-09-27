@@ -65,6 +65,8 @@ SillyTavern installation lives elsewhere.
 | `SILLYTAVERN_MODEL_CACHE` | `$SILLYTAVERN_BRIDGE_HOME/model_catalog_cache.json` | Cache for discovered provider model IDs. |
 | `SILLYTAVERN_MODEL_REFRESH_SECONDS` | `3600` | Model discovery cache lifetime; range `1..86400`. |
 | `OPENCODE_CLIENT_VERSION` | `1.18.31` | Client-version header used by the OpenCode Muse transport. |
+| `SILLYTAVERN_CODEX_AUTH_FILE` | `$SILLYTAVERN_BRIDGE_HOME/codex_oauth.json` | Private rotating OAuth state for the native OpenAI Codex transport. |
+| `SILLYTAVERN_CODEX_CLIENT_VERSION` | `1.0` | Version segment used in the Codex request `User-Agent`. |
 
 Provider-specific credential names are intentionally dynamic: whatever string you
 put in a catalog entry's `api_key_env` must exist in the private environment, for
@@ -248,6 +250,38 @@ PROVIDER_ONE_API_KEY=replace-me
 SILLYTAVERN_PROVIDER_ALLOWED_HOSTS=provider.example
 ```
 
+For native OpenAI Codex OAuth, use an explicit static model list and the Codex
+Responses endpoint:
+
+```yaml
+providers:
+  openai-codex:
+    name: OpenAI Codex OAuth
+    api_endpoint: https://chatgpt.com/backend-api/codex
+    transport: openai_codex
+    adapter: openai_codex
+    discover_models: false
+    models:
+      - gpt-5.4
+```
+
+Allow both OAuth and inference hosts, then complete a separate bridge login:
+
+```dotenv
+SILLYTAVERN_PROVIDER_ALLOWED_HOSTS=chatgpt.com,auth.openai.com
+```
+
+```bash
+python sillytavern_telegram_bridge.py --codex-login
+python sillytavern_telegram_bridge.py --codex-status
+```
+
+The bridge stores its own rotating token family in a private `0600` JSON file;
+it neither copies nor modifies Hermes or Codex CLI credentials. Use
+`--codex-logout` to remove it. Codex does not expose the normal provider
+`GET /models` contract, so keep `discover_models: false` and update the explicit
+model list when your account's available models change.
+
 If the catalog contains no available model IDs, the panel shows setup guidance
 rather than inventing fallback providers or models. The Health and Refresh
 buttons remain available. For a Chat Completions provider, set `api_endpoint`
@@ -261,7 +295,7 @@ configuration error before any network request or credential attachment.
 | `name` | provider ID | Human-readable label shown in Telegram panels. |
 | `api_endpoint` | none | Provider base URL. `api` is accepted as an alias. Remote providers must use HTTPS. |
 | `api_key_env` | `LLM_API_KEY` | Environment-variable name that contains this provider's credential. |
-| `transport` | `chat_completions` | `chat_completions`/`openai`/`openai_compatible`, `anthropic_messages`, or `opencode_muse`. |
+| `transport` | `chat_completions` | `chat_completions`/`openai`/`openai_compatible`, `anthropic_messages`, `opencode_muse`, or `openai_codex`. |
 | `adapter` | `transport` | Model-menu capability label; normally match the transport. |
 | `models` | empty | Explicit model IDs for this provider. Required when discovery is disabled/unavailable. |
 | `discover_models` | false | When true, refresh model IDs from `GET /models` and cache them. |
@@ -274,8 +308,8 @@ configuration error before any network request or credential attachment.
 | `image_models` | empty | Image model IDs; first item is the provider default for image selection. |
 
 `config/providers.example.yaml` contains normal Chat Completions, Anthropic,
-OpenCode Muse and image-provider examples. Only fields consumed by the current
-runtime are shown there.
+native OpenAI Codex OAuth, OpenCode Muse, and image-provider examples. Only
+fields consumed by the current runtime are shown there.
 
 ### Model discovery and health checks
 

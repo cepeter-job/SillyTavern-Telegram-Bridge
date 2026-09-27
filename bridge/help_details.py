@@ -60,8 +60,8 @@ HELP_CATEGORIES = {
             "/providers",
             (
                 "Choose Story or Utility provider/model. Supported OpenAI-compatible, "
-                "Anthropic, and OpenCode transports can generate; catalog-only entries "
-                "stay view-only. Open the provider list to use Provider health or Refresh models."
+                "OpenAI Codex OAuth, Anthropic, and OpenCode transports can generate; "
+                "catalog-only entries stay view-only. Open the provider list to use Provider health or Refresh models."
             ),
         ),
         (

@@ -44,6 +44,18 @@ providers:
 #    models:
 #      - claude-sonnet
 
+# Optional native OpenAI Codex OAuth provider.
+# Login once with: python sillytavern_telegram_bridge.py --codex-login
+# The bridge keeps an independent rotating token family; no API key is stored in YAML.
+#  openai-codex:
+#    name: OpenAI Codex OAuth
+#    api_endpoint: https://chatgpt.com/backend-api/codex
+#    transport: openai_codex
+#    adapter: openai_codex
+#    discover_models: false
+#    models:
+#      - gpt-5.4
+#
 # Optional OpenCode Zen Muse Free provider.
 # This transport is keyless and uses the OpenCode /responses contract.
 #  opencode-free:

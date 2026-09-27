@@ -13,6 +13,7 @@ from bridge.application_composition import initialize_extensions as _initialize_
 from bridge.background import begin_background_shutdown, register_durable_backlog_dispatcher, submit_chat_background
 from bridge.bot_commands import set_bot_commands
 from bridge.card_content import card_fields, card_fields_from_file, read_png_chara, safe_character_path
+from bridge.codex_auth import CodexAuthError, auth_status, device_login, logout
 from bridge.command_routes import handle_command_route
 from bridge.composition import BackgroundRuntime as _BackgroundRuntime
 from bridge.composition import BridgeServices as _BridgeServices
@@ -107,15 +108,28 @@ def validate_startup_credential(model: str, model_router: _ModelRouter, *, app_s
     route = model_router.route(model)
     spec = dict(route.spec)
     transport = str(spec.get("transport") or "chat_completions")
-    if transport not in {"chat_completions", "openai", "openai_compatible", "anthropic_messages", "opencode_muse"}:
+    if transport not in {
+        "chat_completions",
+        "openai",
+        "openai_compatible",
+        "anthropic_messages",
+        "opencode_muse",
+        "openai_codex",
+    }:
         raise RuntimeError("provider transport is not supported")
     endpoint = str(spec.get("api_endpoint") or spec.get("api") or "").strip().rstrip("/")
     if not endpoint and transport == "opencode_muse":
         endpoint = "https://opencode.ai/zen/v1"
+    if not endpoint and transport == "openai_codex":
+        endpoint = "https://chatgpt.com/backend-api/codex"
     if not endpoint:
         raise RuntimeError("provider api_endpoint is missing from the private provider catalog")
     validate_provider_endpoint(endpoint, environ=app_settings.environ)
     if transport == "opencode_muse":
+        return
+    if transport == "openai_codex":
+        if not auth_status(app_settings.codex_oauth_file)["authenticated"]:
+            raise RuntimeError("OpenAI Codex OAuth login is missing; run --codex-login")
         return
     configured_key_env = spec.get("api_key_env")
     if configured_key_env:
@@ -353,13 +367,61 @@ def run_check(services: _BridgeServices) -> int:
     return 0
 
 
+def _run_codex_auth_action(action: str, config: AppSettings) -> int:
+    if action == "login":
+
+        def notify(url: str, code: str) -> None:
+            print(f"Open {url} and enter code: {code}")
+
+        try:
+            device_login(config.codex_oauth_file, environ=config.environ, notify=notify)
+        except CodexAuthError as exc:
+            raise SystemExit(str(exc)) from exc
+        print(f"OpenAI Codex OAuth login saved to {config.codex_oauth_file}")
+        return 0
+    if action == "logout":
+        logout(config.codex_oauth_file)
+        print("OpenAI Codex OAuth login removed")
+        return 0
+    status = auth_status(config.codex_oauth_file)
+    if not status["authenticated"]:
+        print("OpenAI Codex OAuth: not logged in")
+        return 1
+    state = "refresh needed" if status["expiring"] else "ready"
+    print(f"OpenAI Codex OAuth: {state}")
+    return 0
+
+
 def _main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
+    auth_group = parser.add_mutually_exclusive_group()
+    auth_group.add_argument("--codex-login", action="store_true")
+    auth_group.add_argument("--codex-status", action="store_true")
+    auth_group.add_argument("--codex-logout", action="store_true")
     args = parser.parse_args()
+    if getattr(args, "check", False) and any(
+        getattr(args, name, False) for name in ("codex_login", "codex_status", "codex_logout")
+    ):
+        parser.error("--check cannot be combined with a Codex OAuth action")
 
     environment = dict(os.environ)
     bootstrap_environment(environment)
+    auth_action = next(
+        (
+            action
+            for action, enabled in (
+                ("login", getattr(args, "codex_login", False)),
+                ("status", getattr(args, "codex_status", False)),
+                ("logout", getattr(args, "codex_logout", False)),
+            )
+            if enabled
+        ),
+        None,
+    )
+    if auth_action:
+        config = load_app_settings(environment, home=Path.home())
+        return _run_codex_auth_action(auth_action, config)
     config = _load_startup_config(environment)
     model_router = _ModelRouter(load_catalog=_partial(load_routing_catalog, app_settings=config))
     try:

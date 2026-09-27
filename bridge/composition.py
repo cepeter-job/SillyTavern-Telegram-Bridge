@@ -18,6 +18,7 @@ from bridge.persona_service import PersonaService
 from bridge.port_contracts import ChatSubmit, DownloadFile, SendText, TelegramRequest
 from bridge.provider_port import ProviderPort
 from bridge.rag_service import RagService
+from bridge.runtime_health import RuntimeHealth
 from bridge.session_service import SessionService
 from bridge.settings import AppSettings
 from bridge.sync_service import SyncService
@@ -56,3 +57,4 @@ class BridgeServices:
     memory: MemoryService
     persona: PersonaService
     sync: SyncService
+    health: RuntimeHealth | None = None

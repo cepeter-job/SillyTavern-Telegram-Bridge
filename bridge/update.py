@@ -137,7 +137,9 @@ def send_update_menu(token: str, chat_id: str, message_id: int | None = None, *,
     send_panel_request(token, method, payload, request_context=request_context)
 
 
-def _run_update(expected_version: str | None = None, *, app_settings: AppSettings) -> UpdateOutcome:
+def _run_update(
+    expected_version: str | None = None, *, app_settings: AppSettings, before_restart=None
+) -> UpdateOutcome:
     current = installed_bridge_version(app_settings=app_settings)
     try:
         latest, _notes = latest_bridge_release()
@@ -157,7 +159,8 @@ def _run_update(expected_version: str | None = None, *, app_settings: AppSetting
             trusted_signers=trust,
             release_version=latest,
             unit=app_settings.update_service,
-        )
+        ),
+        **({"before_restart": before_restart} if before_restart is not None else {}),
     )
 
 
@@ -218,7 +221,13 @@ def handle_update_callback(
         version = data.removeprefix("update:confirm:") if data.startswith("update:confirm:") else None
         remove_inline_keyboard(db, token, callback)
         try:
-            outcome = _run_update(expected_version=version, app_settings=app_settings)
+            outcome = _run_update(
+                expected_version=version,
+                app_settings=app_settings,
+                before_restart=lambda installed: arm_pending_update_ack(
+                    chat_id, installed.version, commit=installed.commit, app_settings=app_settings
+                ),
+            )
         except Exception:
             logging.error("Unexpected updater failure; deployment requires operator inspection")
             send_text(
@@ -227,15 +236,5 @@ def handle_update_callback(
                 "Update failed. Inspect the deployment before retrying; no error details were sent to Telegram.",
             )
             return True
-        ack_armed = True
-        if outcome.status is UpdateStatus.RESTART_SCHEDULED:
-            try:
-                arm_pending_update_ack(chat_id, outcome.version, app_settings=app_settings)
-            except (OSError, ValueError):
-                logging.warning("Could not arm post-restart update acknowledgement")
-                ack_armed = False
-        message = format_update_outcome(outcome)
-        if outcome.status is UpdateStatus.RESTART_SCHEDULED and not ack_armed:
-            message += " Post-restart confirmation could not be armed; verify the service manually."
-        send_text(token, chat_id, message)
+        send_text(token, chat_id, format_update_outcome(outcome))
     return True

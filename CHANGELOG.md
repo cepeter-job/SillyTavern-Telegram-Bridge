@@ -6,6 +6,14 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Added
 
+- Add the Mini App System dashboard with observed polling health, immutable boot identity, private operation history, and expiring actor-bound verified-update review.
+- Add a re-runnable user-scope `install.sh` for hash-locked Python setup, env-only provider configuration, starter resources, preserved private state, user systemd and optional Caddy HTTPS integration.
+
+### Fixed
+
+- Persist post-update acknowledgement before scheduling restart and send completion only after the replacement process successfully polls Telegram with the expected loaded commit/version. Ignore malformed/expired state and never equate installed files with running code.
+
+
 - Add Mini App continuity-summary and curated-memory editing, explicit Hindsight sync/search/purge, and private Data Bank upload, retrieval, version activation/removal and reindex operations.
 
 - Add private Mini App session lifecycle, native persona CRUD with revision checks, and a bounded World Info JSON editor with backups, selection and reference-protected deletion.

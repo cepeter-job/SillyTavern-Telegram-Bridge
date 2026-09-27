@@ -19,6 +19,70 @@ sync conversation state back through the SillyTavern Live API.
 
 ---
 
+## Install with the user-scope script
+
+For a fresh Linux installation, run as your normal user:
+
+```bash
+git clone https://github.com/cepeter/SillyTavern-Telegram-Bridge.git ~/sillytavern-telegram-bridge
+cd ~/sillytavern-telegram-bridge
+./install.sh --system-deps --no-start
+```
+
+Fill `~/.local/share/sillytavern-telegram/.env`, then run:
+
+```bash
+./install.sh --with-caddy --linger
+```
+
+The installer creates the virtual environment, installs hash-locked dependencies,
+prepares a starter character/avatar, generates a provider catalog from `.env`, and
+installs a user systemd service. `--system-deps` and `--with-caddy` request administrative
+package/proxy setup; the bridge itself does not run as root. Existing private `.env`,
+custom provider YAML, native data and custom service units are preserved. Use
+`--replace-service` only to explicitly replace a custom service with a backup.
+
+Required `.env` values for an env-only provider setup:
+
+```dotenv
+SILLYTAVERN_TELEGRAM_BOT_TOKEN=your-bot-token
+SILLYTAVERN_TELEGRAM_ALLOWED_USERS=your-numeric-user-id
+SILLYTAVERN_MODEL=default::your-model-id
+SILLYTAVERN_PROVIDER_ENDPOINT=https://your-provider.example/v1
+SILLYTAVERN_PROVIDER_ALLOWED_HOSTS=your-provider.example
+LLM_API_KEY=your-provider-key
+SILLYTAVERN_MINIAPP_PUBLIC_URL=https://your-domain.example/miniapp/
+```
+
+Leave the generated starter-character value in place initially. Add optional model
+IDs with `SILLYTAVERN_EXTRA_MODELS=model-two,model-three`, or keep using a custom
+provider YAML for multiple providers. Do not put API keys in URLs.
+
+**Public DNS and reachable HTTPS are external prerequisites.** Point the hostname
+at this server and make ports 80/443 reachable before `--with-caddy`; the installer
+does not edit DNS or firewall rules. With an existing reverse proxy, omit
+`--with-caddy` and route `/miniapp/*` and `/api/v1/*` to `127.0.0.1:8787`.
+An empty Mini App URL keeps the HTTP server disabled. The bot's **Bridge** menu
+opens the app after startup; no separate app account/password is needed.
+
+The Mini App includes Characters/Optimizer, Models/Generation, Sessions, Personas,
+Worlds, Memory, Data Bank and System/Update pages. Private chat sessions are scoped
+to the authenticated Telegram user. Allowed users administer the shared native
+asset catalog; use separate bridge instances for mutually untrusted users.
+
+For an existing running installation, stop its bridge service before changing its
+venv dependencies, or use `--no-deps` when the installed environment already matches
+the lock. The first release containing Mini Apps changes the dependency lock and
+requires a deliberate manual installation; the verified updater does not bypass
+its dependency-change guard. Optional automatic release installation also requires
+an independently obtained public signing key and external allowed-signers file.
+
+See [Mini App installation and operations](docs/miniapp.md) for the complete setup,
+security boundaries, update readiness and troubleshooting. The manual guide below
+remains available for customized deployments.
+
+---
+
 ## 📋 Contents
 
 - [✨ What it does](#-what-it-does)

@@ -14,6 +14,7 @@ def _settings(tmp_path: Path):
     bridge_home = tmp_path / "bridge-home"
     live = bridge_home / "live"
     live.mkdir(parents=True)
+    bridge_home.chmod(0o700)
     return make_test_settings(
         home=tmp_path,
         bridge_home=bridge_home,
@@ -25,11 +26,15 @@ def test_pending_update_ack_is_written_atomically_with_expected_identity(tmp_pat
     from bridge.update_ack import arm_pending_update_ack, pending_update_ack_path
 
     settings = _settings(tmp_path)
-    arm_pending_update_ack("12345", "0.2.033", app_settings=settings)
+    arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=settings)
 
     path = pending_update_ack_path(settings)
     payload = json.loads(path.read_text(encoding="utf-8"))
-    assert payload == {"format": 1, "chat_id": "12345", "version": "0.2.033"}
+    assert payload["format"] == 2
+    assert payload["chat_id"] == "12345"
+    assert payload["version"] == "0.2.033"
+    assert payload["commit"] == "a" * 40
+    assert payload["created_at"] > 0
     assert path.stat().st_mode & 0o077 == 0
 
 
@@ -37,12 +42,13 @@ def test_successful_startup_ack_is_one_shot(tmp_path):
     from bridge.update_ack import acknowledge_pending_update, arm_pending_update_ack, pending_update_ack_path
 
     settings = _settings(tmp_path)
-    arm_pending_update_ack("12345", "0.2.033", app_settings=settings)
+    arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=settings)
     calls = []
 
     delivered = acknowledge_pending_update(
         "token",
         app_settings=settings,
+        commit_backend=lambda **_kwargs: "a" * 40,
         version_backend=lambda **_kwargs: "0.2.033",
         send_text_backend=lambda token, chat_id, text: calls.append((token, chat_id, text)),
     )
@@ -56,12 +62,13 @@ def test_version_mismatch_never_claims_update_success(tmp_path):
     from bridge.update_ack import acknowledge_pending_update, arm_pending_update_ack, pending_update_ack_path
 
     settings = _settings(tmp_path)
-    arm_pending_update_ack("12345", "0.2.033", app_settings=settings)
+    arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=settings)
     calls = []
 
     delivered = acknowledge_pending_update(
         "token",
         app_settings=settings,
+        commit_backend=lambda **_kwargs: "a" * 40,
         version_backend=lambda **_kwargs: "0.2.032",
         send_text_backend=lambda *args: calls.append(args),
     )
@@ -83,6 +90,7 @@ def test_malformed_pending_ack_never_blocks_startup(tmp_path):
         acknowledge_pending_update(
             "token",
             app_settings=settings,
+            commit_backend=lambda **_kwargs: "a" * 40,
             version_backend=lambda **_kwargs: "0.2.033",
             send_text_backend=lambda *_args: (_ for _ in ()).throw(AssertionError("must not send")),
         )
@@ -95,12 +103,13 @@ def test_failed_telegram_ack_is_retried_on_later_startup(tmp_path):
     from bridge.update_ack import acknowledge_pending_update, arm_pending_update_ack, pending_update_ack_path
 
     settings = _settings(tmp_path)
-    arm_pending_update_ack("12345", "0.2.033", app_settings=settings)
+    arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=settings)
 
     assert (
         acknowledge_pending_update(
             "token",
             app_settings=settings,
+            commit_backend=lambda **_kwargs: "a" * 40,
             version_backend=lambda **_kwargs: "0.2.033",
             send_text_backend=lambda *_args: (_ for _ in ()).throw(OSError("telegram unavailable")),
         )
@@ -112,15 +121,19 @@ def test_failed_telegram_ack_is_retried_on_later_startup(tmp_path):
 def test_update_confirmation_arms_ack_before_restart_status(monkeypatch, tmp_path):
     settings = _settings(tmp_path)
     events = []
-    outcome = update.UpdateOutcome(update.UpdateStatus.RESTART_SCHEDULED, "0.2.033")
+    outcome = update.UpdateOutcome(update.UpdateStatus.RESTART_SCHEDULED, "0.2.033", "a" * 40)
 
-    monkeypatch.setattr(update, "_run_update", lambda **_kwargs: outcome)
+    def run(**kwargs):
+        kwargs["before_restart"](outcome)
+        return outcome
+
+    monkeypatch.setattr(update, "_run_update", run)
     monkeypatch.setattr(update, "answer_callback", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(update, "remove_inline_keyboard", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
         update,
         "arm_pending_update_ack",
-        lambda chat_id, version, *, app_settings: events.append(("arm", chat_id, version)),
+        lambda chat_id, version, *, commit, app_settings: events.append(("arm", chat_id, version)),
         raising=False,
     )
     monkeypatch.setattr(
@@ -155,7 +168,7 @@ def test_restart_scheduled_status_does_not_claim_restart_success():
     assert "restart was requested" not in text
 
 
-def test_normal_startup_acknowledges_update_before_runtime(monkeypatch, tmp_path):
+def test_normal_startup_does_not_claim_readiness_before_polling(monkeypatch, tmp_path):
     import bridge.main as main
 
     settings = _settings(tmp_path)
@@ -187,4 +200,77 @@ def test_normal_startup_acknowledges_update_before_runtime(monkeypatch, tmp_path
     )
 
     assert main._main() == 0
-    assert events[-2:] == ["ack", "runtime"]
+    assert events[-2:] == ["commands", "runtime"]
+    assert "ack" not in events
+
+
+def test_same_version_wrong_commit_does_not_acknowledge(tmp_path):
+    from bridge.update_ack import acknowledge_pending_update, arm_pending_update_ack
+
+    settings = _settings(tmp_path)
+    arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=settings)
+    calls = []
+    assert not acknowledge_pending_update(
+        "token",
+        app_settings=settings,
+        version_backend=lambda **kwargs: "0.2.033",
+        commit_backend=lambda **kwargs: "b" * 40,
+        send_text_backend=lambda *args: calls.append(args),
+    )
+    assert not calls
+
+
+def test_stale_acknowledgement_is_discarded(tmp_path):
+    import time
+
+    from bridge.update_ack import acknowledge_pending_update, arm_pending_update_ack, pending_update_ack_path
+
+    settings = _settings(tmp_path)
+    arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=settings)
+    path = pending_update_ack_path(settings)
+    payload = json.loads(path.read_text())
+    payload["created_at"] = time.time() - 86401
+    path.write_text(json.dumps(payload))
+    calls = []
+    assert not acknowledge_pending_update(
+        "token",
+        app_settings=settings,
+        version_backend=lambda **kwargs: "0.2.033",
+        commit_backend=lambda **kwargs: "a" * 40,
+        send_text_backend=lambda *args: calls.append(args),
+    )
+    assert not calls and not path.exists()
+
+
+def test_completion_notification_is_sent_only_after_successful_poll(tmp_path, monkeypatch):
+    from miniapp_test_support import make_services
+
+    import bridge.runtime_lifecycle as lifecycle
+    from bridge.runtime_health import DeploymentIdentity
+    from bridge.update_ack import arm_pending_update_ack
+
+    services = make_services(tmp_path)
+    events = []
+
+    def request(token, method, body):
+        events.append("poll")
+        if events.count("poll") > 1:
+            raise KeyboardInterrupt()
+        assert body["timeout"] == 0
+        return []
+
+    services.telegram = SimpleNamespace(request=request, send_text=lambda *args: events.append("ack"))
+    services.background = SimpleNamespace(begin_shutdown=lambda: None, register_backlog_dispatcher=lambda x: None)
+    services.jobs = SimpleNamespace(recover=lambda *args, **kwargs: None)
+    monkeypatch.setattr(lifecycle, "capture_deployment", lambda config: DeploymentIdentity("0.2.033", "a" * 40))
+    monkeypatch.setattr(lifecycle, "install_bridge_signal_handlers", lambda *args: None)
+    monkeypatch.setattr(lifecycle, "start_live_sync_worker", lambda **kwargs: None)
+    monkeypatch.setattr(lifecycle, "stop_live_sync_worker", lambda **kwargs: True)
+    monkeypatch.setattr(lifecycle, "shutdown_background_executors", lambda **kwargs: True)
+    monkeypatch.setattr(lifecycle, "run_database_maintenance", lambda **kwargs: None)
+    arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=services.config)
+    try:
+        assert lifecycle.run_bridge_runtime(services, {}) == 0
+        assert events == ["poll", "ack", "poll"]
+    finally:
+        lifecycle._SHUTDOWN_EVENT.clear()

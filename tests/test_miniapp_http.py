@@ -144,3 +144,70 @@ def test_character_routes_require_auth_and_keep_private_scope(tmp_path):
             assert (await selected.json())["session"]["chat_id"] == "12345"
 
     asyncio.run(run())
+
+
+def test_menu_registration_failure_does_not_prevent_other_users(tmp_path):
+    from dataclasses import replace
+
+    from bridge.miniapp_config import load_miniapp_config
+    from bridge.miniapp_runtime import configure_miniapp_menu
+
+    s = replace(settings(tmp_path), allowed_users=frozenset({"12345", "67890"}))
+    seen = []
+
+    def request(token, method, payload):
+        seen.append(payload.get("chat_id", "default"))
+        if payload.get("chat_id") == "12345":
+            raise RuntimeError("Bot has not been started by this user")
+
+    configure_miniapp_menu(SimpleNamespace(config=s, telegram=SimpleNamespace(request=request)), load_miniapp_config(s))
+    assert seen == ["default", "12345", "67890"]
+
+
+def test_every_management_page_has_auth_and_no_secret_response(tmp_path, monkeypatch):
+    from miniapp_test_support import make_services
+
+    import bridge.miniapp_system as system
+    from bridge.miniapp_config import load_miniapp_config
+    from bridge.miniapp_http import create_miniapp_app
+
+    services = make_services(tmp_path)
+    monkeypatch.setattr(system, "latest_bridge_release", lambda: ("0.2.099", "Test release"))
+
+    async def run():
+        app = create_miniapp_app(services, load_miniapp_config(services.config))
+        async with TestClient(TestServer(app)) as client:
+            for page in [
+                "characters",
+                "models",
+                "generation",
+                "sessions",
+                "personas",
+                "worlds",
+                "memory",
+                "databank",
+                "status",
+                "update",
+                "jobs",
+            ]:
+                assert (await client.get("/api/v1/" + page)).status == 401
+                response = await client.get("/api/v1/" + page, headers={"Authorization": "tma " + signed_data()})
+                assert response.status == 200, page
+                assert TOKEN not in await response.text()
+            for asset in ["app.js", "characters.js", "models.js", "management.js", "memory.js", "system.js"]:
+                assert (await client.get("/miniapp/" + asset)).status == 200, asset
+
+    asyncio.run(run())
+
+
+def test_default_menu_is_available_to_new_private_chats(tmp_path):
+    from bridge.miniapp_config import load_miniapp_config
+    from bridge.miniapp_runtime import configure_miniapp_menu
+
+    s = settings(tmp_path)
+    requests = []
+    configure_miniapp_menu(
+        SimpleNamespace(config=s, telegram=SimpleNamespace(request=lambda *args: requests.append(args))),
+        load_miniapp_config(s),
+    )
+    assert any("chat_id" not in args[2] and args[2]["menu_button"]["type"] == "web_app" for args in requests)

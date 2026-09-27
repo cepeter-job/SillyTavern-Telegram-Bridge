@@ -31,3 +31,25 @@ Worlds offers a JSON editor/file import limited to 1 MB and 2000 entries, multi-
 Memory is session-scoped. Continuity summaries and curated facts can be reviewed and edited locally with revision checks. Save local list does not silently alter Hindsight: Sync reviewed list explicitly publishes the saved list, and Clear session Hindsight memory performs a confirmed external purge. Curate new messages and summary regeneration use the configured Utility model. Provider/connection failures are not treated as successful synchronization.
 
 Data Bank documents are private to the authenticated bot chat. Uploading the same filename creates a version; users can search, activate an older version, remove all copies of a filename, or reindex. Upload and provider work run as durable-status operations outside database transactions. Supported file types match the bridge document parser, with a 10 MB input limit. The app reports indexed/total counts without claiming an unavailable embedding backend is healthy.
+
+## System and verified updates
+
+The dashboard distinguishes immutable running-version/commit evidence from the version of installed files. Telegram status comes from successful polling observations, not a guessed connected flag. Operations show actor-owned queued/running/succeeded/failed/interrupted outcomes. Release review produces a five-minute actor-bound confirmation; applying consumes it once and calls the canonical signed-release updater, not arbitrary commands. Dependency changes still require manual installation.
+
+Before restart is scheduled, a protected pending notification binds the target version and verified commit. The newly started process acknowledges only after its first successful Telegram poll. Invalid or older-than-one-day state is discarded; delivery failure can retry while polling. A process crash between send and marker deletion can duplicate a notification: this is best-effort one-shot delivery, not an exactly-once network guarantee. The Mini App similarly waits for a new boot, matching revision and resumed polling before claiming update completion.
+
+## Installer options and external prerequisites
+
+Run `./install.sh --system-deps --no-start` as the non-root account that will own the bridge. Fill the generated `.env`, then run `./install.sh --with-caddy --linger`. The script installs user-local uv/Python when needed, hash-locked runtime packages, a valid starter PNG/avatar, generated native directories and the user systemd unit. It does not install a separate SillyTavern frontend or Hindsight server; those remain optional existing integrations.
+
+The script never sources `.env` as shell code. Existing private configuration and native files are preserved. Generated provider YAML is regenerated from env only while its previous managed digest matches; manual edits make it user-managed. A custom service is preserved unless `--replace-service` is requested, with a backup before replacement. Dependencies are not modified while the bridge user service is active. `--no-deps` reuses a compatible environment; `--no-start` leaves the bridge stopped. `--env-file PATH` selects another private configuration file.
+
+Caddy setup is optional and uses administrative permissions only for its package/configuration/service. The generated site is validated before activation; unrelated proxy sites are not replaced and failed activation restores previous configuration. DNS must resolve to the server and certificate-validation ports must be reachable. For an existing proxy, use the generated `Caddyfile.miniapp` as reference and route both API and static paths to loopback; never publish port 8787 directly.
+
+For automatic signed releases, obtain the maintainer public SSH key independently and set `SILLYTAVERN_UPDATE_PUBLIC_KEY` plus an external `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` path in `.env`, then rerun preparation. Never provide a private key and never use a trust file inside the code/live trees. Without this optional trust setup, manual installation and the Mini App work, but automatic update remains refused.
+
+## Verification and troubleshooting
+
+Use `journalctl --user -u sillytavern-telegram.service -n 80 --no-pager` for operational errors. A 401 means the signed launch expired or is not authorized; reopen from Telegram. A 409 indicates a stale session/revision or missing confirmation; refresh before retrying. A 429 means one of your operations is still pending; inspect System → Operations rather than resubmitting. “Interrupted” means the process restarted, not that side effects were automatically rolled back.
+
+The UI smoke harness is a development-only DOM test. Install jsdom in an isolated tooling directory, set `MINIAPP_JSDOM_ROOT` to that directory and `PYTHON` to the project test interpreter, then run `node --experimental-vm-modules tools/miniapp_ui_smoke.mjs`. It starts a temporary authenticated loopback fixture, renders all nine pages and verifies real model/session API mutations. No Node runtime is needed for production. It does not replace testing the deployment on actual Telegram mobile/desktop clients.

@@ -80,6 +80,7 @@ from bridge.rag_composition import build_rag_service
 from bridge.reference_repository import count_persona_references as _count_persona_references
 from bridge.reference_repository import count_session_messages as _count_session_messages
 from bridge.response_delivery import delete_outgoing_message_row, send_reply
+from bridge.runtime_health import RuntimeHealth
 from bridge.runtime_lifecycle import run_bridge_runtime
 from bridge.runtime_logging import configure_logging, enforce_runtime_permissions
 from bridge.scheduler_safety import DurableWorkerGuard as _DurableWorkerGuard
@@ -331,6 +332,7 @@ def _build_startup_services(
         jobs=jobs,
         delivery=delivery,
         conversation=conversation,
+        health=RuntimeHealth(),
     )
 
 

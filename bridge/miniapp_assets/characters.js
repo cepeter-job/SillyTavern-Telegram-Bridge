@@ -13,8 +13,12 @@ async function renderCharacters() {
     search.addEventListener('keydown',e=>{if(e.key==='Enter')searchButton.click();});
     const grid=el('div',{class:'grid'});
     for(const item of data.characters) {
-      const image=el('img',{class:'portrait',alt:item.name,loading:'lazy'});
-      const entry=card(item.name,image,el('div',{class:'row spaced'},el('small',{},item.filename),el('span',{class:'badge'},item.rank||'Unranked')));
+      const image=el('img',{class:'portrait modern-portrait',alt:item.name,loading:'lazy',referrerpolicy:'no-referrer'});
+      image.style.background='var(--tg-theme-secondary-bg-color,#edf1f6)';
+      const tier=String(item.rank||'').trim().toUpperCase();
+      const rankVideo=(['S','A','B','C','D'].includes(tier))?el('video',{class:'rank-video',autoplay:true,loop:true,muted:true,playsinline:true,width:'40',height:'40'}):null;
+      if(rankVideo){const src=document.createElement('source');src.src='/miniapp/ranks/rank_'+tier+'.webm';src.type='video/webm';rankVideo.append(src);rankVideo.onerror=()=>rankVideo.replaceWith(el('span',{class:'badge'},item.rank));try{rankVideo.load();const p=rankVideo.play();if(p&&p.catch)p.catch(()=>{});}catch{}} 
+      const entry=card(item.name,image,el('div',{class:'row spaced'},el('small',{},item.filename),rankVideo||el('span',{class:'badge'},item.rank||'Unranked')));
       if(item.active)entry.append(el('p',{class:'muted'},'Active character'));
       if(item.unavailable)entry.append(el('p',{},'Card cannot be read.'));
       else {
@@ -25,9 +29,11 @@ async function renderCharacters() {
           if(!await confirmAction('Delete '+item.name+'? Active, default and referenced cards are protected.'))return;
           await api('/characters/'+enc(item.filename),{method:'DELETE',body:sessionBody({digest:item.digest,confirm:true})});await load();
         },'danger')));
+        image.decoding='async'; image.referrerPolicy='no-referrer';
         api('/characters/'+enc(item.filename)+'/portrait',{binary:true}).then(blob=>{
-          const url=URL.createObjectURL(blob); image.onload=()=>URL.revokeObjectURL(url);image.onerror=()=>URL.revokeObjectURL(url);image.src=url;
-        }).catch(()=>{image.alt='Portrait unavailable';});
+          if(!blob || blob.size===0) throw new Error('empty portrait');
+          const url=URL.createObjectURL(blob); image.onload=()=>URL.revokeObjectURL(url);image.onerror=()=>{URL.revokeObjectURL(url);image.classList.add('portrait-broken');image.alt='Portrait unavailable';};image.src=url;
+        }).catch(()=>{image.classList.add('portrait-broken');image.alt='Portrait unavailable';image.removeAttribute('src');});
       }
       grid.append(entry);
     }

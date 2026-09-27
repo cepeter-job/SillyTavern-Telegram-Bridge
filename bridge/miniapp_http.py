@@ -20,9 +20,10 @@ from bridge.miniapp_types import ApiRoute, BinaryResult
 
 _CSP = (
     "default-src 'none'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' blob: data:; connect-src 'self'; font-src 'self'; base-uri 'none'; "
+    "img-src 'self' blob: data:; media-src 'self' blob: data:; connect-src 'self'; font-src 'self'; base-uri 'none'; "
     "form-action 'self'; object-src 'none'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"
 )
+_RANK_WEBM = {f"rank_{t}.webm": "video/webm" for t in ("S", "A", "B", "C", "D")}
 _ASSETS = {
     "index.html": "text/html",
     "app.js": "text/javascript",
@@ -73,6 +74,11 @@ def create_miniapp_app(services: Any, config: MiniAppConfig) -> web.Application:
         path = Path(__file__).with_name("miniapp_assets") / asset_name
         if path.is_file():
             assets[asset_name] = (path.read_bytes(), content_type)
+    rank_dir = Path(__file__).with_name("miniapp_assets") / "ranks"
+    for rank_name, mime in _RANK_WEBM.items():
+        rank_path = rank_dir / rank_name
+        if rank_path.is_file():
+            assets["ranks/" + rank_name] = (rank_path.read_bytes(), mime)
 
     @web.middleware
     async def boundary(request: web.Request, handler: Any) -> web.StreamResponse:

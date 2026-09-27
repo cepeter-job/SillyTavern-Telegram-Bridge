@@ -68,30 +68,33 @@ _CHARACTER_RANK_CUSTOM_EMOJI_IDS: dict[str, str] = {
 }
 
 
-def character_rank_button(rank: str | None) -> dict[str, str]:
-    """Build a silent rank-column button with a clear static tier badge."""
+def character_rank_label(rank: str | None, label: str) -> str:
+    """Prefix a classic character label with its static rank badge and tier."""
     tier = str(rank or "").strip().upper()
     if tier not in RANK_TIERS:
-        return {"text": "—", "callback_data": "character:rank:unranked"}
-    return {
-        "text": f"{RANK_BADGES[tier]} {tier}",
-        "callback_data": f"character:rank:{tier}",
-    }
+        return label
+    return f"{RANK_BADGES[tier]} {tier} {label}"
 
 
-def character_rich_rank_button(rank: str | None) -> dict:
-    """Build a disabled RichMessage rank button whose custom emoji can animate."""
+def character_rich_rank_label(rank: str | None, label: str, *, prefix: str = "") -> str | list:
+    """Prefix a RichMessage character label with its animated custom rank emoji."""
     tier = str(rank or "").strip().upper()
     if tier not in RANK_TIERS:
-        return {"text": "—", "disabled": {}}
-    return {
-        "text": {
-            "type": "custom_emoji",
-            "custom_emoji_id": _CHARACTER_RANK_CUSTOM_EMOJI_IDS[tier],
-            "alternative_text": RANK_BADGES[tier],
-        },
-        "disabled": {},
-    }
+        return prefix + label
+    parts: list = []
+    if prefix:
+        parts.append(prefix)
+    parts.extend(
+        [
+            {
+                "type": "custom_emoji",
+                "custom_emoji_id": _CHARACTER_RANK_CUSTOM_EMOJI_IDS[tier],
+                "alternative_text": RANK_BADGES[tier],
+            },
+            " " + label,
+        ]
+    )
+    return parts
 
 
 def _rich_button_row(buttons: list[dict]) -> dict:
@@ -209,13 +212,19 @@ def send_character_menu(
             if protected
             else {"text": "🗑️", "callback_data": "characterdelete:" + callback_token}
         )
-        character_button = {
-            "text": mark + panel_label(label),
-            "callback_data": "character:" + callback_token,
-        }
+        display_label = panel_label(label)
+        callback_data = "character:" + callback_token
         rank = character_rank(request_context.db, filename, app_settings=request_context.app_settings)
-        classic_rows.append([character_rank_button(rank), character_button, action])
-        rich_rows.append([character_rich_rank_button(rank), character_button, action])
+        classic_character_button = {
+            "text": mark + character_rank_label(rank, display_label),
+            "callback_data": callback_data,
+        }
+        rich_character_button = {
+            "text": character_rich_rank_label(rank, display_label, prefix=mark),
+            "callback_data": callback_data,
+        }
+        classic_rows.append([classic_character_button, action])
+        rich_rows.append([rich_character_button, action])
     navigation = panel_navigation("character", current_page, total_pages)
     if navigation:
         classic_rows.append(navigation)

@@ -35,7 +35,7 @@ def test_public_rank_assets_match_hardcoded_custom_emoji_mapping():
     manifest = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "sttb_ranks_by_SillyTavernPunzmeBot" in manifest
     for tier, custom_emoji_id in EXPECTED_IDS.items():
-        assert f"{tier} | \`{custom_emoji_id}\`" in manifest
+        assert f"{tier} | `{custom_emoji_id}`" in manifest
     for relative, digest in EXPECTED_SHA256.items():
         path = ROOT / relative
         assert path.is_file(), relative

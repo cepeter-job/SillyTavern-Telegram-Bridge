@@ -1,6 +1,6 @@
 # Telegram Mini App
 
-The optional Mini App manages the bridge inside Telegram. Chat continues through the existing bot. Configure `SILLYTAVERN_MINIAPP_PUBLIC_URL=https://your-domain.example/miniapp/`; a public HTTPS reverse proxy must forward `/miniapp/*` and `/api/v1/*` to `127.0.0.1:8787`. An empty URL disables the listener. Never expose its HTTP port directly.
+The optional Mini App manages the bridge inside Telegram. Chat continues through the bot. The supported public deployment is Tailscale Funnel directly to `127.0.0.1:8787`. Use `--with-tailscale-funnel` to discover and save the node's public `/miniapp/` URL. Without that flag, an empty `SILLYTAVERN_MINIAPP_PUBLIC_URL` disables the listener. Never expose its HTTP port directly.
 
 Only IDs in `SILLYTAVERN_TELEGRAM_ALLOWED_USERS` are admitted. Open the Bridge menu from the private bot chat. The API validates signed Telegram initData on every request (default lifetime one hour); reopen from Telegram when expired. Direct browser access intentionally has no login bypass. Credentials stay server-side and must not be included in the public URL. Main Mini App profile/deep links additionally require configuration through BotFather.
 
@@ -40,13 +40,108 @@ Before restart is scheduled, a protected pending notification binds the target v
 
 ## Installer options and external prerequisites
 
-Run `./install.sh --system-deps --no-start` as the non-root account that will own the bridge. Fill the generated `.env`, then run `./install.sh --with-caddy --linger`. The script installs user-local uv/Python when needed, hash-locked runtime packages, a valid starter PNG/avatar, generated native directories and the user systemd unit. It does not install a separate SillyTavern frontend or Hindsight server; those remain optional existing integrations.
+Run `./install.sh --system-deps --no-start` as the non-root bridge user. Fill the
+`.env` bot/provider values, leaving `SILLYTAVERN_MINIAPP_PUBLIC_URL` blank for
+discovery. Install Tailscale **1.52+**, authenticate the device and run:
 
-The script never sources `.env` as shell code. Existing private configuration and native files are preserved. Generated provider YAML is regenerated from env only while its previous managed digest matches; manual edits make it user-managed. A custom service is preserved unless `--replace-service` is requested, with a backup before replacement. Dependencies are not modified while the bridge user service is active. `--no-deps` reuses a compatible environment; `--no-start` leaves the bridge stopped. `--env-file PATH` selects another private configuration file.
+```bash
+./install.sh --with-tailscale-funnel --linger
+```
 
-Caddy setup is optional and uses administrative permissions only for its package/configuration/service. The generated site is validated before activation; unrelated proxy sites are not replaced and failed activation restores previous configuration. DNS must resolve to the server and certificate-validation ports must be reachable. For an existing proxy, use the generated `Caddyfile.miniapp` as reference and route both API and static paths to loopback; never publish port 8787 directly.
+The installer prepares user-local uv/Python, locked runtime packages, a starter
+PNG/avatar, native directories and a user systemd unit. It does not install
+Tailscale, a separate SillyTavern frontend or a Hindsight server. `--system-deps`
+installs only Debian/Ubuntu base prerequisites. Tailscale needs external setup:
 
-For automatic signed releases, obtain the maintainer public SSH key independently and set `SILLYTAVERN_UPDATE_PUBLIC_KEY` plus an external `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` path in `.env`, then rerun preparation. Never provide a private key and never use a trust file inside the code/live trees. Without this optional trust setup, manual installation and the Mini App work, but automatic update remains refused.
+- Follow [official Linux installation](https://tailscale.com/download/linux), then
+  use `sudo tailscale up` if the device has not been authenticated.
+- Enable MagicDNS, HTTPS certificates and the `funnel` node attribute for this
+  device. A tailnet administrator must authorize policy changes.
+- Run as a Tailscale-authorized operator. An administrator can set
+  `sudo tailscale set --operator="$USER"`; do not run the bridge installer as root.
+
+Funnel terminates TLS in `tailscaled` and uses the node's `*.ts.net` name, without
+custom DNS or inbound public ports. Certificate names are public in transparency
+logs, so avoid sensitive device names. Funnel is public even for clients without
+Tailscale; Serve is tailnet-only. Funnel remains beta with non-configurable bandwidth
+limits. See the [Funnel guide](https://tailscale.com/docs/features/tailscale-funnel)
+and [CLI reference](https://tailscale.com/docs/reference/tailscale-cli/funnel).
+
+### Safe discovery and activation
+
+The installer reads node identity and Serve/Funnel status. A blank URL reuses only
+an exact already-public root proxy to the Mini App, or selects the first unused
+HTTPS port from **443, 8443, 10000**. It never converts private Serve services into
+public services or knowingly overwrites another root/path/TCP/foreground listener.
+An explicit URL selects its exact port and a conflict is refused. Clear only the
+URL assignment to request fresh discovery; changing the backend port does not
+silently overwrite an old Funnel. Review that exact listener first.
+
+Only a blank URL is filled; other `.env` assignments and private permissions are preserved.
+Both paths pass unchanged through the same direct root proxy:
+
+```text
+https://device.tailnet.ts.net[:port]/miniapp/ → http://127.0.0.1:8787/miniapp/
+https://device.tailnet.ts.net[:port]/api/v1/… → http://127.0.0.1:8787/api/v1/…
+```
+
+After service startup, the installer requires the expected shell and a 401 from
+`/api/v1/me` without credentials, rechecks listener conflicts, then runs
+`tailscale funnel --bg --https=PORT http://127.0.0.1:BACKEND` and verifies the exact
+public mapping. Tailscale may require interactive HTTPS/Funnel approval. A failure
+exits with an error, never a false completion. No Serve/Funnel reset or unrelated
+service removal is attempted. Avoid concurrent manual Serve changes during setup.
+Mapping verification does not prove public DNS propagation or every Telegram
+client's connectivity. Public DNS propagation can delay access after provisioning.
+
+The script never sources `.env`. It preserves private settings and native files;
+generated provider YAML changes only while its recorded digest matches. Custom
+service units require `--replace-service` and are backed up. Dependencies cannot
+be modified while the service is active. `--no-deps` reuses a compatible venv;
+`--no-start` leaves the bridge and existing Funnel unchanged, but can prepare a
+blank URL. `--env-file PATH` selects another private configuration file.
+
+### Upgrade to the Mini App release
+
+Version 0.2.033 changes `requirements.lock` from v0.2.032. The signed `/update`
+refuses dependency changes, so install from a clean checkout explicitly:
+
+```bash
+systemctl --user stop sillytavern-telegram.service
+cd ~/sillytavern-telegram-bridge
+git fetch origin
+git switch main
+git pull --ff-only origin main
+./install.sh --with-tailscale-funnel --linger
+```
+
+Do not reset the database or replace `.env`. A prior custom-domain URL is preserved;
+review and clear only that assignment to let Funnel choose the node URL. The old
+proxy installer/configuration generator has been removed. Existing system proxy
+services/packages are left for their operator to manage, not automatically purged.
+
+For subsequent automatic signed releases, obtain the maintainer's public SSH key
+independently and set `SILLYTAVERN_UPDATE_PUBLIC_KEY` and an external
+`SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` path, then rerun preparation. Never provide a
+private key or put the trust file inside source/live directories. Without trust
+setup, manual installation and the Mini App work; automatic update stays refused.
+
+### Status and targeted shutdown
+
+```bash
+tailscale funnel status
+systemctl --user status sillytavern-telegram.service
+journalctl --user -u sillytavern-telegram.service -n 80 --no-pager
+```
+
+Funnel `--bg` persists through reboot and Tailscale restart. To turn off only this
+listener, use its printed HTTPS port; 443 is an example, not necessarily your port:
+
+```bash
+tailscale funnel --https=443 off
+```
+
+Do not use `funnel reset` or `serve reset`; they can disrupt unrelated services.
 
 ## Verification and troubleshooting
 

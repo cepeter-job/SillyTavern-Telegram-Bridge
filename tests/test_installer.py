@@ -68,8 +68,8 @@ def test_provider_catalog_can_be_prepared_using_only_env_values(tmp_path):
     assert "private-key" not in settings.provider_config_file.read_text()
     assert "private-key" not in (units / "sillytavern-telegram.service").read_text()
     assert validate_install(source, home, env) == []
-    config = (env.parent / "Caddyfile.miniapp").read_text()
-    assert "127.0.0.1:8787" in config and "bridge.example" in config
+    assert not (env.parent / "Caddyfile.miniapp").exists()
+    assert "proxy_path" not in prepare_install(source, home, env, units)
 
 
 def test_installer_rejects_symlink_env_and_never_evaluates_values(tmp_path):
@@ -91,7 +91,8 @@ def test_install_script_help_and_bash_syntax_are_safe():
     assert script.exists()
     subprocess.run(["/bin/bash", "-n", str(script)], check=True)
     result = subprocess.run(["/bin/bash", str(script), "--help"], capture_output=True, text=True, check=True)
-    assert "--no-start" in result.stdout and "--with-caddy" in result.stdout
+    assert "--no-start" in result.stdout and "--with-tailscale-funnel" in result.stdout
+    assert "--with-caddy" not in result.stdout
 
 
 def test_missing_credential_diagnostic_never_echoes_provider_controlled_name(tmp_path, monkeypatch):
@@ -114,3 +115,16 @@ def test_missing_credential_diagnostic_never_echoes_provider_controlled_name(tmp
     errors = validate_install(source, home, env)
     assert errors
     assert marker not in str(errors)
+
+
+def test_retired_proxy_command_is_rejected():
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-m", "bridge.install_support", "public-url", "--source", ".", "--env", "absent"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "invalid choice" in result.stderr

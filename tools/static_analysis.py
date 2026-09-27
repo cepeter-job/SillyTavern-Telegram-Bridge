@@ -45,6 +45,7 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
+    "bridge/tailscale_funnel.py",
     *STATIC_TARGETS,
     *REPOSITORY_TARGETS,
     "bridge/humanize.py",

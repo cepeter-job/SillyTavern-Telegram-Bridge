@@ -212,6 +212,7 @@ def prepare_install(source: Path, home: Path, env_path: Path, unit_dir: Path, *,
             state = {}
     except (FileNotFoundError, ValueError):
         state = {}
+    state = {key: value for key, value in state.items() if key == "provider_hash"}
     provider = _provider_document(settings)
     if provider is not None:
         path = settings.provider_config_file
@@ -238,30 +239,6 @@ def prepare_install(source: Path, home: Path, env_path: Path, unit_dir: Path, *,
         if previous and not previous.startswith(_MANAGED):
             _new_file(unit.with_suffix(f".service.backup-{time.time_ns()}"), previous.encode())
         _atomic_file(unit, _unit(source, settings, env_path).encode())
-    proxy = env_path.parent / "Caddyfile.miniapp"
-    if config.enabled:
-        parts = urlsplit(config.public_url)
-        host = parts.hostname or ""
-        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{0,251}[A-Za-z0-9]", host) or ".." in host:
-            raise ValueError("Caddy requires a valid DNS hostname")
-        content = f"""{_MANAGED}
-{parts.netloc} {{
-    request_body {{
-        max_size 20MB
-    }}
-    @miniapp path /miniapp/* /api/v1/*
-    handle @miniapp {{
-        reverse_proxy 127.0.0.1:{config.port}
-    }}
-    handle / {{
-        redir /miniapp/ 302
-    }}
-    handle {{
-        respond "Not found" 404
-    }}
-}}
-"""
-        _atomic_file(proxy, content.encode())
     state.update(
         {
             "format": 1,
@@ -269,7 +246,6 @@ def prepare_install(source: Path, home: Path, env_path: Path, unit_dir: Path, *,
             "unit_path": str(unit),
             "env_path": str(env_path),
             "public_url": config.public_url,
-            "proxy_path": str(proxy),
             "source": str(source),
         }
     )
@@ -310,7 +286,7 @@ def validate_install(source: Path, home: Path, env_path: Path) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("prepare", "check", "unit-managed", "proxy-path", "public-url"))
+    parser.add_argument("action", choices=("prepare", "check", "unit-managed"))
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--home", type=Path, default=Path.home())
     parser.add_argument("--env", type=Path, required=True)
@@ -337,9 +313,7 @@ def main() -> int:
             print("Configuration checks passed.")
         else:
             state = json.loads((args.env.parent / "installer-state.json").read_text())
-            if args.action == "unit-managed":
-                return 0 if state["unit_managed"] else 2
-            print(state["proxy_path"] if args.action == "proxy-path" else state["public_url"])
+            return 0 if state["unit_managed"] else 2
         return 0
     except Exception as exc:
         print(

@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Add an opt-in localhost-only Telegram Mini App shell with server-validated Telegram identity, private-chat scoping, bounded HTTP admission, same-origin security headers, Telegram theme integration, and managed listener lifecycle.
+
 ## [0.2.032] - 2026-09-27
 
 ### Changed

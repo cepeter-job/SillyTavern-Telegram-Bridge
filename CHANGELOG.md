@@ -6,6 +6,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Added
 
+- Add private Mini App session lifecycle, native persona CRUD with revision checks, and a bounded World Info JSON editor with backups, selection and reference-protected deletion.
+
 - Add Mini App Story/Utility model selection and validated generation settings with private presets; provider credentials are never sent to the browser.
 
 - Add the Mini App Character Manager and digest-bound optimizer with authenticated portraits, paginated search, protected deletion, upload previews, new-session selection and durable actor-owned operation status.

@@ -81,3 +81,27 @@ def test_runtime_starts_and_stops_loopback_listener(tmp_path):
             client.sendall(b"GET /miniapp/ HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
             assert b"200 OK" in client.recv(1024)
     assert not server.thread.is_alive()
+
+
+def test_static_requests_never_open_a_client_derived_path(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from bridge.miniapp_config import load_miniapp_config
+    from bridge.miniapp_http import create_miniapp_app
+
+    s = settings(tmp_path)
+
+    async def run():
+        app = create_miniapp_app(SimpleNamespace(config=s), load_miniapp_config(s))
+        async with TestClient(TestServer(app)) as client:
+
+            def forbidden_read(_path):
+                raise AssertionError("request-time filesystem reads are forbidden")
+
+            with monkeypatch.context() as patch:
+                patch.setattr(Path, "read_bytes", forbidden_read)
+                response = await client.get("/miniapp/app.js")
+                assert response.status == 200
+                assert "function api" in await response.text()
+
+    asyncio.run(run())

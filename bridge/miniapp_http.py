@@ -55,6 +55,12 @@ def create_miniapp_app(services: Any, config: MiniAppConfig) -> web.Application:
     """Construct the app without opening sockets, threads, database handles or providers."""
     users: dict[str, deque[float]] = defaultdict(deque)
     slots = asyncio.Semaphore(4)
+    # Load only developer-declared assets once. No client input ever reaches a filesystem API.
+    assets = {}
+    for asset_name, content_type in _ASSETS.items():
+        path = Path(__file__).with_name("miniapp_assets") / asset_name
+        if path.is_file():
+            assets[asset_name] = (path.read_bytes(), content_type)
 
     @web.middleware
     async def boundary(request: web.Request, handler: Any) -> web.StreamResponse:
@@ -122,12 +128,10 @@ def create_miniapp_app(services: Any, config: MiniAppConfig) -> web.Application:
 
     async def asset(request: web.Request) -> web.Response:
         name = request.match_info.get("asset", "index.html")
-        if name not in _ASSETS:
+        resource = assets.get(name)
+        if resource is None:
             raise web.HTTPNotFound()
-        path = Path(__file__).with_name("miniapp_assets") / name
-        if not path.is_file():
-            raise web.HTTPNotFound()
-        return web.Response(body=path.read_bytes(), content_type=_ASSETS[name])
+        return web.Response(body=resource[0], content_type=resource[1])
 
     def adapt(route: ApiRoute) -> Any:
         async def handle(request: web.Request) -> web.Response:

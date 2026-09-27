@@ -6,6 +6,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Added
 
+- Add Mini App continuity-summary and curated-memory editing, explicit Hindsight sync/search/purge, and private Data Bank upload, retrieval, version activation/removal and reindex operations.
+
 - Add private Mini App session lifecycle, native persona CRUD with revision checks, and a bounded World Info JSON editor with backups, selection and reference-protected deletion.
 
 - Add Mini App Story/Utility model selection and validated generation settings with private presets; provider credentials are never sent to the browser.

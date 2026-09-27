@@ -25,3 +25,9 @@ Models displays provider/model names only, never private provider configuration.
 Sessions can be searched, created, renamed, selected and deleted. Deletion is a background operation and refuses the active session or sessions with pending work. Persona creation/editing/selection/deletion uses the native integrity-checked PersonaService. An existing native avatar is required for new personas; the installer creates a starter avatar for fresh installations.
 
 Worlds offers a JSON editor/file import limited to 1 MB and 2000 entries, multi-file session selection, revision-checked save and backed-up deletion. Files active in any session cannot be deleted. Native personas and World Info are shared administrator-managed resources, not tenant-private files.
+
+## Memory and Data Bank
+
+Memory is session-scoped. Continuity summaries and curated facts can be reviewed and edited locally with revision checks. Save local list does not silently alter Hindsight: Sync reviewed list explicitly publishes the saved list, and Clear session Hindsight memory performs a confirmed external purge. Curate new messages and summary regeneration use the configured Utility model. Provider/connection failures are not treated as successful synchronization.
+
+Data Bank documents are private to the authenticated bot chat. Uploading the same filename creates a version; users can search, activate an older version, remove all copies of a filename, or reindex. Upload and provider work run as durable-status operations outside database transactions. Supported file types match the bridge document parser, with a 10 MB input limit. The app reports indexed/total counts without claiming an unavailable embedding backend is healthy.

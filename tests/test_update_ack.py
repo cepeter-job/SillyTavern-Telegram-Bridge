@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import bridge.update as update
 from settings_test_support import make_test_settings
+
+import bridge.update as update
 
 
 def _settings(tmp_path: Path):

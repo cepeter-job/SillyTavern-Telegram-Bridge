@@ -29,6 +29,7 @@ _ASSETS = {
     "ui.js": "text/javascript",
     "style.css": "text/css",
     "characters.js": "text/javascript",
+    "models.js": "text/javascript",
 }
 
 
@@ -36,12 +37,14 @@ def api_routes() -> list[ApiRoute]:
     from bridge.miniapp_characters import routes as character_routes
     from bridge.miniapp_context import current_session
     from bridge.miniapp_jobs import job_status, recent_jobs
+    from bridge.miniapp_models import routes as model_routes
 
     return [
         ApiRoute("GET", "/session", current_session),
         ApiRoute("GET", "/jobs", recent_jobs),
         ApiRoute("GET", "/jobs/{job_id}", job_status),
         *character_routes(),
+        *model_routes(),
     ]
 
 

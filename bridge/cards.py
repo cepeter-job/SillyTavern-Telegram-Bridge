@@ -5,6 +5,7 @@ Content, callback-token state, and pure panel helpers live in focused modules.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import bridge.limits as _limits
@@ -87,7 +88,7 @@ def character_rich_rank_button(rank: str | None) -> dict:
         "text": {
             "type": "custom_emoji",
             "custom_emoji_id": _CHARACTER_RANK_CUSTOM_EMOJI_IDS[tier],
-            "alternative_text": f"{RANK_BADGES[tier]} {tier}",
+            "alternative_text": RANK_BADGES[tier],
         },
         "disabled": {},
     }
@@ -123,6 +124,7 @@ def _send_character_menu_panel(
     except RuntimeError as exc:
         if message_id is not None and "not modified" in str(exc).casefold():
             return
+        logging.warning("Character rich panel rejected; using classic fallback: %s", exc)
     send_panel_message(
         token,
         chat_id,

@@ -9,8 +9,16 @@ async function dashboard() {
   const [data,operations]=await Promise.all([api('/status'),api('/jobs')]);state.session=data.session;
   const hour=new Date().getHours(),greeting=hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
   const hero=el('section',{class:'dashboard-hero'},el('span',{class:'eyebrow'},'CONTROL CENTER'),el('h2',{},greeting+', '+(state.user?.name||'there')),el('p',{class:'muted'},'Manage the active SillyTavern session here. Continue roleplay in Telegram.'));
-  const sessionCard=card('Current session',el('div',{class:'session-meta'},el('h3',{},data.session.title),el('p',{class:'muted session-model'},data.session.character_file+' · '+data.session.model_id)),el('span',{class:'badge'},'Active'));
+  const sessionPortrait=el('img',{class:'session-portrait',alt:data.session.title,decoding:'async',referrerpolicy:'no-referrer'});
+  const sessionPortraitFrame=el('div',{class:'session-portrait-frame',hidden:true},sessionPortrait);
+  const sessionSummary=el('div',{class:'session-summary'},sessionPortraitFrame,el('div',{class:'session-meta'},el('h3',{},data.session.title),el('p',{class:'muted session-model'},data.session.character_file+' · '+data.session.model_id)));
+  const sessionCard=card('Current session',sessionSummary,el('span',{class:'badge'},'Active'));
   sessionCard.classList.add('dashboard-session');
+  api('/characters/'+encodeURIComponent(data.session.character_file)+'/portrait',{binary:true}).then(blob=>{
+    if(!blob||blob.size===0)throw new Error('empty portrait');
+    const url=URL.createObjectURL(blob);let revoked=false;const revoke=()=>{if(!revoked){revoked=true;URL.revokeObjectURL(url);}};
+    sessionPortrait.onload=()=>{sessionPortraitFrame.hidden=false;revoke();};sessionPortrait.onerror=()=>{revoke();sessionPortraitFrame.hidden=true;};sessionPortrait.src=url;
+  }).catch(()=>{sessionPortraitFrame.hidden=true;});
   const shortcuts=el('div',{class:'dashboard-shortcuts'},button('Characters',()=>navigate('characters'),'shortcut'),button('Sessions',()=>navigate('sessions'),'shortcut'),button('Models',()=>navigate('models'),'shortcut'),button('Memory',()=>navigate('memory'),'shortcut'));
   const latest=operations.jobs?.[0];
   const recent=card('Recent operation',latest?el('div',{class:'row spaced'},el('div',{},el('strong',{},latest.kind.replaceAll('_',' ')),el('p',{class:'muted'},new Date(latest.created_at*1000).toLocaleString())),el('span',{class:'badge'},latest.state)):el('p',{class:'muted'},'No recent background operations.'));recent.classList.add('dashboard-recent');

@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Show registered character-rank icons and the current-session checkmark in the Character Info and Optimizer pickers, and include the cached rank label in their selected-character detail panels.
+
 ## [0.2.036] - 2026-09-27
 
 ### Fixed

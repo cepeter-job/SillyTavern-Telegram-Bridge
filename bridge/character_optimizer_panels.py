@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from bridge.callback_tokens import dynamic_callback_token
 from bridge.card_content import character_card_paths, character_display_name
-from bridge.cards import send_panel_message
-from bridge.character_quality import OPTIMIZABLE_FIELDS
-from bridge.panel_utils import panel_navigation, panel_page
+from bridge.cards import character_rank_icon_id, character_rank_label, send_panel_message
+from bridge.character_quality import OPTIMIZABLE_FIELDS, character_rank
+from bridge.panel_utils import panel_label, panel_navigation, panel_page
 from bridge.request_types import RequestContext
 
 _OPTIMIZER_FIELD_LABELS = {
@@ -33,23 +33,32 @@ def format_character_optimizer_base(name: str, fields: dict[str, str]) -> str:
 
 
 def send_character_optimize_menu(
-    token: str, chat_id: str, message_id: int | None = None, page: int = 0, *, request_context: RequestContext
+    token: str,
+    chat_id: str,
+    message_id: int | None = None,
+    page: int = 0,
+    *,
+    current_character: str,
+    request_context: RequestContext,
 ) -> None:
     options = [
         (path.name, character_display_name(path, app_settings=request_context.app_settings))
         for path in character_card_paths(app_settings=request_context.app_settings)
     ]
     page_options, current_page, total_pages = panel_page(options, page)
-    rows = [
-        [
-            {
-                "text": label,
-                "callback_data": "characteroptimize:"
-                + dynamic_callback_token("character", filename, chat_id, db=request_context.db),
-            }
-        ]
-        for filename, label in page_options
-    ]
+    rows = []
+    for filename, label in page_options:
+        button = {
+            "text": ("✅ " if filename == current_character else "") + panel_label(label),
+            "callback_data": "characteroptimize:"
+            + dynamic_callback_token("character", filename, chat_id, db=request_context.db),
+        }
+        rank_icon_id = character_rank_icon_id(
+            character_rank(request_context.db, filename, app_settings=request_context.app_settings)
+        )
+        if rank_icon_id:
+            button["icon_custom_emoji_id"] = rank_icon_id
+        rows.append([button])
     navigation = panel_navigation("characteroptimize", current_page, total_pages)
     if navigation:
         rows.append(navigation)
@@ -80,11 +89,12 @@ def send_character_optimize_options(
             {"text": "Close", "callback_data": "character:cancel"},
         ],
     ]
+    rank = character_rank_label(character_rank(request_context.db, filename, app_settings=request_context.app_settings))
     send_panel_message(
         token,
         chat_id,
         (
-            f"Optimizer options: {filename}\n\n"
+            f"Optimizer options: {filename}\nRank: {rank}\n\n"
             "Auto Optimize uses the utility model directly. "
             "Manual Suggestion lets you give it editing guidance first."
         ),
@@ -125,5 +135,6 @@ def send_character_optimize_result(
         ]
     )
     rows.append([{"text": "Cancel", "callback_data": f"characteroptimizecancel:{nonce}"}])
-    text = f"Optimization preview: {filename}\nPage {current + 1}/{len(pages)}\n\n" + pages[current]
+    rank = character_rank_label(character_rank(request_context.db, filename, app_settings=request_context.app_settings))
+    text = f"Optimization preview: {filename}\nRank: {rank}\nPage {current + 1}/{len(pages)}\n\n" + pages[current]
     send_panel_message(token, chat_id, text, {"inline_keyboard": rows}, message_id, request_context=request_context)

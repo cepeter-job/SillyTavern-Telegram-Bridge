@@ -10,13 +10,13 @@ Runtime note: Telegram bot menus do not upload or read these files; `bridge/card
 
 | Rank | `custom_emoji_id` | Telegram asset | Public GIF reference |
 |---|---:|---|---|
-| S | `6176891226302718197` | `telegram/rank_S.webm` | `source/rank_S_transparent.gif` |
-| A | `6176955294329871952` | `telegram/rank_A.webm` | `source/rank_A_transparent.gif` |
-| B | `6178981105849344346` | `telegram/rank_B.webm` | `source/rank_B_transparent.gif` |
-| C | `6177219258724917819` | `telegram/rank_C.webm` | `source/rank_C_transparent.gif` |
-| D | `6176733025477337215` | `telegram/rank_D.webm` | `source/rank_D_transparent.gif` |
+| S | `6181691122838938530` | `telegram/rank_S.webm` | `source/rank_S_transparent.gif` |
+| A | `6179119000069349499` | `telegram/rank_A.webm` | `source/rank_A_transparent.gif` |
+| B | `6181710471666606640` | `telegram/rank_B.webm` | `source/rank_B_transparent.gif` |
+| C | `6181325707021395017` | `telegram/rank_C.webm` | `source/rank_C_transparent.gif` |
+| D | `6181582481641187488` | `telegram/rank_D.webm` | `source/rank_D_transparent.gif` |
 
-The checked-in WEBM files were downloaded back from the bot-owned Telegram custom-emoji set, so they are the exact registered media behind the hardcoded IDs. They are VP9, 100×100, and 2.1 seconds long. The checked-in GIF files are public reference derivatives generated from those registered WEBMs with `fps=12.5,scale=100:100:flags=lanczos` and infinite looping. This keeps the repository reference small while preserving the animation users see in Telegram.
+The checked-in WEBM files are the canonical 100×100 VP9 rank media used for the republished bot-owned Telegram custom-emoji IDs above. The IDs changed when the set was republished; the canonical media files and their hashes did not. They are 2.1 seconds long. The checked-in GIF files are public reference derivatives generated from those registered WEBMs with `fps=12.5,scale=100:100:flags=lanczos` and infinite looping. This keeps the repository reference small while preserving the animation users see in Telegram.
 
 ## Original upload provenance
 

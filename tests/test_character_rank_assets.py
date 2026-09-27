@@ -7,11 +7,11 @@ from bridge.cards import _CHARACTER_RANK_CUSTOM_EMOJI_IDS, character_rank_button
 
 ROOT = Path(__file__).resolve().parents[1] / "assets" / "character-ranks"
 EXPECTED_IDS = {
-    "S": "6176891226302718197",
-    "A": "6176955294329871952",
-    "B": "6178981105849344346",
-    "C": "6177219258724917819",
-    "D": "6176733025477337215",
+    "S": "6181691122838938530",
+    "A": "6179119000069349499",
+    "B": "6181710471666606640",
+    "C": "6181325707021395017",
+    "D": "6181582481641187488",
 }
 EXPECTED_STATIC_BADGES = {"S": "🏆", "A": "🥇", "B": "🥈", "C": "🥉", "D": "⚪"}
 EXPECTED_SHA256 = {
@@ -60,3 +60,6 @@ def test_miniapp_reuses_canonical_rank_webm_assets():
     manifest = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "Mini App" in manifest
     assert "/miniapp/ranks/rank_S.webm" in manifest
+    assert "100×100" in manifest
+    assert "512px" not in manifest
+    assert "512×512" not in manifest

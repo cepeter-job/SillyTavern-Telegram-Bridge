@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Remove obsolete character-rank callback/static-badge compatibility code and retired RichMessage panel plumbing after the standard inline-keyboard rank-icon migration.
+
 ### Fixed
 
 - Recover Mode A Light Novel stories and choices when a provider prefixes ordinary prose before one valid trailing fenced JSON envelope, without accepting ambiguous multi-fence responses.

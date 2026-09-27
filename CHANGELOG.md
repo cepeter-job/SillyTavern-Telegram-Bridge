@@ -4,6 +4,11 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Make separate Light Novel choice generation more resilient with a 60-second provider timeout, one bounded retry for transient provider/empty-content failures, and sanitized stage/model/status/parser diagnostics while preserving strict choice validation and the committed story.
+
+
 ### Changed
 
 - Remove obsolete character-rank callback/static-badge compatibility code and retired RichMessage panel plumbing after the standard inline-keyboard rank-icon migration.

@@ -163,13 +163,22 @@ def bind_choice_panel(db: sqlite3.Connection, nonce: str, message_id: int) -> bo
     )
 
 
-def claim_choice_generation(db: sqlite3.Connection, nonce: str, token: str, now: float) -> bool:
+def claim_choice_generation(
+    db: sqlite3.Connection,
+    nonce: str,
+    token: str,
+    now: float,
+    *,
+    lease_seconds: float,
+) -> bool:
     require_active_transaction(db)
+    if lease_seconds <= 0:
+        raise ValueError("Choice generation lease must be positive")
     return (
         db.execute(
             "UPDATE light_novel_choice_sets SET generation_status='pending',lease_token=?,lease_until=?,updated_at=? "
             "WHERE nonce=? AND state='open' AND generation_status<>'ready' AND lease_until<=?",
-            (token, now + 90, now, nonce, now),
+            (token, now + lease_seconds, now, nonce, now),
         ).rowcount
         == 1
     )

@@ -8,6 +8,7 @@ import logging
 import secrets
 import sqlite3
 import time
+import urllib.error
 from collections.abc import Callable, Sequence
 
 from bridge.card_content import build_world_info
@@ -29,6 +30,98 @@ from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
+
+_CHOICE_REQUEST_TIMEOUT_SECONDS = 60
+_CHOICE_PROVIDER_ATTEMPTS = 2
+_CHOICE_GENERATION_LEASE_SECONDS = _CHOICE_PROVIDER_ATTEMPTS * _CHOICE_REQUEST_TIMEOUT_SECONDS + 30
+_TRANSIENT_HTTP_STATUSES = {408, 429, 500, 502, 503, 504}
+_EMPTY_CONTENT_MARKERS = ("no assistant content", "no visible content")
+
+
+class _EmptyChoiceResponse(RuntimeError):
+    pass
+
+
+def _choice_http_status(exc: BaseException) -> int | None:
+    value = getattr(exc, "code", None)
+    if value is None:
+        value = getattr(exc, "status", None)
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _retryable_choice_provider_error(exc: BaseException) -> bool:
+    if isinstance(exc, _EmptyChoiceResponse):
+        return True
+    if isinstance(exc, urllib.error.HTTPError):
+        return _choice_http_status(exc) in _TRANSIENT_HTTP_STATUSES
+    if isinstance(exc, (TimeoutError, urllib.error.URLError, ConnectionError, OSError)):
+        return True
+    if isinstance(exc, RuntimeError):
+        detail = str(exc).casefold()
+        return any(marker in detail for marker in _EMPTY_CONTENT_MARKERS)
+    return False
+
+
+def _choice_failure_reason(exc: BaseException, stage: str) -> str:
+    if stage == "parse":
+        if isinstance(exc, json.JSONDecodeError):
+            return "invalid_json"
+        if isinstance(exc, ValueError):
+            detail = str(exc)
+            if "Expected exactly" in detail:
+                return "invalid_choice_count"
+            if "distinct" in detail:
+                return "duplicate_choices"
+            if "short narrative actions" in detail:
+                return "invalid_choice_action"
+            if "control characters" in detail:
+                return "control_character"
+            if "must be text" in detail:
+                return "non_text_choice"
+            return "invalid_choice_payload"
+        return "parse_error"
+    if isinstance(exc, _EmptyChoiceResponse):
+        return "empty_response"
+    if isinstance(exc, urllib.error.HTTPError):
+        return "http_transient" if _retryable_choice_provider_error(exc) else "http_error"
+    if isinstance(exc, TimeoutError):
+        return "timeout"
+    if isinstance(exc, (urllib.error.URLError, ConnectionError, OSError)):
+        return "network_error"
+    if isinstance(exc, RuntimeError):
+        detail = str(exc).casefold()
+        if any(marker in detail for marker in _EMPTY_CONTENT_MARKERS):
+            return "empty_provider_content"
+        return "provider_error"
+    return "provider_error"
+
+
+def _log_choice_failure(
+    record: ChoiceSet,
+    model: str,
+    stage: str,
+    exc: BaseException,
+    started_at: float,
+    *,
+    retrying: bool,
+) -> None:
+    # Never log prompts, story/model output, provider URLs, credentials, or arbitrary exception text.
+    logging.warning(
+        "Light Novel choices unavailable: stage=%s strategy=%s model=%s requested_count=%s "
+        "elapsed_ms=%s error_type=%s http_status=%s reason=%s retrying=%s",
+        stage,
+        record.strategy,
+        model,
+        record.requested_count,
+        max(0, int((time.monotonic() - started_at) * 1000)),
+        type(exc).__name__,
+        _choice_http_status(exc),
+        _choice_failure_reason(exc, stage),
+        retrying,
+    )
 
 
 def story_digest(text: str) -> str:
@@ -146,15 +239,14 @@ def ensure_choices(
         return record
     lease = secrets.token_urlsafe(16)
     with write_transaction(db):
-        if not claim_choice_generation(db, nonce, lease, time.time()):
+        if not claim_choice_generation(db, nonce, lease, time.time(), lease_seconds=_CHOICE_GENERATION_LEASE_SECONDS):
             return load_choice_set(db, nonce) or record
     choices = None
+    model = record.model_id
+    started_at = time.monotonic()
     try:
-        model = (
-            task_model_for_session(db, record.chat_id, session, "utility", app_settings=app_settings)
-            if record.strategy == "b"
-            else record.model_id
-        )
+        if record.strategy == "b":
+            model = task_model_for_session(db, record.chat_id, session, "utility", app_settings=app_settings)
         history = db.execute(
             "SELECT role,content FROM messages WHERE chat_id=? AND session_id=? ORDER BY rowid DESC LIMIT 6",
             (record.chat_id, record.session_id),
@@ -191,19 +283,35 @@ def ensure_choices(
             },
             {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
         ]
-        raw = provider_port.generate(
-            app_settings.api_key,
-            model,
-            messages,
-            session_id=f"lightnovel:{record.session_id}:{nonce}",
-            settings={"max_tokens": 1200, "temperature": 0.7, "reasoning_budget": 0, "stop_sequences": ""},
-            force_non_stream=True,
-            request_timeout=30,
-        )
-        choices = parse_choice_response(raw, record.requested_count)
-    except Exception:
-        # Never include model output, story content or credentials in logs.
-        logging.warning("Light Novel choices unavailable; committed story preserved")
+    except Exception as exc:
+        _log_choice_failure(record, model, "prepare", exc, started_at, retrying=False)
+    else:
+        raw = None
+        for attempt in range(_CHOICE_PROVIDER_ATTEMPTS):
+            try:
+                raw = provider_port.generate(
+                    app_settings.api_key,
+                    model,
+                    messages,
+                    session_id=f"lightnovel:{record.session_id}:{nonce}",
+                    settings={"max_tokens": 1200, "temperature": 0.7, "reasoning_budget": 0, "stop_sequences": ""},
+                    force_non_stream=True,
+                    request_timeout=_CHOICE_REQUEST_TIMEOUT_SECONDS,
+                )
+                if not raw.strip():
+                    raise _EmptyChoiceResponse()
+                break
+            except Exception as exc:
+                will_retry = attempt + 1 < _CHOICE_PROVIDER_ATTEMPTS and _retryable_choice_provider_error(exc)
+                _log_choice_failure(record, model, "provider", exc, started_at, retrying=will_retry)
+                raw = None
+                if not will_retry:
+                    break
+        if raw is not None:
+            try:
+                choices = parse_choice_response(raw, record.requested_count)
+            except Exception as exc:
+                _log_choice_failure(record, model, "parse", exc, started_at, retrying=False)
     with write_transaction(db):
         latest = load_choice_set(db, nonce)
         if latest and current_choice_story(db, latest) is not None:

@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Recover Mode A Light Novel stories and choices when a provider prefixes ordinary prose before one valid trailing fenced JSON envelope, without accepting ambiguous multi-fence responses.
+
 ### Changed
 
 - Render /character with the standard Telegram inline-keyboard panel while preserving animated rank custom emoji through each character button's icon.

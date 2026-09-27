@@ -137,17 +137,17 @@ USER_ENVIRONMENT_VARIABLES = {
 }
 
 
-def test_user_readme_and_env_example_cover_supported_environment_variables():
-    readme = (ROOT / "README.md").read_text()
+def test_user_configuration_guide_and_env_example_cover_supported_environment_variables():
+    configuration = (ROOT / "docs/configuration.md").read_text()
     example = (ROOT / ".env.example").read_text()
-    missing_readme = sorted(name for name in USER_ENVIRONMENT_VARIABLES if name not in readme)
+    missing_configuration = sorted(name for name in USER_ENVIRONMENT_VARIABLES if name not in configuration)
     missing_example = sorted(name for name in USER_ENVIRONMENT_VARIABLES if name not in example)
-    assert missing_readme == []
+    assert missing_configuration == []
     assert missing_example == []
 
 
-def test_user_readme_documents_provider_catalog_controls():
-    readme = (ROOT / "README.md").read_text()
+def test_user_configuration_guide_documents_provider_catalog_controls():
+    readme = (ROOT / "docs/configuration.md").read_text()
     for field in (
         "name",
         "api_endpoint",
@@ -167,3 +167,43 @@ def test_user_readme_documents_provider_catalog_controls():
         assert f"`{field}`" in readme, field
     provider_example = (ROOT / "config/providers.example.yaml").read_text()
     assert "image_default_size" not in provider_example
+
+
+def test_readme_is_a_compact_user_entrypoint_with_linked_guides():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert len(readme.splitlines()) <= 260
+    for path in (
+        "docs/installation.md",
+        "docs/configuration.md",
+        "docs/user-guide.md",
+        "docs/operations.md",
+        "docs/miniapp.md",
+    ):
+        assert (ROOT / path).is_file(), path
+        assert f"]({path})" in readme, path
+    assert "canonical command reference" in readme
+    assert "/help scene refresh" in readme
+
+
+def test_user_documentation_relative_links_resolve():
+    import re
+
+    documents = [ROOT / "README.md", *(ROOT / "docs").glob("*.md")]
+    for document in documents:
+        text = document.read_text(encoding="utf-8")
+        for target in re.findall(r"\[[^\]]+\]\(([^)]+)\)", text):
+            target = target.strip().split("#", 1)[0]
+            if not target or "://" in target or target.startswith(("mailto:", "#")):
+                continue
+            resolved = (document.parent / target).resolve()
+            assert resolved.exists(), f"{document.relative_to(ROOT)} -> {target}"
+
+
+def test_completed_superpowers_planning_artifacts_are_not_shipped_as_user_docs():
+    retired = (
+        "docs/superpowers/plans/2026-09-26-light-novel-mode.md",
+        "docs/superpowers/plans/2026-09-27-miniapp-delivery.md",
+        "docs/superpowers/specs/2026-09-26-light-novel-mode-design.md",
+        "docs/superpowers/specs/2026-09-27-miniapp-design.md",
+    )
+    assert all(not (ROOT / path).exists() for path in retired)

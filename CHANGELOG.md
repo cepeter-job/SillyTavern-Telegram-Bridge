@@ -8,6 +8,11 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 - Reuse the canonical animated S/A/B/C/D rank WEBMs in the Mini App character grid, with reduced-motion/static fallback and resilient unavailable-portrait handling.
 
+### Changed
+
+- Refocus `README.md` as a compact user entry point and move detailed installation, configuration, usage, operations, update, and troubleshooting material into linked guides under `docs/`.
+- Retire completed internal Superpowers implementation plan/spec files from the distributed repository; active maintenance, security, release, example, asset, CI, and systemd artifacts remain tracked.
+
 ## [0.2.033] - 2026-09-27
 
 ### Added

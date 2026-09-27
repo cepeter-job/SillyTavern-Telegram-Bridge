@@ -31,6 +31,7 @@ _ASSETS = {
     "characters.js": "text/javascript",
     "models.js": "text/javascript",
     "management.js": "text/javascript",
+    "memory.js": "text/javascript",
 }
 
 
@@ -38,6 +39,7 @@ def api_routes() -> list[ApiRoute]:
     from bridge.miniapp_characters import routes as character_routes
     from bridge.miniapp_context import current_session
     from bridge.miniapp_jobs import job_status, recent_jobs
+    from bridge.miniapp_memory import routes as memory_routes
     from bridge.miniapp_models import routes as model_routes
     from bridge.miniapp_sessions import routes as session_routes
     from bridge.miniapp_worlds import routes as world_routes
@@ -50,6 +52,7 @@ def api_routes() -> list[ApiRoute]:
         *model_routes(),
         *session_routes(),
         *world_routes(),
+        *memory_routes(),
     ]
 
 

@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Recover Mode A Light Novel stories and choices when a provider prefixes ordinary prose before one valid trailing fenced JSON envelope, without accepting ambiguous multi-fence responses.
+
 ### Changed
 
 - Merge the /character rank indicator into each character-name button, keeping the animated rank icon directly before the name and removing the separate rank column.

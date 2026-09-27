@@ -56,6 +56,70 @@ def test_inline_parser_keeps_story_when_choice_tail_is_invalid():
         assert choices is None
 
 
+def test_inline_parser_recovers_trailing_fenced_envelope_after_prose():
+    from bridge.light_novel_format import parse_story_response
+
+    source = """Draft narrative that must not leak.
+
+```json
+{"story":"Canonical narrative.","choices":["Open the door","Wait outside"]}
+```"""
+    assert parse_story_response(source, 2) == (
+        "Canonical narrative.",
+        ["Open the door", "Wait outside"],
+    )
+
+
+def test_inline_parser_recovers_trailing_story_when_its_choices_are_invalid():
+    from bridge.light_novel_format import parse_story_response
+
+    source = """Draft narrative that must not leak.
+
+```json
+{"story":"Canonical narrative.","choices":["Only one"]}
+```"""
+    assert parse_story_response(source, 2) == ("Canonical narrative.", None)
+
+
+def test_inline_parser_ignores_a_trailing_envelope_without_story():
+    from bridge.light_novel_format import parse_story_response
+
+    source = """Narrative that remains usable.
+
+```json
+{"choices":["Open the door","Wait outside"]}
+```"""
+    assert parse_story_response(source, 2) == ("Narrative that remains usable.", None)
+
+
+def test_inline_parser_removes_a_trailing_non_object_json_value():
+    from bridge.light_novel_format import parse_story_response
+
+    source = """Narrative that remains usable.
+
+```json
+["Open the door","Wait outside"]
+```"""
+    assert parse_story_response(source, 2) == ("Narrative that remains usable.", None)
+
+
+def test_inline_parser_does_not_recover_an_ambiguous_multi_fence_response():
+    from bridge.light_novel_format import parse_story_response
+
+    source = """Narrative with an earlier code block.
+```
+example
+```
+```json
+{"story":"Other narrative.","choices":["Open the door","Wait outside"]}
+```"""
+    expected = """Narrative with an earlier code block.
+```
+example
+```"""
+    assert parse_story_response(source, 2) == (expected, None)
+
+
 def test_inline_parser_never_leaks_envelope():
     from bridge.light_novel_format import parse_story_response
 

@@ -38,21 +38,51 @@ def _unfence(source: str) -> str:
     return fenced.group(1).strip() if fenced else text
 
 
+def _parse_story_envelope(value: object, requested_count: int) -> tuple[str, list[str] | None] | None:
+    if not isinstance(value, dict):
+        return None
+    story = value.get("story")
+    if not isinstance(story, str) or not story.strip():
+        raise ValueError("Story response has no usable narrative")
+    try:
+        choices = validate_choices(value.get("choices"), requested_count)
+    except ValueError:
+        choices = None
+    return story.strip(), choices
+
+
+def _trailing_fenced_envelope(text: str) -> tuple[str, object | None] | None:
+    fenced = re.search(r"(?:^|\n)```json\s*([\s\S]*?)\s*```\s*$", text, re.IGNORECASE)
+    if fenced is None:
+        return None
+    prefix = text[: fenced.start()].strip()
+    if not prefix:
+        return None
+    try:
+        value = json.loads(fenced.group(1).strip())
+    except (ValueError, TypeError):
+        value = None
+    return prefix, value
+
+
 def parse_story_response(source: str, requested_count: int) -> tuple[str, list[str] | None]:
     text = _unfence(source)
     try:
         result = json.loads(text)
     except (ValueError, TypeError):
         result = None
-    if isinstance(result, dict):
-        story = result.get("story")
-        if not isinstance(story, str) or not story.strip():
-            raise ValueError("Story response has no usable narrative")
-        try:
-            choices = validate_choices(result.get("choices"), requested_count)
-        except ValueError:
-            choices = None
-        return story.strip(), choices
+    parsed = _parse_story_envelope(result, requested_count)
+    if parsed is not None:
+        return parsed
+    trailing = _trailing_fenced_envelope(text)
+    if trailing is not None:
+        prefix, trailing_value = trailing
+        trailing_story = trailing_value.get("story") if isinstance(trailing_value, dict) else None
+        if text.count("```") == 2 and isinstance(trailing_story, str) and trailing_story.strip():
+            parsed_trailing = _parse_story_envelope(trailing_value, requested_count)
+            if parsed_trailing is not None:
+                return parsed_trailing
+        return prefix, None
     # A malformed choice tail must not discard an already complete JSON story string.
     if text.startswith("{"):
         match = re.match(r'\{\s*"story"\s*:\s*', text)

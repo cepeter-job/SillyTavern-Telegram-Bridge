@@ -10,6 +10,7 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Changed
 
+- Redesign the Mini App as a Telegram-native control center: compact live-status header, responsive desktop sidebar/mobile bottom navigation, More sheet, session-focused dashboard, skeleton loading states, native mobile dialogs, and portrait-first character cards without changing API or page contracts.
 - Refocus `README.md` as a compact user entry point and move detailed installation, configuration, usage, operations, update, and troubleshooting material into linked guides under `docs/`.
 - Retire completed internal Superpowers implementation plan/spec files from the distributed repository; active maintenance, security, release, example, asset, CI, and systemd artifacts remain tracked.
 

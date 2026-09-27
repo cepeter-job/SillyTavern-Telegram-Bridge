@@ -13,6 +13,11 @@ const lines=createInterface({input:child.stdout});
 const ready=await Promise.race([new Promise((ok,bad)=>{lines.once('line',line=>{try{ok(JSON.parse(line));}catch(e){bad(e);}});child.once('exit',code=>bad(new Error('Fixture exited '+code)));}),new Promise((_,bad)=>setTimeout(()=>bad(new Error('Fixture startup timed out')),10000).unref())]);
 const html=await readFile(resolve(root,'bridge/miniapp_assets/index.html'),'utf8');
 const dom=new JSDOM(html,{url:ready.url+'/miniapp/',runScripts:'outside-only',pretendToBeVisual:true});
+const initialDocument=dom.window.document;
+assert.ok(initialDocument.querySelector('.app-shell'),'Telegram-native app shell is present');
+assert.ok(initialDocument.querySelector('.app-header .connection-dot'),'Compact header exposes connection status');
+assert.ok(initialDocument.querySelector('#content .skeleton-shell'),'Initial content uses a skeleton instead of a loading card');
+assert.ok(initialDocument.querySelector('#more-menu.more-sheet'),'Secondary navigation has a More sheet');
 const context=dom.getInternalVMContext(),errors=[],expectedFailures=new Set(),observedFailures=[];
 process.on('unhandledRejection',error=>errors.push(error));
 dom.window.Telegram={WebApp:{initData:ready.initData,initDataUnsafe:{start_param:'dashboard'},ready(){},expand(){},BackButton:{onClick(){},hide(){},show(){}}}};
@@ -47,13 +52,27 @@ async function until(predicate,label) {
 }
 try {
   const app=await moduleFor('app.js');await app.link(linker);await app.evaluate();
-  await until(()=>dom.window.document.querySelectorAll('nav button').length===9,'all nine pages registered');
+  await until(()=>dom.window.document.querySelectorAll('#navigation button').length===5,'five primary navigation actions');
+  const shellDocument=dom.window.document;
+  assert.deepEqual([...shellDocument.querySelectorAll('#navigation button')].map(n=>n.textContent.trim()),['Home','Characters','Sessions','Memory','More']);
+  const more=[...shellDocument.querySelectorAll('#navigation button')].find(n=>n.textContent.trim()==='More');
+  more.click();
+  await until(()=>shellDocument.querySelector('#more-menu[open]'),'More sheet opens');
+  assert.deepEqual([...shellDocument.querySelectorAll('#more-navigation button')].map(n=>n.textContent.trim()),['Models','Personas','Worlds','Data Bank','System']);
+  shellDocument.getElementById('more-menu').close();
   for(const page of ['dashboard','characters','models','sessions','personas','worlds','memory','databank','system']) {
     await app.namespace.navigate(page);
+    assert.ok(shellDocument.getElementById('page-title').textContent.trim().length>0,page+' updates the compact page title');
     const body=dom.window.document.querySelector('main').textContent;
     assert.ok(!body.includes('Could not load this page'),page+': '+body);
     assert.ok(body.length>30,page+' rendered content');
+    if(page==='dashboard') {
+      assert.ok(shellDocument.querySelector('.dashboard-hero'),'Dashboard uses a clear hero hierarchy');
+      assert.ok(shellDocument.querySelector('.dashboard-session'),'Dashboard shows the current session summary');
+      assert.equal(shellDocument.querySelectorAll('.dashboard-shortcuts button').length,4,'Dashboard exposes four quick actions');
+    }
     if(page==='characters') {
+      assert.ok(shellDocument.querySelector('.character-card .portrait-frame'),'Character cards use a portrait-first visual layout');
       const pageDocument=dom.window.document;
       const rank=pageDocument.querySelector('video.rank-video source');
       assert.ok(rank,'Ranked character renders an animated rank asset');

@@ -6,9 +6,18 @@ function details(data) {
     card('Database',el('p',{},'SQLite '+data.database.sqlite_version+' · '+data.database.state),el('p',{},data.database.sessions+' private sessions'),el('p',{},data.database.messages+' stored messages')));
 }
 async function dashboard() {
-  const data=await api('/status');state.session=data.session;
-  return el('div',{},card('Your workspace',el('h3',{},data.session.title),el('p',{class:'muted'},data.session.character_file+' · '+data.session.model_id),el('p',{},'Continue conversations in Telegram. Use this workspace for characters, models, context and system management.'),el('div',{class:'actions'},button('Characters',()=>navigate('characters')),button('Sessions',()=>navigate('sessions'),'secondary'),button('Models',()=>navigate('models'),'secondary'))),details(data));
+  const [data,operations]=await Promise.all([api('/status'),api('/jobs')]);state.session=data.session;
+  const hour=new Date().getHours(),greeting=hour<12?'Good morning':hour<18?'Good afternoon':'Good evening';
+  const hero=el('section',{class:'dashboard-hero'},el('span',{class:'eyebrow'},'CONTROL CENTER'),el('h2',{},greeting+', '+(state.user?.name||'there')),el('p',{class:'muted'},'Manage the active SillyTavern session here. Continue roleplay in Telegram.'));
+  const sessionCard=card('Current session',el('div',{class:'session-meta'},el('h3',{},data.session.title),el('p',{class:'muted session-model'},data.session.character_file+' · '+data.session.model_id)),el('span',{class:'badge'},'Active'));
+  sessionCard.classList.add('dashboard-session');
+  const shortcuts=el('div',{class:'dashboard-shortcuts'},button('Characters',()=>navigate('characters'),'shortcut'),button('Sessions',()=>navigate('sessions'),'shortcut'),button('Models',()=>navigate('models'),'shortcut'),button('Memory',()=>navigate('memory'),'shortcut'));
+  const latest=operations.jobs?.[0];
+  const recent=card('Recent operation',latest?el('div',{class:'row spaced'},el('div',{},el('strong',{},latest.kind.replaceAll('_',' ')),el('p',{class:'muted'},new Date(latest.created_at*1000).toLocaleString())),el('span',{class:'badge'},latest.state)):el('p',{class:'muted'},'No recent background operations.'));recent.classList.add('dashboard-recent');
+  const health=details(data);health.classList.add('health-grid');
+  return el('div',{class:'dashboard-layout'},hero,sessionCard,shortcuts,recent,el('section',{class:'dashboard-health'},el('div',{class:'page-heading'},el('h3',{},'Bridge health'),el('span',{class:'eyebrow'},'OBSERVED STATUS')),health));
 }
+
 async function renderSystem() {
   const root=el('div');
   const scope=createSessionScope(),sessionBody=scope.body;
@@ -75,5 +84,5 @@ async function renderSystem() {
   }
   await load();return root;
 }
-registerPage('dashboard','Dashboard',dashboard);
+registerPage('dashboard','Home',dashboard);
 registerPage('system','System',renderSystem);

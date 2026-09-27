@@ -1,3 +1,60 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light dark"><title>SillyTavern Bridge</title><link rel="stylesheet" href="/miniapp/style.css"><script src="https://telegram.org/js/telegram-web-app.js?63"></script><script type="module" src="/miniapp/app.js"></script></head>
-<body><header><div><span class="eyebrow">SILLYTAVERN</span><h1>Bridge</h1></div><button id="refresh" aria-label="Refresh current page">Refresh</button></header><div id="identity" class="identity">Connecting securely to Telegram…</div><nav id="navigation" aria-label="Management sections"></nav><main id="content" aria-live="polite"><section class="card"><h2>Opening your workspace</h2><p>Authentication is verified by the bridge. No passwords or provider keys are stored in this app.</p></section></main><div id="notice" role="status" aria-live="polite" hidden></div><footer>Conversations stay in Telegram. This is your private management workspace.</footer></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>SillyTavern Bridge</title>
+  <link rel="stylesheet" href="/miniapp/style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js?63"></script>
+  <script type="module" src="/miniapp/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="brand-block">
+        <div class="brand-mark" aria-hidden="true">ST</div>
+        <div class="brand-copy">
+          <span class="eyebrow">SILLYTAVERN</span>
+          <h1>Bridge</h1>
+          <div id="identity" class="identity">Connecting securely to Telegram…</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="connection-pill" aria-live="polite"><span class="connection-dot"></span><span id="connection-label">Connecting</span></div>
+        <button id="refresh" class="icon-button secondary" type="button" aria-label="Refresh current page">↻</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <nav id="navigation" class="app-nav" aria-label="Primary management sections"></nav>
+      <section class="workspace-main">
+        <div class="page-heading">
+          <span id="page-kicker" class="eyebrow">PRIVATE WORKSPACE</span>
+          <h2 id="page-title">Home</h2>
+        </div>
+        <main id="content" aria-live="polite">
+          <section class="skeleton-shell" aria-label="Opening your workspace">
+            <div class="skeleton skeleton-title"></div>
+            <div class="skeleton skeleton-line"></div>
+            <div class="skeleton skeleton-line short"></div>
+            <div class="skeleton-grid"><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div></div>
+          </section>
+        </main>
+      </section>
+    </div>
+
+    <dialog id="more-menu" class="more-sheet" aria-labelledby="more-title">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="sheet-header">
+        <div><span class="eyebrow">MANAGE</span><h2 id="more-title">More</h2></div>
+        <button id="more-close" class="icon-button secondary" type="button" aria-label="Close more menu">×</button>
+      </div>
+      <div id="more-navigation" class="more-navigation"></div>
+    </dialog>
+
+    <div id="notice" role="status" aria-live="polite" hidden></div>
+    <footer>Conversations stay in Telegram · Management stays private to your authorized account.</footer>
+  </div>
+</body>
+</html>

@@ -1,4 +1,5 @@
 import json
+from dataclasses import replace
 
 import pytest
 from test_light_novel_storage import novel_db as novel_db
@@ -166,7 +167,7 @@ def test_choice_only_strategy_routes_correct_model_outside_transaction(novel_db,
     )
     assert result.choices == ("Go inside", "Wait outside")
     assert calls[0][0] == expected
-    assert calls[0][2]["request_timeout"] == 30
+    assert calls[0][2]["request_timeout"] == 60
     assert calls[0][2]["force_non_stream"]
     ensure_choices(
         db,
@@ -176,6 +177,170 @@ def test_choice_only_strategy_routes_correct_model_outside_transaction(novel_db,
         provider_port=ProviderPort(lambda *a, **k: pytest.fail("already ready")),
         app_settings=settings,
     )
+
+
+def test_choice_generation_lease_covers_bounded_retry_window(novel_db):
+    import time
+
+    from bridge.light_novel_repository import load_choice_set
+    from bridge.light_novel_service import attach_turn, ensure_choices, prepare_turn
+
+    db, session, settings = novel_db
+    started(db)
+    record = prepare_turn(db, "chat", session, "turn-lease", "owner", rng=lambda _: 2)
+    attach_turn(db, record, story_row(db), "The door opens.")
+    remaining = []
+
+    def generate(*args, **kwargs):
+        current = load_choice_set(db, record.nonce)
+        remaining.append(current.lease_until - time.time())
+        return '{"choices":["Go inside","Wait outside"]}'
+
+    result = ensure_choices(db, record.nonce, session, {}, provider_port=ProviderPort(generate), app_settings=settings)
+
+    assert result.generation_status == "ready"
+    assert remaining and remaining[0] > 130
+
+
+def test_choice_generation_retries_transient_timeout_once(novel_db, caplog):
+    from bridge.light_novel_service import attach_turn, ensure_choices, prepare_turn
+
+    db, session, settings = novel_db
+    started(db)
+    record = prepare_turn(db, "chat", session, "turn-timeout", "owner", rng=lambda _: 2)
+    attach_turn(db, record, story_row(db), "The door opens.")
+    calls = []
+
+    def generate(*args, **kwargs):
+        calls.append(kwargs["request_timeout"])
+        if len(calls) == 1:
+            raise TimeoutError("provider exceeded deadline")
+        return '{"choices":["Go inside","Wait outside"]}'
+
+    with caplog.at_level("WARNING"):
+        result = ensure_choices(
+            db, record.nonce, session, {}, provider_port=ProviderPort(generate), app_settings=settings
+        )
+
+    assert result.generation_status == "ready"
+    assert result.choices == ("Go inside", "Wait outside")
+    assert calls == [60, 60]
+    assert "stage=provider" in caplog.text
+    assert "error_type=TimeoutError" in caplog.text
+    assert "reason=timeout" in caplog.text
+    assert "retrying" in caplog.text
+
+
+def test_choice_generation_retries_empty_response_once(novel_db):
+    from bridge.light_novel_service import attach_turn, ensure_choices, prepare_turn
+
+    db, session, settings = novel_db
+    started(db)
+    record = prepare_turn(db, "chat", session, "turn-empty", "owner", rng=lambda _: 2)
+    attach_turn(db, record, story_row(db), "The door opens.")
+    responses = iter(["   ", '{"choices":["Go inside","Wait outside"]}'])
+    calls = []
+
+    def generate(*args, **kwargs):
+        calls.append(kwargs["request_timeout"])
+        return next(responses)
+
+    result = ensure_choices(db, record.nonce, session, {}, provider_port=ProviderPort(generate), app_settings=settings)
+
+    assert result.generation_status == "ready"
+    assert calls == [60, 60]
+
+
+def test_choice_generation_retries_transient_http_status_and_hides_url(novel_db, caplog):
+    import urllib.error
+
+    from bridge.light_novel_service import attach_turn, ensure_choices, prepare_turn
+
+    db, session, settings = novel_db
+    started(db)
+    record = prepare_turn(db, "chat", session, "turn-http", "owner", rng=lambda _: 2)
+    attach_turn(db, record, story_row(db), "The door opens.")
+    calls = []
+
+    def generate(*args, **kwargs):
+        calls.append(kwargs["request_timeout"])
+        if len(calls) == 1:
+            raise urllib.error.HTTPError(
+                "https://PRIVATE_PROVIDER_URL.example/secret",
+                503,
+                "Service Unavailable",
+                {},
+                None,
+            )
+        return '{"choices":["Go inside","Wait outside"]}'
+
+    with caplog.at_level("WARNING"):
+        result = ensure_choices(
+            db, record.nonce, session, {}, provider_port=ProviderPort(generate), app_settings=settings
+        )
+
+    assert result.generation_status == "ready"
+    assert calls == [60, 60]
+    assert "http_status=503" in caplog.text
+    assert "reason=http_transient" in caplog.text
+    assert "PRIVATE_PROVIDER_URL" not in caplog.text
+
+
+def test_choice_generation_does_not_retry_parse_failure_and_logs_safely(novel_db, caplog):
+    from bridge.light_novel_service import attach_turn, ensure_choices, prepare_turn
+
+    db, session, settings = novel_db
+    settings = replace(settings, api_key="SECRET_API_KEY")
+    started(db)
+    record = prepare_turn(db, "chat", session, "turn-parse", "owner", rng=lambda _: 2)
+    attach_turn(db, record, story_row(db, "SECRET_STORY_TEXT"), "SECRET_STORY_TEXT")
+    calls = []
+    raw = "SECRET_RAW_OUTPUT not-json"
+
+    def generate(*args, **kwargs):
+        calls.append(kwargs["request_timeout"])
+        return raw
+
+    with caplog.at_level("WARNING"):
+        result = ensure_choices(
+            db, record.nonce, session, {}, provider_port=ProviderPort(generate), app_settings=settings
+        )
+
+    assert result.generation_status == "failed"
+    assert calls == [60]
+    assert "stage=parse" in caplog.text
+    assert "reason=invalid_json" in caplog.text
+    assert "requested_count=2" in caplog.text
+    assert "model=story::test" in caplog.text
+    assert "SECRET_STORY_TEXT" not in caplog.text
+    assert "SECRET_RAW_OUTPUT" not in caplog.text
+    assert settings.api_key not in caplog.text
+
+
+def test_choice_generation_does_not_retry_non_transient_provider_error(novel_db, caplog):
+    from bridge.light_novel_service import attach_turn, ensure_choices, prepare_turn
+
+    db, session, settings = novel_db
+    started(db)
+    record = prepare_turn(db, "chat", session, "turn-provider-error", "owner", rng=lambda _: 2)
+    attach_turn(db, record, story_row(db), "The door opens.")
+    calls = []
+
+    def generate(*args, **kwargs):
+        calls.append(kwargs["request_timeout"])
+        raise RuntimeError("provider configuration rejected request with PRIVATE_DETAIL")
+
+    with caplog.at_level("WARNING"):
+        result = ensure_choices(
+            db, record.nonce, session, {}, provider_port=ProviderPort(generate), app_settings=settings
+        )
+
+    assert result.generation_status == "failed"
+    assert calls == [60]
+    assert "stage=provider" in caplog.text
+    assert "error_type=RuntimeError" in caplog.text
+    assert "reason=provider_error" in caplog.text
+    assert "PRIVATE_DETAIL" not in caplog.text
 
 
 def test_failed_choices_retry_does_not_change_story_or_count(novel_db):

@@ -165,9 +165,12 @@ class PanelificationTests(SettingsTestCase):
         self.assertTrue(all(len(row) == 2 for row in item_rows))
         self.assertEqual(
             item_rows[0][0],
-            {"text": "✅ 🏆 S active", "callback_data": "character:cb-active.png"},
+            {
+                "text": "✅ active",
+                "callback_data": "character:cb-active.png",
+                "icon_custom_emoji_id": "6181691122838938530",
+            },
         )
-        self.assertNotIn("icon_custom_emoji_id", item_rows[0][0])
         self.assertEqual(
             item_rows[1][0],
             {"text": "other", "callback_data": "character:cb-other.png"},
@@ -181,22 +184,23 @@ class PanelificationTests(SettingsTestCase):
             self.assertTrue(self._route(command))
             self.assertIn(marker, str(self.calls[-1]))
 
-    def test_classic_character_rank_labels_use_clear_static_badges(self):
+    def test_character_rank_icon_ids_map_known_tiers_and_ignore_unranked(self):
         expected = {
-            "S": "🏆",
-            "A": "🥇",
-            "B": "🥈",
-            "C": "🥉",
-            "D": "⚪",
+            "S": "6181691122838938530",
+            "A": "6179119000069349499",
+            "B": "6181710471666606640",
+            "C": "6181325707021395017",
+            "D": "6181582481641187488",
         }
-        for tier, badge in expected.items():
-            self.assertEqual(_m_cards.character_rank_label(tier, "Alice"), f"{badge} {tier} Alice")
-        self.assertEqual(_m_cards.character_rank_label(None, "Alice"), "Alice")
+        for tier, emoji_id in expected.items():
+            self.assertEqual(_m_cards.character_rank_icon_id(tier), emoji_id)
+        self.assertIsNone(_m_cards.character_rank_icon_id(None))
+        self.assertIsNone(_m_cards.character_rank_icon_id("unknown"))
 
-    def test_character_rank_label_has_no_configuration_parameter(self):
+    def test_character_rank_icon_id_has_no_configuration_parameter(self):
         import inspect
 
-        self.assertEqual(list(inspect.signature(_m_cards.character_rank_label).parameters), ["rank", "label"])
+        self.assertEqual(list(inspect.signature(_m_cards.character_rank_icon_id).parameters), ["rank"])
 
     def test_scene_and_director_goal_open_topic_panels(self):
         topic_id = "chat|topic:1"
@@ -291,7 +295,7 @@ def _with_character_fixture(module, db):
     )
 
 
-def test_character_menu_merges_animated_rank_into_character_name_button(tmp_path):
+def test_character_menu_uses_standard_inline_keyboard_with_animated_rank_icon(tmp_path):
     settings = __import__("settings_test_support").make_test_settings(home=tmp_path)
     db = _m_memory_curator.db_connect(app_settings=settings)
     calls = []
@@ -318,23 +322,16 @@ def test_character_menu_merges_animated_rank_into_character_name_button(tmp_path
             )
     finally:
         db.close()
-    assert calls and calls[0][0] == "sendRichMessage"
+    assert calls and calls[0][0] == "sendMessage"
     payload = calls[0][1]
-    assert "reply_markup" not in payload
-    blocks = payload["rich_message"]["blocks"]
-    button_rows = [block["buttons"] for block in blocks if block.get("type") == "buttons"]
+    assert "rich_message" not in payload
+    assert payload["text"].startswith("Current character: active")
+    button_rows = payload["reply_markup"]["inline_keyboard"]
     character, action = button_rows[0]
     assert character == {
-        "text": [
-            "✅ ",
-            {
-                "type": "custom_emoji",
-                "custom_emoji_id": "6181691122838938530",
-                "alternative_text": "🏆",
-            },
-            " active",
-        ],
+        "text": "✅ active",
         "callback_data": "character:cb-active.png",
+        "icon_custom_emoji_id": "6181691122838938530",
     }
     assert action["callback_data"] == "character:protected"
     assert button_rows[1][0] == {
@@ -343,7 +340,7 @@ def test_character_menu_merges_animated_rank_into_character_name_button(tmp_path
     }
 
 
-def test_character_menu_rich_edit_uses_edit_message_text(tmp_path):
+def test_character_menu_standard_edit_uses_edit_message_text(tmp_path):
     settings = __import__("settings_test_support").make_test_settings(home=tmp_path)
     db = _m_memory_curator.db_connect(app_settings=settings)
     calls = []
@@ -373,21 +370,15 @@ def test_character_menu_rich_edit_uses_edit_message_text(tmp_path):
         db.close()
     assert calls[0][0] == "editMessageText"
     assert calls[0][1]["message_id"] == 55
-    assert "rich_message" in calls[0][1]
-    assert "text" not in calls[0][1]
+    assert "rich_message" not in calls[0][1]
+    assert "text" in calls[0][1]
+    assert "reply_markup" in calls[0][1]
 
 
-def test_character_menu_falls_back_to_classic_panel_when_rich_is_rejected(tmp_path):
+def test_character_menu_never_calls_send_rich_message(tmp_path):
     settings = __import__("settings_test_support").make_test_settings(home=tmp_path)
     db = _m_memory_curator.db_connect(app_settings=settings)
-    calls = []
-
-    def request(_token, method, payload, **_kwargs):
-        calls.append((method, payload))
-        if method == "sendRichMessage":
-            raise RuntimeError("Telegram sendRichMessage failed: unsupported")
-        return {"message_id": 45}
-
+    methods = []
     try:
         patches = _with_character_fixture(_m_cards, db)
         with (
@@ -395,7 +386,11 @@ def test_character_menu_falls_back_to_classic_panel_when_rich_is_rejected(tmp_pa
             patches[1],
             patches[2],
             patches[3],
-            patch.object(_m_cards, "send_panel_request", side_effect=request),
+            patch.object(
+                _m_cards,
+                "send_panel_request",
+                side_effect=lambda _token, method, _payload, **_kwargs: methods.append(method) or {"message_id": 45},
+            ),
         ):
             _m_cards.send_character_menu(
                 "token",
@@ -405,14 +400,4 @@ def test_character_menu_falls_back_to_classic_panel_when_rich_is_rejected(tmp_pa
             )
     finally:
         db.close()
-    assert [method for method, _payload in calls] == ["sendRichMessage", "sendMessage"]
-    fallback = calls[-1][1]
-    assert fallback["text"].startswith("Current character: active")
-    assert fallback["reply_markup"]["inline_keyboard"][0][0] == {
-        "text": "✅ 🏆 S active",
-        "callback_data": "character:cb-active.png",
-    }
-    assert fallback["reply_markup"]["inline_keyboard"][1][0] == {
-        "text": "other",
-        "callback_data": "character:cb-other.png",
-    }
+    assert methods == ["sendMessage"]

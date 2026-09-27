@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import hashlib
-import logging
 from pathlib import Path
 
 import bridge.cards as cards
-from bridge.cards import _CHARACTER_RANK_CUSTOM_EMOJI_IDS, character_rank_label, character_rich_rank_label
+from bridge.cards import _CHARACTER_RANK_CUSTOM_EMOJI_IDS
 
 ROOT = Path(__file__).resolve().parents[1] / "assets" / "character-ranks"
 EXPECTED_IDS = {
@@ -15,7 +14,6 @@ EXPECTED_IDS = {
     "C": "6181325707021395017",
     "D": "6181582481641187488",
 }
-EXPECTED_STATIC_BADGES = {"S": "🏆", "A": "🥇", "B": "🥈", "C": "🥉", "D": "⚪"}
 EXPECTED_SHA256 = {
     "source/rank_A_transparent.gif": "8e38b025cd2b9f42130a0af849fcf83b27272be0d7fdfc59b88da1df9c2d3a7c",
     "source/rank_B_transparent.gif": "dfd710e678c7fcde1b7f8ef845d0e993ed89c53b417b817e41d8eb6f99def2bb",
@@ -43,55 +41,11 @@ def test_public_rank_assets_match_hardcoded_custom_emoji_mapping():
         assert digest in manifest
 
 
-def test_rank_labels_merge_badges_into_character_names():
-    for tier, badge in EXPECTED_STATIC_BADGES.items():
-        assert character_rank_label(tier, "Alice") == f"{badge} {tier} Alice"
-        assert character_rich_rank_label(tier, "Alice") == [
-            {
-                "type": "custom_emoji",
-                "custom_emoji_id": EXPECTED_IDS[tier],
-                "alternative_text": badge,
-            },
-            " Alice",
-        ]
-        assert character_rich_rank_label(tier, "Alice", prefix="✅ ") == [
-            "✅ ",
-            {
-                "type": "custom_emoji",
-                "custom_emoji_id": EXPECTED_IDS[tier],
-                "alternative_text": badge,
-            },
-            " Alice",
-        ]
-
-    assert character_rank_label(None, "Alice") == "Alice"
-    assert character_rich_rank_label(None, "Alice") == "Alice"
-
-
-def test_character_menu_logs_rich_message_rejection_before_classic_fallback(monkeypatch, caplog):
-    fallback = []
-
-    def reject_rich_message(_token, method, _payload, **_kwargs):
-        assert method == "sendRichMessage"
-        raise RuntimeError("Telegram sendRichMessage failed: Bad Request: invalid rich text")
-
-    monkeypatch.setattr(cards, "send_panel_request", reject_rich_message)
-    monkeypatch.setattr(cards, "send_panel_message", lambda *args, **kwargs: fallback.append((args, kwargs)))
-
-    with caplog.at_level(logging.WARNING):
-        cards._send_character_menu_panel(
-            "token",
-            "chat",
-            "Character menu",
-            [[{"text": "🏆 S", "callback_data": "character:rank:S"}]],
-            [[{"text": {"type": "custom_emoji", "custom_emoji_id": EXPECTED_IDS["S"], "alternative_text": "🏆"}}]],
-            None,
-            request_context=object(),
-        )
-
-    assert len(fallback) == 1
-    assert "Character rich panel rejected; using classic fallback" in caplog.text
-    assert "invalid rich text" in caplog.text
+def test_rank_icon_ids_reuse_registered_custom_emoji_ids():
+    for tier, custom_emoji_id in EXPECTED_IDS.items():
+        assert cards.character_rank_icon_id(tier) == custom_emoji_id
+    assert cards.character_rank_icon_id(None) is None
+    assert cards.character_rank_icon_id("unknown") is None
 
 
 def test_miniapp_reuses_canonical_rank_webm_assets():

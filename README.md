@@ -831,9 +831,37 @@ schedules its first choice-only request immediately: A/C use the Story model;
 B uses the configured Utility route. Subsequent successful A turns need no
 additional choice-generation request. A's raw structured response is not streamed
 to Telegram. B/C retain ordinary story streaming when other settings allow it.
-Response language and Humanizer still apply to visible narrative. Choice-only
-requests use bounded character, persona, active World Info, System Prompt and
-recent story context; choices are not passed through Humanizer.
+Response language and Humanizer still apply to visible narrative; choices are not
+passed through Humanizer.
+
+Choice generation remains grounded in the configured session, but each strategy
+uses that context differently:
+
+- **A — Story Inline** generates the narrative and choices together in one
+  Story-model request. The choice contract is added to the same assembled prompt
+  that is sent for the narrative after normal context compaction. Choices therefore
+  see the Character, Persona, selected System Prompt, active World Info,
+  conversation history, Author's Note, post-history instructions,
+  response-language rules, and any session summary, memory, or RAG context that
+  remains in the final prompt. When the prompt is over budget, optional context may
+  be trimmed by the same compaction rules used for ordinary narrative generation.
+- **B — Utility Model** and **C — Story Second Pass** generate choices after the
+  narrative is committed. Both receive the same bounded snapshot: Persona name
+  and description, Character name/description/personality/scenario, relevant
+  World Info, the selected session System Prompt, the six most recent messages,
+  and the current story. B sends that snapshot to the Utility model; C sends it
+  to the Story model.
+- The B/C snapshot limits each Persona field to 4,000 characters, each Character
+  field to 2,000, World Info to 6,000, the System Prompt to 4,000, each recent
+  message to 1,600, and the current story to its final 10,000 characters. It does
+  not separately resend Author's Note, post-history instructions, memory, RAG, or
+  the session summary; those can still influence choices indirectly through the
+  already-generated current story.
+
+Every strategy asks the model to propose actions for the **user**, not actions
+for the assistant Character. The dedicated B/C choice prompt additionally treats
+the supplied snapshot as story data that cannot override the bounded output
+contract.
 
 Each new story turn requests a uniformly random **2, 3 or 4** distinct actions.
 The count is reserved before generation; retries/restarts do not reroll it, and

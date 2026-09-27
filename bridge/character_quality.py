@@ -32,7 +32,6 @@ from bridge.sqlite_store import write_transaction
 # Rank tiers, best to worst. Normal Telegram inline-keyboard character buttons
 # attach the registered custom emoji as icon_custom_emoji_id.
 RANK_TIERS = ("S", "A", "B", "C", "D")
-RANK_BADGES = {"S": "🏆", "A": "🥇", "B": "🥈", "C": "🥉", "D": "⚪"}
 
 # A rank is a property of the card file, not of any chat/session, so it is
 # stored in the global meta table keyed by filename.
@@ -54,14 +53,6 @@ _RANK_MAX_TOKENS = 120
 _OPTIMIZE_MAX_TOKENS = 4000
 
 _JSON_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
-
-
-def rank_badge(rank: str | None) -> str:
-    """Return the display badge for a rank, or "" when unranked/unknown."""
-    tier = str(rank or "").strip().upper()
-    if tier not in RANK_BADGES:
-        return ""
-    return f"{RANK_BADGES[tier]}{tier} "
 
 
 def _file_signature(filename: str, *, app_settings: AppSettings) -> list[str | int] | None:

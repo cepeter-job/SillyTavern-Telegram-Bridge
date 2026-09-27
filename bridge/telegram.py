@@ -31,7 +31,6 @@ def telegram_request(token: str, method: str, payload: dict | None = None) -> di
         request_payload["chat_id"] = chat_id
         if thread_id is not None and method in {
             "sendMessage",
-            "sendRichMessage",
             "sendPhoto",
             "sendVoice",
             "sendDocument",
@@ -92,8 +91,8 @@ def delete_pending_input_prompts(token: str, chat_id: str, state: dict) -> None:
 def send_panel_request(token: str, method: str, payload: dict, *, request_context: RequestContext) -> dict:
     scoped_chat_id = str(payload.get("chat_id", "")) if payload.get("chat_id") is not None else ""
     result = telegram_request(token, method, payload)
-    panel_content = payload.get("reply_markup") or payload.get("rich_message")
-    if panel_content and method in {"sendMessage", "sendRichMessage", "editMessageText"}:
+    panel_content = payload.get("reply_markup")
+    if panel_content and method in {"sendMessage", "editMessageText"}:
         bound_message_id = result.get("message_id") if isinstance(result, dict) else None
         bound_message_id = bound_message_id or payload.get("message_id")
         if request_context.session_id and bound_message_id:

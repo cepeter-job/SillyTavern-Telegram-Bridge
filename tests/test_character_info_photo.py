@@ -224,7 +224,7 @@ def test_send_panel_photo_uploads_reply_markup_and_binds_returned_message(tmp_pa
     assert binding == ("session-1", "owner-1")
 
 
-def test_character_rank_column_callback_is_silent_noop(tmp_path):
+def test_obsolete_character_rank_callback_uses_generic_invalid_character_path(tmp_path):
     db = sqlite3.connect(":memory:")
     context = make_test_request_context(db, "session", "owner", app_settings=make_test_settings(home=tmp_path))
     answers = []
@@ -247,7 +247,7 @@ def test_character_rank_column_callback_is_silent_noop(tmp_path):
     finally:
         db.close()
     assert handled is True
-    assert answers == [""]
+    assert answers == ["Character not found"]
 
 
 def test_character_info_caption_never_shows_rank_badge(tmp_path, monkeypatch):

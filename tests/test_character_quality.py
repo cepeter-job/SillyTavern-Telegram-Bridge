@@ -31,16 +31,10 @@ def _minimal_png(card: dict) -> bytes:
     return b"\x89PNG\r\n\x1a\n" + chunk
 
 
-class RankBadgeTests(unittest.TestCase):
-    def test_badges_map_tiers(self):
-        self.assertEqual(quality.rank_badge("S"), "🏆S ")
-        self.assertEqual(quality.rank_badge("a"), "🥇A ")
-        self.assertEqual(quality.rank_badge("D"), "⚪D ")
-
-    def test_unknown_or_empty_returns_empty(self):
-        self.assertEqual(quality.rank_badge(None), "")
-        self.assertEqual(quality.rank_badge(""), "")
-        self.assertEqual(quality.rank_badge("Z"), "")
+class RankPresentationCleanupTests(unittest.TestCase):
+    def test_static_rank_badge_surface_is_removed(self):
+        self.assertFalse(hasattr(quality, "rank_badge"))
+        self.assertFalse(hasattr(quality, "RANK_BADGES"))
 
 
 class ParseRankTests(unittest.TestCase):

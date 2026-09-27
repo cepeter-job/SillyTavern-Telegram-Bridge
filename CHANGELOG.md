@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Add sanitized Humanizer rewrite-rejection diagnostics with reason and source/candidate character counts, without logging response text, protected fragments, prompts, or credentials.
+
 ### Fixed
 
 - Make separate Light Novel choice generation more resilient with a 60-second provider timeout, one bounded retry for transient provider/empty-content failures, and sanitized stage/model/status/parser diagnostics while preserving strict choice validation and the committed story.

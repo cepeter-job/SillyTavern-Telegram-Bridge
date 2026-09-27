@@ -70,6 +70,8 @@ def make_services(tmp_path):
     settings.native_persona_settings_file.write_text(
         json.dumps({"power_user": {"personas": {}, "persona_descriptions": {}}})
     )
+    settings.native_persona_avatar_dir.mkdir(parents=True, exist_ok=True)
+    (settings.native_persona_avatar_dir / "user-default.png").write_bytes(card_bytes("User"))
     settings.card_file.write_bytes(card_bytes("Default"))
     (settings.character_dir / "Alice.png").write_bytes(card_bytes("Alice"))
     services = make_test_application_services(app_settings=settings)

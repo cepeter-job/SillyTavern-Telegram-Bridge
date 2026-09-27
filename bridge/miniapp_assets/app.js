@@ -35,6 +35,7 @@ async function start() {
     document.getElementById('identity').textContent=data.user.name+' · Private bot chat';
     await import('./characters.js');
     await import('./models.js');
+    await import('./management.js');
     await navigate(telegram?.initDataUnsafe?.start_param || 'dashboard');
   } catch(error) {
     document.getElementById('identity').textContent='Authentication required';

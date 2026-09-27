@@ -19,3 +19,9 @@ Slow work is admitted to the existing bounded utility executor and has an actor-
 ## Models and generation
 
 Models displays provider/model names only, never private provider configuration. Story and Utility selections are scoped to the current session; Utility can inherit Story. Search filters up to 500 results. Generation uses the same canonical limits as Telegram: temperature 0–2, top-p 0–1, output tokens 1–16000, frequency/presence penalties -2–2, reasoning budget 0–32000 and at most four stop sequences of 100 characters. Settings are fully validated before mutation. Presets are private to your chat; replacing/deleting a preset requires confirmation.
+
+## Sessions, personas and worlds
+
+Sessions can be searched, created, renamed, selected and deleted. Deletion is a background operation and refuses the active session or sessions with pending work. Persona creation/editing/selection/deletion uses the native integrity-checked PersonaService. An existing native avatar is required for new personas; the installer creates a starter avatar for fresh installations.
+
+Worlds offers a JSON editor/file import limited to 1 MB and 2000 entries, multi-file session selection, revision-checked save and backed-up deletion. Files active in any session cannot be deleted. Native personas and World Info are shared administrator-managed resources, not tenant-private files.

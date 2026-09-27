@@ -837,11 +837,14 @@ passed through Humanizer.
 Choice generation remains grounded in the configured session, but each strategy
 uses that context differently:
 
-- **A — Story Inline** generates the narrative and choices together from the full
-  assembled conversation prompt. Choices therefore see the active Character,
-  Persona, selected System Prompt, active World Info, conversation history,
-  Author's Note, post-history instructions, response-language rules, and any
-  available session summary, memory, or RAG context used by the narrative.
+- **A — Story Inline** generates the narrative and choices together in one
+  Story-model request. The choice contract is added to the same assembled prompt
+  that is sent for the narrative after normal context compaction. Choices therefore
+  see the Character, Persona, selected System Prompt, active World Info,
+  conversation history, Author's Note, post-history instructions,
+  response-language rules, and any session summary, memory, or RAG context that
+  remains in the final prompt. When the prompt is over budget, optional context may
+  be trimmed by the same compaction rules used for ordinary narrative generation.
 - **B — Utility Model** and **C — Story Second Pass** generate choices after the
   narrative is committed. Both receive the same bounded snapshot: Persona name
   and description, Character name/description/personality/scenario, relevant

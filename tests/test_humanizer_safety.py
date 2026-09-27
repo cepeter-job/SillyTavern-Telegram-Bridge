@@ -67,6 +67,70 @@ def test_destructive_or_truncated_rewrite_keeps_original(source, rewritten):
     assert result == source
 
 
+@pytest.mark.parametrize(
+    "source,candidate,reason",
+    [
+        (
+            "This is a fairly detailed explanation that should remain substantial after rewriting.",
+            "Short.",
+            "too_short",
+        ),
+        (
+            "This response is long enough to exercise the upper rewrite bound safely.",
+            "Expanded rewrite " * 40,
+            "too_long",
+        ),
+        (
+            "Read https://example.test/source for the complete reference and continue carefully.",
+            "Read https://other.test/source for the complete reference and continue carefully.",
+            "protected_fragments_changed",
+        ),
+    ],
+)
+def test_humanizer_logs_sanitized_rejection_reason(source, candidate, reason, caplog):
+    with caplog.at_level("WARNING"):
+        result = humanize.render_humanized_response(
+            "",
+            "model",
+            source,
+            "s",
+            provider_port=ProviderPort(lambda *a, **k: candidate),
+        )
+
+    assert result == source
+    assert f"reason={reason}" in caplog.text
+    assert f"source_chars={len(source)}" in caplog.text
+    assert f"candidate_chars={len(candidate.strip())}" in caplog.text
+    assert source not in caplog.text
+    assert candidate.strip() not in caplog.text
+
+
+@pytest.mark.parametrize(
+    "candidate,reason",
+    [
+        ("", "empty_candidate"),
+        ("None", "null_candidate"),
+        ("null", "null_candidate"),
+    ],
+)
+def test_humanizer_logs_empty_or_null_candidate_rejection(candidate, reason, caplog):
+    source = "A normal response that should remain available if rewriting fails safely."
+    with caplog.at_level("WARNING"):
+        result = humanize.render_humanized_response(
+            "",
+            "model",
+            source,
+            "s",
+            provider_port=ProviderPort(lambda *a, **k: candidate),
+        )
+
+    assert result == source
+    assert f"reason={reason}" in caplog.text
+    assert f"source_chars={len(source)}" in caplog.text
+    assert "candidate_chars=" in caplog.text
+    assert source not in caplog.text
+
+
 def test_humanizer_logs_no_exception_payload(caplog):
     def fail(*args, **kwargs):
         raise RuntimeError("private-provider-credential-and-source")

@@ -82,7 +82,7 @@ def test_inline_parser_recovers_trailing_story_when_its_choices_are_invalid():
     assert parse_story_response(source, 2) == ("Canonical narrative.", None)
 
 
-def test_inline_parser_ignores_a_trailing_envelope_without_story():
+def test_inline_parser_accepts_unambiguous_trailing_choices_only_envelope():
     from bridge.light_novel_format import parse_story_response
 
     source = """Narrative that remains usable.
@@ -90,7 +90,10 @@ def test_inline_parser_ignores_a_trailing_envelope_without_story():
 ```json
 {"choices":["Open the door","Wait outside"]}
 ```"""
-    assert parse_story_response(source, 2) == ("Narrative that remains usable.", None)
+    assert parse_story_response(source, 2) == (
+        "Narrative that remains usable.",
+        ["Open the door", "Wait outside"],
+    )
 
 
 def test_inline_parser_removes_a_trailing_non_object_json_value():
@@ -140,6 +143,31 @@ def test_unsafe_or_invalid_choices_are_rejected(values):
 
     with pytest.raises(ValueError):
         validate_choices(values, 2)
+
+
+def test_mode_a_inline_rejection_logs_reason_and_counts_without_content(novel_db, caplog):
+    from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
+    from bridge.light_novel_turn import begin_novel_turn
+
+    db, session, _settings = novel_db
+    configure_conversation(db, "chat", "story", "lightnovel", "a")
+    mark_started(db, "chat", "story", conversation_state(db, "chat", "story").epoch)
+    turn = begin_novel_turn(db, "chat", session, "message", 24)
+    count = turn.record.requested_count
+    wrong_count = 2 if count != 2 else 3
+    private_story = "PRIVATE_STORY_CONTENT"
+    private_choice = "PRIVATE_CHOICE_CONTENT"
+    source = json.dumps({"story": private_story, "choices": [private_choice] * wrong_count})
+
+    with caplog.at_level("WARNING"):
+        assert turn.extract(source) == private_story
+
+    assert "Light Novel inline choices unavailable" in caplog.text
+    assert "reason=invalid_choice_count" in caplog.text
+    assert f"requested_count={count}" in caplog.text
+    assert f"observed_count={wrong_count}" in caplog.text
+    assert private_story not in caplog.text
+    assert private_choice not in caplog.text
 
 
 @pytest.mark.parametrize("strategy,expected", [("a", "story::test"), ("b", "utility::test"), ("c", "story::test")])

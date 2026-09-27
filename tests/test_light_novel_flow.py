@@ -71,6 +71,25 @@ def test_story_and_choice_job_roll_back_together(novel_db):
     assert load_choice_set(db, record.nonce).assistant_rowid is None
 
 
+def test_pending_choices_panel_shows_recovery_without_manual_retry(novel_db, monkeypatch):
+    from bridge import light_novel_panels as panels
+
+    record = attached_choice(novel_db, strategy="a", ready=False)
+    db, _session, settings = novel_db
+    sent = []
+    monkeypatch.setattr(
+        panels,
+        "send_panel_request",
+        lambda token, method, payload, **kw: sent.append((method, payload)) or {"message_id": 81},
+    )
+    assert load_choice_set(db, record.nonce).generation_status == "pending"
+    assert panels.render_choices(db, "token", record, app_settings=settings)
+    payload = sent[-1][1]
+    assert payload["text"] == "Preparing choices for your saved story. You may also type your own reply."
+    assert payload["reply_markup"]["inline_keyboard"] == []
+    assert "Retry Choices" not in payload["text"]
+
+
 def test_choice_panels_show_full_text_in_body_with_numbered_selector_buttons(novel_db, monkeypatch):
     from bridge import light_novel_panels as panels
 
@@ -325,7 +344,7 @@ def test_turn_wrapper_attaches_combined_continuation_and_fences_old_panel(novel_
     assert load_choice_set(db, turn.record.nonce).choices == tuple(actions)
 
 
-def test_missing_inline_choices_marks_retry_without_automatic_extra_call(novel_db):
+def test_missing_inline_choices_leave_automatic_recovery_pending(novel_db):
     from bridge.light_novel_turn import begin_novel_turn
 
     db, session, _settings = make_started(novel_db, "a")
@@ -337,7 +356,59 @@ def test_missing_inline_choices_marks_retry_without_automatic_extra_call(novel_d
             ",'story','assistant','The rain falls.',1)"
         ).lastrowid
         turn.commit(db, rowid, "The rain falls.")
-    assert load_choice_set(db, turn.record.nonce).generation_status == "failed"
+    record = load_choice_set(db, turn.record.nonce)
+    assert record.generation_status == "pending"
+    jobs = db.execute("SELECT kind,payload_json,state FROM jobs WHERE kind='novel_choices'").fetchall()
+    assert len(jobs) == 1
+    assert json.loads(jobs[0][1])["retry"] is False
+    assert jobs[0][2] == "queued"
+
+
+def test_mode_a_automatic_choice_worker_recovers_invalid_inline_choices(novel_db, monkeypatch):
+    from bridge import light_novel_jobs as workers
+    from bridge.light_novel_service import prepare_turn
+    from bridge.light_novel_turn import NovelTurn
+    from bridge.provider_port import ProviderPort
+    from bridge.sqlite_store import db_connect
+
+    db, session, settings = make_started(novel_db, "a")
+    record = prepare_turn(db, "chat", session, "message:23", "owner", rng=lambda _: 2)
+    turn = NovelTurn(record)
+    assert turn.extract('{"story":"The rain falls.","choices":[]}') == "The rain falls."
+    with write_transaction(db):
+        rowid = db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_ids,created_at) "
+            "VALUES('chat','story','assistant','The rain falls.','[71]',1)"
+        ).lastrowid
+        turn.commit(db, rowid, "The rain falls.")
+
+    calls = []
+
+    def generate(*args, **kwargs):
+        calls.append((args, kwargs))
+        return '{"choices":["Open the door","Wait outside"]}'
+
+    services = bridge_services(settings, [])
+    filename = db.execute("PRAGMA database_list").fetchone()[2]
+    services = replace(
+        services,
+        provider=ProviderPort(generate),
+        db_factory=lambda: db_connect(filename, app_settings=settings),
+    )
+    monkeypatch.setattr(workers, "card_fields_from_file", lambda *a, **k: {"name": "Alice"})
+    rendered = []
+    monkeypatch.setattr(workers, "render_choices", lambda _db, _token, record, **k: rendered.append(record) or True)
+
+    job_id = db.execute("SELECT job_id FROM jobs WHERE update_id=?", (-turn.record.id,)).fetchone()[0]
+    workers.process_light_novel_choices_job(services, "chat", turn.record.nonce, False, job_id)
+
+    recovered = load_choice_set(db, turn.record.nonce)
+    assert recovered.generation_status == "ready"
+    assert recovered.choices == ("Open the door", "Wait outside")
+    assert len(calls) == 1
+    assert calls[0][1]["request_timeout"] == 60
+    assert [item.generation_status for item in rendered] == ["pending", "ready"]
+    assert db.execute("SELECT content FROM messages WHERE rowid=?", (rowid,)).fetchone()[0] == "The rain falls."
 
 
 def test_manual_reply_invalidates_choices_and_pins_generation_job(novel_db, monkeypatch):

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 import time
 from dataclasses import dataclass
 
 from bridge.job_store import job_actor_id
-from bridge.light_novel_format import add_inline_contract, parse_story_response
-from bridge.light_novel_repository import ChoiceSet, fail_choice_generation
+from bridge.light_novel_format import add_inline_contract, parse_story_response_diagnostic
+from bridge.light_novel_repository import ChoiceSet
 from bridge.light_novel_service import attach_turn, prepare_turn
 from bridge.sqlite_store import write_transaction
 
@@ -17,7 +18,6 @@ from bridge.sqlite_store import write_transaction
 class NovelTurn:
     record: ChoiceSet
     choices: list[str] | None = None
-    choices_failed: bool = False
 
     def messages(self, messages: list[dict], language: str) -> list[dict]:
         if self.record.strategy != "a":
@@ -27,15 +27,22 @@ class NovelTurn:
     def extract(self, raw: str) -> str:
         if self.record.strategy != "a":
             return raw
-        story, self.choices = parse_story_response(raw, self.record.requested_count)
-        self.choices_failed = self.choices is None
+        story, self.choices, reason, observed_count = parse_story_response_diagnostic(raw, self.record.requested_count)
+        if self.choices is None:
+            logging.warning(
+                "Light Novel inline choices unavailable: reason=%s requested_count=%s observed_count=%s",
+                reason or "unknown",
+                self.record.requested_count,
+                observed_count,
+            )
         return story
 
     def commit(self, db: sqlite3.Connection, assistant_rowid: int, story: str) -> None:
+        # Missing/invalid inline choices stay pending. attach_turn() already
+        # schedules the durable choice-only worker, which performs one automatic
+        # same-strategy recovery pass and owns the final ready/failed transition.
         with write_transaction(db):
             attach_turn(db, self.record, assistant_rowid, story, self.choices)
-            if self.choices_failed:
-                fail_choice_generation(db, self.record.nonce)
 
 
 def begin_novel_turn(

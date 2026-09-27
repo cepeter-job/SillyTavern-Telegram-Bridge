@@ -281,10 +281,15 @@ a story it restores the current choice/retry panel without regenerating the stor
 After `/start` commits the card-authored greeting, every Light Novel strategy
 schedules its first choice-only request immediately: A/C use the Story model;
 B uses the configured Utility route. Subsequent successful A turns need no
-additional choice-generation request. A's raw structured response is not streamed
-to Telegram. B/C retain ordinary story streaming when other settings allow it.
-Response language and Humanizer still apply to visible narrative; choices are not
-passed through Humanizer.
+additional choice-generation request. If A returns usable narrative but its inline
+choices are missing or invalid, the story remains committed and the existing
+durable choice worker automatically performs one choice-only Story-model repair
+pass. While that repair is pending, the panel says that choices are being
+prepared; **Retry Choices** appears only if automatic recovery finishes without
+valid choices. A's raw structured response is not streamed to Telegram. B/C
+retain ordinary story streaming when other settings allow it. Response language
+and Humanizer still apply to visible narrative; choices are not passed through
+Humanizer.
 
 Choice generation remains grounded in the configured session, but each strategy
 uses that context differently:
@@ -333,11 +338,12 @@ branch. Choices are bound to the originating user, chat, session, reset epoch,
 assistant revision and panel. Consumption and durable enqueue share a transaction,
 so double taps or process recovery cannot create two committed user turns.
 
-When choice generation fails, the committed story remains available with
-**Retry Choices**. Retrying repairs choices only; A uses a Story-model repair
-pass, B the Utility route, and C the Story model. Missing panel delivery can be
-restored with `/lightnovel`. Telegram cleanup is best effort; invalidation in
-SQLite remains authoritative even if an old button is still visible.
+When automatic choice generation finally fails, the committed story remains
+available with **Retry Choices**. Retrying repairs choices only; A uses the same
+Story-model repair path, B the Utility route, and C the Story model. Missing panel
+delivery can be restored with `/lightnovel`. Telegram cleanup is best effort;
+invalidation in SQLite remains authoritative even if an old button is still
+visible.
 
 Normal mode generates no Light Novel choices or additional choice-model calls.
 `/swipe` remains a selector for alternate assistant responses, not user actions.

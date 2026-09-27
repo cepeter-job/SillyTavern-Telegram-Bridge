@@ -98,6 +98,7 @@ from bridge.sync_core import sync_binding
 from bridge.sync_service import SyncService as _SyncService
 from bridge.telegram import download_telegram_file, send_panel_request, send_text, send_typing, telegram_request
 from bridge.text_action_input import start_text_action_input
+from bridge.update_ack import acknowledge_pending_update
 
 
 def validate_startup_credential(model: str, model_router: _ModelRouter, *, app_settings: AppSettings) -> None:
@@ -377,6 +378,7 @@ def _main() -> int:
 
     set_bot_commands(token)
     fields = card_fields(read_png_chara(config.card_file), app_settings=config)
+    acknowledge_pending_update(token, app_settings=config, send_text_backend=send_text)
     return run_bridge_runtime(services, fields)
 
 

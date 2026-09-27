@@ -6,7 +6,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Changed
 
-- Merge the /character rank indicator into each character-name button, keeping the animated rank icon directly before the name and removing the separate rank column.
+- Render /character with the standard Telegram inline-keyboard panel while preserving animated rank custom emoji through each character button's icon.
+- Merge the /character rank indicator into each character-name button, keeping the rank icon directly before the name and removing the separate rank column.
 
 ## [0.2.034] - 2026-09-27
 

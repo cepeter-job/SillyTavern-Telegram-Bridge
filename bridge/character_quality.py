@@ -29,8 +29,8 @@ from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
 
-# Rank tiers, best to worst. Classic inline-keyboard fallback labels use a
-# static emoji badge plus the letter; RichMessage character buttons use custom emoji.
+# Rank tiers, best to worst. Normal Telegram inline-keyboard character buttons
+# attach the registered custom emoji as icon_custom_emoji_id.
 RANK_TIERS = ("S", "A", "B", "C", "D")
 RANK_BADGES = {"S": "🏆", "A": "🥇", "B": "🥈", "C": "🥉", "D": "⚪"}
 

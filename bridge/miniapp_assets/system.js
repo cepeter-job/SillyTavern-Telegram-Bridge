@@ -18,6 +18,12 @@ async function renderSystem() {
       const view=card(job.kind.replaceAll('_',' '),el('span',{class:'badge'},job.state),el('p',{class:'muted'},new Date(job.created_at*1000).toLocaleString()));
       if(job.error)view.append(el('p',{},job.error));
       if(job.state==='succeeded')view.append(el('details',{},el('summary',{},'Result'),el('pre',{},JSON.stringify(job.result,null,2))));
+      if(job.state==='succeeded'&&job.kind==='character_optimize'&&job.result?.nonce) {
+        view.append(button('Review saved preview',async()=>{
+          const {reopenCharacterPreview}=await import('./characters.js');
+          await reopenCharacterPreview(job.result);
+        }));
+      }
       history.append(view);
     }
     if(!operations.jobs.length)history.append(empty('No recent operations.'));

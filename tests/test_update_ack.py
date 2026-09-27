@@ -274,3 +274,20 @@ def test_completion_notification_is_sent_only_after_successful_poll(tmp_path, mo
         assert events == ["poll", "ack", "poll"]
     finally:
         lifecycle._SHUTDOWN_EVENT.clear()
+
+
+def test_acknowledgement_preserves_native_forum_topic_scope(tmp_path):
+    from bridge.update_ack import acknowledge_pending_update, arm_pending_update_ack
+
+    settings = _settings(tmp_path)
+    scope = "-100123456789|topic:42"
+    arm_pending_update_ack(scope, "0.2.033", commit="a" * 40, app_settings=settings)
+    calls = []
+    assert acknowledge_pending_update(
+        "token",
+        app_settings=settings,
+        version_backend=lambda **kwargs: "0.2.033",
+        commit_backend=lambda **kwargs: "a" * 40,
+        send_text_backend=lambda token, chat, text: calls.append(chat),
+    )
+    assert calls == [scope]

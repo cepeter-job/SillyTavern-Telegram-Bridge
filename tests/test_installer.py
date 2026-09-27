@@ -92,3 +92,25 @@ def test_install_script_help_and_bash_syntax_are_safe():
     subprocess.run(["/bin/bash", "-n", str(script)], check=True)
     result = subprocess.run(["/bin/bash", str(script), "--help"], capture_output=True, text=True, check=True)
     assert "--no-start" in result.stdout and "--with-caddy" in result.stdout
+
+
+def test_missing_credential_diagnostic_never_echoes_provider_controlled_name(tmp_path, monkeypatch):
+    import bridge.provider_catalog as catalog
+    from bridge.install_support import prepare_install, validate_install
+
+    home, source, env, units = inputs(tmp_path)
+    prepare_install(source, home, env, units)
+    env.write_text(
+        "SILLYTAVERN_TELEGRAM_BOT_TOKEN=123456:synthetic\nSILLYTAVERN_TELEGRAM_ALLOWED_USERS=12345\nSILLYTAVERN_MODEL=test::sample\nSILLYTAVERN_PROVIDER_ALLOWED_HOSTS=provider.example\n"
+    )
+    marker = "provider-controlled-sensitive-name"
+    monkeypatch.setattr(
+        catalog,
+        "load_routing_catalog",
+        lambda **kwargs: {
+            "test": {"models": ["sample"], "api_endpoint": "https://provider.example/v1", "api_key_env": marker}
+        },
+    )
+    errors = validate_install(source, home, env)
+    assert errors
+    assert marker not in str(errors)

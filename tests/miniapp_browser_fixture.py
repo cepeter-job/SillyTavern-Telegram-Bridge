@@ -18,12 +18,18 @@ import bridge.miniapp_system as system
 from bridge.miniapp_config import load_miniapp_config
 from bridge.miniapp_http import create_miniapp_app
 from bridge.model_router import ModelRouter
+from bridge.provider_port import ProviderPort
 
 
 async def serve() -> None:
     with tempfile.TemporaryDirectory(prefix="miniapp-dom-") as directory:
         services = make_services(Path(directory))
         services.model_router = ModelRouter(load_catalog=lambda: {"test": {"models": ["model", "other"]}})
+        services.provider = ProviderPort(
+            generate_backend=lambda *args, **kwargs: json.dumps(
+                {"description": "A thoughtful companion with clear motivations and consistent habits."}
+            )
+        )
         services.persona = make_native_test_persona_service(app_settings=services.config)
         services.telegram = SimpleNamespace(send_text=lambda *a: [], request=lambda *a: {})
         system.latest_bridge_release = lambda: ("0.2.099", "Fixture release; no deployment runs in this test.")

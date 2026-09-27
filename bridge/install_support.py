@@ -302,7 +302,7 @@ def validate_install(source: Path, home: Path, env_path: Path) -> list[str]:
         validate_provider_endpoint(endpoint, environ=settings.environ)
         key_env = str(route.spec.get("api_key_env") or "LLM_API_KEY")
         if route.spec.get("transport") != "opencode_muse" and not settings.environ.get(key_env):
-            return [key_env]
+            return ["The provider credential is missing. Set the configured credential in the private .env file."]
     except Exception:
         return ["Check the default character, provider endpoint/model/key and explicit provider allowed-hosts values."]
     return []

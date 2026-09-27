@@ -17,6 +17,7 @@ from typing import Any
 from bridge.runtime_health import capture_deployment
 from bridge.self_update import UpdateRefused, version_tuple
 from bridge.settings import AppSettings
+from bridge.topic_scope import parse_topic_scope, topic_scope_id
 
 VersionBackend = Callable[..., str]
 SendTextBackend = Callable[[str, str, str], Any]
@@ -27,7 +28,10 @@ def pending_update_ack_path(app_settings: AppSettings) -> Path:
 
 
 def _valid(chat_id: str, version: str, commit: str) -> bool:
-    if not re.fullmatch(r"-?[1-9][0-9]{0,19}", chat_id) or not re.fullmatch(r"[0-9a-f]{40}", commit):
+    base_chat, thread = parse_topic_scope(chat_id)
+    if thread is not None and (not 0 < thread < 2**31 or topic_scope_id(base_chat, thread) != chat_id):
+        return False
+    if not re.fullmatch(r"-?[1-9][0-9]{0,19}", base_chat) or not re.fullmatch(r"[0-9a-f]{40}", commit):
         return False
     try:
         version_tuple(version)

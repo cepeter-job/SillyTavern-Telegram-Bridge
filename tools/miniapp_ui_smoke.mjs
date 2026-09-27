@@ -66,8 +66,25 @@ try {
   [...document.querySelectorAll('main button')].find(n=>n.textContent==='Create and open').click();
   await until(()=>document.querySelector('main').textContent.includes('DOM verified session'),'create session');
   const sessions=await app.namespace.api('/sessions');assert.equal(sessions.session.title,'DOM verified session');
+  const info=await app.namespace.api('/characters/Alice.png');
+  let job=await app.namespace.api('/characters/Alice.png/optimize',{method:'POST',body:app.namespace.sessionBody({digest:info.digest,suggestion:'Clarify motivation.',operation_id:'dom-optimizer'})});
+  for(let i=0;i<50&&['queued','running'].includes(job.state);i++) {
+    await new Promise(r=>setTimeout(r,50));job=await app.namespace.api('/jobs/'+job.id);
+  }
+  assert.equal(job.state,'succeeded',JSON.stringify(job));
+  await app.namespace.navigate('system');
+  const resume=[...document.querySelectorAll('main button')].find(n=>n.textContent==='Review saved preview');
+  assert.ok(resume,'Completed optimization must be resumable without another model call');
+  resume.click();
+  await until(()=>document.querySelector('main').textContent.includes('Review optimization'),'resume saved proposal');
+  [...document.querySelectorAll('main button')].find(n=>n.textContent==='Apply').click();
+  await until(()=>document.querySelector('dialog[open]'),'apply confirmation');
+  [...document.querySelectorAll('dialog button')].find(n=>n.textContent==='Confirm').click();
+  await until(()=>document.querySelector('main').textContent.includes('Upload character'),'proposal applied');
+  const updated=await app.namespace.api('/characters/Alice.png');
+  assert.equal(updated.fields.description,'A thoughtful companion with clear motivations and consistent habits.');
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
-  console.log('mutations=2 passed; pages=9 passed; browser-errors=0');
+  console.log('mutations=3 passed; optimizer-resume=passed; pages=9 passed; browser-errors=0');
 } finally {
   dom.window.close();lines.close();child.kill('SIGTERM');
 }

@@ -18,7 +18,7 @@ Slow work is admitted to the existing bounded utility executor and has an actor-
 
 ## Models and generation
 
-Models displays provider/model names only, never private provider configuration. Story and Utility selections are scoped to the current session; Utility can inherit Story. Search filters up to 500 results. Generation uses the same canonical limits as Telegram: temperature 0–2, top-p 0–1, output tokens 1–16000, frequency/presence penalties -2–2, reasoning budget 0–32000 and at most four stop sequences of 100 characters. Settings are fully validated before mutation. Presets are private to your chat; replacing/deleting a preset requires confirmation.
+Models displays provider/model names only, never private provider configuration. Story and Utility selections are scoped to the current session; Utility can inherit Story. Search filters up to 500 results. Generation uses the same canonical limits as Telegram: temperature 0–2, top-p 0–1, output tokens 1–16000, frequency/presence penalties -2–2, reasoning budget 0–32000 and at most four stop sequences of 100 characters. Reasoning provides the same named levels as Telegram—None (0), Low (1024), Medium (4096), High (8192) and Max (16384)—plus Custom for any other valid budget. A stored non-preset value automatically reopens as Custom. Settings are fully validated before mutation. Presets are private to your chat; replacing/deleting a preset requires confirmation.
 
 ## Sessions, personas and worlds
 

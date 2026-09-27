@@ -128,6 +128,7 @@ aiohttp==3.14.3 \
     --hash=sha256:fd51ebf9d3a00c074df4ede271023f4d2dba289bcc740b88191872716014e3c5
     # via
     #   -c requirements.lock
+    #   -r requirements.txt
     #   aiohttp-retry
     #   hindsight-client
 aiohttp-retry==2.9.1 \

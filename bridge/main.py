@@ -61,6 +61,8 @@ from bridge.memory import (
 from bridge.memory_backend import recall_memory_context
 from bridge.memory_service import MemoryService as _MemoryService
 from bridge.message_commands import generate_and_store_reply, prepare_message
+from bridge.miniapp_config import load_miniapp_config
+from bridge.miniapp_runtime import MiniAppRuntime, configure_miniapp_menu
 from bridge.model_router import ModelRouter as _ModelRouter
 from bridge.network_security import validate_provider_endpoint
 from bridge.persona_service import PersonaService as _PersonaService
@@ -377,7 +379,10 @@ def _main() -> int:
 
     set_bot_commands(token)
     fields = card_fields(read_png_chara(config.card_file), app_settings=config)
-    return run_bridge_runtime(services, fields)
+    miniapp = load_miniapp_config(config)
+    with MiniAppRuntime(services, miniapp):
+        configure_miniapp_menu(services, miniapp)
+        return run_bridge_runtime(services, fields)
 
 
 def main() -> int:

@@ -63,6 +63,8 @@ class AppSettings:
     performance_log: bool
     enforce_prompt_permissions: bool
     opencode_client_version: str
+    codex_oauth_file: Path
+    codex_client_version: str
     update_repo_dir: Path
     update_live_dir: Path
     update_allowed_signers: Path | None
@@ -175,6 +177,8 @@ def load_app_settings(environ: Mapping[str, str], *, home: Path) -> AppSettings:
         performance_log=_boolean(values, "SILLYTAVERN_PERF_LOG"),
         enforce_prompt_permissions=_boolean(values, "SILLYTAVERN_ENFORCE_PROMPT_PERMISSIONS"),
         opencode_client_version=values.get("OPENCODE_CLIENT_VERSION", "1.18.31"),
+        codex_oauth_file=_path(values, "SILLYTAVERN_CODEX_AUTH_FILE", bridge_home / "codex_oauth.json", home),
+        codex_client_version=values.get("SILLYTAVERN_CODEX_CLIENT_VERSION", "1.0").strip() or "1.0",
         update_repo_dir=_path(values, "SILLYTAVERN_BRIDGE_SOURCE_DIR", Path(__file__).resolve().parents[1], home),
         update_live_dir=_path(values, "SILLYTAVERN_LIVE_BRIDGE_DIR", bridge_home / "live", home),
         update_allowed_signers=_path(values, "SILLYTAVERN_UPDATE_ALLOWED_SIGNERS", home, home) if signer_raw else None,

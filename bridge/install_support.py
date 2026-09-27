@@ -150,7 +150,14 @@ def _provider_document(settings: AppSettings) -> bytes | None:
     if len(models) > 500 or any(len(x) > 200 or any(c.isspace() for c in x) for x in models):
         raise ValueError("Invalid configured model identifiers")
     transport = settings.environ.get("SILLYTAVERN_PROVIDER_TRANSPORT", "chat_completions").strip()
-    if transport not in {"chat_completions", "openai", "openai_compatible", "anthropic_messages", "opencode_muse"}:
+    if transport not in {
+        "chat_completions",
+        "openai",
+        "openai_compatible",
+        "anthropic_messages",
+        "opencode_muse",
+        "openai_codex",
+    }:
         raise ValueError("Unsupported provider transport")
     payload = {
         "providers": {
@@ -254,6 +261,7 @@ def prepare_install(source: Path, home: Path, env_path: Path, unit_dir: Path, *,
 
 
 def validate_install(source: Path, home: Path, env_path: Path) -> list[str]:
+    from bridge.codex_auth import auth_status, validate_codex_endpoint
     from bridge.model_router import ModelRouter
     from bridge.network_security import validate_provider_endpoint
     from bridge.provider_catalog import load_routing_catalog
@@ -274,11 +282,18 @@ def validate_install(source: Path, home: Path, env_path: Path) -> list[str]:
         route = ModelRouter(load_catalog=lambda: load_routing_catalog(app_settings=settings)).route(
             settings.default_model
         )
+        transport = str(route.spec.get("transport") or "chat_completions")
         endpoint = str(route.spec.get("api_endpoint") or route.spec.get("api") or "")
+        if transport == "openai_codex":
+            endpoint = validate_codex_endpoint(route.spec, environ=settings.environ)
         validate_provider_endpoint(endpoint, environ=settings.environ)
-        key_env = str(route.spec.get("api_key_env") or "LLM_API_KEY")
-        if route.spec.get("transport") != "opencode_muse" and not settings.environ.get(key_env):
-            return ["The provider credential is missing. Set the configured credential in the private .env file."]
+        if transport == "openai_codex":
+            if not auth_status(settings.codex_oauth_file)["authenticated"]:
+                return ["OpenAI Codex OAuth login is missing. Run --codex-login."]
+        else:
+            key_env = str(route.spec.get("api_key_env") or "LLM_API_KEY")
+            if transport != "opencode_muse" and not settings.environ.get(key_env):
+                return ["The provider credential is missing. Set the configured credential in the private .env file."]
     except Exception:
         return ["Check the default character, provider endpoint/model/key and explicit provider allowed-hosts values."]
     return []

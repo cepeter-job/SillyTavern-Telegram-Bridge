@@ -4,27 +4,29 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.2.035] - 2026-09-27
+
+### Added
+
+- Add an independent native OpenAI Codex OAuth provider with device login, private rotating credentials, CLI status/logout and static model routing. Interactive SSH login does not require a browser on the server.
+
 ### Changed
 
-- Add sanitized Humanizer rewrite-rejection diagnostics with reason and source/candidate character counts, without logging response text, protected fragments, prompts, or credentials.
+- Render `/character` with standard Telegram inline keyboards and registered custom-emoji rank icons directly before each character name, removing the separate rank column and retired RichMessage compatibility paths.
+- Add a Mini App reasoning selector while retaining canonical numeric reasoning-budget validation.
+- Add sanitized Humanizer rejection diagnostics with reason and source/candidate character counts. Rewrite safety thresholds and original-response fallback are unchanged.
 
 ### Fixed
 
-- Make separate Light Novel choice generation more resilient with a 60-second provider timeout, one bounded retry for transient provider/empty-content failures, and sanitized stage/model/status/parser diagnostics while preserving strict choice validation and the committed story.
+- Recover Mode A Light Novel narratives from one trailing fenced JSON envelope without accepting ambiguous multi-fence output.
+- Increase separate Light Novel choice requests to a 60-second per-request timeout, with one controlled transient-error retry and content-free failure diagnostics. Preserve committed stories, strict choice validation and strategy routing.
+- Harden Codex OAuth file handling against links and oversized state, serialize refresh rotation with bounded lock acquisition, and restrict native bearers to the official Codex endpoint.
+- Bound Codex stream reads, require completion, prefer canonical completed output, throttle previews and honor cancellation before credential/network work. Provider error messages are not exposed to chats or logs.
 
+### Notes
 
-### Changed
-
-- Remove obsolete character-rank callback/static-badge compatibility code and retired RichMessage panel plumbing after the standard inline-keyboard rank-icon migration.
-
-### Fixed
-
-- Recover Mode A Light Novel stories and choices when a provider prefixes ordinary prose before one valid trailing fenced JSON envelope, without accepting ambiguous multi-fence responses.
-
-### Changed
-
-- Render /character with the standard Telegram inline-keyboard panel while preserving animated rank custom emoji through each character button's icon.
-- Merge the /character rank indicator into each character-name button, keeping the rank icon directly before the name and removing the separate rank column.
+- Native Codex login requires an eligible OpenAI account and device-code authorization. Automated tests use local fixtures; interactive OAuth authorization and account-specific live inference are not part of release verification.
+- No runtime dependencies changed from v0.2.034. Publishing this release does not update a running deployment or enable Humanizer/Codex for existing sessions.
 
 ## [0.2.034] - 2026-09-27
 

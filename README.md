@@ -50,8 +50,9 @@ fresh-install, upgrade, systemd, and Tailscale procedure.
   Novel choice mode.
 - Manage Characters, Optimizer proposals, models, sessions, Personas, Worlds,
   memory, Data Bank, status, and verified updates from the optional Mini App.
-- Use a private provider catalog for OpenAI-compatible, Anthropic Messages, and
-  OpenCode Muse routes without exposing provider credentials to Telegram clients.
+- Use a private provider catalog for OpenAI-compatible, native OpenAI Codex OAuth,
+  Anthropic Messages, and OpenCode Muse routes without exposing provider credentials
+  to Telegram clients.
 
 For behavior and workflows, see the [User guide](docs/user-guide.md).
 

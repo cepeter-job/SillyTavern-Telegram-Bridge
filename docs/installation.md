@@ -81,7 +81,7 @@ remain available for customized deployments.
 - **Python 3.11**
 - A Telegram bot token and your Telegram user ID
 - A local SillyTavern installation with at least one PNG character card
-- A configured Story model from the private provider catalog — OpenAI-compatible, Anthropic Messages, or OpenCode Muse
+- A configured Story model from the private provider catalog — OpenAI-compatible, native OpenAI Codex OAuth, Anthropic Messages, or OpenCode Muse
 - Optional: a separate Utility model, Hindsight, embeddings, image generation, STT, and TTS services
 
 ---

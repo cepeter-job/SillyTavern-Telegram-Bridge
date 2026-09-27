@@ -75,7 +75,11 @@ def test_runtime_starts_and_stops_loopback_listener(tmp_path):
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
     s = settings(tmp_path, SILLYTAVERN_MINIAPP_PORT=str(port))
-    server = MiniAppRuntime(SimpleNamespace(config=s), load_miniapp_config(s))
+    from bridge.sqlite_store import db_connect
+
+    server = MiniAppRuntime(
+        SimpleNamespace(config=s, db_factory=lambda: db_connect(app_settings=s)), load_miniapp_config(s)
+    )
     with server:
         with socket.create_connection(("127.0.0.1", port), timeout=2) as client:
             client.sendall(b"GET /miniapp/ HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
@@ -103,5 +107,40 @@ def test_static_requests_never_open_a_client_derived_path(tmp_path, monkeypatch)
                 response = await client.get("/miniapp/app.js")
                 assert response.status == 200
                 assert "function api" in await response.text()
+
+    asyncio.run(run())
+
+
+def test_character_routes_require_auth_and_keep_private_scope(tmp_path):
+    from miniapp_test_support import make_services
+
+    from bridge.miniapp_config import load_miniapp_config
+    from bridge.miniapp_http import create_miniapp_app
+
+    services = make_services(tmp_path)
+
+    async def run():
+        app = create_miniapp_app(services, load_miniapp_config(services.config))
+        async with TestClient(TestServer(app)) as client:
+            headers = {"Authorization": "tma " + signed_data()}
+            assert (await client.get("/api/v1/characters")).status == 401
+            result = await client.get("/api/v1/characters", headers=headers)
+            assert result.status == 200
+            data = await result.json()
+            assert data["session"]["chat_id"] == "12345"
+            portrait = await client.get("/api/v1/characters/Alice.png/portrait", headers=headers)
+            assert portrait.status == 200 and portrait.content_type == "image/png"
+            assert (await client.get("/miniapp/characters.js")).status == 200
+            denied = await client.post(
+                "/api/v1/characters/Alice.png/select", headers=headers, json={"session_id": "foreign", "confirm": True}
+            )
+            assert denied.status == 409
+            selected = await client.post(
+                "/api/v1/characters/Alice.png/select",
+                headers=headers,
+                json={"session_id": "default", "confirm": True, "chat_id": "67890"},
+            )
+            assert selected.status == 200
+            assert (await selected.json())["session"]["chat_id"] == "12345"
 
     asyncio.run(run())

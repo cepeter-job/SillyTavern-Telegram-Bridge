@@ -7,3 +7,11 @@ Only IDs in `SILLYTAVERN_TELEGRAM_ALLOWED_USERS` are admitted. Open the Bridge m
 Private sessions use the authenticated user ID. Group chats and forum topics are not implicitly authorized by a launch link. Allowed users administer shared native character, persona and world files; use separate bridge instances for mutually untrusted users.
 
 The static UI uses native ES modules and needs no Node runtime or build. It ships inside `bridge/miniapp_assets` and is included in verified live-mirror updates.
+
+## Characters and optimizer
+
+Use Characters to browse/search PNG cards, view portraits/info, upload cards and create a new normal conversation session. Selecting a character creates a new session instead of changing existing conversation history; send `/start` in Telegram for its opening. Active/default/referenced characters cannot be deleted; deletion verifies a backup and the revision you reviewed.
+
+Optimizer uses the configured Utility model and supports an optional Manual suggestion. It returns an original/proposed preview. Apply consumes the actor/session-bound proposal once and verifies the original digest; Discard leaves the card untouched. Existing-filename uploads similarly require an explicit replacement preview. Simple upload filenames must not contain path or wildcard characters.
+
+Slow work is admitted to the existing bounded utility executor and has an actor-owned operation ID. Identical retries return the existing operation rather than spending twice. Interrupted operations are marked after restart, never silently replayed.

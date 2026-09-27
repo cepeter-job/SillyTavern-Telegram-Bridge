@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Show the active character portrait in the Mini App Home session card and preserve complete character artwork in the Characters tab instead of center-cropping it.
+
 ## [0.2.035] - 2026-09-27
 
 ### Added

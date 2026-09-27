@@ -12,13 +12,16 @@ const child=spawn(process.env.PYTHON||'python3',[resolve(root,'tests/miniapp_bro
 const lines=createInterface({input:child.stdout});
 const ready=await Promise.race([new Promise((ok,bad)=>{lines.once('line',line=>{try{ok(JSON.parse(line));}catch(e){bad(e);}});child.once('exit',code=>bad(new Error('Fixture exited '+code)));}),new Promise((_,bad)=>setTimeout(()=>bad(new Error('Fixture startup timed out')),10000).unref())]);
 const html=await readFile(resolve(root,'bridge/miniapp_assets/index.html'),'utf8');
+const css=await readFile(resolve(root,'bridge/miniapp_assets/style.css'),'utf8');
 const dom=new JSDOM(html,{url:ready.url+'/miniapp/',runScripts:'outside-only',pretendToBeVisual:true});
+const style=dom.window.document.createElement('style');style.textContent=css;dom.window.document.head.append(style);
 const initialDocument=dom.window.document;
 assert.ok(initialDocument.querySelector('.app-shell'),'Telegram-native app shell is present');
 assert.ok(initialDocument.querySelector('.app-header .connection-dot'),'Compact header exposes connection status');
 assert.ok(initialDocument.querySelector('#content .skeleton-shell'),'Initial content uses a skeleton instead of a loading card');
 assert.ok(initialDocument.querySelector('#more-menu.more-sheet'),'Secondary navigation has a More sheet');
 const context=dom.getInternalVMContext(),errors=[],expectedFailures=new Set(),observedFailures=[];
+let portraitMode='success';
 process.on('unhandledRejection',error=>errors.push(error));
 dom.window.Telegram={WebApp:{initData:ready.initData,initDataUnsafe:{start_param:'dashboard'},ready(){},expand(){},BackButton:{onClick(){},hide(){},show(){}}}};
 dom.window.AbortSignal=globalThis.AbortSignal;
@@ -26,7 +29,9 @@ dom.window.URL.createObjectURL=()=> 'blob:test-fixture';
 dom.window.URL.revokeObjectURL=()=>{};
 dom.window.fetch=async (path,options)=>{
   assert.ok(String(path).startsWith('/api/v1/'),'Only local API requests are permitted');
-  if(String(path).includes('/characters/Alice.png/portrait')) return new Response(new Blob([],{type:'image/png'}),{status:200,headers:{'Content-Type':'image/png'}});
+  if(/^\/api\/v1\/characters\/[^/]+\/portrait$/.test(String(path))) {
+    return new Response(new Blob([portraitMode==='success'?'portrait':''],{type:'image/png'}),{status:200,headers:{'Content-Type':'image/png'}});
+  }
   const response=await fetch(ready.url+path,options);
   if(!response.ok&&expectedFailures.has(response.status+' '+path))observedFailures.push(response.status+' '+path);
   if(!response.ok&&!expectedFailures.has(response.status+' '+path))errors.push(new Error('API '+response.status+' '+path));
@@ -69,10 +74,19 @@ try {
     if(page==='dashboard') {
       assert.ok(shellDocument.querySelector('.dashboard-hero'),'Dashboard uses a clear hero hierarchy');
       assert.ok(shellDocument.querySelector('.dashboard-session'),'Dashboard shows the current session summary');
+      const sessionPortrait=shellDocument.querySelector('.dashboard-session .session-portrait');
+      assert.ok(sessionPortrait,'Dashboard shows the active character portrait');
+      await until(()=>sessionPortrait.getAttribute('src')==='blob:test-fixture','dashboard portrait loaded');
+      sessionPortrait.dispatchEvent(new dom.window.Event('load'));
+      assert.equal(sessionPortrait.closest('.session-portrait-frame').hidden,false,'Dashboard portrait appears only after loading');
+      assert.equal(dom.window.getComputedStyle(sessionPortrait).objectFit,'contain','Dashboard portrait preserves the full image');
       assert.equal(shellDocument.querySelectorAll('.dashboard-shortcuts button').length,4,'Dashboard exposes four quick actions');
+      portraitMode='empty';
     }
     if(page==='characters') {
       assert.ok(shellDocument.querySelector('.character-card .portrait-frame'),'Character cards use a portrait-first visual layout');
+      const characterPortrait=shellDocument.querySelector('.character-card img.portrait');
+      assert.equal(dom.window.getComputedStyle(characterPortrait).objectFit,'contain','Character portraits show the complete image without cropping');
       const pageDocument=dom.window.document;
       const rank=pageDocument.querySelector('video.rank-video source');
       assert.ok(rank,'Ranked character renders an animated rank asset');
@@ -81,6 +95,9 @@ try {
     }
     console.log('render='+page+' ok');
   }
+  await app.namespace.navigate('dashboard');
+  await until(()=>shellDocument.querySelector('.dashboard-session .session-portrait-frame')?.hidden===true,'dashboard missing portrait fallback');
+  assert.ok(shellDocument.querySelector('.dashboard-session').textContent.includes('Default session'),'Dashboard text remains when its portrait is unavailable');
   await app.namespace.navigate('models');
   const document=dom.window.document;
   const reasoningLabel=[...document.querySelectorAll('label')].find(n=>n.textContent==='Reasoning level');

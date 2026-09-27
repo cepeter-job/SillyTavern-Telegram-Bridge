@@ -333,7 +333,7 @@ def test_character_menu_prefers_rich_message_with_disabled_animated_rank(tmp_pat
     assert rank == {
         "text": {
             "type": "custom_emoji",
-            "custom_emoji_id": "6176891226302718197",
+            "custom_emoji_id": "6181691122838938530",
             "alternative_text": "🏆 S",
         },
         "disabled": {},

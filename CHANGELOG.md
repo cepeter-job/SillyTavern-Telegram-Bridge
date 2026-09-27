@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Refresh the registered S/A/B/C/D Telegram rank custom-emoji IDs after the set was republished, while retaining the same canonical 100×100 WEBM media and Mini App assets.
+
 ### Added
 
 - Reuse the canonical animated S/A/B/C/D rank WEBMs in the Mini App character grid, with reduced-motion/static fallback and resilient unavailable-portrait handling.

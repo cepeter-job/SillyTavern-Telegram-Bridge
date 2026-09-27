@@ -4,6 +4,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.2.034] - 2026-09-27
+
 ### Fixed
 
 - Refresh the registered S/A/B/C/D Telegram rank custom-emoji IDs after the set was republished, while retaining the same canonical 100×100 WEBM media and Mini App assets.

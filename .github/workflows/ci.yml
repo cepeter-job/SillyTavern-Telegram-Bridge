@@ -43,6 +43,19 @@ jobs:
       - name: Validate dependency environment
         run: python -m pip check
 
+      - name: Set up Node for development-only Mini App tests
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: tests/miniapp-ui/package-lock.json
+      - name: Install locked DOM test tooling
+        run: npm ci --prefix tests/miniapp-ui --include=dev --ignore-scripts --no-audit --no-fund
+      - name: Exercise Mini App pages and session safety
+        env:
+          MINIAPP_JSDOM_ROOT: ${{ github.workspace }}/tests/miniapp-ui
+          PYTHON: python
+        run: node --experimental-vm-modules tools/miniapp_ui_smoke.mjs
       - name: Run full test suite
         run: >-
           python -m pytest -q -n auto --maxprocesses=4 --dist=loadfile

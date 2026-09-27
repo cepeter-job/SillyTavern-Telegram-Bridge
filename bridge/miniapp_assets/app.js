@@ -12,6 +12,19 @@ export async function api(path, {method='GET', body, signal, binary=false}={}) {
   if (!response.ok) { const error = new Error(result.error?.message || 'Request failed.'); error.status=response.status; throw error; }
   return result;
 }
+export function createSessionScope() {
+  let sessionId='';
+  return {
+    set(session) {
+      sessionId=String(session?.session_id||'');
+      state.session=session;
+    },
+    body(extra={}) {
+      if(!sessionId)throw new Error('Open or create a session first.');
+      return {...extra,session_id:sessionId};
+    }
+  };
+}
 export function sessionBody(extra={}) { if (!state.session) throw new Error('Open or create a session first.'); return {session_id:state.session.session_id,...extra}; }
 const pages = {dashboard:{label:'Dashboard',render:async()=>card('Your workspace',el('p',{},'Manage your characters, models and context here. Continue the conversation in your Telegram chat.'),el('p',{class:'muted'},'Signed in as '+state.user.name))}};
 export function registerPage(key, label, render) { pages[key] = {label,render}; }
@@ -22,6 +35,7 @@ export async function navigate(key=current) {
     const b=button(page.label,()=>navigate(name)); if(name===current)b.setAttribute('aria-current','page'); return b;
   }));
   document.getElementById('content').setAttribute('aria-busy','true');
+  document.getElementById('content').replaceChildren(card('Loading…',el('p',{class:'muted'},'Reading the current workspace.')));
   try { const view=await pages[key].render(); if(seq===generation)document.getElementById('content').replaceChildren(view); }
   catch(error){if(seq===generation)document.getElementById('content').replaceChildren(card('Could not load this page',el('p',{},error.message),button('Retry',()=>navigate(key))));}
   finally{document.getElementById('content').removeAttribute('aria-busy');}

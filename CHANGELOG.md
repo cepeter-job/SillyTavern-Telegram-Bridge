@@ -11,6 +11,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Fixed
 
+- Bind each Mini App form and pending confirmation to its rendered session instead of a mutable global selection; prevent navigation races from silently changing or purging a different session.
+
 - Persist post-update acknowledgement before scheduling restart and send completion only after the replacement process successfully polls Telegram with the expected loaded commit/version. Ignore malformed/expired state and never equate installed files with running code.
 
 

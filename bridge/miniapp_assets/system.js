@@ -1,4 +1,4 @@
-import {api,state,sessionBody,registerPage,navigate} from './app.js';
+import {api,state,createSessionScope,registerPage,navigate} from './app.js';
 import {el,card,button,empty,confirmAction,notice} from './ui.js';
 function details(data) {
   return el('div',{class:'grid'},card('Bridge',el('p',{},'Running: v'+data.deployment.version),el('p',{class:'muted'},'Revision: '+(data.deployment.commit.slice(0,12)||'unverified')),el('p',{},'Uptime: '+Math.floor(data.uptime_seconds/60)+' minutes'),el('p',{class:'muted'},'Installed files: v'+data.installed_version)),
@@ -11,8 +11,9 @@ async function dashboard() {
 }
 async function renderSystem() {
   const root=el('div');
+  const scope=createSessionScope(),sessionBody=scope.body;
   async function load() {
-    const [data,operations]=await Promise.all([api('/status'),api('/jobs')]);state.session=data.session;
+    const [data,operations]=await Promise.all([api('/status'),api('/jobs')]);scope.set(data.session);
     const history=card('Operations',el('p',{class:'muted'},'Results are private to your account. Interrupted jobs are not silently replayed. Refresh this page to check pending work.'));
     for(const job of operations.jobs) {
       const view=card(job.kind.replaceAll('_',' '),el('span',{class:'badge'},job.state),el('p',{class:'muted'},new Date(job.created_at*1000).toLocaleString()));

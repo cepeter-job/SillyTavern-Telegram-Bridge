@@ -1,10 +1,11 @@
-import {api,state,sessionBody,registerPage,runJob} from './app.js';
+import {api,state,createSessionScope,registerPage,runJob} from './app.js';
 import {el,card,button,field,empty,confirmAction,notice} from './ui.js';
 const enc=encodeURIComponent;
 async function renderMemory() {
   const root=el('div');
+  const scope=createSessionScope(),sessionBody=scope.body;
   async function load() {
-    const data=await api('/memory');state.session=data.session;
+    const data=await api('/memory');scope.set(data.session);
     const mode=el('select',{},el('option',{value:'on'},'On'),el('option',{value:'off'},'Off'));mode.value=data.mode;
     const summary=el('textarea',{value:data.summary,maxlength:12000,rows:9});
     const memoryCards=el('div'),editors=[];
@@ -36,8 +37,9 @@ async function renderMemory() {
 }
 async function renderDataBank() {
   const root=el('div');
+  const scope=createSessionScope(),sessionBody=scope.body;
   async function load() {
-    const data=await api('/databank');state.session=data.session;
+    const data=await api('/databank');scope.set(data.session);
     const mode=el('select',{},el('option',{value:'on'},'On'),el('option',{value:'off'},'Off'));mode.value=data.mode;
     const documents=el('div',{class:'grid'});
     for(const item of data.documents)documents.append(card(item.filename,el('p',{class:'muted'},item.chunks+' chunks · '+item.bytes+' bytes'),el('div',{class:'actions'},button('Versions',()=>versions(item)),button('Reindex',async()=>{

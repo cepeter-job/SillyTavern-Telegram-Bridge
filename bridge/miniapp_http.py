@@ -7,8 +7,6 @@ import json
 import logging
 import time
 from collections import defaultdict, deque
-from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -18,33 +16,33 @@ from aiohttp import web
 from bridge.miniapp_auth import MiniAppIdentity, authenticate
 from bridge.miniapp_config import MiniAppConfig
 from bridge.miniapp_errors import MiniAppError
-
-Handler = Callable[[Any, MiniAppIdentity, dict[str, Any]], Any]
-
-
-@dataclass(frozen=True)
-class ApiRoute:
-    method: str
-    path: str
-    handler: Handler
-
-
-@dataclass(frozen=True)
-class BinaryResult:
-    content: bytes
-    content_type: str
-
+from bridge.miniapp_types import ApiRoute, BinaryResult
 
 _CSP = (
     "default-src 'none'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; "
     "img-src 'self' blob: data:; connect-src 'self'; font-src 'self'; base-uri 'none'; "
     "form-action 'self'; object-src 'none'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"
 )
-_ASSETS = {"index.html": "text/html", "app.js": "text/javascript", "ui.js": "text/javascript", "style.css": "text/css"}
+_ASSETS = {
+    "index.html": "text/html",
+    "app.js": "text/javascript",
+    "ui.js": "text/javascript",
+    "style.css": "text/css",
+    "characters.js": "text/javascript",
+}
 
 
 def api_routes() -> list[ApiRoute]:
-    return []
+    from bridge.miniapp_characters import routes as character_routes
+    from bridge.miniapp_context import current_session
+    from bridge.miniapp_jobs import job_status, recent_jobs
+
+    return [
+        ApiRoute("GET", "/session", current_session),
+        ApiRoute("GET", "/jobs", recent_jobs),
+        ApiRoute("GET", "/jobs/{job_id}", job_status),
+        *character_routes(),
+    ]
 
 
 def _error(status: int, code: str, message: str) -> web.Response:
@@ -157,7 +155,14 @@ def create_miniapp_app(services: Any, config: MiniAppConfig) -> web.Application:
             except TimeoutError:
                 raise MiniAppError("Management service is busy; retry shortly.", status=503, code="busy") from None
             try:
-                result = await asyncio.to_thread(route.handler, services, who, values)
+                if route.background_kind:
+                    from bridge.miniapp_jobs import submit_job
+
+                    result = await asyncio.to_thread(
+                        submit_job, services, who, route.background_kind, values, route.handler
+                    )
+                else:
+                    result = await asyncio.to_thread(route.handler, services, who, values)
             finally:
                 slots.release()
             if isinstance(result, BinaryResult):

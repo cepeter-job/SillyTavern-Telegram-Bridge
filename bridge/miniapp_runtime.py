@@ -32,6 +32,9 @@ class MiniAppRuntime:
         try:
             await runner.setup()
             await web.TCPSite(runner, self.config.host, self.config.port).start()
+            from bridge.miniapp_jobs import recover_interrupted_jobs
+
+            recover_interrupted_jobs(self.services)
             self.ready.set()
             await self.stop_event.wait()
         finally:

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 from pathlib import Path
 
+import bridge.cards as cards
 from bridge.cards import _CHARACTER_RANK_CUSTOM_EMOJI_IDS, character_rank_button, character_rich_rank_button
 
 ROOT = Path(__file__).resolve().parents[1] / "assets" / "character-ranks"
@@ -33,7 +35,7 @@ def test_public_rank_assets_match_hardcoded_custom_emoji_mapping():
     manifest = (ROOT / "README.md").read_text(encoding="utf-8")
     assert "sttb_ranks_by_SillyTavernPunzmeBot" in manifest
     for tier, custom_emoji_id in EXPECTED_IDS.items():
-        assert f"{tier} | `{custom_emoji_id}`" in manifest
+        assert f"{tier} | \`{custom_emoji_id}\`" in manifest
     for relative, digest in EXPECTED_SHA256.items():
         path = ROOT / relative
         assert path.is_file(), relative
@@ -41,7 +43,7 @@ def test_public_rank_assets_match_hardcoded_custom_emoji_mapping():
         assert digest in manifest
 
 
-def test_rank_buttons_use_clear_tier_specific_static_fallbacks():
+def test_rank_buttons_use_valid_custom_emoji_alternatives_and_static_fallbacks():
     for tier, badge in EXPECTED_STATIC_BADGES.items():
         assert character_rank_button(tier) == {
             "text": f"{badge} {tier}",
@@ -50,8 +52,34 @@ def test_rank_buttons_use_clear_tier_specific_static_fallbacks():
         assert character_rich_rank_button(tier)["text"] == {
             "type": "custom_emoji",
             "custom_emoji_id": EXPECTED_IDS[tier],
-            "alternative_text": f"{badge} {tier}",
+            "alternative_text": badge,
         }
+
+
+def test_character_menu_logs_rich_message_rejection_before_classic_fallback(monkeypatch, caplog):
+    fallback = []
+
+    def reject_rich_message(_token, method, _payload, **_kwargs):
+        assert method == "sendRichMessage"
+        raise RuntimeError("Telegram sendRichMessage failed: Bad Request: invalid rich text")
+
+    monkeypatch.setattr(cards, "send_panel_request", reject_rich_message)
+    monkeypatch.setattr(cards, "send_panel_message", lambda *args, **kwargs: fallback.append((args, kwargs)))
+
+    with caplog.at_level(logging.WARNING):
+        cards._send_character_menu_panel(
+            "token",
+            "chat",
+            "Character menu",
+            [[{"text": "🏆 S", "callback_data": "character:rank:S"}]],
+            [[{"text": {"type": "custom_emoji", "custom_emoji_id": EXPECTED_IDS["S"], "alternative_text": "🏆"}}]],
+            None,
+            request_context=object(),
+        )
+
+    assert len(fallback) == 1
+    assert "Character rich panel rejected; using classic fallback" in caplog.text
+    assert "invalid rich text" in caplog.text
 
 
 def test_miniapp_reuses_canonical_rank_webm_assets():

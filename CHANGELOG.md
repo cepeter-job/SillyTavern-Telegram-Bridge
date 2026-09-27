@@ -6,6 +6,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Added
 
+- Add Mini App Story/Utility model selection and validated generation settings with private presets; provider credentials are never sent to the browser.
+
 - Add the Mini App Character Manager and digest-bound optimizer with authenticated portraits, paginated search, protected deletion, upload previews, new-session selection and durable actor-owned operation status.
 
 - Add an opt-in localhost-only Telegram Mini App shell with server-validated Telegram identity, private-chat scoping, bounded HTTP admission, same-origin security headers, Telegram theme integration, and managed listener lifecycle.

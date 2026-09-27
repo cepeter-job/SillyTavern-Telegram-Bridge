@@ -50,6 +50,9 @@ def render_choices(db: sqlite3.Connection, token: str, record: ChoiceSet, *, app
             ],
             [{"text": "⏭ Next Scene", "callback_data": f"lnnext:{current.nonce}"}],
         ]
+    elif current.generation_status == "pending":
+        text = "Preparing choices for your saved story. You may also type your own reply."
+        rows = []
     else:
         text = "Choices are not available yet. Your story is saved. Retry choices or type your own reply."
         rows = [[{"text": "Retry Choices", "callback_data": f"lnretry:{current.nonce}"}]]

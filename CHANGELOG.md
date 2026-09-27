@@ -6,6 +6,7 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Fixed
 
+- Make Mode A Light Novel recover missing or invalid inline choices automatically through the existing durable choice-only Story-model worker, keep the committed story pending during recovery, distinguish pending from final failure in Telegram, accept one unambiguous trailing choices-only JSON envelope, and log content-free inline rejection reasons/counts.
 - Show the active character portrait in the Mini App Home session card and preserve complete character artwork in the Characters tab instead of center-cropping it.
 
 ## [0.2.035] - 2026-09-27

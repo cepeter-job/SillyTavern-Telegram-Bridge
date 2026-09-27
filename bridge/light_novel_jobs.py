@@ -40,6 +40,11 @@ def process_light_novel_choices_job(
                     services.config.bot_token, chat_id, str(row[0]), db, record.session_id, record.assistant_rowid
                 )
             fields = card_fields_from_file(session["character_file"], app_settings=services.config)
+            if record.strategy == "a" and record.generation_status == "pending":
+                try:
+                    render_choices(db, services.config.bot_token, record, app_settings=services.config)
+                except Exception:
+                    logging.info("Could not show pending Mode A choice recovery panel")
             record = ensure_choices(
                 db,
                 nonce,

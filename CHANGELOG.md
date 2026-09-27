@@ -4,6 +4,14 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Confirm successful self-updates after the restarted bridge reaches normal startup, using an owner-local one-shot acknowledgement marker that never claims success for a version mismatch.
+
+### Changed
+
+- Report a verified update as restarting instead of treating a scheduled user-service restart as final completion.
+
 ## [0.2.032] - 2026-09-27
 
 ### Changed

@@ -1,12 +1,13 @@
-import {api,state,sessionBody,registerPage,runJob,navigate} from './app.js';
+import {api,state,createSessionScope,registerPage,runJob,navigate} from './app.js';
 import {el,card,button,field,empty,confirmAction,notice} from './ui.js';
 const enc=encodeURIComponent;
 let query='',offset=0,resumedProposal=null;
 export async function reopenCharacterPreview(result) { resumedProposal=result; await navigate('characters'); }
 async function renderCharacters() {
   const root=el('div');
+  const scope=createSessionScope(),sessionBody=scope.body;
   async function load() {
-    const data=await api('/characters?q='+enc(query)+'&offset='+offset); state.session=data.session;
+    const data=await api('/characters?q='+enc(query)+'&offset='+offset); scope.set(data.session);
     const search=el('input',{type:'search',value:query,placeholder:'Search filenames',maxlength:120});
     const searchButton=button('Search',async()=>{query=search.value;offset=0;await load();});
     search.addEventListener('keydown',e=>{if(e.key==='Enter')searchButton.click();});
@@ -19,7 +20,7 @@ async function renderCharacters() {
       else {
         entry.append(el('div',{class:'actions'},button('Info',()=>details(item)),button('Use',async()=>{
           if(!await confirmAction('Create a new normal session with '+item.name+'? Existing conversations will not be changed.'))return;
-          const result=await api('/characters/'+enc(item.filename)+'/select',{method:'POST',body:sessionBody({confirm:true})}); state.session=result.session;notice(result.message);await load();
+          const result=await api('/characters/'+enc(item.filename)+'/select',{method:'POST',body:sessionBody({confirm:true})}); scope.set(result.session);notice(result.message);await load();
         }),button('Optimize',()=>optimizer(item),'secondary'),button('Delete',async()=>{
           if(!await confirmAction('Delete '+item.name+'? Active, default and referenced cards are protected.'))return;
           await api('/characters/'+enc(item.filename),{method:'DELETE',body:sessionBody({digest:item.digest,confirm:true})});await load();
@@ -69,7 +70,7 @@ async function renderCharacters() {
   }
   if(resumedProposal) {
     const result=resumedProposal;resumedProposal=null;
-    state.session=(await api('/session')).session;
+    scope.set((await api('/session')).session);
     await preview(result);
   } else await load();
   return root;

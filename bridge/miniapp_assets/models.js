@@ -1,10 +1,11 @@
-import {api,state,sessionBody,registerPage} from './app.js';
+import {api,state,createSessionScope,registerPage} from './app.js';
 import {el,card,button,field,confirmAction,notice} from './ui.js';
 async function renderModels() {
   const root=el('div');
+  const scope=createSessionScope(),sessionBody=scope.body;
   async function load(query='') {
     const [catalog,generation,presets]=await Promise.all([api('/models?q='+encodeURIComponent(query)),api('/generation'),api('/generation/presets')]);
-    state.session=generation.session;
+    scope.set(generation.session);
     const search=el('input',{type:'search',placeholder:'Provider or model name',value:query,maxlength:120});
     const models=card('Models',el('p',{class:'muted'},'Selections apply only to '+state.session.title+'. Provider credentials remain on the server.'),field('Search configured models',search),button('Search',()=>load(search.value),'secondary'));
     for(const [key,label] of [['story','Story model'],['utility','Utility model']]) {

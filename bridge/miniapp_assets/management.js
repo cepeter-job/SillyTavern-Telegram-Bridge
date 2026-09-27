@@ -1,10 +1,11 @@
-import {api,state,sessionBody,registerPage,runJob} from './app.js';
+import {api,state,createSessionScope,registerPage,runJob} from './app.js';
 import {el,card,button,field,empty,confirmAction,notice} from './ui.js';
 const enc=encodeURIComponent;
 async function renderSessions() {
   const root=el('div');
+  const scope=createSessionScope(),sessionBody=scope.body;
   async function load(query='') {
-    const data=await api('/sessions?q='+enc(query));state.session=data.session;
+    const data=await api('/sessions?q='+enc(query));scope.set(data.session);
     const filter=el('input',{type:'search',value:query,maxlength:120,placeholder:'Search session titles'});
     const list=el('div',{class:'grid'});
     for(const item of data.sessions) {
@@ -14,7 +15,7 @@ async function renderSessions() {
         field('Session title',title),el('div',{class:'actions'},button('Rename',async()=>{
           await api('/sessions/'+enc(item.session_id),{method:'PATCH',body:sessionBody({title:title.value})});await load(query);
         },'secondary'),button('Open',async()=>{
-          const result=await api('/sessions/'+enc(item.session_id)+'/select',{method:'POST',body:sessionBody()});state.session=result.session;await load(query);
+          const result=await api('/sessions/'+enc(item.session_id)+'/select',{method:'POST',body:sessionBody()});scope.set(result.session);await load(query);
         }),button('Delete',async()=>{
           if(!await confirmAction('Delete '+item.title+' and its stored conversation? Active sessions cannot be deleted.'))return;
           await runJob('/sessions/'+enc(item.session_id)+'/delete',sessionBody({confirm:true}),root);await load(query);
@@ -23,7 +24,7 @@ async function renderSessions() {
     const name=el('input',{maxlength:120,placeholder:'New session title'});
     root.replaceChildren(card('Sessions',el('p',{class:'muted'},data.total+' sessions · Private to your Telegram chat.'),field('Find a session',filter),button('Search',()=>load(filter.value),'secondary')),
       list,card('Create session',field('Title',name),button('Create and open',async()=>{
-        const result=await api('/sessions',{method:'POST',body:sessionBody({title:name.value,operation_id:crypto.randomUUID()})});state.session=result.session;await load(query);notice('Session created. Use /start in Telegram to begin.');
+        const result=await api('/sessions',{method:'POST',body:sessionBody({title:name.value,operation_id:crypto.randomUUID()})});scope.set(result.session);await load(query);notice('Session created. Use /start in Telegram to begin.');
       })));
     if(!data.sessions.length)list.append(empty('No matching sessions.'));
   }
@@ -31,8 +32,9 @@ async function renderSessions() {
 }
 async function renderPersonas() {
   const root=el('div');
+  const scope=createSessionScope(),sessionBody=scope.body;
   async function load() {
-    const data=await api('/personas');state.session=data.session;
+    const data=await api('/personas');scope.set(data.session);
     const list=el('div',{class:'grid'});
     for(const item of data.personas) {
       list.append(card(item.name,el('p',{},item.description),item.id===state.session.persona_id?el('span',{class:'badge'},'Active'):null,
@@ -61,8 +63,9 @@ async function renderPersonas() {
 }
 async function renderWorlds() {
   const root=el('div');
+  const scope=createSessionScope(),sessionBody=scope.body;
   async function load() {
-    const data=await api('/worlds');state.session=data.session;
+    const data=await api('/worlds');scope.set(data.session);
     const list=el('div',{class:'grid'}),selected=new Set(data.worlds.filter(x=>x.active).map(x=>x.filename));
     for(const item of data.worlds) {
       const check=el('input',{type:'checkbox',checked:item.active,onchange:()=>{if(check.checked)selected.add(item.filename);else selected.delete(item.filename);}});

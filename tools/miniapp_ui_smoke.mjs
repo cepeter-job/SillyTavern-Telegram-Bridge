@@ -13,7 +13,7 @@ const lines=createInterface({input:child.stdout});
 const ready=await Promise.race([new Promise((ok,bad)=>{lines.once('line',line=>{try{ok(JSON.parse(line));}catch(e){bad(e);}});child.once('exit',code=>bad(new Error('Fixture exited '+code)));}),new Promise((_,bad)=>setTimeout(()=>bad(new Error('Fixture startup timed out')),10000).unref())]);
 const html=await readFile(resolve(root,'bridge/miniapp_assets/index.html'),'utf8');
 const dom=new JSDOM(html,{url:ready.url+'/miniapp/',runScripts:'outside-only',pretendToBeVisual:true});
-const context=dom.getInternalVMContext(),errors=[];
+const context=dom.getInternalVMContext(),errors=[],expectedFailures=new Set(),observedFailures=[];
 process.on('unhandledRejection',error=>errors.push(error));
 dom.window.Telegram={WebApp:{initData:ready.initData,initDataUnsafe:{start_param:'dashboard'},ready(){},expand(){},BackButton:{onClick(){},hide(){},show(){}}}};
 dom.window.AbortSignal=globalThis.AbortSignal;
@@ -22,7 +22,8 @@ dom.window.URL.revokeObjectURL=()=>{};
 dom.window.fetch=async (path,options)=>{
   assert.ok(String(path).startsWith('/api/v1/'),'Only local API requests are permitted');
   const response=await fetch(ready.url+path,options);
-  if(!response.ok)errors.push(new Error('API '+response.status+' '+path));
+  if(!response.ok&&expectedFailures.has(response.status+' '+path))observedFailures.push(response.status+' '+path);
+  if(!response.ok&&!expectedFailures.has(response.status+' '+path))errors.push(new Error('API '+response.status+' '+path));
   return response;
 };
 dom.window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};
@@ -60,6 +61,18 @@ try {
   [...document.querySelectorAll('main button')].find(n=>n.textContent==='Save settings').click();
   await until(()=>document.getElementById('notice').textContent==='Generation settings saved.','save settings');
   const stored=await app.namespace.api('/generation');assert.equal(stored.settings.temperature,.65);
+  // A page still displaying session A must not retarget an action when another view changes global state.
+  const replacement=await app.namespace.api('/sessions',{method:'POST',body:app.namespace.sessionBody({title:'Other view session',operation_id:'dom-other-session'})});
+  app.namespace.state.session=replacement.session;
+  const before=(await app.namespace.api('/generation')).settings.temperature;
+  document.getElementById(label.htmlFor).value='0.2';
+  expectedFailures.add('409 /api/v1/generation');
+  const oldSave=[...document.querySelectorAll('main button')].find(n=>n.textContent==='Save settings');
+  oldSave.click();await until(()=>!oldSave.disabled,'stale-session save finished');
+  const after=(await app.namespace.api('/generation')).settings.temperature;
+  assert.equal(after,before,'A rendered session action must never silently mutate a different session');
+  assert.ok(observedFailures.includes('409 /api/v1/generation'),'The server rejected the original rendered session as stale');
+  expectedFailures.clear();
   await app.namespace.navigate('sessions');
   const input=[...document.querySelectorAll('input')].find(n=>n.placeholder==='New session title');
   input.value='DOM verified session';
@@ -84,7 +97,7 @@ try {
   const updated=await app.namespace.api('/characters/Alice.png');
   assert.equal(updated.fields.description,'A thoughtful companion with clear motivations and consistent habits.');
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
-  console.log('mutations=3 passed; optimizer-resume=passed; pages=9 passed; browser-errors=0');
+  console.log('mutations=4 passed; stale-session=blocked; optimizer-resume=passed; pages=9 passed; browser-errors=0');
 } finally {
   dom.window.close();lines.close();child.kill('SIGTERM');
 }

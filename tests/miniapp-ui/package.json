@@ -1,0 +1,8 @@
+{
+  "name": "sttb-miniapp-ui-tests",
+  "version": "0.0.0",
+  "private": true,
+  "devDependencies": {
+    "jsdom": "30.1.1"
+  }
+}

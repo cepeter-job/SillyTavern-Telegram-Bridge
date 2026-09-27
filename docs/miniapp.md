@@ -6,7 +6,7 @@ Only IDs in `SILLYTAVERN_TELEGRAM_ALLOWED_USERS` are admitted. Open the Bridge m
 
 Private sessions use the authenticated user ID. Group chats and forum topics are not implicitly authorized by a launch link. Allowed users administer shared native character, persona and world files; use separate bridge instances for mutually untrusted users.
 
-The static UI uses native ES modules and needs no Node runtime or build. It ships inside `bridge/miniapp_assets` and is included in verified live-mirror updates.
+The static UI uses native ES modules and needs no Node runtime or build. It ships inside `bridge/miniapp_assets` and is included in verified live-mirror updates. The responsive presentation uses a compact Telegram-themed status header, desktop sidebar, five-item mobile bottom navigation, and a More sheet for secondary pages. The Home dashboard emphasizes the active session, quick actions, recent operations and observed bridge health; loading states use skeletons instead of replacing the page with a generic loading card.
 
 ## Characters and optimizer
 

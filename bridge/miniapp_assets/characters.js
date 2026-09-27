@@ -26,11 +26,12 @@ async function renderCharacters() {
     const grid=el('div',{class:'grid'});
     for(const item of data.characters) {
       const image=el('img',{class:'portrait modern-portrait',alt:item.name,loading:'lazy',decoding:'async',referrerpolicy:'no-referrer'});
-      const entry=card(item.name,image,el('div',{class:'row spaced'},el('small',{},item.filename),rankVisual(item.rank)));
-      if(item.active)entry.append(el('p',{class:'muted'},'Active character'));
-      if(item.unavailable)entry.append(el('p',{},'Card cannot be read.'));
+      const portrait=el('div',{class:'portrait-frame'},image,el('div',{class:'rank-overlay'},rankVisual(item.rank)),item.active?el('span',{class:'active-chip'},'Active'):null);
+      const body=el('div',{class:'character-card-body'},el('div',{class:'character-card-heading'},el('div',{},el('h2',{},item.name),el('small',{},item.filename))));
+      const entry=el('section',{class:'card character-card'},portrait,body);
+      if(item.unavailable){portraitUnavailable(image);body.append(el('p',{class:'muted'},'Card cannot be read.'));}
       else {
-        entry.append(el('div',{class:'actions'},button('Info',()=>details(item)),button('Use',async()=>{
+        body.append(el('div',{class:'actions'},button('Info',()=>details(item),'secondary'),button('Use',async()=>{
           if(!await confirmAction('Create a new normal session with '+item.name+'? Existing conversations will not be changed.'))return;
           const result=await api('/characters/'+enc(item.filename)+'/select',{method:'POST',body:sessionBody({confirm:true})}); scope.set(result.session);notice(result.message);await load();
         }),button('Optimize',()=>optimizer(item),'secondary'),button('Delete',async()=>{

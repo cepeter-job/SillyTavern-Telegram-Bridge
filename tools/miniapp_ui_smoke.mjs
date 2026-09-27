@@ -83,11 +83,34 @@ try {
   }
   await app.namespace.navigate('models');
   const document=dom.window.document;
+  const reasoningLabel=[...document.querySelectorAll('label')].find(n=>n.textContent==='Reasoning level');
+  assert.ok(reasoningLabel,'Generation settings expose a named reasoning selector');
+  const reasoning=document.getElementById(reasoningLabel.htmlFor);
+  assert.equal(reasoning.tagName,'SELECT');
+  assert.deepEqual([...reasoning.options].map(option=>[option.value,option.textContent]),[
+    ['none','None (0)'],['low','Low (1,024)'],['medium','Medium (4,096)'],
+    ['high','High (8,192)'],['max','Max (16,384)'],['custom','Custom'],
+  ]);
+  assert.equal(reasoning.value,'none');
+  const customLabel=[...document.querySelectorAll('label')].find(n=>n.textContent.startsWith('Custom reasoning budget'));
+  assert.ok(customLabel);
+  const customBudget=document.getElementById(customLabel.htmlFor);
+  assert.equal(customLabel.parentElement.hidden,true,'Custom budget is hidden for named levels');
+  reasoning.value='low';reasoning.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
+  assert.equal(customLabel.parentElement.hidden,true);
   const label=[...document.querySelectorAll('label')].find(n=>n.textContent.startsWith('Temperature'));
   document.getElementById(label.htmlFor).value='0.65';
-  [...document.querySelectorAll('main button')].find(n=>n.textContent==='Save settings').click();
+  const saveSettings=[...document.querySelectorAll('main button')].find(n=>n.textContent==='Save settings');
+  saveSettings.click();
   await until(()=>document.getElementById('notice').textContent==='Generation settings saved.','save settings');
-  const stored=await app.namespace.api('/generation');assert.equal(stored.settings.temperature,.65);
+  let stored=await app.namespace.api('/generation');
+  assert.equal(stored.settings.temperature,.65);assert.equal(stored.settings.reasoning_budget,1024);
+  reasoning.value='custom';reasoning.dispatchEvent(new dom.window.Event('change',{bubbles:true}));
+  assert.equal(customLabel.parentElement.hidden,false,'Custom budget is shown for Custom');
+  customBudget.value='12345';document.getElementById('notice').textContent='';
+  saveSettings.click();
+  await until(()=>document.getElementById('notice').textContent==='Generation settings saved.','save custom reasoning budget');
+  stored=await app.namespace.api('/generation');assert.equal(stored.settings.reasoning_budget,12345);
   // A page still displaying session A must not retarget an action when another view changes global state.
   const replacement=await app.namespace.api('/sessions',{method:'POST',body:app.namespace.sessionBody({title:'Other view session',operation_id:'dom-other-session'})});
   app.namespace.state.session=replacement.session;
@@ -124,7 +147,7 @@ try {
   const updated=await app.namespace.api('/characters/Alice.png');
   assert.equal(updated.fields.description,'A thoughtful companion with clear motivations and consistent habits.');
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
-  console.log('mutations=4 passed; stale-session=blocked; optimizer-resume=passed; pages=9 passed; browser-errors=0');
+  console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=9 passed; browser-errors=0');
 } finally {
   dom.window.close();lines.close();child.kill('SIGTERM');
 }

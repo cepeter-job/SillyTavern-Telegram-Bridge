@@ -23,15 +23,33 @@ async function renderModels() {
     const inputs={};
     for(const [key,label,min,max,step] of [
       ['temperature','Temperature',0,2,.05],['top_p','Top P',0,1,.05],['max_tokens','Maximum output tokens',1,16000,1],
-      ['frequency_penalty','Frequency penalty',-2,2,.1],['presence_penalty','Presence penalty',-2,2,.1],['reasoning_budget','Reasoning budget (0 disables)',0,32000,1]]) {
+      ['frequency_penalty','Frequency penalty',-2,2,.1],['presence_penalty','Presence penalty',-2,2,.1]]) {
       const input=el('input',{type:'number',min,max,step,value:generation.settings[key],required:true});inputs[key]=input;
       settings.append(field(label+' ('+min+'–'+max+')',input));
     }
+    const reasoningLevels=[
+      ['none','None (0)',0],['low','Low (1,024)',1024],['medium','Medium (4,096)',4096],
+      ['high','High (8,192)',8192],['max','Max (16,384)',16384],
+    ];
+    const currentReasoning=Number(generation.settings.reasoning_budget);
+    const reasoning=el('select',{},...reasoningLevels.map(([key,label])=>el('option',{value:key},label)),el('option',{value:'custom'},'Custom'));
+    reasoning.value=reasoningLevels.find(([, ,budget])=>budget===currentReasoning)?.[0]||'custom';
+    const customReasoning=el('input',{type:'number',min:0,max:32000,step:1,value:currentReasoning,required:true});
+    const customReasoningField=field('Custom reasoning budget (0–32000)',customReasoning);
+    const syncReasoning=()=>{customReasoningField.hidden=reasoning.value!=='custom';};
+    reasoning.addEventListener('change',syncReasoning);syncReasoning();
+    settings.append(field('Reasoning level',reasoning),customReasoningField);
     inputs.stop_sequences=el('textarea',{maxlength:404,value:generation.settings.stop_sequences||'',placeholder:'One stop sequence per line, up to four.'});
     settings.append(field('Stop sequences',inputs.stop_sequences),button('Save settings',async()=>{
       const values={};for(const [key,input] of Object.entries(inputs)) {
         if(key==='stop_sequences')values[key]=input.value;
         else {if(!input.checkValidity()||input.value==='')throw new Error('Check '+key.replaceAll('_',' ')+'.');values[key]=Number(input.value);}
+      }
+      if(reasoning.value==='custom') {
+        if(!customReasoning.checkValidity()||customReasoning.value==='')throw new Error('Check custom reasoning budget.');
+        values.reasoning_budget=Number(customReasoning.value);
+      } else {
+        values.reasoning_budget=reasoningLevels.find(([key])=>key===reasoning.value)[2];
       }
       await api('/generation',{method:'PATCH',body:sessionBody({settings:values})});notice('Generation settings saved.');
     }));

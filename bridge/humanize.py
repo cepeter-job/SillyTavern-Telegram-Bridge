@@ -61,12 +61,18 @@ _PROTECTED = re.compile(
 )
 
 
-def _rewrite_is_safe(source: str, candidate: str) -> bool:
-    if not candidate or candidate in {"None", "null"}:
-        return False
-    if not 0.6 * len(source.strip()) <= len(candidate) <= min(HUMANIZER_MAX_CHARS, 2 * len(source) + 256):
-        return False
-    return _PROTECTED.findall(source) == _PROTECTED.findall(candidate)
+def _rewrite_rejection_reason(source: str, candidate: str) -> str | None:
+    if not candidate:
+        return "empty_candidate"
+    if candidate in {"None", "null"}:
+        return "null_candidate"
+    if len(candidate) < 0.6 * len(source.strip()):
+        return "too_short"
+    if len(candidate) > min(HUMANIZER_MAX_CHARS, 2 * len(source) + 256):
+        return "too_long"
+    if _PROTECTED.findall(source) != _PROTECTED.findall(candidate):
+        return "protected_fragments_changed"
+    return None
 
 
 def render_humanized_response(
@@ -116,4 +122,13 @@ def render_humanized_response(
         logging.warning("Humanizer pass failed; keeping the original response")
         return text
     cleaned = str(rewritten or "").strip()
-    return cleaned if _rewrite_is_safe(text, cleaned) else text
+    rejection_reason = _rewrite_rejection_reason(text, cleaned)
+    if rejection_reason is not None:
+        logging.warning(
+            "Humanizer rewrite rejected: reason=%s source_chars=%s candidate_chars=%s",
+            rejection_reason,
+            len(text),
+            len(cleaned),
+        )
+        return text
+    return cleaned

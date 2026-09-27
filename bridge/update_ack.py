@@ -60,11 +60,14 @@ def arm_pending_update_ack(chat_id: str, version: str, *, app_settings: AppSetti
 
     path = pending_update_ack_path(app_settings)
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    payload = json.dumps(
-        {"format": 1, "chat_id": chat_id, "version": version},
-        separators=(",", ":"),
-        sort_keys=True,
-    ) + "\n"
+    payload = (
+        json.dumps(
+            {"format": 1, "chat_id": chat_id, "version": version},
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
+    )
 
     fd, temporary = tempfile.mkstemp(prefix=".pending-update-ack-", dir=path.parent)
     temporary_path = Path(temporary)

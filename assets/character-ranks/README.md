@@ -4,7 +4,7 @@ These files are the public, auditable media references for the S/A/B/C/D charact
 
 Telegram custom-emoji set: `sttb_ranks_by_SillyTavernPunzmeBot`
 
-Runtime note: the files below are provenance/reproduction assets; the bridge does not upload or read them when rendering a menu. `bridge/cards.py` hardcodes the registered IDs. The main Character Menu embeds those IDs as `RichTextCustomEmoji` inside Bot API 10.3 RichMessage buttons so video custom emoji can animate. Each uses a tier-specific badge and letter (`🏆 S`, `🥇 A`, `🥈 B`, `🥉 C`, or `⚪ D`) as its alternative text. The classic inline-keyboard fallback deliberately uses those static text labels without `icon_custom_emoji_id`, avoiding duplicate animated and static icons on eligible clients.
+Runtime note: Telegram bot menus do not upload or read these files; `bridge/cards.py` hardcodes the registered IDs. The Mini App reuses the same canonical WEBMs through the tier-specific route (for example `/miniapp/ranks/rank_S.webm`), so there is no duplicate media tree. The main Telegram Character Menu embeds the hardcoded IDs as `RichTextCustomEmoji` inside Bot API 10.3 RichMessage buttons so video custom emoji can animate. Each uses a tier-specific badge and letter (`🏆 S`, `🥇 A`, `🥈 B`, `🥉 C`, or `⚪ D`) as its alternative text. The classic inline-keyboard fallback deliberately uses those static text labels without `icon_custom_emoji_id`, avoiding duplicate animated and static icons on eligible clients.
 
 ## Rank mapping
 

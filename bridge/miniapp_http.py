@@ -20,9 +20,10 @@ from bridge.miniapp_types import ApiRoute, BinaryResult
 
 _CSP = (
     "default-src 'none'; script-src 'self' https://telegram.org; style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' blob: data:; connect-src 'self'; font-src 'self'; base-uri 'none'; "
+    "img-src 'self' blob: data:; media-src 'self'; connect-src 'self'; font-src 'self'; base-uri 'none'; "
     "form-action 'self'; object-src 'none'; frame-ancestors 'self' https://web.telegram.org https://*.telegram.org"
 )
+_RANK_ASSET_NAMES = tuple(f"rank_{tier}.webm" for tier in ("S", "A", "B", "C", "D"))
 _ASSETS = {
     "index.html": "text/html",
     "app.js": "text/javascript",
@@ -73,6 +74,12 @@ def create_miniapp_app(services: Any, config: MiniAppConfig) -> web.Application:
         path = Path(__file__).with_name("miniapp_assets") / asset_name
         if path.is_file():
             assets[asset_name] = (path.read_bytes(), content_type)
+    rank_assets = {}
+    rank_dir = Path(__file__).resolve().parents[1] / "assets/character-ranks/telegram"
+    for rank_name in _RANK_ASSET_NAMES:
+        path = rank_dir / rank_name
+        if path.is_file():
+            rank_assets[rank_name] = path.read_bytes()
 
     @web.middleware
     async def boundary(request: web.Request, handler: Any) -> web.StreamResponse:
@@ -155,6 +162,12 @@ def create_miniapp_app(services: Any, config: MiniAppConfig) -> web.Application:
             raise web.HTTPNotFound()
         return web.Response(body=resource[0], content_type=resource[1])
 
+    async def rank_asset(request: web.Request) -> web.Response:
+        content = rank_assets.get(request.match_info["asset"])
+        if content is None:
+            raise web.HTTPNotFound()
+        return web.Response(body=content, content_type="video/webm")
+
     def adapt(route: ApiRoute) -> Any:
         async def handle(request: web.Request) -> web.Response:
             who = identity(request)
@@ -197,6 +210,7 @@ def create_miniapp_app(services: Any, config: MiniAppConfig) -> web.Application:
 
     app.router.add_get("/miniapp/", asset)
     app.router.add_get("/miniapp/{asset}", asset)
+    app.router.add_get("/miniapp/ranks/{asset}", rank_asset)
     app.router.add_get("/api/v1/me", me)
     for route in api_routes():
         app.router.add_route(route.method, "/api/v1" + route.path, adapt(route))

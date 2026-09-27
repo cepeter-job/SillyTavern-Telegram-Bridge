@@ -24,6 +24,13 @@ from bridge.provider_port import ProviderPort
 async def serve() -> None:
     with tempfile.TemporaryDirectory(prefix="miniapp-dom-") as directory:
         services = make_services(Path(directory))
+        from bridge.character_quality import store_character_rank
+
+        db = services.db_factory()
+        try:
+            store_character_rank(db, "Alice.png", "S", app_settings=services.config)
+        finally:
+            db.close()
         services.model_router = ModelRouter(load_catalog=lambda: {"test": {"models": ["model", "other"]}})
         services.provider = ProviderPort(
             generate_backend=lambda *args, **kwargs: json.dumps(

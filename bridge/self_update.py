@@ -23,7 +23,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
@@ -419,7 +419,7 @@ def _activate_live(payload: Path, live: Path, backup: Path) -> None:
         raise
 
 
-def apply_update(plan: UpdatePlan) -> UpdateOutcome:
+def apply_update(plan: UpdatePlan, *, before_restart: Callable[[UpdateOutcome], None] | None = None) -> UpdateOutcome:
     source_changed = live_changed = False
     commit = ""
     phase = "preflight"
@@ -480,8 +480,19 @@ def apply_update(plan: UpdatePlan) -> UpdateOutcome:
             _activate_live(payload, plan.live, backup)
             live_changed = True
             try:
+                if before_restart is not None:
+                    before_restart(
+                        UpdateOutcome(
+                            UpdateStatus.RESTART_SCHEDULED,
+                            plan.release_version,
+                            commit,
+                            "",
+                            source_changed,
+                            live_changed,
+                        )
+                    )
                 _schedule_user_service_restart(tools, plan.unit)
-            except (OSError, subprocess.SubprocessError):
+            except (OSError, ValueError, subprocess.SubprocessError):
                 return UpdateOutcome(
                     UpdateStatus.RESTART_REQUIRED, plan.release_version, commit, "restart", source_changed, live_changed
                 )

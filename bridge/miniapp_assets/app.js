@@ -37,6 +37,7 @@ async function start() {
     await import('./models.js');
     await import('./management.js');
     await import('./memory.js');
+    await import('./system.js');
     await navigate(telegram?.initDataUnsafe?.start_param || 'dashboard');
   } catch(error) {
     document.getElementById('identity').textContent='Authentication required';

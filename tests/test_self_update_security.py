@@ -374,3 +374,22 @@ def test_malformed_public_signer_policy_is_refused_before_network(engine, releas
     monkeypatch.setattr(engine, "_verified_release", lambda *_a, **_k: pytest.fail("policy must be validated first"))
     result = engine.apply_update(make_plan(engine, data))
     assert result.code == "trust"
+
+
+def test_activation_hook_finishes_before_restart_is_scheduled(engine, release_tree, monkeypatch):
+    fake_supervisor(monkeypatch, engine)
+    events = []
+
+    def activated(outcome):
+        assert outcome.commit == release_tree.new
+        assert (release_tree.live / "bridge/feature.py").is_file()
+        events.append("durable-marker")
+
+    def schedule(*args):
+        assert events == ["durable-marker"]
+        events.append("restart")
+
+    monkeypatch.setattr(engine, "_schedule_user_service_restart", schedule)
+    result = engine.apply_update(make_plan(engine, release_tree), before_restart=activated)
+    assert result.status is engine.UpdateStatus.RESTART_SCHEDULED
+    assert events == ["durable-marker", "restart"]

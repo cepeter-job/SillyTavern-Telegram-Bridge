@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from types import TracebackType
@@ -49,6 +50,9 @@ class MiniAppRuntime:
             self.ready.set()
 
     def __enter__(self) -> MiniAppRuntime:
+        health = getattr(self.services, "health", None)
+        if health is not None:
+            health.begin(self.services.config)
         if self.config.enabled:
             self.thread.start()
             if not self.ready.wait(10):
@@ -74,12 +78,13 @@ class MiniAppRuntime:
 
 def configure_miniapp_menu(services: Any, config: MiniAppConfig) -> None:
     if config.enabled:
-        for user_id in sorted(services.config.allowed_users):
-            services.telegram.request(
-                services.config.bot_token,
-                "setChatMenuButton",
-                {
-                    "chat_id": user_id,
-                    "menu_button": {"type": "web_app", "text": "Bridge", "web_app": {"url": config.public_url}},
-                },
-            )
+        menu = {"type": "web_app", "text": "Bridge", "web_app": {"url": config.public_url}}
+        # Set the default for users who have not opened their first private bot chat yet.
+        for user_id in [None, *sorted(services.config.allowed_users)]:
+            payload = {"menu_button": menu}
+            if user_id is not None:
+                payload["chat_id"] = user_id
+            try:
+                services.telegram.request(services.config.bot_token, "setChatMenuButton", payload)
+            except Exception as exc:
+                logging.warning("Mini App menu registration deferred (%s)", type(exc).__name__)

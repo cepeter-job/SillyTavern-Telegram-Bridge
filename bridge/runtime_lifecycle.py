@@ -11,8 +11,10 @@ import urllib.error
 from bridge.background import shutdown_background_executors
 from bridge.composition import BridgeServices
 from bridge.metadata import get_meta
+from bridge.runtime_health import capture_deployment
 from bridge.sqlite_store import run_database_maintenance, write_transaction
 from bridge.sync_api import start_live_sync_worker, stop_live_sync_worker
+from bridge.update_ack import acknowledge_pending_update, pending_update_ack_path
 from bridge.update_routing import route_update
 from bridge.worker_orchestration import make_durable_backlog_dispatcher, resolve_recovered_job_submission
 
@@ -55,6 +57,13 @@ def restore_poll_offset(db: sqlite3.Connection, fallback: int) -> int:
 def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
     config = services.config
     token = config.bot_token
+    health = getattr(services, "health", None)
+    if health is not None:
+        health.begin(config)
+    deployment = health.deployment if health is not None else capture_deployment(config)
+    pending_at_boot = pending_update_ack_path(config).exists()
+    ack_done = False
+    first_poll = True
     _SHUTDOWN_EVENT.clear()
     install_bridge_signal_handlers(services.background.begin_shutdown)
     db = services.db_factory()
@@ -83,7 +92,7 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
                 "getUpdates",
                 {
                     "offset": offset,
-                    "timeout": 50,
+                    "timeout": 0 if first_poll else 50,
                     "allowed_updates": [
                         "message",
                         "edited_message",
@@ -91,6 +100,17 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
                     ],
                 },
             )
+            first_poll = False
+            if health is not None:
+                health.poll_succeeded()
+            if pending_at_boot and not ack_done:
+                ack_done = acknowledge_pending_update(
+                    token,
+                    app_settings=config,
+                    send_text_backend=services.telegram.send_text,
+                    version_backend=lambda **kwargs: deployment.version,
+                    commit_backend=lambda **kwargs: deployment.commit,
+                )
             for update in updates:
                 last_safe_offset = offset
                 offset = route_update(
@@ -102,12 +122,16 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
                     permitted,
                 )
         except urllib.error.HTTPError as exc:
+            if health is not None:
+                health.poll_failed()
             logging.error("Telegram HTTP error: %s", exc.code)
             _SHUTDOWN_EVENT.wait(10)
         except KeyboardInterrupt:
             request_bridge_shutdown(services.background.begin_shutdown)
             break
         except Exception as exc:
+            if health is not None:
+                health.poll_failed()
             if _SHUTDOWN_EVENT.is_set():
                 break
             offset = restore_poll_offset(db, last_safe_offset)
@@ -115,6 +139,8 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
             _SHUTDOWN_EVENT.wait(5)
 
     request_bridge_shutdown(services.background.begin_shutdown)
+    if health is not None:
+        health.stopping()
     sync_stopped = stop_live_sync_worker(timeout=5.0)
     drained = shutdown_background_executors(timeout=20.0)
     db.close()

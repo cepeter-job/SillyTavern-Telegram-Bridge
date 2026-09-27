@@ -1984,7 +1984,7 @@ class CompositionSourceBoundaryTests(SettingsTestCase):
 
     def test_composition_module_does_not_import_compatibility_runtime(self):
         source = (Path(__file__).parents[1] / "bridge" / "composition.py").read_text(encoding="utf-8")
-        self.assertNotIn("bridge.runtime", source)
+        self.assertNotRegex(source, r"\bbridge\.runtime\b")
         self.assertNotIn("CURRENT_SERVICES", source)
         self.assertNotIn("get_services(", source)
         self.assertNotIn("set_services(", source)

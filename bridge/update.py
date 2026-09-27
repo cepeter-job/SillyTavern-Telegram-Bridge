@@ -14,6 +14,7 @@ from bridge.network_security import EndpointPolicy, strict_urlopen
 from bridge.self_update import UpdateOutcome, UpdatePlan, UpdateStatus, apply_update, version_tuple
 from bridge.settings import AppSettings
 from bridge.telegram import answer_callback, send_panel_request, send_text
+from bridge.update_ack import arm_pending_update_ack
 
 UPDATE_REPO = "cepeter/SillyTavern-Telegram-Bridge"
 UPDATE_CANONICAL_GIT_URL = f"https://github.com/{UPDATE_REPO}.git"
@@ -136,7 +137,9 @@ def send_update_menu(token: str, chat_id: str, message_id: int | None = None, *,
     send_panel_request(token, method, payload, request_context=request_context)
 
 
-def _run_update(expected_version: str | None = None, *, app_settings: AppSettings) -> UpdateOutcome:
+def _run_update(
+    expected_version: str | None = None, *, app_settings: AppSettings, before_restart=None
+) -> UpdateOutcome:
     current = installed_bridge_version(app_settings=app_settings)
     try:
         latest, _notes = latest_bridge_release()
@@ -156,7 +159,8 @@ def _run_update(expected_version: str | None = None, *, app_settings: AppSetting
             trusted_signers=trust,
             release_version=latest,
             unit=app_settings.update_service,
-        )
+        ),
+        **({"before_restart": before_restart} if before_restart is not None else {}),
     )
 
 
@@ -164,7 +168,7 @@ def format_update_outcome(outcome: UpdateOutcome) -> str:
     if outcome.status is UpdateStatus.ALREADY_LATEST:
         return f"Already latest (v{outcome.version}); no update was performed."
     if outcome.status is UpdateStatus.RESTART_SCHEDULED:
-        return f"Verified v{outcome.version} installed; the user-service restart was requested."
+        return f"Verified v{outcome.version} installed. Restarting bridge; completion will be confirmed after startup."
     if outcome.status is UpdateStatus.RESTART_REQUIRED:
         return (
             f"Verified v{outcome.version} installed, but automatic restart failed. "
@@ -217,7 +221,13 @@ def handle_update_callback(
         version = data.removeprefix("update:confirm:") if data.startswith("update:confirm:") else None
         remove_inline_keyboard(db, token, callback)
         try:
-            outcome = _run_update(expected_version=version, app_settings=app_settings)
+            outcome = _run_update(
+                expected_version=version,
+                app_settings=app_settings,
+                before_restart=lambda installed: arm_pending_update_ack(
+                    chat_id, installed.version, commit=installed.commit, app_settings=app_settings
+                ),
+            )
         except Exception:
             logging.error("Unexpected updater failure; deployment requires operator inspection")
             send_text(

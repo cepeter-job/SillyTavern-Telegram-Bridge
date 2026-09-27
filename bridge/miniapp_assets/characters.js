@@ -1,7 +1,8 @@
-import {api,state,sessionBody,registerPage,runJob} from './app.js';
+import {api,state,sessionBody,registerPage,runJob,navigate} from './app.js';
 import {el,card,button,field,empty,confirmAction,notice} from './ui.js';
 const enc=encodeURIComponent;
-let query='',offset=0;
+let query='',offset=0,resumedProposal=null;
+export async function reopenCharacterPreview(result) { resumedProposal=result; await navigate('characters'); }
 async function renderCharacters() {
   const root=el('div');
   async function load() {
@@ -66,6 +67,11 @@ async function renderCharacters() {
       const result=await runJob('/characters/'+enc(item.filename)+'/optimize',sessionBody({digest:item.digest,suggestion:guidance.value}),root);await preview(result);
     }))));
   }
-  await load();return root;
+  if(resumedProposal) {
+    const result=resumedProposal;resumedProposal=null;
+    state.session=(await api('/session')).session;
+    await preview(result);
+  } else await load();
+  return root;
 }
 registerPage('characters','Characters',renderCharacters);

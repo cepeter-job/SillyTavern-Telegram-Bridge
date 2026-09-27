@@ -334,7 +334,7 @@ def test_character_menu_prefers_rich_message_with_disabled_animated_rank(tmp_pat
         "text": {
             "type": "custom_emoji",
             "custom_emoji_id": "6181691122838938530",
-            "alternative_text": "🏆 S",
+            "alternative_text": "🏆",
         },
         "disabled": {},
     }

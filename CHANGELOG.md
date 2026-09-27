@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Reuse the canonical animated S/A/B/C/D rank WEBMs in the Mini App character grid, with reduced-motion/static fallback and resilient unavailable-portrait handling.
+
 ## [0.2.033] - 2026-09-27
 
 ### Added

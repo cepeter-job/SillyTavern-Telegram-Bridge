@@ -211,3 +211,30 @@ def test_default_menu_is_available_to_new_private_chats(tmp_path):
         load_miniapp_config(s),
     )
     assert any("chat_id" not in args[2] and args[2]["menu_button"]["type"] == "web_app" for args in requests)
+
+
+def test_rank_webm_assets_use_canonical_files_and_nested_route(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from bridge.miniapp_config import load_miniapp_config
+    from bridge.miniapp_http import create_miniapp_app
+
+    s = settings(tmp_path)
+    canonical = Path(__file__).parents[1] / "assets/character-ranks/telegram/rank_S.webm"
+    expected = canonical.read_bytes()
+
+    async def run():
+        app = create_miniapp_app(SimpleNamespace(config=s), load_miniapp_config(s))
+        async with TestClient(TestServer(app)) as client:
+            with monkeypatch.context() as patch:
+                patch.setattr(
+                    Path, "read_bytes", lambda _path: (_ for _ in ()).throw(AssertionError("request-time read"))
+                )
+                response = await client.get("/miniapp/ranks/rank_S.webm")
+                assert response.status == 200
+                assert response.content_type == "video/webm"
+                assert await response.read() == expected
+                assert "media-src 'self'" in response.headers["Content-Security-Policy"]
+                assert (await client.get("/miniapp/ranks/rank_Z.webm")).status == 404
+
+    asyncio.run(run())

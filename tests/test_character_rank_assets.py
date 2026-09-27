@@ -52,3 +52,11 @@ def test_rank_buttons_use_clear_tier_specific_static_fallbacks():
             "custom_emoji_id": EXPECTED_IDS[tier],
             "alternative_text": f"{badge} {tier}",
         }
+
+
+def test_miniapp_reuses_canonical_rank_webm_assets():
+    repo = ROOT.parents[1]
+    assert not (repo / "bridge/miniapp_assets/ranks").exists()
+    manifest = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "Mini App" in manifest
+    assert "/miniapp/ranks/rank_S.webm" in manifest

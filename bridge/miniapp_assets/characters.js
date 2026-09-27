@@ -1,7 +1,19 @@
 import {api,state,createSessionScope,registerPage,runJob,navigate} from './app.js';
 import {el,card,button,field,empty,confirmAction,notice} from './ui.js';
 const enc=encodeURIComponent;
+const rankTiers=new Set(['S','A','B','C','D']);
 let query='',offset=0,resumedProposal=null;
+function rankVisual(rank) {
+  const tier=String(rank||'').trim().toUpperCase();
+  if(!rankTiers.has(tier))return el('span',{class:'badge'},rank||'Unranked');
+  if(typeof window.matchMedia==='function'&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)return el('span',{class:'badge'},tier);
+  const slot=el('span',{class:'rank-slot'}),video=el('video',{class:'rank-video',width:40,height:40,'aria-label':'Rank '+tier}),source=el('source',{src:'/miniapp/ranks/rank_'+tier+'.webm',type:'video/webm'});
+  video.autoplay=true;video.loop=true;video.muted=true;video.playsInline=true;
+  const fallback=()=>slot.replaceChildren(el('span',{class:'badge'},tier));
+  source.addEventListener('error',fallback,{once:true});video.addEventListener('error',fallback,{once:true});
+  video.append(source);slot.append(video);return slot;
+}
+function portraitUnavailable(image) { image.classList.add('portrait-broken');image.alt='Portrait unavailable';image.removeAttribute('src'); }
 export async function reopenCharacterPreview(result) { resumedProposal=result; await navigate('characters'); }
 async function renderCharacters() {
   const root=el('div');
@@ -13,8 +25,8 @@ async function renderCharacters() {
     search.addEventListener('keydown',e=>{if(e.key==='Enter')searchButton.click();});
     const grid=el('div',{class:'grid'});
     for(const item of data.characters) {
-      const image=el('img',{class:'portrait',alt:item.name,loading:'lazy'});
-      const entry=card(item.name,image,el('div',{class:'row spaced'},el('small',{},item.filename),el('span',{class:'badge'},item.rank||'Unranked')));
+      const image=el('img',{class:'portrait modern-portrait',alt:item.name,loading:'lazy',decoding:'async',referrerpolicy:'no-referrer'});
+      const entry=card(item.name,image,el('div',{class:'row spaced'},el('small',{},item.filename),rankVisual(item.rank)));
       if(item.active)entry.append(el('p',{class:'muted'},'Active character'));
       if(item.unavailable)entry.append(el('p',{},'Card cannot be read.'));
       else {
@@ -26,8 +38,10 @@ async function renderCharacters() {
           await api('/characters/'+enc(item.filename),{method:'DELETE',body:sessionBody({digest:item.digest,confirm:true})});await load();
         },'danger')));
         api('/characters/'+enc(item.filename)+'/portrait',{binary:true}).then(blob=>{
-          const url=URL.createObjectURL(blob); image.onload=()=>URL.revokeObjectURL(url);image.onerror=()=>URL.revokeObjectURL(url);image.src=url;
-        }).catch(()=>{image.alt='Portrait unavailable';});
+          if(!blob||blob.size===0)throw new Error('empty portrait');
+          const url=URL.createObjectURL(blob);let revoked=false;const revoke=()=>{if(!revoked){revoked=true;URL.revokeObjectURL(url);}};
+          image.onload=revoke;image.onerror=()=>{revoke();portraitUnavailable(image);};image.src=url;
+        }).catch(()=>portraitUnavailable(image));
       }
       grid.append(entry);
     }

@@ -10,7 +10,7 @@ The static UI uses native ES modules and needs no Node runtime or build. It ship
 
 ## Characters and optimizer
 
-Use Characters to browse/search PNG cards, view portraits/info, upload cards and create a new normal conversation session. Selecting a character creates a new session instead of changing existing conversation history; send `/start` in Telegram for its opening. Active/default/referenced characters cannot be deleted; deletion verifies a backup and the revision you reviewed.
+Use Characters to browse/search PNG cards, view portraits/info, upload cards and create a new normal conversation session. Ranked cards show the canonical S/A/B/C/D WEBM animation from `assets/character-ranks/telegram`; reduced-motion clients and media failures fall back to the static tier badge. Empty or failed portrait loads show the explicit portrait-unavailable state instead of a broken image. Selecting a character creates a new session instead of changing existing conversation history; send `/start` in Telegram for its opening. Active/default/referenced characters cannot be deleted; deletion verifies a backup and the revision you reviewed.
 
 Optimizer uses the configured Utility model and supports an optional Manual suggestion. It returns an original/proposed preview. Apply consumes the actor/session-bound proposal once and verifies the original digest; Discard leaves the card untouched. Existing-filename uploads similarly require an explicit replacement preview. Simple upload filenames must not contain path or wildcard characters.
 

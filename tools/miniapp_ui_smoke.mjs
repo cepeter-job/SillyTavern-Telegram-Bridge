@@ -21,6 +21,7 @@ dom.window.URL.createObjectURL=()=> 'blob:test-fixture';
 dom.window.URL.revokeObjectURL=()=>{};
 dom.window.fetch=async (path,options)=>{
   assert.ok(String(path).startsWith('/api/v1/'),'Only local API requests are permitted');
+  if(String(path).includes('/characters/Alice.png/portrait')) return new Response(new Blob([],{type:'image/png'}),{status:200,headers:{'Content-Type':'image/png'}});
   const response=await fetch(ready.url+path,options);
   if(!response.ok&&expectedFailures.has(response.status+' '+path))observedFailures.push(response.status+' '+path);
   if(!response.ok&&!expectedFailures.has(response.status+' '+path))errors.push(new Error('API '+response.status+' '+path));
@@ -52,6 +53,13 @@ try {
     const body=dom.window.document.querySelector('main').textContent;
     assert.ok(!body.includes('Could not load this page'),page+': '+body);
     assert.ok(body.length>30,page+' rendered content');
+    if(page==='characters') {
+      const pageDocument=dom.window.document;
+      const rank=pageDocument.querySelector('video.rank-video source');
+      assert.ok(rank,'Ranked character renders an animated rank asset');
+      assert.equal(rank.getAttribute('src'),'/miniapp/ranks/rank_S.webm');
+      await until(()=>[...pageDocument.querySelectorAll('img.portrait-broken')].some(n=>n.alt==='Portrait unavailable'),'empty portrait fallback');
+    }
     console.log('render='+page+' ok');
   }
   await app.namespace.navigate('models');

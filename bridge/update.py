@@ -165,10 +165,7 @@ def format_update_outcome(outcome: UpdateOutcome) -> str:
     if outcome.status is UpdateStatus.ALREADY_LATEST:
         return f"Already latest (v{outcome.version}); no update was performed."
     if outcome.status is UpdateStatus.RESTART_SCHEDULED:
-        return (
-            f"Verified v{outcome.version} installed. "
-            "Restarting bridge; completion will be confirmed after startup."
-        )
+        return f"Verified v{outcome.version} installed. Restarting bridge; completion will be confirmed after startup."
     if outcome.status is UpdateStatus.RESTART_REQUIRED:
         return (
             f"Verified v{outcome.version} installed, but automatic restart failed. "

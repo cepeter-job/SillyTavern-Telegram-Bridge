@@ -276,6 +276,10 @@ python sillytavern_telegram_bridge.py --codex-login
 python sillytavern_telegram_bridge.py --codex-status
 ```
 
+`--codex-login` opens a prefilled OpenAI authorization page in the configured
+local browser; the short-lived device code is never written to terminal logs.
+If no browser can be opened, configure the process `BROWSER` launcher and retry.
+
 The bridge stores its own rotating token family in a private `0600` JSON file;
 it neither copies nor modifies Hermes or Codex CLI credentials. Use
 `--codex-logout` to remove it. Codex does not expose the normal provider

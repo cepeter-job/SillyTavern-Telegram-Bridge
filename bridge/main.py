@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import os
+import urllib.parse
+import webbrowser
 from functools import partial as _partial
 from pathlib import Path
 
@@ -371,7 +373,14 @@ def _run_codex_auth_action(action: str, config: AppSettings) -> int:
     if action == "login":
 
         def notify(url: str, code: str) -> None:
-            print(f"Open {url} and enter code: {code}")
+            separator = "&" if "?" in url else "?"
+            login_url = url + separator + urllib.parse.urlencode({"user_code": code})
+            if not webbrowser.open(login_url, new=2):
+                raise CodexAuthError(
+                    "Could not open the OpenAI login browser; configure a browser and retry.",
+                    code="codex_browser_unavailable",
+                )
+            print("Continue the OpenAI Codex login in the browser that just opened.")
 
         try:
             device_login(config.codex_oauth_file, environ=config.environ, notify=notify)

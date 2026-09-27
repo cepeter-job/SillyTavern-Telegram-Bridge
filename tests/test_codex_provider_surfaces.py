@@ -80,6 +80,40 @@ class CodexProviderSurfaceTests(unittest.TestCase):
             app_settings=self.settings,
         )
 
+    def test_login_opens_prefilled_browser_without_printing_device_code(self):
+        opened = []
+        output = io.StringIO()
+        old_login = main.device_login
+        old_open = getattr(main, "webbrowser", None)
+
+        def fake_login(_path, *, environ, notify):
+            del environ
+            notify("https://auth.openai.com/codex/device", "ABCD-EFGH")
+            return {"access_token": self.access, "refresh_token": "refresh"}
+
+        class Browser:
+            @staticmethod
+            def open(url, new=0):
+                opened.append((url, new))
+                return True
+
+        main.device_login = fake_login
+        main.webbrowser = Browser
+        try:
+            with contextlib.redirect_stdout(output):
+                exit_code = main._run_codex_auth_action("login", self.settings)
+        finally:
+            main.device_login = old_login
+            if old_open is None:
+                delattr(main, "webbrowser")
+            else:
+                main.webbrowser = old_open
+
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(opened, [("https://auth.openai.com/codex/device?user_code=ABCD-EFGH", 2)])
+        self.assertNotIn("ABCD-EFGH", output.getvalue())
+        self.assertIn("browser", output.getvalue())
+
     def test_auth_status_output_does_not_expose_tokens(self):
         codex_auth.save_tokens(self.auth_file, {"access_token": self.access, "refresh_token": "secret-refresh"})
         output = io.StringIO()

@@ -7,7 +7,7 @@ usage() {
 Usage: ./install.sh [options]
   --no-start             Prepare files without starting the bridge service.
   --no-deps              Reuse an existing .venv; skip dependency installation.
-  --with-caddy           Install/configure HTTPS through Caddy (sudo required).
+  --with-tailscale-funnel  Publish the Mini App through an authenticated Tailscale node.
   --system-deps          Install Debian/Ubuntu prerequisites (sudo required).
   --linger               Enable user services after logout.
   --replace-service      Back up and replace an existing custom bridge unit.
@@ -15,20 +15,23 @@ Usage: ./install.sh [options]
   --help                 Show this help without changing anything.
 
 First run creates a private .env, starter character/avatar and user systemd unit.
-Fill the .env values, then rerun. Mini Apps require public HTTPS, DNS and reachable
-ports 80/443. --with-caddy configures the proxy, not DNS or firewall rules.
+Fill the .env values, then rerun with --with-tailscale-funnel. Tailscale 1.52+,
+authentication, operator permissions and HTTPS/Funnel authorization are required.
+Funnel supplies public HTTPS without custom DNS or inbound ports. A blank Mini App
+URL is filled automatically using a free supported port; existing routes are kept.
+--no-start never publishes a new Funnel. The bridge API still requires Telegram auth.
 A running bridge is never upgraded in place: stop it before installing dependencies,
 or use --no-deps when its existing environment already satisfies requirements.lock.
 HELP
 }
-START=1; DEPS=1; CADDY=0; SYSTEM_DEPS=0; LINGER=0; REPLACE=0
+START=1; DEPS=1; FUNNEL=0; SYSTEM_DEPS=0; LINGER=0; REPLACE=0
 ENV_FILE="${SILLYTAVERN_ENV_FILE:-$HOME/.local/share/sillytavern-telegram/.env}"
 while (($#)); do
   case "$1" in
     --help|-h) usage; exit 0;;
     --no-start) START=0;;
     --no-deps) DEPS=0;;
-    --with-caddy) CADDY=1;;
+    --with-tailscale-funnel) FUNNEL=1;;
     --system-deps) SYSTEM_DEPS=1;;
     --linger) LINGER=1;;
     --replace-service) REPLACE=1;;
@@ -97,11 +100,9 @@ elif ((CHECK_STATUS)); then
   echo 'Configuration validation failed; nothing was started.' >&2
   exit "$CHECK_STATUS"
 fi
-if ((CADDY)); then
-  PUBLIC_URL=$("$PY" -m bridge.install_support public-url "${ARGS[@]}")
-  [[ -n "$PUBLIC_URL" ]] || { echo 'Set SILLYTAVERN_MINIAPP_PUBLIC_URL before --with-caddy.' >&2;exit 1; }
-  PROXY=$("$PY" -m bridge.install_support proxy-path "${ARGS[@]}")
-  bash "$SOURCE/tools/install_caddy.sh" "$PROXY"
+if ((FUNNEL)); then
+  "$PY" -m bridge.tailscale_funnel prepare --source "$SOURCE" --home "$HOME" --env "$ENV_FILE"
+  "$PY" -m bridge.install_support prepare "${ARGS[@]}"
 fi
 if ((LINGER)); then
   loginctl enable-linger "$(id -un)" || sudo loginctl enable-linger "$(id -un)"
@@ -114,10 +115,13 @@ if ((START)); then
   systemctl --user enable sillytavern-telegram.service
   systemctl --user restart sillytavern-telegram.service
   systemctl --user is-active --quiet sillytavern-telegram.service
+  if ((FUNNEL)); then
+    "$PY" -m bridge.tailscale_funnel enable --source "$SOURCE" --home "$HOME" --env "$ENV_FILE"
+  fi
   echo 'User service is active. Open the bot in Telegram and use its Bridge menu.'
   echo 'Diagnostics: journalctl --user -u sillytavern-telegram.service -n 80 --no-pager'
 else
-  echo 'Configuration and user service are ready; --no-start left the bridge service unchanged.'
+  echo 'Configuration and user service are ready; --no-start left the bridge and Funnel unchanged.'
 fi
 if [[ $(loginctl show-user "$(id -un)" -p Linger --value 2>/dev/null || true) != yes ]]; then
   echo 'For persistence after logout/reboot, rerun with --linger.'

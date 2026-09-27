@@ -29,20 +29,7 @@ cd ~/sillytavern-telegram-bridge
 ./install.sh --system-deps --no-start
 ```
 
-Fill `~/.local/share/sillytavern-telegram/.env`, then run:
-
-```bash
-./install.sh --with-caddy --linger
-```
-
-The installer creates the virtual environment, installs hash-locked dependencies,
-prepares a starter character/avatar, generates a provider catalog from `.env`, and
-installs a user systemd service. `--system-deps` and `--with-caddy` request administrative
-package/proxy setup; the bridge itself does not run as root. Existing private `.env`,
-custom provider YAML, native data and custom service units are preserved. Use
-`--replace-service` only to explicitly replace a custom service with a backup.
-
-Required `.env` values for an env-only provider setup:
+Fill `~/.local/share/sillytavern-telegram/.env` with your bot and provider values:
 
 ```dotenv
 SILLYTAVERN_TELEGRAM_BOT_TOKEN=your-bot-token
@@ -51,35 +38,60 @@ SILLYTAVERN_MODEL=default::your-model-id
 SILLYTAVERN_PROVIDER_ENDPOINT=https://your-provider.example/v1
 SILLYTAVERN_PROVIDER_ALLOWED_HOSTS=your-provider.example
 LLM_API_KEY=your-provider-key
-SILLYTAVERN_MINIAPP_PUBLIC_URL=https://your-domain.example/miniapp/
+# Leave blank for automatic Funnel URL discovery.
+SILLYTAVERN_MINIAPP_PUBLIC_URL=
 ```
 
-Leave the generated starter-character value in place initially. Add optional model
-IDs with `SILLYTAVERN_EXTRA_MODELS=model-two,model-three`, or keep using a custom
-provider YAML for multiple providers. Do not put API keys in URLs.
+Install and sign in to [Tailscale](https://tailscale.com/download/linux) on this
+server first. Requires **Tailscale 1.52+**, running `tailscaled`, MagicDNS, HTTPS
+certificates, Funnel authorization and an account allowed to configure Tailscale.
+An administrator can designate the account with `sudo tailscale set --operator="$USER"`.
+Account login and tailnet approval are external prerequisites; the bridge does not
+invent or bypass them. Then run:
 
-**Public DNS and reachable HTTPS are external prerequisites.** Point the hostname
-at this server and make ports 80/443 reachable before `--with-caddy`; the installer
-does not edit DNS or firewall rules. With an existing reverse proxy, omit
-`--with-caddy` and route `/miniapp/*` and `/api/v1/*` to `127.0.0.1:8787`.
-An empty Mini App URL keeps the HTTP server disabled. The bot's **Bridge** menu
-opens the app after startup; no separate app account/password is needed.
+```bash
+./install.sh --with-tailscale-funnel --linger
+```
 
-The Mini App includes Characters/Optimizer, Models/Generation, Sessions, Personas,
-Worlds, Memory, Data Bank and System/Update pages. Private chat sessions are scoped
-to the authenticated Telegram user. Allowed users administer the shared native
-asset catalog; use separate bridge instances for mutually untrusted users.
+Deployment: **public HTTPS → Tailscale Funnel → `127.0.0.1:8787`**. No additional
+reverse proxy, custom domain, inbound public ports or port forwarding is required.
+Funnel manages TLS and the public hostname. The bot's **Bridge** menu opens the app.
+Funnel is public; private API operations still require signed Telegram `initData`
+and an allowed-user ID. The same root proxy carries both `/miniapp/*` and `/api/v1/*`.
 
-For an existing running installation, stop its bridge service before changing its
-venv dependencies, or use `--no-deps` when the installed environment already matches
-the lock. The first release containing Mini Apps changes the dependency lock and
-requires a deliberate manual installation; the verified updater does not bypass
-its dependency-change guard. Optional automatic release installation also requires
-an independently obtained public signing key and external allowed-signers file.
+A blank URL reuses only an exact already-public Mini App proxy, or selects the first
+unused HTTPS port: **443, 8443, then 10000**. Only that URL assignment is saved in
+`.env`. Existing private Serve and public Funnel routes are not reset or replaced.
+An explicit URL must match this node and an available supported port; conflicts
+stop setup. The backend uses `SILLYTAVERN_MINIAPP_PORT` (default `8787`).
 
-See [Mini App installation and operations](docs/miniapp.md) for the complete setup,
-security boundaries, update readiness and troubleshooting. The manual guide below
-remains available for customized deployments.
+The installer prepares user-local Python, hash-locked dependencies, a starter
+character/avatar, an env-derived provider catalog and a user systemd service.
+`--system-deps` installs Debian/Ubuntu base prerequisites, **not Tailscale**.
+Existing `.env` values, custom provider YAML, native files and custom service units
+are preserved. `--replace-service` explicitly replaces a custom unit with a backup.
+`--no-start` prepares files but never starts the bridge or publishes a new Funnel.
+Publishing requires a ready loopback Mini App and an unauthenticated API rejection.
+
+Keep the generated starter-character value initially. Add optional model IDs with
+`SILLYTAVERN_EXTRA_MODELS=model-two,model-three`, or use custom provider YAML for
+multiple providers. Without the Funnel flag, a blank URL keeps the listener off.
+The Mini App manages Characters/Optimizer, Models/Generation, Sessions, Personas,
+Worlds, Memory, Data Bank and System/Update. Ordinary conversation stays in Telegram.
+
+**Upgrade:** stop the user service before changing dependencies, update the clean
+checkout to `main`, and rerun `./install.sh --with-tailscale-funnel --linger`.
+Version **0.2.033** changes the dependency lock from previous releases, requiring
+this manual installation; `/update` keeps its dependency-change guard.
+
+Allowed users share administration of native assets; use separate bridge instances
+for mutually untrusted users. Existing unrelated proxy packages and system services
+are not uninstalled. Funnel `--bg` persists across daemon restarts and reboot.
+Tailscale still documents Funnel as beta with non-configurable bandwidth limits.
+
+See [Mini App installation and operations](docs/miniapp.md) for authorization,
+upgrade commands, status and troubleshooting. The manual guide below remains
+available for customized deployments.
 
 ---
 

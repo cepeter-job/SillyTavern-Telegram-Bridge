@@ -4,7 +4,7 @@
 
 **Goal:** Ship the private management Mini App and install.sh in six merged PR waves.
 **Architecture:** Embedded loopback aiohttp transport over canonical services, authenticated private-chat scope, static ES modules, bounded background operations.
-**Tech Stack:** Python 3.11+, aiohttp, SQLite, HTML/CSS/JavaScript, bash/systemd/Caddy.
+**Tech Stack:** Python 3.11+, aiohttp, SQLite, HTML/CSS/JavaScript, bash/systemd/Tailscale Funnel.
 **Spec:** docs/superpowers/specs/2026-09-27-miniapp-design.md
 
 ## Global constraints

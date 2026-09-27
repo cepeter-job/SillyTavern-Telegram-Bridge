@@ -4,27 +4,33 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.2.033] - 2026-09-27
+
 ### Added
 
-- Add the Mini App System dashboard with observed polling health, immutable boot identity, private operation history, and expiring actor-bound verified-update review.
-- Add a re-runnable user-scope `install.sh` for hash-locked Python setup, env-only provider configuration, starter resources, preserved private state, user systemd and optional Caddy HTTPS integration.
+- Add the opt-in Telegram Mini App: server-validated Telegram identity, private-chat scoping, localhost-only listener, same-origin security headers and native theme integration.
+- Add Character Manager portraits, search, protected deletion, upload previews, new-session selection and digest-bound optimizer previews with manual suggestions and Apply/Discard.
+- Add Story/Utility model selection, validated generation settings and private presets; native Session/Persona/World management with revision checks and backups.
+- Add continuity-summary and curated-memory editing, explicit Hindsight sync/search/purge, and private Data Bank uploads, search, version activation/removal and reindex operations.
+- Add the System dashboard with observed polling health, immutable boot identity, durable actor-owned operations and expiring verified-update review.
+- Add re-runnable user-scope `install.sh` with hash-locked Python setup, env-only provider configuration, starter resources, private-state preservation and user systemd.
+- Add `--with-tailscale-funnel`: discover the authenticated node, fill a blank Mini App URL, reuse an exact public proxy or choose an unused HTTPS port, check backend authentication readiness and verify persistent direct Funnel routing.
+
+### Changed
+
+- Standardize Mini App HTTPS deployment on Tailscale Funnel directly to the loopback bridge. Remove the former proxy installer/configuration generator; preserve existing private Serve routes and unrelated system services.
+- Clarify how Light Novel strategy A uses the final compacted narrative prompt, while B/C use a bounded snapshot of session context and the committed story.
 
 ### Fixed
 
-- Bind each Mini App form and pending confirmation to its rendered session instead of a mutable global selection; prevent navigation races from silently changing or purging a different session.
+- Bind Mini App forms and pending confirmations to their rendered session instead of mutable global selection; reject stale-session mutations. Add locked development-only UI interaction tests to CI.
+- Allow completed optimizer previews to be reopened without a second model call; preserve actor/session/revision checks when applying.
+- Persist update acknowledgement before scheduling restart. Confirm completion only after the replacement process successfully polls Telegram with the expected loaded commit/version; ignore malformed or expired state.
+- Keep installer diagnostics free of provider-controlled credential names and preserve forum-topic scope in update notifications.
 
-- Persist post-update acknowledgement before scheduling restart and send completion only after the replacement process successfully polls Telegram with the expected loaded commit/version. Ignore malformed/expired state and never equate installed files with running code.
+### Installation note
 
-
-- Add Mini App continuity-summary and curated-memory editing, explicit Hindsight sync/search/purge, and private Data Bank upload, retrieval, version activation/removal and reindex operations.
-
-- Add private Mini App session lifecycle, native persona CRUD with revision checks, and a bounded World Info JSON editor with backups, selection and reference-protected deletion.
-
-- Add Mini App Story/Utility model selection and validated generation settings with private presets; provider credentials are never sent to the browser.
-
-- Add the Mini App Character Manager and digest-bound optimizer with authenticated portraits, paginated search, protected deletion, upload previews, new-session selection and durable actor-owned operation status.
-
-- Add an opt-in localhost-only Telegram Mini App shell with server-validated Telegram identity, private-chat scoping, bounded HTTP admission, same-origin security headers, Telegram theme integration, and managed listener lifecycle.
+- This release changes `requirements.lock` from v0.2.032. Existing installations must stop the bridge, update the clean checkout and run `install.sh`; the signed `/update` dependency guard remains enforced. Tailscale installation/login and tailnet HTTPS/Funnel authorization are external prerequisites, not silently provisioned by the bridge.
 
 ## [0.2.032] - 2026-09-27
 

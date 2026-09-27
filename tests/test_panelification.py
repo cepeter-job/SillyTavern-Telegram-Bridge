@@ -133,7 +133,7 @@ class PanelificationTests(SettingsTestCase):
             rag_service=make_test_rag_service(),
         )
 
-    def test_character_panel_has_rank_name_and_action_columns(self):
+    def test_character_panel_merges_rank_into_name_and_keeps_action_column(self):
         old_paths = _m_cards.character_card_paths
         old_display = _m_cards.character_display_name
         old_callback_token = _m_cards.dynamic_callback_token
@@ -162,13 +162,16 @@ class PanelificationTests(SettingsTestCase):
             _m_cards.character_rank = old_rank
         rows = self.calls[0][0][3]["inline_keyboard"]
         item_rows = rows[:2]
-        self.assertTrue(all(len(row) == 3 for row in item_rows))
-        self.assertEqual(item_rows[0][0]["text"], "🏆 S")
-        self.assertEqual(item_rows[0][0]["callback_data"], "character:rank:S")
+        self.assertTrue(all(len(row) == 2 for row in item_rows))
+        self.assertEqual(
+            item_rows[0][0],
+            {"text": "✅ 🏆 S active", "callback_data": "character:cb-active.png"},
+        )
         self.assertNotIn("icon_custom_emoji_id", item_rows[0][0])
-        self.assertEqual(item_rows[1][0], {"text": "—", "callback_data": "character:rank:unranked"})
-        self.assertEqual(item_rows[0][1]["callback_data"], "character:cb-active.png")
-        self.assertEqual(item_rows[1][1]["callback_data"], "character:cb-other.png")
+        self.assertEqual(
+            item_rows[1][0],
+            {"text": "other", "callback_data": "character:cb-other.png"},
+        )
         callbacks = [button["callback_data"] for row in item_rows for button in row]
         self.assertEqual(sum(value.startswith("characterdelete:") for value in callbacks), 1)
         self.assertIn("character:protected", callbacks)
@@ -178,7 +181,7 @@ class PanelificationTests(SettingsTestCase):
             self.assertTrue(self._route(command))
             self.assertIn(marker, str(self.calls[-1]))
 
-    def test_classic_character_rank_buttons_use_clear_static_badges(self):
+    def test_classic_character_rank_labels_use_clear_static_badges(self):
         expected = {
             "S": "🏆",
             "A": "🥇",
@@ -187,22 +190,13 @@ class PanelificationTests(SettingsTestCase):
             "D": "⚪",
         }
         for tier, badge in expected.items():
-            self.assertEqual(
-                _m_cards.character_rank_button(tier),
-                {
-                    "text": f"{badge} {tier}",
-                    "callback_data": f"character:rank:{tier}",
-                },
-            )
-        self.assertEqual(
-            _m_cards.character_rank_button(None),
-            {"text": "—", "callback_data": "character:rank:unranked"},
-        )
+            self.assertEqual(_m_cards.character_rank_label(tier, "Alice"), f"{badge} {tier} Alice")
+        self.assertEqual(_m_cards.character_rank_label(None, "Alice"), "Alice")
 
-    def test_character_rank_button_has_no_configuration_parameter(self):
+    def test_character_rank_label_has_no_configuration_parameter(self):
         import inspect
 
-        self.assertEqual(list(inspect.signature(_m_cards.character_rank_button).parameters), ["rank"])
+        self.assertEqual(list(inspect.signature(_m_cards.character_rank_label).parameters), ["rank", "label"])
 
     def test_scene_and_director_goal_open_topic_panels(self):
         topic_id = "chat|topic:1"
@@ -297,7 +291,7 @@ def _with_character_fixture(module, db):
     )
 
 
-def test_character_menu_prefers_rich_message_with_disabled_animated_rank(tmp_path):
+def test_character_menu_merges_animated_rank_into_character_name_button(tmp_path):
     settings = __import__("settings_test_support").make_test_settings(home=tmp_path)
     db = _m_memory_curator.db_connect(app_settings=settings)
     calls = []
@@ -329,18 +323,24 @@ def test_character_menu_prefers_rich_message_with_disabled_animated_rank(tmp_pat
     assert "reply_markup" not in payload
     blocks = payload["rich_message"]["blocks"]
     button_rows = [block["buttons"] for block in blocks if block.get("type") == "buttons"]
-    rank, character, action = button_rows[0]
-    assert rank == {
-        "text": {
-            "type": "custom_emoji",
-            "custom_emoji_id": "6181691122838938530",
-            "alternative_text": "🏆",
-        },
-        "disabled": {},
+    character, action = button_rows[0]
+    assert character == {
+        "text": [
+            "✅ ",
+            {
+                "type": "custom_emoji",
+                "custom_emoji_id": "6181691122838938530",
+                "alternative_text": "🏆",
+            },
+            " active",
+        ],
+        "callback_data": "character:cb-active.png",
     }
-    assert character["callback_data"] == "character:cb-active.png"
     assert action["callback_data"] == "character:protected"
-    assert button_rows[1][0] == {"text": "—", "disabled": {}}
+    assert button_rows[1][0] == {
+        "text": "other",
+        "callback_data": "character:cb-other.png",
+    }
 
 
 def test_character_menu_rich_edit_uses_edit_message_text(tmp_path):
@@ -409,6 +409,10 @@ def test_character_menu_falls_back_to_classic_panel_when_rich_is_rejected(tmp_pa
     fallback = calls[-1][1]
     assert fallback["text"].startswith("Current character: active")
     assert fallback["reply_markup"]["inline_keyboard"][0][0] == {
-        "text": "🏆 S",
-        "callback_data": "character:rank:S",
+        "text": "✅ 🏆 S active",
+        "callback_data": "character:cb-active.png",
+    }
+    assert fallback["reply_markup"]["inline_keyboard"][1][0] == {
+        "text": "other",
+        "callback_data": "character:cb-other.png",
     }

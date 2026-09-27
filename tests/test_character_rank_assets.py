@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 import bridge.cards as cards
-from bridge.cards import _CHARACTER_RANK_CUSTOM_EMOJI_IDS, character_rank_button, character_rich_rank_button
+from bridge.cards import _CHARACTER_RANK_CUSTOM_EMOJI_IDS, character_rank_label, character_rich_rank_label
 
 ROOT = Path(__file__).resolve().parents[1] / "assets" / "character-ranks"
 EXPECTED_IDS = {
@@ -43,17 +43,29 @@ def test_public_rank_assets_match_hardcoded_custom_emoji_mapping():
         assert digest in manifest
 
 
-def test_rank_buttons_use_valid_custom_emoji_alternatives_and_static_fallbacks():
+def test_rank_labels_merge_badges_into_character_names():
     for tier, badge in EXPECTED_STATIC_BADGES.items():
-        assert character_rank_button(tier) == {
-            "text": f"{badge} {tier}",
-            "callback_data": f"character:rank:{tier}",
-        }
-        assert character_rich_rank_button(tier)["text"] == {
-            "type": "custom_emoji",
-            "custom_emoji_id": EXPECTED_IDS[tier],
-            "alternative_text": badge,
-        }
+        assert character_rank_label(tier, "Alice") == f"{badge} {tier} Alice"
+        assert character_rich_rank_label(tier, "Alice") == [
+            {
+                "type": "custom_emoji",
+                "custom_emoji_id": EXPECTED_IDS[tier],
+                "alternative_text": badge,
+            },
+            " Alice",
+        ]
+        assert character_rich_rank_label(tier, "Alice", prefix="✅ ") == [
+            "✅ ",
+            {
+                "type": "custom_emoji",
+                "custom_emoji_id": EXPECTED_IDS[tier],
+                "alternative_text": badge,
+            },
+            " Alice",
+        ]
+
+    assert character_rank_label(None, "Alice") == "Alice"
+    assert character_rich_rank_label(None, "Alice") == "Alice"
 
 
 def test_character_menu_logs_rich_message_rejection_before_classic_fallback(monkeypatch, caplog):

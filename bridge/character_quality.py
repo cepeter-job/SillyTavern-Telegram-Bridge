@@ -29,8 +29,8 @@ from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
 
-# Rank tiers, best to worst. Telegram inline-keyboard labels cannot animate,
-# so each tier is conveyed with a static emoji badge plus the letter.
+# Rank tiers, best to worst. Classic inline-keyboard fallback labels use a
+# static emoji badge plus the letter; RichMessage character buttons use custom emoji.
 RANK_TIERS = ("S", "A", "B", "C", "D")
 RANK_BADGES = {"S": "🏆", "A": "🥇", "B": "🥈", "C": "🥉", "D": "⚪"}
 

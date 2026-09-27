@@ -14,6 +14,7 @@ from bridge.network_security import EndpointPolicy, strict_urlopen
 from bridge.self_update import UpdateOutcome, UpdatePlan, UpdateStatus, apply_update, version_tuple
 from bridge.settings import AppSettings
 from bridge.telegram import answer_callback, send_panel_request, send_text
+from bridge.update_ack import arm_pending_update_ack
 
 UPDATE_REPO = "cepeter/SillyTavern-Telegram-Bridge"
 UPDATE_CANONICAL_GIT_URL = f"https://github.com/{UPDATE_REPO}.git"
@@ -164,7 +165,10 @@ def format_update_outcome(outcome: UpdateOutcome) -> str:
     if outcome.status is UpdateStatus.ALREADY_LATEST:
         return f"Already latest (v{outcome.version}); no update was performed."
     if outcome.status is UpdateStatus.RESTART_SCHEDULED:
-        return f"Verified v{outcome.version} installed; the user-service restart was requested."
+        return (
+            f"Verified v{outcome.version} installed. "
+            "Restarting bridge; completion will be confirmed after startup."
+        )
     if outcome.status is UpdateStatus.RESTART_REQUIRED:
         return (
             f"Verified v{outcome.version} installed, but automatic restart failed. "
@@ -226,5 +230,15 @@ def handle_update_callback(
                 "Update failed. Inspect the deployment before retrying; no error details were sent to Telegram.",
             )
             return True
-        send_text(token, chat_id, format_update_outcome(outcome))
+        ack_armed = True
+        if outcome.status is UpdateStatus.RESTART_SCHEDULED:
+            try:
+                arm_pending_update_ack(chat_id, outcome.version, app_settings=app_settings)
+            except (OSError, ValueError):
+                logging.warning("Could not arm post-restart update acknowledgement")
+                ack_armed = False
+        message = format_update_outcome(outcome)
+        if outcome.status is UpdateStatus.RESTART_SCHEDULED and not ack_armed:
+            message += " Post-restart confirmation could not be armed; verify the service manually."
+        send_text(token, chat_id, message)
     return True

@@ -542,3 +542,40 @@ def test_manual_refinement_callback_uses_current_temporary_fields_as_next_base(c
     assert handled is True
     assert captured
     assert captured[-1][1]["base_fields"] == draft.fields
+
+
+def test_manual_optimizer_does_not_swallow_unexpected_runtime_error(card_context, monkeypatch):
+    from bridge import character_optimizer_input
+
+    db, ctx, _ = card_context
+    target = ctx.app_settings.character_dir / "Alice.png"
+    original = _card_png("Alice", "original")
+    target.write_bytes(original)
+    session = make_test_application_services(app_settings=ctx.app_settings).session.create(
+        db, "chat", ctx.app_settings.default_model, session_id="session-runtime"
+    )
+    state = {
+        "session_id": session["session_id"],
+        "actor_id": "actor",
+        "character_file": "Alice.png",
+        "expected_digest": __import__("hashlib").sha256(original).hexdigest(),
+        "expires_at": __import__("time").time() + 600,
+        "prompt_message_ids": [],
+    }
+    monkeypatch.setattr(
+        character_optimizer_input,
+        "prepare_character_optimization",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("unexpected application defect")),
+    )
+
+    with pytest.raises(RuntimeError, match="unexpected application defect"):
+        character_optimizer_input.handle_character_optimizer_suggestion_input(
+            db,
+            "token",
+            "chat",
+            session,
+            "Improve the motivation.",
+            state,
+            provider_port=ProviderPort(lambda *a, **k: "unused"),
+            request_context=RequestContext(db, session["session_id"], "actor", app_settings=ctx.app_settings),
+        )

@@ -48,6 +48,13 @@ def test_rank_icon_ids_reuse_registered_custom_emoji_ids():
     assert cards.character_rank_icon_id("unknown") is None
 
 
+def test_rank_display_labels_normalize_tiers_and_mark_unranked():
+    for tier in EXPECTED_IDS:
+        assert cards.character_rank_label(tier.lower()) == tier
+    assert cards.character_rank_label(None) == "—"
+    assert cards.character_rank_label("unknown") == "—"
+
+
 def test_miniapp_reuses_canonical_rank_webm_assets():
     repo = ROOT.parents[1]
     assert not (repo / "bridge/miniapp_assets/ranks").exists()

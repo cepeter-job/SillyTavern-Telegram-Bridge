@@ -474,18 +474,14 @@ before any replacement or deletion.
 The active card and any cards referenced by sessions or groups are protected —
 you can't accidentally delete a card that's in use.
 
-Character rows use three columns: **rank | character | action**. The main
-Character Menu prefers Telegram Bot API 10.3 RichMessage buttons: the rank column
-uses a disabled `RichTextCustomEmoji` from the built-in animated set
-`sttb_ranks_by_SillyTavernPunzmeBot`; if the custom emoji cannot render, Telegram
-falls back to a tier-specific badge and letter (`🏆 S`, `🥇 A`, `🥈 B`, `🥉 C`, or
-`⚪ D`; `—` when unranked). If Telegram rejects RichMessage sending or editing,
-the bridge falls back to the classic inline-keyboard panel; that compatibility
-path deliberately uses the same static badge-and-letter labels without custom emoji.
-The checked-in [rank asset manifest](../assets/character-ranks/README.md) contains
+Ranked character buttons in the main Character Menu, Character Info picker and
+Optimizer picker reuse Telegram's registered custom-emoji icons from
+`sttb_ranks_by_SillyTavernPunzmeBot`; the current session character keeps the
+main picker's `✅` prefix, while unranked characters keep a plain name button.
+The selected Character Info and Optimizer details also show an explicit
+`Rank: S/A/B/C/D` label, or `Rank: —` when no valid cached rank exists. The
+checked-in [rank asset manifest](../assets/character-ranks/README.md) contains
 public GIF/WEBM references, SHA-256 provenance, and the exact hardcoded mapping.
-Rank decoration is intentionally limited to this main Character Menu; Character
-Info and Optimizer pickers show names only.
 
 #### Re-uploading and optimizing a card
 

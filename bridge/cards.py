@@ -75,6 +75,12 @@ def character_rank_icon_id(rank: str | None) -> str | None:
     return _CHARACTER_RANK_CUSTOM_EMOJI_IDS[tier]
 
 
+def character_rank_label(rank: str | None) -> str:
+    """Return a normalized rank tier or the canonical unranked marker."""
+    tier = str(rank or "").strip().upper()
+    return tier if tier in RANK_TIERS else "—"
+
+
 def send_persona_menu(
     token: str,
     chat_id: str,
@@ -195,23 +201,32 @@ def send_character_menu(
 
 
 def send_character_info_menu(
-    token: str, chat_id: str, message_id: int | None = None, page: int = 0, *, request_context: RequestContext
+    token: str,
+    chat_id: str,
+    message_id: int | None = None,
+    page: int = 0,
+    *,
+    current_character: str,
+    request_context: RequestContext,
 ) -> None:
     options = [
         (path.name, character_display_name(path, app_settings=request_context.app_settings))
         for path in character_card_paths(app_settings=request_context.app_settings)
     ]
     page_options, current_page, total_pages = panel_page(options, page)
-    rows = [
-        [
-            {
-                "text": label,
-                "callback_data": "characterinfo:"
-                + dynamic_callback_token("character", filename, chat_id, db=request_context.db),
-            }
-        ]
-        for filename, label in page_options
-    ]
+    rows = []
+    for filename, label in page_options:
+        button = {
+            "text": ("✅ " if filename == current_character else "") + panel_label(label),
+            "callback_data": "characterinfo:"
+            + dynamic_callback_token("character", filename, chat_id, db=request_context.db),
+        }
+        rank_icon_id = character_rank_icon_id(
+            character_rank(request_context.db, filename, app_settings=request_context.app_settings)
+        )
+        if rank_icon_id:
+            button["icon_custom_emoji_id"] = rank_icon_id
+        rows.append([button])
     navigation = panel_navigation("characterinfo", current_page, total_pages)
     if navigation:
         rows.append(navigation)

@@ -4,9 +4,16 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.2.044] - 2026-09-28
+
+### Added
+
+- Add local Bridge, Telegram, and Database icons to Mini App health cards on both Home and System.
+
 ### Changed
 
-- Implement the story-first Mini App design with a live Home story card, recent sessions, compact mobile character cards, and a grouped Manage hub while keeping Usage under Advanced settings and System directly accessible.
+- Implement the story-first Mini App design with a live Home story card, recent sessions, compact mobile character cards, five primary destinations, and a grouped Manage hub while keeping Usage under Advanced settings and System directly accessible.
+- Add the optimized Mini App design gallery to README using compact WebP assets instead of multi-megabyte PNG screenshots.
 
 ## [0.2.043] - 2026-09-28
 

@@ -5,12 +5,15 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import inspect
+import ipaddress
 import json
 import logging
+import os
 import re
 import sqlite3
 import threading
 import time
+from urllib.parse import urlsplit
 
 from bridge.limits import (
     HINDSIGHT_CONTEXT_MAX_CHARS,
@@ -19,7 +22,6 @@ from bridge.limits import (
     HINDSIGHT_RETAIN_MAX_MESSAGES,
 )
 from bridge.metadata import get_meta
-from bridge.network_security import validate_provider_endpoint
 from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect, write_transaction
 
@@ -34,11 +36,51 @@ def hindsight_tags(chat_id: str, session_id: str, character_name: str) -> list[s
     return [f"user:telegram-{user_key}", f"session:{session_id}", f"character:{character_key}"]
 
 
+def _validated_hindsight_base_url(value: str) -> tuple[str, str]:
+    raw = str(value or "").strip().rstrip("/")
+    message = "Hindsight SDK endpoint must use a numeric loopback origin"
+    try:
+        parsed = urlsplit(raw)
+        _ = parsed.port
+    except ValueError as exc:
+        raise ValueError(message) from exc
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or parsed.path not in {"", "/"}
+    ):
+        raise ValueError(message)
+    try:
+        address = ipaddress.ip_address(parsed.hostname)
+    except ValueError as exc:
+        raise ValueError(message) from exc
+    if not address.is_loopback:
+        raise ValueError(message)
+    return raw, address.compressed
+
+
+def _ensure_hindsight_loopback_proxy_bypass(host: str) -> None:
+    values: list[str] = []
+    for name in ("NO_PROXY", "no_proxy"):
+        values.extend(item.strip() for item in os.environ.get(name, "").split(",") if item.strip())
+    for required in (host, "127.0.0.1", "::1", "[::1]"):
+        if required not in values:
+            values.append(required)
+    combined = ",".join(values)
+    os.environ["NO_PROXY"] = combined
+    os.environ["no_proxy"] = combined
+
+
 def hindsight_client(*, app_settings: AppSettings):
+    base_url, host = _validated_hindsight_base_url(app_settings.environ.get("HINDSIGHT_API_URL", HINDSIGHT_DEFAULT_URL))
+    _ensure_hindsight_loopback_proxy_bypass(host)
+
     from hindsight_client import Hindsight
 
-    base_url = app_settings.environ.get("HINDSIGHT_API_URL", HINDSIGHT_DEFAULT_URL).rstrip("/")
-    validate_provider_endpoint(base_url, "SILLYTAVERN_HINDSIGHT_ALLOWED_HOSTS", environ=app_settings.environ)
     api_key = app_settings.environ.get("HINDSIGHT_API_KEY") or None
     return Hindsight(base_url=base_url, api_key=api_key, timeout=30.0, user_agent="SillyTavernTelegramBridge/1.0")
 

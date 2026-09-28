@@ -10,7 +10,7 @@ from bridge.provider_port import ProviderPort
 
 
 def test_provider_port_normalizes_http_rate_limit_without_raw_details():
-    from bridge.provider_errors import ProviderRequestError
+    from bridge.port_contracts import ProviderRequestError
 
     error = urllib.error.HTTPError(
         "https://provider.example/private",
@@ -34,7 +34,7 @@ def test_provider_port_normalizes_http_rate_limit_without_raw_details():
 
 
 def test_provider_port_does_not_relabel_unexpected_runtime_error():
-    from bridge.provider_errors import ProviderRequestError
+    from bridge.port_contracts import ProviderRequestError
 
     unexpected = RuntimeError("programming defect")
 

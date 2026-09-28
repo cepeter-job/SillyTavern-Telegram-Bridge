@@ -5,7 +5,9 @@ from __future__ import annotations
 import importlib
 import os
 import shutil
+import sqlite3
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -185,6 +187,41 @@ def test_wrong_signer_refused(engine, release_tree, monkeypatch):
     assert result.status is engine.UpdateStatus.REFUSED
     assert result.code == "signature"
     assert git(data.source, "rev-parse", "HEAD") == data.old
+
+
+def test_verified_release_snapshots_database_before_source_activation(engine, release_tree, monkeypatch):
+    data = release_tree
+    database = data.live.parent / "bridge.sqlite3"
+    with sqlite3.connect(database) as db:
+        db.execute("CREATE TABLE sample(value TEXT NOT NULL)")
+        db.execute("INSERT INTO sample VALUES('preserved')")
+        db.commit()
+    backup_dir = data.live.parent / "database-backups"
+    events = []
+    original_backup = engine.create_database_backup
+    original_git = engine._git
+
+    def backup(*args, **kwargs):
+        events.append("backup")
+        return original_backup(*args, **kwargs)
+
+    def git_command(argv, *args, **kwargs):
+        if argv and argv[0] == "fetch" and args and Path(args[0]) == data.source:
+            events.append("activate-source")
+        return original_git(argv, *args, **kwargs)
+
+    monkeypatch.setattr(engine, "create_database_backup", backup)
+    monkeypatch.setattr(engine, "_git", git_command)
+    fake_supervisor(monkeypatch, engine)
+    plan = replace(make_plan(engine, data), database=database, database_backup_dir=backup_dir)
+    result = engine.apply_update(plan)
+
+    assert result.status is engine.UpdateStatus.RESTART_SCHEDULED
+    assert events.index("backup") < events.index("activate-source")
+    backups = list(backup_dir.glob("*.sqlite3"))
+    assert len(backups) == 1
+    with sqlite3.connect(backups[0]) as db:
+        assert db.execute("SELECT value FROM sample").fetchone()[0] == "preserved"
 
 
 def test_verified_release_updates_exact_commit_and_schedules_restart(engine, release_tree, monkeypatch):

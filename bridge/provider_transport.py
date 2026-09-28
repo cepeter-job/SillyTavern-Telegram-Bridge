@@ -5,15 +5,18 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import socket
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 
 from bridge.codex_transport import generate_codex_response
 from bridge.config import GENERATION_DEFAULTS
 from bridge.limits import DEFAULT_MAX_TOKENS
-from bridge.model_router import ModelRouter
+from bridge.model_router import ModelRouter, ModelRoutingError
 from bridge.network_security import strict_urlopen, validate_provider_endpoint
+from bridge.port_contracts import ProviderRequestError, provider_error_for_http_status
 from bridge.settings import AppSettings
 from bridge.token_usage_values import TokenUsage, UsageCallback, UsageCapture
 
@@ -401,7 +404,7 @@ def opencode_muse_generate(
     return output_text
 
 
-def generate_provider_text(
+def _generate_provider_text(
     model_router: ModelRouter,
     api_key: str,
     model: str,
@@ -710,3 +713,48 @@ def generate_provider_text(
                 break
 
         return " ".join(segment for segment in segments if segment)
+
+def generate_provider_text(
+    model_router: ModelRouter,
+    api_key: str,
+    model: str,
+    messages: list[dict],
+    session_id: str = "telegram",
+    settings: dict[str, object] | None = None,
+    stream_callback=None,
+    cancel_event=None,
+    force_non_stream: bool = False,
+    request_timeout: float | None = None,
+    _recovery_attempt: int = 0,
+    *,
+    app_settings: AppSettings,
+    usage_callback: UsageCallback | None = None,
+) -> str:
+    """Normalize transport failures at the concrete provider-adapter boundary."""
+    try:
+        return _generate_provider_text(
+            model_router,
+            api_key,
+            model,
+            messages,
+            session_id=session_id,
+            settings=settings,
+            stream_callback=stream_callback,
+            cancel_event=cancel_event,
+            force_non_stream=force_non_stream,
+            request_timeout=request_timeout,
+            _recovery_attempt=_recovery_attempt,
+            app_settings=app_settings,
+            usage_callback=usage_callback,
+        )
+    except ProviderRequestError:
+        raise
+    except ModelRoutingError:
+        raise ProviderRequestError("model_unavailable", model) from None
+    except urllib.error.HTTPError as exc:
+        raise provider_error_for_http_status(model, int(exc.code)) from None
+    except (TimeoutError, socket.timeout):
+        raise ProviderRequestError("timeout", model) from None
+    except (urllib.error.URLError, ConnectionError):
+        raise ProviderRequestError("connection", model) from None
+

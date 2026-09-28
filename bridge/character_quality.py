@@ -366,7 +366,11 @@ def optimize_character(
         "reasoning_budget": 0,
         "stop_sequences": "",
     }
-    model = _utility_model(db, chat_id, session, app_settings=app_settings)
+    try:
+        model = _utility_model(db, chat_id, session, app_settings=app_settings)
+    except Exception:
+        logging.warning("Character optimization model resolution failed; leaving the card unchanged")
+        return None
     try:
         raw = provider_port.for_usage(chat_id, session["session_id"], "optimizer").generate(
             "",

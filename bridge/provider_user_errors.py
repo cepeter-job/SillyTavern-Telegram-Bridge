@@ -17,10 +17,10 @@ def _safe_model_name(model: str) -> str:
     return value
 
 
-def _http_status(error: BaseException) -> int | None:
-    value = getattr(error, "code", None)
-    if value is None:
-        value = getattr(error, "status", None)
+def provider_http_status(error: BaseException) -> int | None:
+    if not isinstance(error, urllib.error.HTTPError):
+        return None
+    value = error.code
     try:
         return int(value) if value is not None else None
     except (TypeError, ValueError):
@@ -30,7 +30,7 @@ def _http_status(error: BaseException) -> int | None:
 def actionable_provider_user_error(error: BaseException, model: str) -> ProviderUserError | None:
     """Return a safe actionable message for recognized provider failures."""
     selected = _safe_model_name(model)
-    status = _http_status(error)
+    status = provider_http_status(error)
     if status == 429:
         message = f"Model {selected} is rate-limited (HTTP 429). Try again later or choose another model."
     elif status in {401, 403}:

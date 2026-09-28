@@ -311,6 +311,20 @@ class CharacterQualityModelTests(SettingsTestCase):
             )
         self.assertIsNone(result)
 
+    def test_optimize_character_returns_none_when_utility_model_resolution_fails(self):
+        port = make_test_provider_port(generate_backend=lambda *a, **k: self.fail("provider must not be called"))
+        with mock.patch.object(quality, "task_model_for_session", side_effect=ValueError("bad model selection")):
+            result = quality.optimize_character(
+                self.db,
+                "chat",
+                self.session,
+                {"name": "Alice"},
+                provider_port=port,
+                app_settings=self.app_settings,
+            )
+
+        self.assertIsNone(result)
+
     def test_optimize_character_raises_sanitized_provider_failure(self):
         error = urllib.error.HTTPError(
             "https://provider.example/private",

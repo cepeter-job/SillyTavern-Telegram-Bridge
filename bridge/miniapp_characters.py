@@ -10,7 +10,7 @@ from typing import Any
 from bridge.card_content import active_world_files, card_fields, character_card_paths, parse_png_chara_bytes
 from bridge.character_optimizer import prepare_character_optimization
 from bridge.character_proposals import stage_character_proposal
-from bridge.character_quality import character_rank
+from bridge.character_quality import CharacterProviderError, character_rank
 from bridge.conversation_setup import ConversationSetupService
 from bridge.limits import RAG_MAX_FILE_BYTES
 from bridge.miniapp_auth import MiniAppIdentity
@@ -26,6 +26,7 @@ from bridge.native_imports import (
     character_delete_references,
     verify_character_card_backup,
 )
+from bridge.provider_user_errors import provider_http_status, provider_user_error
 from bridge.sqlite_store import write_transaction
 
 
@@ -174,16 +175,25 @@ def optimize_character(services: Any, who: MiniAppIdentity, values: dict) -> dic
     with session_scope(services, who, values, write=True) as scope:
         path, raw = _card(services, text(values, "filename"))
         original = card_fields(parse_png_chara_bytes(raw), app_settings=services.config)
-        draft = prepare_character_optimization(
-            scope.db,
-            scope.chat_id,
-            scope.session,
-            path.name,
-            provider_port=services.provider,
-            request_context=scope.context,
-            suggestion=text(values, "suggestion", 2000, required=False),
-            expected_digest=expected,
-        )
+        try:
+            draft = prepare_character_optimization(
+                scope.db,
+                scope.chat_id,
+                scope.session,
+                path.name,
+                provider_port=services.provider,
+                request_context=scope.context,
+                suggestion=text(values, "suggestion", 2000, required=False),
+                expected_digest=expected,
+            )
+        except CharacterProviderError as exc:
+            failure = provider_user_error(exc.cause, exc.model)
+            status = provider_http_status(exc.cause)
+            raise MiniAppError(
+                str(failure),
+                status=429 if status == 429 else 502,
+                code="provider_rate_limited" if status == 429 else "provider_error",
+            ) from None
         return {
             "filename": draft.filename,
             "nonce": draft.nonce,

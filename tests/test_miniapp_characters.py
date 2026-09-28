@@ -1,6 +1,8 @@
 import base64
 import hashlib
 import json
+import urllib.error
+from email.message import Message
 
 import pytest
 from miniapp_test_support import card_bytes, identity, make_services
@@ -105,6 +107,46 @@ def test_optimizer_proposal_retains_original_and_is_actor_bound(tmp_path):
         apply_proposal(s, identity("67890"), {**p, "nonce": result["nonce"], "action": "apply", "confirm": True})
     apply_proposal(s, w, {**p, "nonce": result["nonce"], "action": "apply", "confirm": True})
     assert target.read_bytes() != before
+
+
+def test_optimizer_provider_failure_returns_safe_miniapp_error(tmp_path):
+    from bridge.miniapp_characters import optimize_character
+    from bridge.miniapp_errors import MiniAppError
+    from bridge.provider_port import ProviderPort
+
+    s, w, p = setup(tmp_path)
+    error = urllib.error.HTTPError(
+        "https://provider.example/private",
+        429,
+        "upstream secret body",
+        Message(),
+        None,
+    )
+
+    def fail_provider(*_args, **_kwargs):
+        raise error
+
+    s.provider = ProviderPort(fail_provider)
+    target = s.config.character_dir / "Alice.png"
+    before = target.read_bytes()
+
+    with pytest.raises(MiniAppError) as raised:
+        optimize_character(
+            s,
+            w,
+            {
+                **p,
+                "filename": "Alice.png",
+                "digest": hashlib.sha256(before).hexdigest(),
+            },
+        )
+
+    assert raised.value.status == 429
+    assert raised.value.code == "provider_rate_limited"
+    assert "rate-limited (HTTP 429)" in str(raised.value)
+    assert "upstream secret body" not in str(raised.value)
+    assert "provider.example" not in str(raised.value)
+    assert target.read_bytes() == before
 
 
 @pytest.mark.parametrize("filename", ["*.png", "x?.png", "a[0].png", "bad\\name.png", "../x.png", ".hidden.png"])

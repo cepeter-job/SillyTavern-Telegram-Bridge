@@ -5,8 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
+from bridge.port_contracts import ProviderSelectionError
 
-class ModelRoutingError(RuntimeError):
+
+class ModelRoutingError(ProviderSelectionError):
     """A model selection cannot be resolved from the configured catalog."""
 
 

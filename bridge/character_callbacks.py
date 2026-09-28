@@ -24,7 +24,7 @@ from bridge.character_optimizer_panels import (
     send_character_optimize_result,
 )
 from bridge.character_proposals import load_character_proposal
-from bridge.character_quality import character_rank, rank_character
+from bridge.character_quality import CharacterProviderError, character_rank, rank_character
 from bridge.conversation_setup import begin_setup
 from bridge.conversation_setup_panels import send_setup_panel
 from bridge.group_service import GroupService
@@ -37,6 +37,7 @@ from bridge.native_imports import (
 )
 from bridge.operations import begin_operation, record_operation
 from bridge.provider_port import ProviderPort
+from bridge.provider_user_errors import provider_user_error
 from bridge.telegram import send_panel_photo, send_panel_request
 
 
@@ -267,6 +268,19 @@ def handle_character_callback(
                 draft.fields,
                 draft.nonce,
                 message.get("message_id"),
+                request_context=request_context,
+            )
+        except CharacterProviderError as exc:
+            failure = provider_user_error(exc.cause, exc.model)
+            send_panel_request(
+                token,
+                "editMessageText",
+                {
+                    "chat_id": chat_id,
+                    "message_id": message.get("message_id"),
+                    "text": f"{failure}\n\nThe installed card is unchanged.",
+                    "reply_markup": {"inline_keyboard": [[{"text": "Back", "callback_data": "character:optimize"}]]},
+                },
                 request_context=request_context,
             )
         except (ValueError, OSError):

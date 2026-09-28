@@ -91,7 +91,9 @@ def load_environment_file(
             if len(value) < 2 or value[-1] != value[0]:
                 raise ConfigurationError(f"unterminated quoted value at {path}:{line_number}")
             value = value[1:-1]
-        parsed.setdefault(key, value)
+        if key in parsed:
+            raise ConfigurationError(f"duplicate environment assignment for {key} at {path}:{line_number}")
+        parsed[key] = value
     # Parsing is atomic: neither a bad later assignment nor NUL can partially
     # apply secrets. Existing process variables still have highest precedence.
     for key, value in parsed.items():

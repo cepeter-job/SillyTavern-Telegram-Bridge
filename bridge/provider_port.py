@@ -9,6 +9,7 @@ from dataclasses import dataclass, replace
 from functools import partial
 
 from bridge.port_contracts import CancellationEvent, ProviderGenerate
+from bridge.provider_errors import ProviderRequestError, normalize_provider_transport_error
 from bridge.token_usage_values import TokenUsage, UsageEvent, UsageRecorder, UsageScope
 
 
@@ -48,19 +49,27 @@ class ProviderPort:
         started = time.monotonic()
         status = "failed"
         try:
-            result = str(
-                backend(
-                    api_key,
-                    model,
-                    messages,
-                    session_id=session_id,
-                    settings=settings,
-                    stream_callback=stream_callback,
-                    cancel_event=cancel_event,
-                    force_non_stream=force_non_stream,
-                    request_timeout=request_timeout,
+            try:
+                result = str(
+                    backend(
+                        api_key,
+                        model,
+                        messages,
+                        session_id=session_id,
+                        settings=settings,
+                        stream_callback=stream_callback,
+                        cancel_event=cancel_event,
+                        force_non_stream=force_non_stream,
+                        request_timeout=request_timeout,
+                    )
                 )
-            )
+            except ProviderRequestError:
+                raise
+            except Exception as exc:
+                normalized = normalize_provider_transport_error(exc, model)
+                if normalized is not None:
+                    raise normalized from None
+                raise
             status = "cancelled" if tracking and cancel_event is not None and cancel_event.is_set() else "succeeded"
             return result
         finally:

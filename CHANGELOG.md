@@ -4,6 +4,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.2.039] - 2026-09-28
+
 ### Added
 
 - Add independent session-scoped Utility reasoning controls to `/providers`, reusing the canonical None/Low/Medium/High/Max/Custom budgets for Utility-model summaries, curated memory, scene state, Light Novel strategy B choices, and character rank/optimizer work.
@@ -17,12 +19,12 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 ### Fixed
 
 - Make `/reset` best-effort delete tracked user inputs, assistant replies, open choices, and consumed Light Novel choice quotes for the active session, including choice panels that were already consumed.
+- Reject duplicate keys in the private environment file so appended allowlist or credential changes cannot be silently ignored; existing process environment variables retain precedence.
 
 ## [0.2.038] - 2026-09-28
 
 ### Fixed
 
-- Reject duplicate keys in the private environment file so appended allowlist or credential changes cannot be silently ignored; existing process environment variables retain precedence.
 
 - Optimize character PNGs with consistent duplicate `chara` or paired `chara`/`ccv3` metadata by updating every embedded copy while preserving schema-specific data and all unrelated PNG chunks; conflicting or malformed copies remain safely rejected.
 

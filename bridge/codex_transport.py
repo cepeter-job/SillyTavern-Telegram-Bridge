@@ -11,7 +11,7 @@ from typing import Any
 
 from bridge.codex_auth import codex_headers, resolve_access_token, validate_codex_endpoint
 from bridge.network_security import strict_urlopen
-from bridge.provider_errors import ProviderRequestError, provider_error_for_http_status
+from bridge.port_contracts import ProviderRequestError, provider_error_for_http_status
 from bridge.settings import AppSettings
 from bridge.token_usage_values import UsageCallback, UsageCapture
 

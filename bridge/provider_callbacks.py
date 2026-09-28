@@ -8,6 +8,7 @@ import time
 from bridge.callback_tokens import resolve_dynamic_callback_token
 from bridge.callbacks import remove_inline_keyboard
 from bridge.config import REASONING_LEVELS
+from bridge.generation_settings import update_generation_settings
 from bridge.limits import PENDING_SETTINGS_TTL_SECONDS
 from bridge.metadata import set_meta
 from bridge.model_selection import (
@@ -23,6 +24,7 @@ from bridge.provider_panels import (
     send_model_menu,
     send_model_target_menu,
     send_provider_health_menu,
+    send_story_reasoning_menu,
     send_utility_reasoning_menu,
 )
 from bridge.session_core import update_session
@@ -81,6 +83,46 @@ def handle_provider_model_callback(
     if data == "models:cancel":
         answer_callback(token, str(callback.get("id", "")), "Cancelled")
         remove_inline_keyboard(db, token, callback)
+        return True
+    if data == "models:story-reasoning":
+        answer_callback(token, str(callback.get("id", "")), "Story reasoning")
+        send_story_reasoning_menu(
+            token,
+            chat_id,
+            message_id,
+            request_context=request_context,
+        )
+        return True
+    if data.startswith("storyreasoning:"):
+        label = data.split(":", 1)[1]
+        if label == "custom":
+            pending = {
+                "key": "reasoning_budget",
+                "scope": "story_reasoning",
+                "session_id": session_id,
+                "expires_at": time.time() + PENDING_SETTINGS_TTL_SECONDS,
+            }
+            set_meta(db, f"settings_input:{chat_id}", json.dumps(pending))
+            answer_callback(token, str(callback.get("id", "")), "Enter Story reasoning")
+            remove_inline_keyboard(db, token, callback)
+            pending["prompt_message_ids"] = send_text(
+                token,
+                chat_id,
+                "Send Story reasoning budget (0–32000). Send /cancel to leave it unchanged.",
+            )
+            set_meta(db, f"settings_input:{chat_id}", json.dumps(pending))
+            return True
+        if label not in REASONING_LEVELS:
+            answer_callback(token, str(callback.get("id", "")), "Reasoning choice invalid")
+            return True
+        update_generation_settings(db, chat_id, session_id, reasoning_budget=REASONING_LEVELS[label])
+        answer_callback(token, str(callback.get("id", "")), "Story reasoning updated")
+        send_story_reasoning_menu(
+            token,
+            chat_id,
+            message_id,
+            request_context=request_context,
+        )
         return True
     if data == "models:utility-reasoning":
         answer_callback(token, str(callback.get("id", "")), "Utility reasoning")

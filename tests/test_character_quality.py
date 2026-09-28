@@ -17,7 +17,7 @@ import bridge.character_quality as quality
 from bridge.card_content import parse_png_chara_bytes
 from bridge.memory_curator import db_connect
 from bridge.model_router import ModelRoutingError
-from bridge.provider_errors import ProviderRequestError
+from bridge.port_contracts import ProviderRequestError
 
 
 def _raw_chunk(kind: bytes, data: bytes) -> bytes:
@@ -311,10 +311,13 @@ class CharacterQualityModelTests(SettingsTestCase):
             )
         self.assertIsNone(result)
 
-    def test_optimize_character_returns_none_when_utility_model_resolution_fails(self):
+    def test_optimize_character_normalizes_utility_model_resolution_failure(self):
         port = make_test_provider_port(generate_backend=mock.Mock(side_effect=ModelRoutingError("bad model selection")))
-        with mock.patch.object(quality, "task_model_for_session", return_value="missing::model"):
-            result = quality.optimize_character(
+        with (
+            mock.patch.object(quality, "task_model_for_session", return_value="missing::model"),
+            self.assertRaises(ProviderRequestError) as raised,
+        ):
+            quality.optimize_character(
                 self.db,
                 "chat",
                 self.session,
@@ -323,7 +326,8 @@ class CharacterQualityModelTests(SettingsTestCase):
                 app_settings=self.app_settings,
             )
 
-        self.assertIsNone(result)
+        self.assertEqual(raised.exception.kind, "model_unavailable")
+        self.assertEqual(raised.exception.model, "missing::model")
 
     def test_optimize_character_raises_canonical_provider_failure(self):
         error = ProviderRequestError("rate_limit", "provider::model", status=429)

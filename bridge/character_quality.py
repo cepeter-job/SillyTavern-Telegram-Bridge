@@ -13,6 +13,7 @@ exported for `bridge.native_imports` to combine with its verified-backup flow.
 from __future__ import annotations
 
 import base64
+import binascii
 import copy
 import json
 import logging
@@ -208,20 +209,44 @@ def merge_optimized_fields(card: dict, optimized: dict[str, str]) -> dict:
     return result
 
 
-def write_png_chara_bytes(raw: bytes, card: dict) -> bytes:
-    """Replace only one valid chara chunk; preserve every other byte/chunk."""
-    if raw[:8] != b"\x89PNG\r\n\x1a\n":
-        raise ValueError("character file is not a PNG")
+def _metadata_card(data: bytes) -> tuple[bytes, dict] | None:
+    label, separator, encoded = data.partition(b"\x00")
+    if separator != b"\x00" or label not in {b"chara", b"ccv3"}:
+        return None
+    try:
+        decoded = base64.b64decode(encoded, validate=True).decode("utf-8")
+        card = json.loads(decoded)
+    except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("invalid PNG character metadata") from exc
+    if not isinstance(card, dict):
+        raise ValueError("invalid PNG character metadata")
+    return label, card
+
+
+def _editable_metadata_values(card: dict) -> dict[str, str]:
+    nested = card.get("data")
+    container = nested if isinstance(nested, dict) else card
+    return {key: str(container.get(key) or card.get(key) or "") for key in ("name", *OPTIMIZABLE_FIELDS)}
+
+
+def _text_metadata_chunk(label: bytes, card: dict) -> bytes:
     encoded = base64.b64encode(json.dumps(card, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-    payload = b"chara\x00" + encoded
-    replacement = (
+    payload = label + b"\x00" + encoded
+    return (
         struct.pack(">I", len(payload))
         + b"tEXt"
         + payload
         + struct.pack(">I", zlib.crc32(b"tEXt" + payload) & 0xFFFFFFFF)
     )
-    pos, replaced = 8, False
+
+
+def write_png_chara_bytes(raw: bytes, card: dict) -> bytes:
+    """Update every consistent character-metadata copy and preserve other PNG chunks."""
+    if raw[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("character file is not a PNG")
+    pos = 8
     chunks: list[bytes] = []
+    metadata: list[tuple[int, bytes, dict]] = []
     while pos < len(raw):
         if pos + 12 > len(raw):
             raise ValueError("truncated PNG chunk")
@@ -233,20 +258,31 @@ def write_png_chara_bytes(raw: bytes, card: dict) -> bytes:
         crc = struct.unpack(">I", raw[end - 4 : end])[0]
         if crc != zlib.crc32(kind + data) & 0xFFFFFFFF:
             raise ValueError("PNG chunk checksum mismatch")
-        if kind == b"tEXt" and data.startswith(b"ccv3\x00"):
-            raise ValueError("optimizer does not support dual chara/ccv3 payloads")
-        if kind == b"tEXt" and data.startswith(b"chara\x00"):
-            if replaced:
-                raise ValueError("duplicate PNG character metadata")
-            chunks.append(replacement)
-            replaced = True
-        else:
-            chunks.append(raw[pos:end])
-        if kind == b"IEND" and end != len(raw):
-            raise ValueError("unexpected data after PNG end")
+        chunks.append(raw[pos:end])
+        parsed = _metadata_card(data) if kind == b"tEXt" else None
+        if parsed is not None:
+            label, metadata_card = parsed
+            metadata.append((len(chunks) - 1, label, metadata_card))
+        if kind == b"IEND":
+            if data:
+                raise ValueError("invalid PNG IEND chunk")
+            if end != len(raw):
+                raise ValueError("unexpected data after PNG end")
         pos = end
-    if not replaced:
+    canonical = next((item for item in metadata if item[1] == b"chara"), None)
+    if canonical is None:
         raise ValueError("PNG has no SillyTavern chara metadata")
+    original_values = _editable_metadata_values(canonical[2])
+    if any(_editable_metadata_values(item[2]) != original_values for item in metadata):
+        raise ValueError("conflicting PNG character metadata")
+    updated_values = _editable_metadata_values(card)
+    changes = {key: updated_values[key] for key in OPTIMIZABLE_FIELDS if updated_values[key] != original_values[key]}
+    if len(raw) > _limits.RAG_MAX_FILE_BYTES:
+        raise ValueError("optimized card exceeds the file-size limit")
+    if not changes:
+        return raw
+    for index, label, metadata_card in metadata:
+        chunks[index] = _text_metadata_chunk(label, merge_optimized_fields(metadata_card, changes))
     result = raw[:8] + b"".join(chunks)
     if len(result) > _limits.RAG_MAX_FILE_BYTES:
         raise ValueError("optimized card exceeds the file-size limit")

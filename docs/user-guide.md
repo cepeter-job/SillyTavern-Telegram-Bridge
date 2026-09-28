@@ -46,10 +46,11 @@ OpenAI-compatible Chat Completions, native OpenAI Codex OAuth, Anthropic
 Messages, the keyless OpenCode Muse `/responses` transport, or an opt-in image
 provider — all from the same panel. `/providers` starts with a block-quoted
 snapshot of the active session's Story and Utility models and their reasoning
-budgets. Story reasoning stays under `/settings`; Utility reasoning is configured
-from `/providers` and is independent per session. It applies to Utility-model
-tasks such as summaries, curated memory, scene state, Light Novel strategy B
-choices, and character ranking/optimization.
+budgets. Both Story and Utility reasoning are configured from `/providers` and
+remain independent per session. Story reasoning applies to Story-model replies;
+Utility reasoning applies to Utility-model tasks such as summaries, curated
+memory, scene state, Light Novel strategy B choices, and character
+ranking/optimization.
 
 Beyond basic generation, the bridge handles:
 

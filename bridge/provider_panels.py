@@ -150,7 +150,10 @@ def send_model_target_menu(
                 {"text": "📖 Story model", "callback_data": "modeltarget:story"},
                 {"text": "🛠️ Utility model", "callback_data": "modeltarget:utility"},
             ],
-            [{"text": "🧠 Utility reasoning", "callback_data": "models:utility-reasoning"}],
+            [
+                {"text": "🧠 Story reasoning", "callback_data": "models:story-reasoning"},
+                {"text": "🧠 Utility reasoning", "callback_data": "models:utility-reasoning"},
+            ],
             [{"text": "❌ Cancel", "callback_data": "models:cancel"}],
         ]
     }
@@ -162,6 +165,42 @@ def send_model_target_menu(
         message_id,
         request_context=request_context,
         entities=[{"type": "blockquote", "offset": 0, "length": len(quote.encode("utf-16-le")) // 2}],
+    )
+
+
+def send_story_reasoning_menu(
+    token: str,
+    chat_id: str,
+    message_id: int | None = None,
+    *,
+    request_context,
+) -> None:
+    settings = get_generation_settings(request_context.db, chat_id, request_context.session_id)
+    current = int(str(settings.get("reasoning_budget") or 0))
+    rows = [
+        [
+            {
+                "text": ("✅ " if budget == current else "") + f"{label.title()} ({budget})",
+                "callback_data": f"storyreasoning:{label}",
+            }
+        ]
+        for label, budget in REASONING_LEVELS.items()
+    ]
+    rows.append([{"text": "✏️ Custom (0–32000)", "callback_data": "storyreasoning:custom"}])
+    rows.append(
+        [
+            {"text": "⬅️ Back", "callback_data": "models:target"},
+            {"text": "❌ Cancel", "callback_data": "models:cancel"},
+        ]
+    )
+    send_panel_message(
+        token,
+        chat_id,
+        f"Story reasoning\nCurrent: {_reasoning_label(current)}\n\n"
+        "Choose the reasoning budget used by Story-model replies.",
+        {"inline_keyboard": rows},
+        message_id,
+        request_context=request_context,
     )
 
 

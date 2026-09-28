@@ -1,15 +1,26 @@
+import json
 import time
 
 from application_test_setup import make_test_memory_service, make_test_request_context
 from settings_test_support import make_test_settings
 
-from bridge import cards, model_selection, provider_panels, response_delivery, settings_input, telegram
+from bridge import (
+    cards,
+    model_selection,
+    provider_callbacks,
+    provider_panels,
+    response_delivery,
+    settings_input,
+    settings_panels,
+    telegram,
+)
 from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started, reset_conversation
 from bridge.generation_settings import get_generation_settings, update_generation_settings
 from bridge.light_novel_repository import attach_choice_set, bind_choice_panel, consume_choice_set, reserve_choice_set
 from bridge.light_novel_service import attach_turn, ensure_choices, prepare_turn
 from bridge.memory import generate_session_summary
 from bridge.message_commands import reset_session
+from bridge.metadata import get_meta
 from bridge.provider_port import ProviderPort
 from bridge.session_core import create_session
 from bridge.session_naming import start_session_name_input
@@ -64,9 +75,113 @@ def test_provider_target_panel_quotes_models_and_both_reasoning_levels(tmp_path,
         buttons = [button for row in payload["reply_markup"]["inline_keyboard"] for button in row]
         labels = [button["text"] for button in buttons]
         callbacks = [button["callback_data"] for button in buttons]
-        assert {"📖 Story model", "🛠️ Utility model", "🧠 Utility reasoning"} <= set(labels)
+        assert {"📖 Story model", "🛠️ Utility model", "🧠 Story reasoning", "🧠 Utility reasoning"} <= set(labels)
         assert all(not label.startswith("✅ ") for label in labels)
+        assert "models:story-reasoning" in callbacks
         assert "models:utility-reasoning" in callbacks
+    finally:
+        db.close()
+
+
+def test_settings_panel_does_not_offer_story_reasoning(tmp_path, monkeypatch):
+    settings, db, session = session_fixture(tmp_path)
+    try:
+        captured = []
+        monkeypatch.setattr(
+            cards,
+            "send_panel_request",
+            lambda _token, method, payload, **_kwargs: captured.append((method, payload)) or {"message_id": 72},
+        )
+        settings_panels.send_settings_menu(
+            "token",
+            "chat",
+            db,
+            session["session_id"],
+            request_context=make_test_request_context(db, session["session_id"], "owner", app_settings=settings),
+        )
+        payload = captured[-1][1]
+        callbacks = [button["callback_data"] for row in payload["reply_markup"]["inline_keyboard"] for button in row]
+        assert all("reasoning" not in callback for callback in callbacks)
+        assert "Active reasoning" not in payload["text"]
+        assert "reasoning level" not in payload["text"]
+    finally:
+        db.close()
+
+
+def test_story_reasoning_menu_marks_current_budget_and_offers_custom(tmp_path, monkeypatch):
+    settings, db, session = session_fixture(tmp_path)
+    try:
+        update_generation_settings(db, "chat", session["session_id"], reasoning_budget=4096)
+        captured = []
+        monkeypatch.setattr(
+            cards,
+            "send_panel_request",
+            lambda _token, method, payload, **_kwargs: captured.append((method, payload)) or {"message_id": 73},
+        )
+        provider_panels.send_story_reasoning_menu(
+            "token",
+            "chat",
+            request_context=make_test_request_context(db, session["session_id"], "owner", app_settings=settings),
+        )
+        buttons = [button for row in captured[-1][1]["reply_markup"]["inline_keyboard"] for button in row]
+        assert {button["callback_data"] for button in buttons} >= {
+            "storyreasoning:medium",
+            "storyreasoning:custom",
+            "models:target",
+        }
+        assert next(
+            button["text"] for button in buttons if button["callback_data"] == "storyreasoning:medium"
+        ).startswith("✅ ")
+    finally:
+        db.close()
+
+
+def test_story_reasoning_provider_callback_updates_session_budget(tmp_path, monkeypatch):
+    settings, db, session = session_fixture(tmp_path)
+    try:
+        shown = []
+        monkeypatch.setattr(
+            provider_callbacks,
+            "send_story_reasoning_menu",
+            lambda *args, **kwargs: shown.append((args, kwargs)),
+        )
+        handled = provider_callbacks.handle_provider_model_callback(
+            db,
+            "token",
+            {"id": "cb"},
+            lambda *_args: None,
+            "storyreasoning:high",
+            "chat",
+            {"message_id": 73},
+            session,
+            session["session_id"],
+            None,
+            request_context=make_test_request_context(db, session["session_id"], "owner", app_settings=settings),
+        )
+        assert handled
+        assert get_generation_settings(db, "chat", session["session_id"])["reasoning_budget"] == 8192
+        assert shown
+
+        monkeypatch.setattr(provider_callbacks, "remove_inline_keyboard", lambda *args, **kwargs: None)
+        monkeypatch.setattr(provider_callbacks, "send_text", lambda *args, **kwargs: [74])
+        handled = provider_callbacks.handle_provider_model_callback(
+            db,
+            "token",
+            {"id": "cb"},
+            lambda *_args: None,
+            "storyreasoning:custom",
+            "chat",
+            {"message_id": 73},
+            session,
+            session["session_id"],
+            None,
+            request_context=make_test_request_context(db, session["session_id"], "owner", app_settings=settings),
+        )
+        assert handled
+        pending = json.loads(get_meta(db, "settings_input:chat", "{}"))
+        assert pending["scope"] == "story_reasoning"
+        assert pending["key"] == "reasoning_budget"
+        assert pending["prompt_message_ids"] == [74]
     finally:
         db.close()
 
@@ -136,6 +251,38 @@ def test_light_novel_strategy_b_uses_utility_reasoning(tmp_path):
         assert result.generation_status == "ready"
         assert calls[0][0] == "utility::worker"
         assert calls[0][1]["reasoning_budget"] == 16384
+    finally:
+        db.close()
+
+
+def test_custom_story_reasoning_input_updates_story_and_reopens_providers(tmp_path, monkeypatch):
+    settings, db, session = session_fixture(tmp_path)
+    try:
+        update_generation_settings(db, "chat", session["session_id"], reasoning_budget=1024)
+        reopened = []
+        monkeypatch.setattr(
+            settings_input,
+            "send_model_target_menu",
+            lambda *args, **kwargs: reopened.append((args, kwargs)),
+        )
+        state = {
+            "key": "reasoning_budget",
+            "scope": "story_reasoning",
+            "session_id": session["session_id"],
+            "expires_at": time.time() + 600,
+            "prompt_message_ids": [],
+        }
+        assert settings_input._handle_settings_input(
+            db,
+            "token",
+            "chat",
+            session["session_id"],
+            "5000",
+            state,
+            request_context=make_test_request_context(db, session["session_id"], "owner", app_settings=settings),
+        )
+        assert get_generation_settings(db, "chat", session["session_id"])["reasoning_budget"] == 5000
+        assert reopened
     finally:
         db.close()
 

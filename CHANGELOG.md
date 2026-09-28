@@ -4,6 +4,23 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.2.037] - 2026-09-28
+
+### Added
+
+- Add a private Mini App Usage view and current-session token overview with provider-reported input/output totals, cached/reasoning subsets, UTC daily figures, model/task breakdowns, 24-hour/7-day/30-day filters and explicit missing-data coverage. No historical estimates, billing prices or subscription quotas are inferred.
+- Add a content-free, session-scoped SQLite usage ledger through forward migration 3, with 90-day pruning on tracked writes and deletion alongside its session. Back up before upgrade; restoring an older binary requires a matching pre-upgrade database.
+
+### Changed
+
+- Redesign the Mini App as an active-session-first native workspace: local SVG icons, theme-aware light/dark surfaces, responsive desktop sidebar/mobile tabs, searchable More tools, on-demand page modules, safe-area handling, keyboard focus and reduced-motion support. Keep existing protected management workflows and full character artwork.
+- Capture usage through explicit provider-port scopes for story, rewrite, choice, image, continuity and character-utility work. Normalize OpenAI-compatible, Anthropic, OpenCode and Codex counters without double-counting cumulative stream snapshots or cached/reasoning subsets.
+
+### Fixed
+
+- Prevent stale page loads from clearing a newer navigation's loading state. Keep large token counts readable on narrow cards while retaining exact accessible figures.
+- Treat interrupted streams and failed continuation requests as incomplete usage coverage while preserving known counts and the existing response behavior.
+
 ## [0.2.036] - 2026-09-27
 
 ### Fixed

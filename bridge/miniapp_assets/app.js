@@ -1,4 +1,6 @@
 import {el,card,button,notice} from './ui.js';
+import {icon} from './icons.js';
+import {setupNative,selectionFeedback} from './native.js';
 const telegram = window.Telegram?.WebApp;
 const raw = telegram?.initData || '';
 export const state = {user:null, session:null};
@@ -27,13 +29,27 @@ export function createSessionScope() {
 }
 export function sessionBody(extra={}) { if (!state.session) throw new Error('Open or create a session first.'); return {session_id:state.session.session_id,...extra}; }
 
-const pages = {dashboard:{label:'Home',render:async()=>card('Your workspace',el('p',{},'Manage your characters, models and context here. Continue the conversation in your Telegram chat.'),el('p',{class:'muted'},'Signed in as '+state.user.name))}};
-const primaryPages = [['dashboard','Home'],['characters','Characters'],['sessions','Sessions'],['memory','Memory']];
-const secondaryPages = ['models','personas','worlds','databank','system'];
-const pageHints = {
-  dashboard:'PRIVATE WORKSPACE',characters:'CHARACTER LIBRARY',sessions:'CONVERSATIONS',memory:'MEMORY & CONTEXT',
-  models:'GENERATION',personas:'IDENTITY',worlds:'LORE & CONTEXT',databank:'RETRIEVAL',system:'RUNTIME'
+const pageInfo = {
+  dashboard:{label:'Home',module:'system',hint:'YOUR WORKSPACE',description:'Your story, one tap away.'},
+  characters:{label:'Characters',module:'characters',hint:'YOUR CAST',description:'Find a character. Start something new.'},
+  usage:{label:'Usage',module:'usage',hint:'TOKEN INSIGHTS',description:'Know where your tokens go.'},
+  sessions:{label:'Sessions',module:'management',hint:'CONVERSATIONS',description:'Pick up where you left off.'},
+  models:{label:'Models',module:'models',hint:'GENERATION',description:'The right model for every task.'},
+  memory:{label:'Memory',module:'memory',hint:'CONTINUITY',description:'Keep the details that matter.'},
+  personas:{label:'Personas',module:'management',hint:'YOUR IDENTITY',description:'Choose who you are in each story.'},
+  worlds:{label:'Worlds',module:'management',hint:'LORE & CONTEXT',description:'Give your conversation a setting.'},
+  databank:{label:'Data Bank',module:'memory',hint:'REFERENCE LIBRARY',description:'Ground replies in your documents.'},
+  system:{label:'System',module:'system',hint:'BRIDGE HEALTH',description:'Status, operations and verified updates.'},
 };
+const pages = {};
+const primaryPages = [['dashboard','Home'],['characters','Characters'],['usage','Usage'],['sessions','Sessions']];
+const secondaryPages = ['models','memory','personas','worlds','databank','system'];
+const loadedModules = new Map();
+async function loadPage(key) {
+  const name=pageInfo[key].module;
+  if(!loadedModules.has(name))loadedModules.set(name,import('./'+name+'.js').catch(error=>{loadedModules.delete(name);throw error;}));
+  await loadedModules.get(name);
+}
 export function registerPage(key, label, render) { pages[key] = {label,render}; }
 let current='dashboard', generation=0;
 
@@ -45,8 +61,10 @@ function closeMore() {
 function renderMoreNavigation() {
   const target=document.getElementById('more-navigation');
   target.replaceChildren(...secondaryPages.map(key=>{
-    const page=pages[key];if(!page)return document.createDocumentFragment();
+    const page=pageInfo[key];if(!page)return document.createDocumentFragment();
     const control=button(page.label,async()=>{closeMore();await navigate(key);},'more-link');
+    control.prepend(icon(key));control.setAttribute('aria-label',page.label);control.append(el('small',{},page.description));
+    control.hidden=!((page.label+' '+page.description).toLowerCase().includes((document.getElementById('more-search')?.value||'').toLowerCase()));
     control.setAttribute('data-page',key);
     if(key===current)control.setAttribute('aria-current','page');
     return control;
@@ -59,17 +77,18 @@ function openMore() {
 }
 function renderNavigation() {
   const controls=primaryPages.map(([key,label])=>{
-    const control=button(label,()=>navigate(key),'nav-button');control.setAttribute('data-page',key);
+    const control=button(label,()=>navigate(key),'nav-button');control.prepend(icon(key));control.setAttribute('data-page',key);
     if(key===current)control.setAttribute('aria-current','page');return control;
   });
-  const more=button('More',openMore,'nav-button');more.setAttribute('data-page','more');
+  const more=button('More',openMore,'nav-button');more.prepend(icon('more'));more.setAttribute('data-page','more');
   if(secondaryPages.includes(current))more.setAttribute('aria-current','page');
   controls.push(more);document.getElementById('navigation').replaceChildren(...controls);renderMoreNavigation();
 }
 function updateShell(key) {
-  const page=pages[key];
+  const page=pageInfo[key];
   document.getElementById('page-title').textContent=page?.label||'Home';
-  document.getElementById('page-kicker').textContent=pageHints[key]||'PRIVATE WORKSPACE';
+  document.getElementById('page-kicker').textContent=page?.hint||'YOUR WORKSPACE';
+  document.getElementById('page-description').textContent=page?.description||'';
 }
 function loadingView() {
   return el('section',{class:'skeleton-shell','aria-label':'Loading page'},
@@ -77,28 +96,39 @@ function loadingView() {
     el('div',{class:'skeleton-grid'},el('div',{class:'skeleton skeleton-card'}),el('div',{class:'skeleton skeleton-card'})));
 }
 export async function navigate(key=current) {
-  if (!pages[key]) key='dashboard'; current=key; const seq=++generation;
+  if (!Object.hasOwn(pageInfo,key)) key='dashboard';
+  const changed=key!==current;current=key;const seq=++generation;
+  if(changed)selectionFeedback();
   renderNavigation();updateShell(key);closeMore();
-  const content=document.getElementById('content');content.setAttribute('aria-busy','true');content.replaceChildren(loadingView());
-  try { const view=await pages[key].render(); if(seq===generation)content.replaceChildren(view); }
-  catch(error){if(seq===generation)content.replaceChildren(card('Could not load this page',el('p',{},error.message),button('Retry',()=>navigate(key))));}
-  finally{content.removeAttribute('aria-busy');}
-  try { if(key==='dashboard')telegram?.BackButton?.hide();else telegram?.BackButton?.show(); } catch {}
+  const content=document.getElementById('content');content.setAttribute('aria-busy','true');content.inert=true;
+  const loading=setTimeout(()=>{if(seq===generation)content.replaceChildren(loadingView());},120);
+  try {
+    await loadPage(key);
+    if(seq!==generation)return;
+    const view=await pages[key].render();
+    if(seq===generation){content.replaceChildren(view);if(changed){window.scrollTo(0,0);document.getElementById('page-title').focus({preventScroll:true});}}
+  } catch(error) {
+    if(seq===generation)content.replaceChildren(card('Could not load this page',el('p',{},error.message),button('Retry',()=>navigate(key))));
+  } finally {
+    clearTimeout(loading);
+    if(seq===generation){content.removeAttribute('aria-busy');content.inert=false;}
+  }
+  if(seq!==generation)return;
+  try {if(key==='dashboard')telegram?.BackButton?.hide();else telegram?.BackButton?.show();}catch{}
 }
 async function start() {
-  try { telegram?.ready(); telegram?.expand(); telegram?.BackButton?.onClick(()=>navigate('dashboard')); } catch {}
+  setupNative(telegram);
+  document.getElementById('refresh').replaceChildren(icon('refresh'));
+  document.getElementById('more-close').replaceChildren(icon('close'));
+  document.getElementById('more-search').addEventListener('input',renderMoreNavigation);
+  try { telegram?.ready(); telegram?.expand(); telegram?.BackButton?.onClick(()=>{if(document.getElementById('more-menu').open)closeMore();else navigate('dashboard');}); } catch {}
   document.getElementById('refresh').addEventListener('click',()=>navigate());
   document.getElementById('more-close').addEventListener('click',closeMore);
   try {
     const data=await api('/me'); state.user=data.user;
     document.getElementById('identity').textContent=data.user.name+' · Private bot chat';
-    document.getElementById('connection-label').textContent='Live';
+    document.getElementById('connection-label').textContent='Connected';
     document.querySelector('.connection-dot')?.classList.add('online');
-    await import('./characters.js');
-    await import('./models.js');
-    await import('./management.js');
-    await import('./memory.js');
-    await import('./system.js');
     await navigate(telegram?.initDataUnsafe?.start_param || 'dashboard');
   } catch(error) {
     document.getElementById('identity').textContent='Authentication required';

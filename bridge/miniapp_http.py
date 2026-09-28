@@ -28,6 +28,9 @@ _ASSETS = {
     "index.html": "text/html",
     "app.js": "text/javascript",
     "ui.js": "text/javascript",
+    "icons.js": "text/javascript",
+    "native.js": "text/javascript",
+    "usage.js": "text/javascript",
     "style.css": "text/css",
     "characters.js": "text/javascript",
     "models.js": "text/javascript",
@@ -45,6 +48,7 @@ def api_routes() -> list[ApiRoute]:
     from bridge.miniapp_models import routes as model_routes
     from bridge.miniapp_sessions import routes as session_routes
     from bridge.miniapp_system import routes as system_routes
+    from bridge.miniapp_usage import routes as usage_routes
     from bridge.miniapp_worlds import routes as world_routes
 
     return [
@@ -57,6 +61,7 @@ def api_routes() -> list[ApiRoute]:
         *world_routes(),
         *memory_routes(),
         *system_routes(),
+        *usage_routes(),
     ]
 
 
@@ -142,6 +147,7 @@ def create_miniapp_app(services: Any, config: MiniAppConfig) -> web.Application:
                 "scope": "private_chat",
                 "features": [
                     "dashboard",
+                    "usage",
                     "characters",
                     "models",
                     "sessions",

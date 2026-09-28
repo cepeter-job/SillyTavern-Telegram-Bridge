@@ -281,7 +281,7 @@ def rank_character(
     }
     try:
         model = _utility_model(db, chat_id, session, app_settings=app_settings)
-        raw = provider_port.generate(
+        raw = provider_port.for_usage(chat_id, session["session_id"], "rank").generate(
             "",
             model,
             rank_prompt(fields),
@@ -322,7 +322,7 @@ def optimize_character(
     }
     try:
         model = _utility_model(db, chat_id, session, app_settings=app_settings)
-        raw = provider_port.generate(
+        raw = provider_port.for_usage(chat_id, session["session_id"], "optimizer").generate(
             "",
             model,
             optimize_prompt(fields, suggestion=suggestion),

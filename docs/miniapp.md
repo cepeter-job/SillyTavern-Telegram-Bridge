@@ -8,6 +8,21 @@ Private sessions use the authenticated user ID. Group chats and forum topics are
 
 The static UI uses native ES modules and needs no Node runtime or build. It ships inside `bridge/miniapp_assets` and is included in verified live-mirror updates. The responsive presentation uses a compact Telegram-themed status header, desktop sidebar, five-item mobile bottom navigation, and a More sheet for secondary pages. The Home dashboard emphasizes the active session, quick actions, recent operations and observed bridge health; loading states use skeletons instead of replacing the page with a generic loading card.
 
+## Navigation and usage
+
+The primary destinations are **Home, Characters, Usage, Sessions and More**.
+More contains searchable links to Models, Memory, Personas, Worlds, Data Bank and
+System. Home puts the current session first, with a direct return to Telegram,
+quick controls and a token overview. Pages load on demand; a slower previous
+navigation cannot replace the page you just selected. Native theme/safe-area
+updates, labeled local SVG icons, keyboard focus and reduced-motion preferences
+are supported without an icon font or external font download.
+
+**Usage** reports actual provider counters for the selected private session or
+all sessions in that private chat. See [Token usage](token-usage.md) for coverage,
+missing counters, UTC time windows, retention and the migration/rollback note.
+No historical token totals, currency costs or subscription quotas are invented.
+
 ## Characters and optimizer
 
 Use Characters to browse/search PNG cards, view portraits/info, upload cards and create a new normal conversation session. Ranked cards show the canonical S/A/B/C/D WEBM animation from `assets/character-ranks/telegram`; reduced-motion clients and media failures fall back to the static tier badge. Empty or failed portrait loads show the explicit portrait-unavailable state instead of a broken image. Selecting a character creates a new session instead of changing existing conversation history; send `/start` in Telegram for its opening. Active/default/referenced characters cannot be deleted; deletion verifies a backup and the revision you reviewed.
@@ -147,7 +162,7 @@ Do not use `funnel reset` or `serve reset`; they can disrupt unrelated services.
 
 Use `journalctl --user -u sillytavern-telegram.service -n 80 --no-pager` for operational errors. A 401 means the signed launch expired or is not authorized; reopen from Telegram. A 409 indicates a stale session/revision or missing confirmation; refresh before retrying. A 429 means one of your operations is still pending; inspect System → Operations rather than resubmitting. “Interrupted” means the process restarted, not that side effects were automatically rolled back.
 
-The UI smoke harness is a development-only DOM test. Run `npm ci --prefix tests/miniapp-ui --ignore-scripts`, set `MINIAPP_JSDOM_ROOT=tests/miniapp-ui` and `PYTHON` to the project test interpreter, then run `node --experimental-vm-modules tools/miniapp_ui_smoke.mjs` with Node 24 or newer. CI runs this locked, development-only test harness automatically. It starts a temporary authenticated loopback fixture, renders all nine pages and verifies model/session mutations plus saved optimizer-preview resumption and application. No Node runtime is needed for production. It does not replace testing the deployment on actual Telegram mobile/desktop clients.
+The UI smoke harness is a development-only DOM test. Run `npm ci --prefix tests/miniapp-ui --ignore-scripts`, set `MINIAPP_JSDOM_ROOT=tests/miniapp-ui` and `PYTHON` to the project test interpreter, then run `node --experimental-vm-modules tools/miniapp_ui_smoke.mjs` with Node 24 or newer. CI runs this locked, development-only test harness automatically. It starts a temporary authenticated loopback fixture, renders all ten pages and verifies model/session mutations plus saved optimizer-preview resumption and application, token/empty states, exact large counts and out-of-order navigation. No Node runtime is needed for production. It does not replace testing the deployment on actual Telegram mobile/desktop clients.
 
 Completed optimizer previews can be reopened from System → Operations without making another model call. Apply still enforces the originating actor/session and card revision; a switched or expired session fails closed. Update notifications preserve the existing bot's forum-topic scope even though the Mini App itself only manages private chats.
 

@@ -11,6 +11,7 @@ from collections.abc import Callable, Mapping
 from typing import Any, ParamSpec, Protocol, TypeVar
 
 from bridge.request_types import PreparedMessage, RequestContext
+from bridge.token_usage_values import UsageCallback
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -78,6 +79,7 @@ class ProviderGenerate(Protocol):
         cancel_event: CancellationEvent | None = None,
         force_non_stream: bool = False,
         request_timeout: float | None = None,
+        usage_callback: UsageCallback | None = None,
     ) -> str: ...
 
 

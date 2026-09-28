@@ -15,9 +15,9 @@ export function notice(message) {
 }
 export function button(label, action, kind = '') {
   return el('button', {type:'button', class:kind, onclick:async event => {
-    const target = event.currentTarget; target.disabled = true;
+    const target = event.currentTarget; target.disabled = true;target.setAttribute('aria-busy','true');
     try { await action(); } catch (error) { notice(error.message || 'Operation failed.'); }
-    finally { target.disabled = false; }
+    finally { target.disabled = false;target.removeAttribute('aria-busy'); }
   }}, label);
 }
 export function field(label, input) { const id = 'field-' + crypto.randomUUID(); input.id = id; return el('div', {}, el('label', {for:id}, label), input); }

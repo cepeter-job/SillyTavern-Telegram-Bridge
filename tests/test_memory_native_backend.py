@@ -103,6 +103,24 @@ class MemoryNativeBackendTests(SettingsTestCase):
         client = memory_backend.hindsight_client(app_settings=settings)
         memory_backend.close_hindsight_client(client)
 
+    def test_hindsight_sdk_transport_forces_loopback_proxy_bypass(self):
+        from dataclasses import replace
+
+        settings = self.app_settings_builder.build()
+        environ = dict(settings.environ)
+        environ["HINDSIGHT_API_URL"] = "http://127.0.0.1:8890"
+        settings = replace(settings, environ=environ)
+        with patch.dict("os.environ", {"HTTP_PROXY": "http://proxy.example:8080", "NO_PROXY": ""}, clear=False):
+            client = memory_backend.hindsight_client(app_settings=settings)
+            try:
+                import os
+
+                bypass = {item.strip() for item in os.environ["NO_PROXY"].split(",") if item.strip()}
+                self.assertIn("127.0.0.1", bypass)
+                self.assertIn("::1", bypass)
+            finally:
+                memory_backend.close_hindsight_client(client)
+
     def setUp(self):
         # This suite tests the Hindsight guard, not asynchronous scene/curator
         # workers. Those extension hooks have their own tests. Letting them run

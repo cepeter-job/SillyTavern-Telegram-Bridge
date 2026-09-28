@@ -16,8 +16,7 @@ from bridge.character_optimizer_panels import (
 )
 from bridge.limits import PENDING_SETTINGS_TTL_SECONDS
 from bridge.metadata import get_meta, set_meta
-from bridge.provider_errors import ProviderRequestError
-from bridge.provider_port import ProviderPort
+from bridge.provider_port import ProviderPort, ProviderRequestError
 from bridge.request_types import RequestContext
 from bridge.telegram import delete_pending_input_prompts, send_text
 

@@ -11,6 +11,9 @@ Usage: ./install.sh [options]
   --system-deps          Install Debian/Ubuntu prerequisites (sudo required).
   --linger               Enable user services after logout.
   --replace-service      Back up and replace an existing custom bridge unit.
+  --release TAG          Clone and verify one signed release tag (recommended first install).
+  --allowed-signers PATH Trusted SSH allowed-signers file used by --release.
+  --unsafe-main          Explicitly clone unsigned development main instead of a release.
   --env-file PATH        Choose the private .env location.
   --help                 Show this help without changing anything.
 
@@ -22,9 +25,13 @@ URL is filled automatically using a free supported port; existing routes are kep
 --no-start never publishes a new Funnel. The bridge API still requires Telegram auth.
 A running bridge is never upgraded in place: stop it before installing dependencies,
 or use --no-deps when its existing environment already satisfies requirements.lock.
+When this script must clone the repository, choose a signed --release and independently
+provision its allowed-signers file. --unsafe-main is for explicit development installs only.
 HELP
 }
-START=1; DEPS=1; FUNNEL=0; SYSTEM_DEPS=0; LINGER=0; REPLACE=0
+START=1; DEPS=1; FUNNEL=0; SYSTEM_DEPS=0; LINGER=0; REPLACE=0; UNSAFE_MAIN=0
+RELEASE=""
+ALLOWED_SIGNERS="${SILLYTAVERN_UPDATE_ALLOWED_SIGNERS:-$HOME/.config/sillytavern-telegram/trusted-maintainers}"
 ENV_FILE="${SILLYTAVERN_ENV_FILE:-$HOME/.local/share/sillytavern-telegram/.env}"
 while (($#)); do
   case "$1" in
@@ -35,6 +42,9 @@ while (($#)); do
     --system-deps) SYSTEM_DEPS=1;;
     --linger) LINGER=1;;
     --replace-service) REPLACE=1;;
+    --release) shift; [[ $# -gt 0 ]] || { echo 'Missing release tag' >&2;exit 2; }; RELEASE=$1;;
+    --allowed-signers) shift; [[ $# -gt 0 ]] || { echo 'Missing allowed-signers path' >&2;exit 2; }; ALLOWED_SIGNERS=$1;;
+    --unsafe-main) UNSAFE_MAIN=1;;
     --env-file) shift; [[ $# -gt 0 ]] || { echo 'Missing env path' >&2;exit 2; }; ENV_FILE=$1;;
     *) echo "Unknown option: $1" >&2;usage;exit 2;;
   esac
@@ -50,14 +60,33 @@ fi
 for tool in git systemctl; do
   command -v "$tool" >/dev/null || { echo "Missing $tool. Use --system-deps or install it first." >&2;exit 1; }
 done
+if [[ -n "$RELEASE" && $UNSAFE_MAIN -eq 1 ]]; then
+  echo '--release and --unsafe-main are mutually exclusive.' >&2
+  exit 2
+fi
+if [[ -n "$RELEASE" && ! "$RELEASE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo 'Release tag must look like vX.Y.Z.' >&2
+  exit 2
+fi
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 SOURCE=$HERE
 if [[ ! -f "$SOURCE/bridge/main.py" || ! -f "$SOURCE/requirements.lock" ]]; then
   SOURCE="$HOME/sillytavern-telegram-bridge"
   if [[ -e "$SOURCE" ]]; then
     [[ -f "$SOURCE/bridge/main.py" && -f "$SOURCE/requirements.lock" ]] || { echo "Refusing to overwrite $SOURCE" >&2;exit 1; }
-  else
+  elif [[ -n "$RELEASE" ]]; then
+    command -v ssh-keygen >/dev/null || { echo 'ssh-keygen is required to verify a signed release.' >&2;exit 1; }
+    [[ -f "$ALLOWED_SIGNERS" && ! -L "$ALLOWED_SIGNERS" ]] || { echo 'A regular allowed-signers file is required for --release.' >&2;exit 1; }
+    git clone --no-checkout -- https://github.com/cepeter/SillyTavern-Telegram-Bridge.git "$SOURCE"
+    git -C "$SOURCE" -c gpg.format=ssh -c "gpg.ssh.allowedSignersFile=$ALLOWED_SIGNERS" -c gpg.minTrustLevel=fully verify-tag "$RELEASE"
+    RELEASE_COMMIT=$(git -C "$SOURCE" rev-parse "$RELEASE^{commit}")
+    [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Signed release did not resolve to a commit.' >&2;exit 1; }
+    git -C "$SOURCE" checkout -B main "$RELEASE_COMMIT"
+  elif ((UNSAFE_MAIN)); then
     git clone --branch main --single-branch -- https://github.com/cepeter/SillyTavern-Telegram-Bridge.git "$SOURCE"
+  else
+    echo 'First install requires --release vX.Y.Z with --allowed-signers PATH, or explicit --unsafe-main for development.' >&2
+    exit 2
   fi
 fi
 cd -- "$SOURCE"

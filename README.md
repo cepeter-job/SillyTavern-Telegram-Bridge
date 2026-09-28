@@ -11,14 +11,20 @@ and an optional private management Mini App.
 
 ## Quick start
 
-Linux installation is user-scoped. Run this as the account that will own the
-bridge, not as root:
+Linux installation is user-scoped. For a first install, verify a signed release **before executing repository code**. Provision the maintainer public key independently as described in [Operations](docs/operations.md), choose a release tag such as `vX.Y.Z`, then:
 
 ```bash
-git clone https://github.com/cepeter/SillyTavern-Telegram-Bridge.git ~/sillytavern-telegram-bridge
+git clone --no-checkout https://github.com/cepeter/SillyTavern-Telegram-Bridge.git ~/sillytavern-telegram-bridge
 cd ~/sillytavern-telegram-bridge
+git -c gpg.format=ssh \
+  -c gpg.ssh.allowedSignersFile="$HOME/.config/sillytavern-telegram/trusted-maintainers" \
+  -c gpg.minTrustLevel=fully verify-tag vX.Y.Z
+commit=$(git rev-parse 'vX.Y.Z^{commit}')
+git checkout -B main "$commit"
 ./install.sh --system-deps --no-start
 ```
+
+Cloning unsigned `main` is a development-only choice. When an independently obtained bootstrap copy of `install.sh` must clone the repository itself, use `--release vX.Y.Z --allowed-signers PATH`; `--unsafe-main` is the explicit opt-in for an unsigned development clone.
 
 Fill the generated private file:
 

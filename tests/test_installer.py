@@ -92,6 +92,7 @@ def test_install_script_help_and_bash_syntax_are_safe():
     subprocess.run(["/bin/bash", "-n", str(script)], check=True)
     result = subprocess.run(["/bin/bash", str(script), "--help"], capture_output=True, text=True, check=True)
     assert "--no-start" in result.stdout and "--with-tailscale-funnel" in result.stdout
+    assert "--release" in result.stdout and "--allowed-signers" in result.stdout and "--unsafe-main" in result.stdout
     assert "--with-caddy" not in result.stdout
 
 
@@ -128,3 +129,114 @@ def test_retired_proxy_command_is_rejected():
     )
     assert result.returncode == 2
     assert "invalid choice" in result.stderr
+
+
+def _bootstrap_installer_fixture(tmp_path):
+    import os
+
+    bootstrap = tmp_path / "bootstrap"
+    bootstrap.mkdir()
+    script = bootstrap / "install.sh"
+    script.write_bytes((ROOT / "install.sh").read_bytes())
+    script.chmod(0o755)
+    home = tmp_path / "home"
+    home.mkdir()
+    fakebin = tmp_path / "bin"
+    fakebin.mkdir()
+    git_log = tmp_path / "git.log"
+
+    def executable(name: str, body: str):
+        path = fakebin / name
+        path.write_text("#!/bin/sh\nset -eu\n" + body, encoding="utf-8")
+        path.chmod(0o755)
+
+    executable("uname", "echo Linux\n")
+    executable(
+        "systemctl",
+        'if [ "${1:-}" = --user ] && [ "${2:-}" = is-active ]; then exit 3; fi\nexit 0\n',
+    )
+    executable("loginctl", 'if [ "${1:-}" = show-user ]; then echo yes; fi\nexit 0\n')
+    executable("ssh-keygen", "exit 0\n")
+    executable(
+        "git",
+        f"""printf '%s\\n' "$*" >> {git_log}\n
+if [ "${{1:-}}" = clone ]; then
+  eval "target=\\${{${{#}}}}"
+  mkdir -p "$target/bridge" "$target/.venv/bin"
+  : > "$target/bridge/main.py"
+  : > "$target/bridge/install_support.py"
+  : > "$target/requirements.lock"
+  cat > "$target/.venv/bin/python" <<'PYWRAP'
+#!/bin/sh
+if [ "${1:-}" = -c ]; then printf '%s\\n' "${3:-}"; fi
+exit 0
+PYWRAP
+  chmod +x "$target/.venv/bin/python"
+  exit 0
+fi
+case "$*" in
+  *"rev-parse"*) printf '%040d\\n' 0;;
+esac
+exit 0
+""",
+    )
+    env = dict(os.environ)
+    env.update(HOME=str(home), PATH=str(fakebin) + ":/usr/bin:/bin", GIT_LOG=str(git_log))
+    return script, home, git_log, env
+
+
+def test_clone_install_requires_explicit_release_or_unsafe_main(tmp_path):
+    script, _home, git_log, env = _bootstrap_installer_fixture(tmp_path)
+    result = subprocess.run(
+        ["/bin/bash", str(script), "--no-deps", "--no-start"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "--release" in result.stderr and "--unsafe-main" in result.stderr
+    assert not git_log.exists()
+
+
+def test_release_clone_verifies_signed_tag_before_checkout(tmp_path):
+    script, home, git_log, env = _bootstrap_installer_fixture(tmp_path)
+    signers = home / "trusted-maintainers"
+    signers.write_text("maintainer ssh-ed25519 synthetic-public-key\n", encoding="utf-8")
+    signers.chmod(0o600)
+    result = subprocess.run(
+        [
+            "/bin/bash",
+            str(script),
+            "--release",
+            "v0.2.039",
+            "--allowed-signers",
+            str(signers),
+            "--no-deps",
+            "--no-start",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    calls = git_log.read_text(encoding="utf-8")
+    assert "clone --no-checkout" in calls
+    assert "gpg.format=ssh" in calls and "gpg.ssh.allowedSignersFile=" in calls
+    assert "verify-tag v0.2.039" in calls
+    assert "rev-parse v0.2.039^{commit}" in calls
+    assert "checkout -B main" in calls
+    assert "clone --branch main" not in calls
+
+
+def test_unsafe_main_clone_is_explicit_and_does_not_claim_signature_verification(tmp_path):
+    script, _home, git_log, env = _bootstrap_installer_fixture(tmp_path)
+    result = subprocess.run(
+        ["/bin/bash", str(script), "--unsafe-main", "--no-deps", "--no-start"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    calls = git_log.read_text(encoding="utf-8")
+    assert "clone --branch main --single-branch" in calls
+    assert "verify-tag" not in calls

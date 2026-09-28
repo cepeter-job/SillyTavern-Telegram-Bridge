@@ -20,7 +20,6 @@ from bridge.port_contracts import (
 from bridge.token_usage_values import TokenUsage, UsageEvent, UsageRecorder, UsageScope
 
 
-
 def normalize_provider_transport_error(error: BaseException, model: str) -> ProviderRequestError | None:
     """Normalize known provider-boundary failures and leave unrelated runtime defects untouched."""
     if isinstance(error, ProviderRequestError):

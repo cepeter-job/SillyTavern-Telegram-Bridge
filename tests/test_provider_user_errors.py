@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from bridge.provider_errors import ProviderRequestError
+from bridge.port_contracts import ProviderRequestError
 from bridge.provider_user_errors import ProviderUserError, actionable_provider_user_error, provider_user_error
 
 

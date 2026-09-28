@@ -23,6 +23,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Changed
 
+- Confine the third-party Hindsight SDK to numeric loopback with explicit proxy bypass, retire misleading external Hindsight allowlist settings, and document transport-specific egress guarantees.
+
 - Ratchet security CI with a non-shrinking typed-surface baseline, dedicated coverage floors for authentication/network/update/environment modules, and SHA-pinned full-history secret scanning.
 
 - Show the active Story and Utility models plus both reasoning budgets in a Telegram block quote when `/providers` opens.

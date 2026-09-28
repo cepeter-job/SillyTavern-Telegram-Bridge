@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 from bridge.environment import _read_private_environment
 from bridge.install_support import _atomic_file, installation_settings
 from bridge.miniapp_config import MiniAppConfig, load_miniapp_config
+from bridge.subprocess_security import minimal_subprocess_environment
 
 _PORTS = (443, 8443, 10000)
 _URL_KEY = "SILLYTAVERN_MINIAPP_PUBLIC_URL"
@@ -130,6 +131,7 @@ def _tailscale(*args: str, interactive: bool = False) -> str:
             text=True,
             check=True,
             timeout=120 if interactive else 15,
+            env=minimal_subprocess_environment(),
         )
     except (OSError, subprocess.SubprocessError):
         raise ValueError(

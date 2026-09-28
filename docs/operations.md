@@ -184,3 +184,7 @@ Never paste real bot/provider passwords or private signing keys into issues,
 README files, release assets, or Telegram messages.
 
 ---
+
+### Helper subprocess environment
+
+The bridge launches trusted helper binaries with a minimal environment instead of inheriting the full bridge process environment. Provider keys, the Telegram bot token, Hindsight credentials, Live Sync passwords and other application secrets are not passed to TTS/ffmpeg, document parser workers, runtime-health Git commands, Tailscale CLI operations or self-update supervisor commands. Only process plumbing such as PATH/HOME/locale, temporary-directory settings, user-systemd bus variables and explicit TLS CA paths is retained.

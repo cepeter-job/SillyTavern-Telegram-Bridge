@@ -30,6 +30,8 @@ from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from bridge.subprocess_security import minimal_subprocess_environment
+
 APPLICATION = "cepeter/SillyTavern-Telegram-Bridge"
 CANONICAL_GIT_URL = f"https://github.com/{APPLICATION}.git"
 MARKER = ".bridge-deployment.json"
@@ -77,6 +79,7 @@ def version_tuple(value: str) -> tuple[int, ...]:
 
 
 def _run(argv: Sequence[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+    kwargs.setdefault("env", minimal_subprocess_environment())
     return subprocess.run(list(argv), check=True, text=True, capture_output=True, timeout=120, **kwargs)  # noqa: S603 -- fixed argv, explicit executable, no shell
 
 
@@ -108,9 +111,13 @@ def _schedule_user_service_restart(tools: Mapping[str, str], unit: str) -> None:
 def _git(argv: Sequence[str], cwd: Path, *, executable: str, extra: Sequence[str] = ()) -> str:
     # Do not inherit proxy, helper, credential, include or signing configuration
     # from unrelated shell tools. The local repository is operator controlled.
-    env = {key: os.environ[key] for key in ("PATH", "HOME", "LANG", "SystemRoot") if key in os.environ}
-    env.update(
-        GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_TERMINAL_PROMPT="0", GIT_ALLOW_PROTOCOL="https:file"
+    env = minimal_subprocess_environment(
+        extra={
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_ALLOW_PROTOCOL": "https:file",
+        }
     )
     command = [
         executable,

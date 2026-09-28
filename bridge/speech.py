@@ -20,6 +20,7 @@ from bridge.limits import STT_MAX_BYTES, TTS_MAX_CHARS
 from bridge.operations import begin_operation, operation_was_applied, record_operation
 from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect
+from bridge.subprocess_security import minimal_subprocess_environment
 from bridge.topic_scope import parse_topic_scope
 
 
@@ -87,6 +88,7 @@ def synthesize_voice(text: str, output_path: Path, *, app_settings: AppSettings)
             timeout=120,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
+            env=minimal_subprocess_environment(),
         )
         ffmpeg_bin = _resolve_media_command("ffmpeg", "ffmpeg")
         subprocess.run(  # noqa: S603 -- fixed argv, no shell; executable is operator configured
@@ -107,6 +109,7 @@ def synthesize_voice(text: str, output_path: Path, *, app_settings: AppSettings)
             timeout=120,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
+            env=minimal_subprocess_environment(),
         )
 
 

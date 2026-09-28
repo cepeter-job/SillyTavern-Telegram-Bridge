@@ -8,7 +8,6 @@ import logging
 import secrets
 import sqlite3
 import time
-import urllib.error
 from collections.abc import Callable, Sequence
 
 from bridge.card_content import build_world_info
@@ -35,7 +34,6 @@ from bridge.sqlite_store import write_transaction
 _CHOICE_REQUEST_TIMEOUT_SECONDS = 60
 _CHOICE_PROVIDER_ATTEMPTS = 2
 _CHOICE_GENERATION_LEASE_SECONDS = _CHOICE_PROVIDER_ATTEMPTS * _CHOICE_REQUEST_TIMEOUT_SECONDS + 30
-_TRANSIENT_HTTP_STATUSES = {408, 429, 500, 502, 503, 504}
 _EMPTY_CONTENT_MARKERS = ("no assistant content", "no visible content")
 
 
@@ -44,15 +42,7 @@ class _EmptyChoiceResponse(RuntimeError):
 
 
 def _choice_http_status(exc: BaseException) -> int | None:
-    if isinstance(exc, ProviderRequestError):
-        return exc.status
-    value = getattr(exc, "code", None)
-    if value is None:
-        value = getattr(exc, "status", None)
-    try:
-        return int(value) if value is not None else None
-    except (TypeError, ValueError):
-        return None
+    return exc.status if isinstance(exc, ProviderRequestError) else None
 
 
 def _retryable_choice_provider_error(exc: BaseException) -> bool:
@@ -60,10 +50,6 @@ def _retryable_choice_provider_error(exc: BaseException) -> bool:
         return True
     if isinstance(exc, ProviderRequestError):
         return exc.category in {"rate_limit", "timeout", "provider_unavailable", "network"}
-    if isinstance(exc, urllib.error.HTTPError):
-        return _choice_http_status(exc) in _TRANSIENT_HTTP_STATUSES
-    if isinstance(exc, (TimeoutError, urllib.error.URLError, ConnectionError, OSError)):
-        return True
     if isinstance(exc, RuntimeError):
         detail = str(exc).casefold()
         return any(marker in detail for marker in _EMPTY_CONTENT_MARKERS)
@@ -92,12 +78,6 @@ def _choice_failure_reason(exc: BaseException, stage: str) -> str:
         return exc.category
     if isinstance(exc, _EmptyChoiceResponse):
         return "empty_response"
-    if isinstance(exc, urllib.error.HTTPError):
-        return "http_transient" if _retryable_choice_provider_error(exc) else "http_error"
-    if isinstance(exc, TimeoutError):
-        return "timeout"
-    if isinstance(exc, (urllib.error.URLError, ConnectionError, OSError)):
-        return "network_error"
     if isinstance(exc, RuntimeError):
         detail = str(exc).casefold()
         if any(marker in detail for marker in _EMPTY_CONTENT_MARKERS):

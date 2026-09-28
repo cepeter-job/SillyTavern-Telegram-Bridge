@@ -79,6 +79,7 @@ def test_provider_port_normalizes_http_failures_without_transport_details(status
         socket.timeout("private timeout detail"),
         urllib.error.URLError("private endpoint detail"),
         ConnectionError("private endpoint detail"),
+        OSError("private socket detail"),
     ],
 )
 def test_provider_port_normalizes_network_failures(source):
@@ -129,3 +130,18 @@ def test_character_optimizer_propagates_only_typed_provider_failure(tmp_path):
             )
     finally:
         db.close()
+
+
+def test_provider_error_contract_has_no_transport_exception_imports():
+    import ast
+    from pathlib import Path
+
+    tree = ast.parse((Path(__file__).parents[1] / "bridge" / "provider_errors.py").read_text())
+    imports = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imports.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imports.add(node.module)
+    assert "socket" not in imports
+    assert "urllib.error" not in imports

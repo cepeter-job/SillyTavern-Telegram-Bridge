@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import socket
-import urllib.error
-
 _CATEGORIES = {
     "rate_limit",
     "authentication",
@@ -97,27 +94,3 @@ class ProviderRequestError(RuntimeError):
     @property
     def miniapp_code(self) -> str:
         return "provider_rate_limited" if self.category == "rate_limit" else "provider_error"
-
-
-def provider_request_error_from_exception(error: BaseException, model: str) -> ProviderRequestError | None:
-    """Normalize known provider transport failures; leave unrelated runtime errors untouched."""
-    if isinstance(error, ProviderRequestError):
-        return error
-    if isinstance(error, ProviderTransportError):
-        return ProviderRequestError(model, error.category, error.status)
-    if isinstance(error, urllib.error.HTTPError):
-        try:
-            status = int(error.code)
-        except (TypeError, ValueError):
-            return None
-        return ProviderRequestError(model, provider_category_for_status(status), status)
-    if isinstance(error, (TimeoutError, socket.timeout)):
-        return ProviderRequestError(model, "timeout")
-    if isinstance(error, urllib.error.URLError):
-        reason = getattr(error, "reason", None)
-        if isinstance(reason, (TimeoutError, socket.timeout)):
-            return ProviderRequestError(model, "timeout")
-        return ProviderRequestError(model, "network")
-    if isinstance(error, ConnectionError):
-        return ProviderRequestError(model, "network")
-    return None

@@ -3,14 +3,39 @@
 from __future__ import annotations
 
 import logging
+import socket
 import time
+import urllib.error
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
 
 from bridge.port_contracts import CancellationEvent, ProviderGenerate
-from bridge.provider_errors import provider_request_error_from_exception
+from bridge.provider_errors import ProviderRequestError, ProviderTransportError, provider_category_for_status
 from bridge.token_usage_values import TokenUsage, UsageEvent, UsageRecorder, UsageScope
+
+
+def _normalize_provider_exception(error: BaseException, model: str) -> ProviderRequestError | None:
+    if isinstance(error, ProviderRequestError):
+        return error
+    if isinstance(error, ProviderTransportError):
+        return ProviderRequestError(model, error.category, error.status)
+    if isinstance(error, urllib.error.HTTPError):
+        try:
+            status = int(error.code)
+        except (TypeError, ValueError):
+            return None
+        return ProviderRequestError(model, provider_category_for_status(status), status)
+    if isinstance(error, (TimeoutError, socket.timeout)):
+        return ProviderRequestError(model, "timeout")
+    if isinstance(error, urllib.error.URLError):
+        reason = getattr(error, "reason", None)
+        if isinstance(reason, (TimeoutError, socket.timeout)):
+            return ProviderRequestError(model, "timeout")
+        return ProviderRequestError(model, "network")
+    if isinstance(error, (ConnectionError, OSError)):
+        return ProviderRequestError(model, "network")
+    return None
 
 
 @dataclass(frozen=True)
@@ -65,7 +90,7 @@ class ProviderPort:
             status = "cancelled" if tracking and cancel_event is not None and cancel_event.is_set() else "succeeded"
             return result
         except Exception as exc:
-            normalized = provider_request_error_from_exception(exc, model)
+            normalized = _normalize_provider_exception(exc, model)
             if normalized is not None:
                 raise normalized from None
             raise

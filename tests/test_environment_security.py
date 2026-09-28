@@ -68,6 +68,21 @@ def test_environment_parsing_is_atomic(tmp_path):
     assert target == {"EXISTING": "kept"}
 
 
+def test_environment_rejects_duplicate_keys_without_partial_changes(tmp_path):
+    path = private_env(tmp_path, "SILLYTAVERN_TELEGRAM_ALLOWED_USERS=111\nSILLYTAVERN_TELEGRAM_ALLOWED_USERS=222\n")
+    target = {"EXISTING": "kept"}
+    with pytest.raises(RuntimeError, match=r"duplicate environment assignment.*SILLYTAVERN_TELEGRAM_ALLOWED_USERS"):
+        load_environment_file(path, target)
+    assert target == {"EXISTING": "kept"}
+
+
+def test_environment_preserves_inline_hash_in_unquoted_values(tmp_path):
+    path = private_env(tmp_path, "TOKEN=abc#def\n")
+    target = {}
+    load_environment_file(path, target)
+    assert target["TOKEN"] == "abc#def"
+
+
 def test_environment_rejects_nul_without_partial_changes(tmp_path):
     path = private_env(tmp_path, "FIRST=secret\nSECOND=a\x00b\n")
     target = {}

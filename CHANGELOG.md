@@ -22,6 +22,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Fixed
 
+- Reject duplicate keys in the private environment file so appended allowlist or credential changes cannot be silently ignored; existing process environment variables retain precedence.
+
 - Optimize character PNGs with consistent duplicate `chara` or paired `chara`/`ccv3` metadata by updating every embedded copy while preserving schema-specific data and all unrelated PNG chunks; conflicting or malformed copies remain safely rejected.
 
 ### Changed

@@ -1,5 +1,9 @@
 # Configuration and providers
 
+### Environment-file parsing
+
+Duplicate keys inside the private environment file are rejected as configuration errors. Existing process environment variables still take precedence over file values. A `#` starts a comment only when it is the first non-whitespace character on a line; `#` inside an assignment value is preserved literally.
+
 ## ⚙️ Configuration
 
 The bridge is configured primarily through a private environment file. The

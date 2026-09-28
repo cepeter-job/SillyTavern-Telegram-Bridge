@@ -259,16 +259,20 @@ def test_manual_optimizer_option_starts_actor_session_digest_bound_pending_state
     assert prompts and "2,000" in prompts[-1]
 
 
-def test_optimizer_preview_exposes_manual_refinement_callback(card_context, monkeypatch):
+def test_optimizer_details_show_cached_character_rank(card_context, monkeypatch):
     from bridge import character_optimizer_panels
 
-    _, ctx, _ = card_context
+    db, ctx, _ = card_context
+    (ctx.app_settings.character_dir / "Alice.png").write_bytes(_card_png("Alice", "original"))
+    character_quality.store_character_rank(db, "Alice.png", "S", app_settings=ctx.app_settings)
     delivered = []
     monkeypatch.setattr(
         character_optimizer_panels,
         "send_panel_message",
         lambda _token, _chat, text, markup, *a, **k: delivered.append((text, markup)),
     )
+    character_optimizer_panels.send_character_optimize_options("token", "chat", "Alice.png", request_context=ctx)
+    assert "Rank: S" in delivered[-1][0]
     character_optimizer_panels.send_character_optimize_result(
         "token",
         "chat",
@@ -277,6 +281,7 @@ def test_optimizer_preview_exposes_manual_refinement_callback(card_context, monk
         "a" * 24,
         request_context=ctx,
     )
+    assert "Rank: S" in delivered[-1][0]
     callbacks = [button["callback_data"] for row in delivered[-1][1]["inline_keyboard"] for button in row]
     assert "characteroptimizerefine:" + "a" * 24 in callbacks
     labels = [button["text"] for row in delivered[-1][1]["inline_keyboard"] for button in row]
@@ -284,7 +289,7 @@ def test_optimizer_preview_exposes_manual_refinement_callback(card_context, monk
     assert "Manual Suggestion" not in labels
 
 
-def test_optimizer_menus_show_character_names_without_rank_badges(card_context, monkeypatch):
+def test_optimizer_picker_shows_registered_rank_icon(card_context, monkeypatch):
     from bridge import character_optimizer_panels
 
     db, ctx, _ = card_context
@@ -296,12 +301,15 @@ def test_optimizer_menus_show_character_names_without_rank_badges(card_context, 
         "send_panel_message",
         lambda _token, _chat, text, markup, *a, **k: delivered.append((text, markup)),
     )
-    character_optimizer_panels.send_character_optimize_menu("token", "chat", request_context=ctx)
+    character_optimizer_panels.send_character_optimize_menu(
+        "token", "chat", current_character="Alice.png", request_context=ctx
+    )
     first = delivered[-1][1]["inline_keyboard"][0][0]
-    assert first["text"] == "Alice"
+    assert first["text"] == "✅ Alice"
+    assert first["icon_custom_emoji_id"] == cards.character_rank_icon_id("S")
 
 
-def test_character_info_picker_shows_character_names_without_rank_badges(card_context, monkeypatch):
+def test_character_info_picker_shows_registered_rank_icon(card_context, monkeypatch):
     db, ctx, _ = card_context
     (ctx.app_settings.character_dir / "Alice.png").write_bytes(_card_png("Alice", "original"))
     character_quality.store_character_rank(db, "Alice.png", "S", app_settings=ctx.app_settings)
@@ -309,8 +317,10 @@ def test_character_info_picker_shows_character_names_without_rank_badges(card_co
     monkeypatch.setattr(
         cards, "send_panel_request", lambda _token, _method, payload, **_k: delivered.append(payload) or {}
     )
-    cards.send_character_info_menu("token", "chat", request_context=ctx)
-    assert delivered[-1]["reply_markup"]["inline_keyboard"][0][0]["text"] == "Alice"
+    cards.send_character_info_menu("token", "chat", current_character="Alice.png", request_context=ctx)
+    first = delivered[-1]["reply_markup"]["inline_keyboard"][0][0]
+    assert first["text"] == "✅ Alice"
+    assert first["icon_custom_emoji_id"] == cards.character_rank_icon_id("S")
 
 
 def test_manual_suggestion_prompt_shows_current_base_with_readable_sections(card_context, monkeypatch):

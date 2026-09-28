@@ -216,7 +216,7 @@ def curate_memory_now(
     )
     try:
         model = task_model_for_session(db, chat_id, session, "memory_curator", app_settings=app_settings)
-        raw = provider_port.generate(
+        raw = provider_port.for_usage(chat_id, session["session_id"], "memory").generate(
             api_key,
             model,
             curator_messages,

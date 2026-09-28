@@ -21,7 +21,8 @@ assert.ok(initialDocument.querySelector('.app-header .connection-dot'),'Compact 
 assert.ok(initialDocument.querySelector('#content .skeleton-shell'),'Initial content uses a skeleton instead of a loading card');
 assert.ok(initialDocument.querySelector('#more-menu.more-sheet'),'Secondary navigation has a More sheet');
 const context=dom.getInternalVMContext(),errors=[],expectedFailures=new Set(),observedFailures=[];
-let portraitMode='success';
+let portraitMode='success',scrollResets=0;
+dom.window.scrollTo=()=>{scrollResets++;};
 process.on('unhandledRejection',error=>errors.push(error));
 dom.window.Telegram={WebApp:{initData:ready.initData,initDataUnsafe:{start_param:'dashboard'},ready(){},expand(){},BackButton:{onClick(){},hide(){},show(){}}}};
 dom.window.AbortSignal=globalThis.AbortSignal;
@@ -59,13 +60,15 @@ try {
   const app=await moduleFor('app.js');await app.link(linker);await app.evaluate();
   await until(()=>dom.window.document.querySelectorAll('#navigation button').length===5,'five primary navigation actions');
   const shellDocument=dom.window.document;
-  assert.deepEqual([...shellDocument.querySelectorAll('#navigation button')].map(n=>n.textContent.trim()),['Home','Characters','Sessions','Memory','More']);
+  assert.deepEqual([...shellDocument.querySelectorAll('#navigation button')].map(n=>n.textContent.trim()),['Home','Characters','Usage','Sessions','More']);
   const more=[...shellDocument.querySelectorAll('#navigation button')].find(n=>n.textContent.trim()==='More');
+  assert.equal(shellDocument.querySelectorAll('#navigation svg').length,5,'Every primary destination has a local SVG icon');
+  assert.ok(shellDocument.querySelector('.skip-link'),'Keyboard users can skip navigation');
   more.click();
   await until(()=>shellDocument.querySelector('#more-menu[open]'),'More sheet opens');
-  assert.deepEqual([...shellDocument.querySelectorAll('#more-navigation button')].map(n=>n.textContent.trim()),['Models','Personas','Worlds','Data Bank','System']);
+  assert.deepEqual([...shellDocument.querySelectorAll('#more-navigation button')].map(n=>n.getAttribute('aria-label')||n.textContent.trim()),['Models','Memory','Personas','Worlds','Data Bank','System']);
   shellDocument.getElementById('more-menu').close();
-  for(const page of ['dashboard','characters','models','sessions','personas','worlds','memory','databank','system']) {
+  for(const page of ['dashboard','characters','usage','models','sessions','personas','worlds','memory','databank','system']) {
     await app.namespace.navigate(page);
     assert.ok(shellDocument.getElementById('page-title').textContent.trim().length>0,page+' updates the compact page title');
     const body=dom.window.document.querySelector('main').textContent;
@@ -82,6 +85,13 @@ try {
       assert.equal(dom.window.getComputedStyle(sessionPortrait).objectFit,'contain','Dashboard portrait preserves the full image');
       assert.equal(shellDocument.querySelectorAll('.dashboard-shortcuts button').length,4,'Dashboard exposes four quick actions');
       portraitMode='empty';
+    }
+    if(page==='usage') {
+      assert.ok(shellDocument.querySelector('.usage-dashboard'),'Dedicated usage page renders');
+      assert.ok(shellDocument.querySelector('select[aria-label="Usage period"]'),'Period is selectable');
+      assert.ok(shellDocument.querySelector('select[aria-label="Usage scope"]'),'Private session scope is selectable');
+      assert.ok(body.includes('No recorded usage'),'Empty history is not presented as zero billed tokens');
+      assert.ok(body.includes('provider-reported'),'Usage describes its measurement source');
     }
     if(page==='characters') {
       assert.ok(shellDocument.querySelector('.character-card .portrait-frame'),'Character cards use a portrait-first visual layout');
@@ -163,8 +173,24 @@ try {
   await until(()=>document.querySelector('main').textContent.includes('Upload character'),'proposal applied');
   const updated=await app.namespace.api('/characters/Alice.png');
   assert.equal(updated.fields.description,'A thoughtful companion with clear motivations and consistent habits.');
+  assert.ok(scrollResets>0,'Page navigation resets the old scroll position');
+  const usageModule=await moduleFor('usage.js');
+  const overview=usageModule.namespace.usageOverview({totals:{calls:2,complete_calls:1,total_tokens:123456789,input_tokens:123450000,output_tokens:6789,cached_tokens:null,reasoning_tokens:null,failed_calls:1}});
+  const totalValue=overview.querySelector('.stat-value');
+  assert.equal(totalValue.getAttribute('title'),new Intl.NumberFormat().format(123456789),'Large token figures retain the exact count');
+  assert.ok(totalValue.textContent.length<10,'Large metrics remain readable on narrow cards');
+  assert.ok(overview.querySelector('.usage-exact'),'Exact counts remain accessible without hovering');
+  let finishOld,finishNew;
+  app.namespace.registerPage('models','Models',()=>new Promise(resolve=>{finishOld=resolve;}));
+  app.namespace.registerPage('usage','Usage',()=>new Promise(resolve=>{finishNew=resolve;}));
+  const oldNavigation=app.namespace.navigate('models');await until(()=>finishOld,'old navigation started');
+  const newNavigation=app.namespace.navigate('usage');await until(()=>finishNew,'new navigation started');
+  const oldView=document.createElement('div');oldView.textContent='Stale view';finishOld(oldView);await oldNavigation;
+  assert.equal(document.querySelector('main').getAttribute('aria-busy'),'true','Stale navigation cannot clear current loading state');
+  const newView=document.createElement('div');newView.textContent='Current view';finishNew(newView);await newNavigation;
+  assert.equal(document.querySelector('main').textContent,'Current view','Only the latest page is committed');
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
-  console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=9 passed; browser-errors=0');
+  console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=10 passed; browser-errors=0');
 } finally {
   dom.window.close();lines.close();child.kill('SIGTERM');
 }

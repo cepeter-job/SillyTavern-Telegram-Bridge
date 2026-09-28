@@ -311,10 +311,10 @@ class SyncAuditHardeningTests(SettingsTestCase):
             sync_structural,
         )
 
-    def test_sync_has_no_migration_beyond_conversation_modes(self):
+    def test_sync_has_no_migration_beyond_declared_application_features(self):
         self.assertEqual(
             tuple(migration.version for migration in _m_schema.SCHEMA_MIGRATIONS),
-            (1, 2),
+            (1, 2, 3),
         )
 
 

@@ -10,6 +10,7 @@ from bridge.callback_tokens import resolve_dynamic_callback_token
 from bridge.callbacks import close_panel_message, discard_panel_binding
 from bridge.card_content import card_fields_from_file, safe_character_path
 from bridge.cards import (
+    character_rank_label,
     send_character_delete_confirm,
     send_character_delete_menu,
     send_character_info_menu,
@@ -23,7 +24,7 @@ from bridge.character_optimizer_panels import (
     send_character_optimize_result,
 )
 from bridge.character_proposals import load_character_proposal
-from bridge.character_quality import rank_character
+from bridge.character_quality import character_rank, rank_character
 from bridge.conversation_setup import begin_setup
 from bridge.conversation_setup_panels import send_setup_panel
 from bridge.group_service import GroupService
@@ -39,10 +40,12 @@ from bridge.provider_port import ProviderPort
 from bridge.telegram import send_panel_photo, send_panel_request
 
 
-def _character_info_text(info: dict, filename: str) -> str:
+def _character_info_text(info: dict, filename: str, rank: str | None) -> str:
     return (
         "Character: "
         f"{info['name']}"
+        "\nRank: "
+        f"{character_rank_label(rank)}"
         "\nFile: "
         f"{filename}"
         "\nDescription: "
@@ -87,7 +90,13 @@ def handle_character_callback(
         return True
     if data == "character:info":
         answer_callback(token, str(callback.get("id", "")), "Info")
-        send_character_info_menu(token, chat_id, message.get("message_id"), request_context=request_context)
+        send_character_info_menu(
+            token,
+            chat_id,
+            message.get("message_id"),
+            current_character=session["character_file"],
+            request_context=request_context,
+        )
         return True
     if data == "character:delete":
         answer_callback(token, str(callback.get("id", "")), "Delete")
@@ -121,7 +130,13 @@ def handle_character_callback(
         return True
     if data == "character:optimize":
         answer_callback(token, str(callback.get("id", "")), "Optimizer")
-        send_character_optimize_menu(token, chat_id, message.get("message_id"), request_context=request_context)
+        send_character_optimize_menu(
+            token,
+            chat_id,
+            message.get("message_id"),
+            current_character=session["character_file"],
+            request_context=request_context,
+        )
         return True
     if data.startswith(
         ("characterupload:", "characteroptimizeapply:", "characteroptimizecancel:", "characteroptimizepreview:")
@@ -275,7 +290,12 @@ def handle_character_callback(
             except ValueError:
                 page = 0
             send_character_optimize_menu(
-                token, chat_id, message.get("message_id"), page, request_context=request_context
+                token,
+                chat_id,
+                message.get("message_id"),
+                page,
+                current_character=session["character_file"],
+                request_context=request_context,
             )
             return True
         filename = resolve_dynamic_callback_token(value, "character", chat_id, db=db) or ""
@@ -293,11 +313,21 @@ def handle_character_callback(
         if value == "back":
             answer_callback(token, str(callback.get("id", "")), "Back")
             close_panel_message(db, token, chat_id, callback)
-            send_character_info_menu(token, chat_id, request_context=request_context)
+            send_character_info_menu(
+                token,
+                chat_id,
+                current_character=session["character_file"],
+                request_context=request_context,
+            )
             return True
         if value.startswith("page:"):
             send_character_info_menu(
-                token, chat_id, message.get("message_id"), int(value.split(":", 1)[1]), request_context=request_context
+                token,
+                chat_id,
+                message.get("message_id"),
+                int(value.split(":", 1)[1]),
+                current_character=session["character_file"],
+                request_context=request_context,
             )
             return True
         filename = resolve_dynamic_callback_token(value, "character", chat_id, db=db) or ""
@@ -306,8 +336,9 @@ def handle_character_callback(
             answer_callback(token, str(callback.get("id", "")), "Character choice expired")
             return True
         info = card_fields_from_file(filename, app_settings=request_context.app_settings)
+        rank = character_rank(db, filename, app_settings=request_context.app_settings)
         answer_callback(token, str(callback.get("id", "")), "Info")
-        text = _character_info_text(info, filename)
+        text = _character_info_text(info, filename, rank)
         reply_markup = {
             "inline_keyboard": [
                 [

@@ -29,3 +29,6 @@ personas.json
 coverage.json
 coverage.xml
 htmlcov/
+
+# Locked development-only DOM tooling
+tests/miniapp-ui/node_modules/

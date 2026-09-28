@@ -71,6 +71,7 @@ def test_character_info_selection_sends_selected_png_as_bound_photo(tmp_path, mo
     args, kwargs = sent[0]
     assert args[:3] == ("bot-token", "chat", card)
     assert "Character: Alisha" in args[3]
+    assert "Rank: —" in args[3]
     assert "File: Alisha.png" in args[3]
     assert "Description: 11 chars" in args[3]
     buttons = args[4]["inline_keyboard"][0]
@@ -93,6 +94,7 @@ def test_character_info_photo_failure_falls_back_to_existing_text_panel(tmp_path
     monkeypatch.setattr(_owner_character_callbacks, "resolve_dynamic_callback_token", lambda *_a, **_k: card.name)
     monkeypatch.setattr(_owner_character_callbacks, "safe_character_path", lambda *_a, **_k: card)
     monkeypatch.setattr(_owner_character_callbacks, "card_fields_from_file", lambda *_a, **_k: _info())
+    monkeypatch.setattr(_owner_character_callbacks, "character_rank", lambda *_a, **_k: "A", raising=False)
     monkeypatch.setattr(
         _owner_character_callbacks,
         "send_panel_photo",
@@ -127,6 +129,7 @@ def test_character_info_photo_failure_falls_back_to_existing_text_panel(tmp_path
     assert args[1] == "editMessageText"
     assert args[2]["message_id"] == 41
     assert "Character: Alisha" in args[2]["text"]
+    assert "Rank: A" in args[2]["text"]
     assert kwargs["request_context"] is context
 
 
@@ -164,6 +167,7 @@ def test_character_info_photo_back_closes_photo_and_opens_fresh_info_list(monkey
     args, kwargs = opened[0]
     assert args[:2] == ("bot-token", "chat")
     assert len(args) == 2
+    assert kwargs["current_character"] == "Active.png"
     assert kwargs["request_context"] is context
 
 
@@ -250,7 +254,7 @@ def test_obsolete_character_rank_callback_uses_generic_invalid_character_path(tm
     assert answers == ["Character not found"]
 
 
-def test_character_info_caption_never_shows_rank_badge(tmp_path, monkeypatch):
+def test_character_info_caption_shows_rank_label(tmp_path, monkeypatch):
     card = tmp_path / "Alisha.png"
     card.write_bytes(b"png-card-bytes")
     db = sqlite3.connect(":memory:")
@@ -281,6 +285,4 @@ def test_character_info_caption_never_shows_rank_badge(tmp_path, monkeypatch):
     finally:
         db.close()
     caption = sent[0][0][3]
-    assert caption.startswith("Character: Alisha\n")
-    assert "🏆" not in caption
-    assert " S " not in caption
+    assert caption.startswith("Character: Alisha\nRank: S\n")

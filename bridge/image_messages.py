@@ -92,7 +92,7 @@ def process_image_message(
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
     send_typing(token, chat_id)
-    reply = provider_port.generate(
+    reply = provider_port.for_usage(chat_id, session["session_id"], "image").generate(
         api_key,
         session["model_id"],
         messages,

@@ -76,6 +76,7 @@ async def serve() -> None:
         services.persona = make_native_test_persona_service(app_settings=services.config)
         services.telegram = SimpleNamespace(send_text=lambda *a: [], request=lambda *a: {})
         system.latest_bridge_release = lambda: ("0.2.099", "Fixture release; no deployment runs in this test.")
+        system.installed_bridge_version = lambda **kwargs: "0.2.099"
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind(("127.0.0.1", 0))
         sock.listen(128)

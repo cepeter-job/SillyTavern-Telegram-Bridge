@@ -62,7 +62,13 @@ async function renderSystem() {
   }
   async function review() {
     const release=await api('/update');
-    const page=card('Review release',el('p',{},'Installed: v'+release.installed+' · Latest: v'+release.latest),el('pre',{},release.notes),el('p',{class:'muted'},'Confirmation expires in five minutes. Signature, source cleanliness, dependency and deployment guards remain active.'));
+    const page=card('Review release',el('p',{},'Installed: v'+release.installed+' · Latest: v'+release.latest));
+    if(!release.update_available) {
+      const message=release.status==='already_latest'?'Already latest. No update is required.':'The installed version is newer than the latest published release. No update is available.';
+      page.append(el('p',{class:'muted'},message),el('div',{class:'actions'},button('Back',load,'secondary')));
+      root.replaceChildren(page);return;
+    }
+    page.append(el('pre',{},release.notes),el('p',{class:'muted'},'Confirmation expires in five minutes. Signature, source cleanliness, dependency and deployment guards remain active.'));
     page.append(el('div',{class:'actions'},button('Back',load,'secondary'),button('Install reviewed release',async()=>{
       if(!await confirmAction('Install v'+release.latest+' and restart the bridge? Readiness will be confirmed only by the new process after polling resumes.'))return;
       await updateAndWait(release);

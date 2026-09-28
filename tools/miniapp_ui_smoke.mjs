@@ -93,6 +93,12 @@ try {
       assert.ok(body.includes('No recorded usage'),'Empty history is not presented as zero billed tokens');
       assert.ok(body.includes('provider-reported'),'Usage describes its measurement source');
     }
+    if(page==='system') {
+      const review=[...shellDocument.querySelectorAll('main button')].find(n=>n.textContent==='Review latest release');
+      assert.ok(review,'System exposes release review');review.click();
+      await until(()=>shellDocument.querySelector('main').textContent.includes('Already latest'),'already-latest review state');
+      assert.equal([...shellDocument.querySelectorAll('main button')].some(n=>n.textContent==='Install reviewed release'),false,'Already-current release cannot be installed again');
+    }
     if(page==='characters') {
       assert.ok(shellDocument.querySelector('.character-card .portrait-frame'),'Character cards use a portrait-first visual layout');
       const characterPortrait=shellDocument.querySelector('.character-card img.portrait');

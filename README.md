@@ -102,6 +102,21 @@ Telegram `/help` is the **canonical command reference**. Use a command name for
 focused detail, for example `/help scene refresh`. The repository documentation
 explains concepts and workflows; `/help` reflects the executable command catalog.
 
+## Mini App concept gallery
+
+<table>
+  <tr>
+    <th>Home</th>
+    <th>Characters</th>
+    <th>Manage</th>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/miniapp-concept/home.webp" alt="Mini App Home concept" width="280"></td>
+    <td><img src="docs/assets/miniapp-concept/characters.webp" alt="Mini App Characters concept" width="280"></td>
+    <td><img src="docs/assets/miniapp-concept/manage.webp" alt="Mini App Manage concept" width="280"></td>
+  </tr>
+</table>
+
 ## Documentation
 
 | Guide | Use it for |

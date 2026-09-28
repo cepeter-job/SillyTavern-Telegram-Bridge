@@ -143,6 +143,7 @@ def generate_and_store_reply(
     rag_service: RagService,
 ) -> None:
     """Assemble context, run generation, persist the reply, and deliver it."""
+    provider_port = provider_port.for_usage(chat_id, session_id, "story")
     if not require_started(db, chat_id, session_id):
         send_text(token, chat_id, START_REQUIRED)
         return

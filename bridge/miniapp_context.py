@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from typing import Any
@@ -42,7 +43,7 @@ def digest(values: dict, key: str = "digest") -> str:
 
 
 @contextmanager
-def session_scope(services: Any, who: MiniAppIdentity, values: dict, *, write: bool = False):
+def session_scope(services: Any, who: MiniAppIdentity, values: dict, *, write: bool = False) -> Iterator[MiniAppScope]:
     lock = chat_job_lock(who.chat_id) if write else None
     if lock is not None and not lock.acquire(timeout=0.1):
         raise MiniAppError("This chat is busy. Retry after its current operation finishes.", status=409, code="busy")

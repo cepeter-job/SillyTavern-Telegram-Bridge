@@ -12,6 +12,7 @@ from typing import Any
 from bridge.codex_auth import codex_headers, resolve_access_token, validate_codex_endpoint
 from bridge.network_security import strict_urlopen
 from bridge.settings import AppSettings
+from bridge.token_usage_values import UsageCallback, UsageCapture
 
 OpenRequest = Callable[..., Any]
 
@@ -120,64 +121,71 @@ _MAX_STREAM_BYTES = 4 * 1024 * 1024
 _MAX_STREAM_LINE_BYTES = 256 * 1024
 
 
-def _stream_response_text(response: Any, *, stream_callback: Any = None, cancel_event: Any = None) -> str:
-    chunks: list[str] = []
-    completed = ""
-    saw_completion = False
-    cancelled = False
-    total_bytes = 0
-    last_emit = float("-inf")
-    while True:
-        if cancel_event is not None and cancel_event.is_set():
-            cancelled = True
-            break
-        raw_line = response.readline(_MAX_STREAM_LINE_BYTES + 1)
-        if not raw_line:
-            break
-        total_bytes += len(raw_line)
-        if total_bytes > _MAX_STREAM_BYTES or len(raw_line) > _MAX_STREAM_LINE_BYTES:
-            raise RuntimeError("OpenAI Codex response exceeded the safety limit")
-        line = raw_line.decode("utf-8", "replace").strip()
-        if not line.startswith("data:"):
-            continue
-        data = line[5:].lstrip()
-        if data == "[DONE]":
-            break
-        try:
-            event = json.loads(data)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(event, dict):
-            continue
-        event_type = str(event.get("type") or "")
-        if event_type in {"response.output_text.delta", "response.text.delta", "response.refusal.delta"} and isinstance(
-            event.get("delta"), str
-        ):
-            chunks.append(event["delta"])
-            now = time.monotonic()
-            if stream_callback and now - last_emit >= 0.5:
-                stream_callback("".join(chunks).strip())
-                last_emit = now
-        elif event_type == "response.completed":
-            completed = _response_output_text(event.get("response"))
-            saw_completion = True
-            break
-        elif event_type in {"response.failed", "response.error", "error", "response.incomplete"}:
-            # Provider messages may echo prompts, URLs or credentials. Never surface them.
-            raise RuntimeError("OpenAI Codex request failed; provider response was unsuccessful")
-        if cancel_event is not None and cancel_event.is_set():
-            cancelled = True
-            break
-    if cancelled:
-        close = getattr(response, "close", None)
-        if callable(close):
-            close()
-    elif not saw_completion:
-        raise RuntimeError("OpenAI Codex stream ended without a completion event")
-    visible = completed or "".join(chunks).strip()
-    if stream_callback and visible and not cancelled:
-        stream_callback(visible)
-    return visible
+def _stream_response_text(
+    response: Any, *, stream_callback: Any = None, cancel_event: Any = None, usage_callback: UsageCallback | None = None
+) -> str:
+    with UsageCapture(usage_callback, flavor="openai") as usage:
+        chunks: list[str] = []
+        completed = ""
+        saw_completion = False
+        cancelled = False
+        total_bytes = 0
+        last_emit = float("-inf")
+        while True:
+            if cancel_event is not None and cancel_event.is_set():
+                cancelled = True
+                break
+            raw_line = response.readline(_MAX_STREAM_LINE_BYTES + 1)
+            if not raw_line:
+                break
+            total_bytes += len(raw_line)
+            if total_bytes > _MAX_STREAM_BYTES or len(raw_line) > _MAX_STREAM_LINE_BYTES:
+                raise RuntimeError("OpenAI Codex response exceeded the safety limit")
+            line = raw_line.decode("utf-8", "replace").strip()
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].lstrip()
+            if data == "[DONE]":
+                break
+            try:
+                event = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(event, dict):
+                continue
+            usage.observe(event)
+            event_type = str(event.get("type") or "")
+            if event_type in {
+                "response.output_text.delta",
+                "response.text.delta",
+                "response.refusal.delta",
+            } and isinstance(event.get("delta"), str):
+                chunks.append(event["delta"])
+                now = time.monotonic()
+                if stream_callback and now - last_emit >= 0.5:
+                    stream_callback("".join(chunks).strip())
+                    last_emit = now
+            elif event_type == "response.completed":
+                completed = _response_output_text(event.get("response"))
+                saw_completion = True
+                break
+            elif event_type in {"response.failed", "response.error", "error", "response.incomplete"}:
+                # Provider messages may echo prompts, URLs or credentials. Never surface them.
+                raise RuntimeError("OpenAI Codex request failed; provider response was unsuccessful")
+            if cancel_event is not None and cancel_event.is_set():
+                cancelled = True
+                break
+        usage.final = not cancelled
+        if cancelled:
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
+        elif not saw_completion:
+            raise RuntimeError("OpenAI Codex stream ended without a completion event")
+        visible = completed or "".join(chunks).strip()
+        if stream_callback and visible and not cancelled:
+            stream_callback(visible)
+        return visible
 
 
 def generate_codex_response(
@@ -191,6 +199,7 @@ def generate_codex_response(
     cancel_event: Any = None,
     *,
     app_settings: AppSettings,
+    usage_callback: UsageCallback | None = None,
     open_request: OpenRequest = strict_urlopen,
 ) -> str:
     """Generate visible assistant text through ChatGPT's native Codex backend."""
@@ -230,7 +239,9 @@ def generate_codex_response(
                 timeout=240 if request_timeout is None else request_timeout,
                 environ=app_settings.environ,
             ) as response:
-                output = _stream_response_text(response, stream_callback=stream_callback, cancel_event=cancel_event)
+                output = _stream_response_text(
+                    response, stream_callback=stream_callback, cancel_event=cancel_event, usage_callback=usage_callback
+                )
             break
         except Exception as exc:
             status = getattr(exc, "code", None)

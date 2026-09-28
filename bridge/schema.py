@@ -4,6 +4,7 @@ import time
 from bridge.conversation_schema import migrate_conversation_modes
 from bridge.migrations import Migration as _Migration
 from bridge.migrations import run_migrations as _run_migrations
+from bridge.token_usage_schema import migrate_token_usage
 
 PROCESSED_UPDATE_RETENTION_SECONDS = 30 * 86400
 
@@ -380,6 +381,7 @@ def _create_initial_schema(db: sqlite3.Connection) -> None:
 SCHEMA_MIGRATIONS = (
     _Migration(1, "initial_schema", _create_initial_schema),
     _Migration(2, "conversation_modes", migrate_conversation_modes),
+    _Migration(3, "token_usage_ledger", migrate_token_usage),
 )
 
 

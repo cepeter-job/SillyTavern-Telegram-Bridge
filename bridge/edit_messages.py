@@ -170,7 +170,7 @@ def regenerate_edited_turn(
     novel_turn = begin_novel_turn(db, chat_id, session, "edit", operation_id)
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
-    reply = provider_port.generate(
+    reply = provider_port.for_usage(chat_id, session_id, "edit").generate(
         api_key,
         session["model_id"],
         messages,

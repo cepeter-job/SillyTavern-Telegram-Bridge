@@ -16,14 +16,14 @@ function rankVisual(rank) {
 function portraitUnavailable(image) { image.classList.add('portrait-broken');image.alt='Portrait unavailable';image.removeAttribute('src'); }
 export async function reopenCharacterPreview(result) { resumedProposal=result; await navigate('characters'); }
 async function renderCharacters() {
-  const root=el('div');
+  const root=el('div',{class:'characters-page'});
   const scope=createSessionScope(),sessionBody=scope.body;
   async function load() {
     const data=await api('/characters?q='+enc(query)+'&offset='+offset); scope.set(data.session);
     const search=el('input',{type:'search',value:query,placeholder:'Search filenames',maxlength:120});
     const searchButton=button('Search',async()=>{query=search.value;offset=0;await load();});
     search.addEventListener('keydown',e=>{if(e.key==='Enter')searchButton.click();});
-    const grid=el('div',{class:'grid'});
+    const grid=el('div',{class:'grid character-grid'});
     for(const item of data.characters) {
       const image=el('img',{class:'portrait modern-portrait',alt:item.name,loading:'lazy',decoding:'async',referrerpolicy:'no-referrer'});
       const portrait=el('div',{class:'portrait-frame'},image,el('div',{class:'rank-overlay'},rankVisual(item.rank)),item.active?el('span',{class:'active-chip'},'Active'):null);
@@ -53,7 +53,7 @@ async function renderCharacters() {
       const result=await api('/characters',{method:'POST',body:sessionBody({filename:selected.name,data:encoded})});
       if(result.nonce)await preview(result);else {notice('Character installed.');await load();}
     }));
-    root.replaceChildren(card('Characters',el('p',{class:'muted'},data.total+' cards · '+data.session.title),field('Find a character',search),searchButton),grid);
+    root.replaceChildren(card('Characters',el('p',{class:'muted'},data.total+' cards · '+data.session.title),el('div',{class:'search-toolbar'},field('Find a character',search),searchButton)),grid);
     if(!data.characters.length)grid.append(empty('No matching character cards.'));
     const pager=el('div',{class:'actions'});
     if(offset>0)pager.append(button('Previous',async()=>{offset=Math.max(0,offset-24);await load();},'secondary'));

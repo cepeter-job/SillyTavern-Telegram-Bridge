@@ -15,6 +15,7 @@ from bridge.limits import DEFAULT_MAX_TOKENS
 from bridge.model_router import ModelRouter
 from bridge.network_security import strict_urlopen, validate_provider_endpoint
 from bridge.settings import AppSettings
+from bridge.token_usage_values import TokenUsage, UsageCallback, UsageCapture
 
 
 def anthropic_content(value):
@@ -89,43 +90,47 @@ def _read_openai_stream_segment(
     prefix: str,
     stream_callback,
     cancel_event,
+    usage_callback: UsageCallback | None = None,
 ) -> tuple[str, str | None, bool]:
-    parts: list[str] = []
-    finish_reason: str | None = None
-    last_emit = 0.0
-    cancelled = False
+    with UsageCapture(usage_callback, flavor="openai") as usage:
+        parts: list[str] = []
+        finish_reason: str | None = None
+        last_emit = 0.0
+        cancelled = False
 
-    for raw_line in response:
+        for raw_line in response:
+            if cancel_event is not None and cancel_event.is_set():
+                cancelled = True
+                break
+            line = raw_line.decode("utf-8", "replace").strip()
+            if not line.startswith("data:"):
+                continue
+            payload = line[5:].lstrip()
+            if payload == "[DONE]":
+                continue
+            try:
+                event = json.loads(payload)
+            except json.JSONDecodeError:
+                continue
+            usage.observe(event)
+            for choice in _openai_response_choices(event):
+                delta = choice.get("delta") or {}
+                text_delta = _stream_text(delta.get("content"))
+                if text_delta:
+                    parts.append(text_delta)
+                if choice.get("finish_reason"):
+                    finish_reason = str(choice["finish_reason"])
+            if stream_callback and parts and time.monotonic() - last_emit >= 0.5:
+                stream_callback(_join_visible_stream(prefix, "".join(parts)))
+                last_emit = time.monotonic()
+
+        content = "".join(parts).strip()
+        if stream_callback and content:
+            stream_callback(_join_visible_stream(prefix, content))
         if cancel_event is not None and cancel_event.is_set():
             cancelled = True
-            break
-        line = raw_line.decode("utf-8", "replace").strip()
-        if not line.startswith("data:"):
-            continue
-        payload = line[5:].lstrip()
-        if payload == "[DONE]":
-            continue
-        try:
-            event = json.loads(payload)
-        except json.JSONDecodeError:
-            continue
-        for choice in _openai_response_choices(event):
-            delta = choice.get("delta") or {}
-            text_delta = _stream_text(delta.get("content"))
-            if text_delta:
-                parts.append(text_delta)
-            if choice.get("finish_reason"):
-                finish_reason = str(choice["finish_reason"])
-        if stream_callback and parts and time.monotonic() - last_emit >= 0.5:
-            stream_callback(_join_visible_stream(prefix, "".join(parts)))
-            last_emit = time.monotonic()
-
-    content = "".join(parts).strip()
-    if stream_callback and content:
-        stream_callback(_join_visible_stream(prefix, content))
-    if cancel_event is not None and cancel_event.is_set():
-        cancelled = True
-    return content, finish_reason, cancelled
+        usage.final = not cancelled and finish_reason is not None
+        return content, finish_reason, cancelled
 
 
 def _parse_stop_sequences(raw: object) -> list[str]:
@@ -156,6 +161,7 @@ def anthropic_generate(
     request_timeout: float | None = None,
     *,
     app_settings: AppSettings,
+    usage_callback: UsageCallback | None = None,
 ) -> str:
     system_parts = [str(message.get("content") or "") for message in messages if message.get("role") == "system"]
     conversation = []
@@ -208,9 +214,13 @@ def anthropic_generate(
     }
     headers.update(spec.get("extra_headers") or {})
     request = urllib.request.Request(endpoint, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")  # noqa: S310 -- Request is opened only through DNS-pinned strict_urlopen
-    with strict_urlopen(
-        request, timeout=240 if request_timeout is None else request_timeout, environ=app_settings.environ
-    ) as response:
+    with (
+        strict_urlopen(
+            request, timeout=240 if request_timeout is None else request_timeout, environ=app_settings.environ
+        ) as response,
+        UsageCapture(usage_callback, flavor="anthropic") as usage,
+    ):
+        usage.final = False
         parts = []
         for raw_line in response:
             line = raw_line.decode("utf-8", "replace").strip()
@@ -220,6 +230,9 @@ def anthropic_generate(
                 event = json.loads(line[5:].lstrip())
             except json.JSONDecodeError:
                 continue
+            usage.observe(event)
+            if event.get("type") == "message_stop" or (event.get("delta") or {}).get("stop_reason"):
+                usage.final = True
             delta = event.get("delta") or {}
             if delta.get("type") == "text_delta" and delta.get("text"):
                 parts.append(str(delta["text"]))
@@ -298,34 +311,40 @@ def _opencode_json_text(payload: dict) -> str:
     return "".join(chunks).strip()
 
 
-def _opencode_responses_text(raw: str) -> str:
+def _opencode_responses_text(raw: str, *, usage_callback: UsageCallback | None = None) -> str:
     """Read both JSON and the SSE stream required by OpenCode Free."""
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError:
-        payload = None
-    if isinstance(payload, dict):
-        return _opencode_json_text(payload)
-
-    chunks = []
-    completed_text = ""
-    for line in raw.splitlines():
-        if not line.startswith("data:"):
-            continue
-        data = line[5:].lstrip()
-        if data == "[DONE]":
-            continue
+    with UsageCapture(usage_callback, flavor="openai") as usage:
         try:
-            event = json.loads(data)
+            payload = json.loads(raw)
         except json.JSONDecodeError:
-            continue
-        delta = event.get("delta")
-        if isinstance(delta, str):
-            chunks.append(delta)
-        response = event.get("response")
-        if isinstance(response, dict):
-            completed_text = completed_text or _opencode_json_text(response)
-    return "".join(chunks).strip() or completed_text
+            payload = None
+        if isinstance(payload, dict):
+            usage.observe(payload)
+            return _opencode_json_text(payload)
+
+        usage.final = False
+        chunks = []
+        completed_text = ""
+        for line in raw.splitlines():
+            if not line.startswith("data:"):
+                continue
+            data = line[5:].lstrip()
+            if data == "[DONE]":
+                continue
+            try:
+                event = json.loads(data)
+            except json.JSONDecodeError:
+                continue
+            usage.observe(event)
+            if event.get("type") == "response.completed":
+                usage.final = True
+            delta = event.get("delta")
+            if isinstance(delta, str):
+                chunks.append(delta)
+            response = event.get("response")
+            if isinstance(response, dict):
+                completed_text = completed_text or _opencode_json_text(response)
+        return "".join(chunks).strip() or completed_text
 
 
 def opencode_muse_generate(
@@ -337,6 +356,7 @@ def opencode_muse_generate(
     request_timeout: float | None = None,
     *,
     app_settings: AppSettings,
+    usage_callback: UsageCallback | None = None,
 ) -> str:
     endpoint = str(spec.get("api_endpoint") or spec.get("api") or "https://opencode.ai/zen/v1").rstrip("/")
     validate_provider_endpoint(endpoint, environ=app_settings.environ)
@@ -375,7 +395,7 @@ def opencode_muse_generate(
         request, timeout=240 if request_timeout is None else request_timeout, environ=app_settings.environ
     ) as response:
         raw = response.read().decode("utf-8", "replace")
-    output_text = _opencode_responses_text(raw)
+    output_text = _opencode_responses_text(raw, usage_callback=usage_callback)
     if not output_text:
         raise RuntimeError("OpenCode Muse returned no assistant content")
     return output_text
@@ -395,6 +415,7 @@ def generate_provider_text(
     _recovery_attempt: int = 0,
     *,
     app_settings: AppSettings,
+    usage_callback: UsageCallback | None = None,
 ) -> str:
     """Generate through the selected bridge provider adapter."""
     route = model_router.route(model)
@@ -415,6 +436,7 @@ def generate_provider_text(
             stream_callback=stream_callback,
             cancel_event=cancel_event,
             app_settings=app_settings,
+            usage_callback=usage_callback,
         )
     if transport == "opencode_muse":
         return opencode_muse_generate(
@@ -425,6 +447,7 @@ def generate_provider_text(
             session_id,
             request_timeout=request_timeout,
             app_settings=app_settings,
+            usage_callback=usage_callback,
         )
     if transport == "anthropic_messages":
         anthropic_key = _resolve_provider_credential(
@@ -439,6 +462,7 @@ def generate_provider_text(
             session_id,
             request_timeout=request_timeout,
             app_settings=app_settings,
+            usage_callback=usage_callback,
         )
     if transport not in {"chat_completions", "openai", "openai_compatible"}:
         raise RuntimeError(f"Provider transport '{transport}' is not supported")
@@ -459,6 +483,8 @@ def generate_provider_text(
         "presence_penalty": float(generation["presence_penalty"]),
         "stream": is_streaming,
     }
+    if is_streaming and usage_callback is not None and spec.get("stream_usage", True):
+        body["stream_options"] = {"include_usage": True}
     stops = _parse_stop_sequences(generation.get("stop_sequences"))
     if stops:
         body["stop"] = stops[:4]
@@ -487,7 +513,9 @@ def generate_provider_text(
         environ=app_settings.environ,
     ) as response:
         if not is_streaming:
-            result = json.loads(response.read().decode("utf-8"))
+            with UsageCapture(usage_callback) as usage:
+                result = json.loads(response.read().decode("utf-8"))
+                usage.observe(result)
             choices = _openai_response_choices(result)
             finish_reason = choices[0].get("finish_reason") if choices else None
             content = choices[0].get("message", {}).get("content") if choices else None
@@ -506,6 +534,7 @@ def generate_provider_text(
                             request_timeout=request_timeout,
                             _recovery_attempt=_recovery_attempt + 1,
                             app_settings=app_settings,
+                            usage_callback=usage_callback,
                         )
                 http_status = getattr(response, "status", None)
                 if http_status is None:
@@ -553,13 +582,17 @@ def generate_provider_text(
                         timeout=180 if request_timeout is None else request_timeout,
                         environ=app_settings.environ,
                     ) as continuation_response:
-                        continuation_result = json.loads(continuation_response.read().decode("utf-8"))
+                        with UsageCapture(usage_callback) as usage:
+                            continuation_result = json.loads(continuation_response.read().decode("utf-8"))
+                            usage.observe(continuation_result)
                     continuation_choices = _openai_response_choices(continuation_result)
                     continuation = (
                         continuation_choices[0].get("message", {}).get("content") if continuation_choices else None
                     )
                     continuation_reason = continuation_choices[0].get("finish_reason") if continuation_choices else None
                 except Exception:
+                    if usage_callback is not None:
+                        usage_callback(TokenUsage(final=False))
                     logging.warning("Automatic continuation failed after %s segment(s)", len(segments), exc_info=True)
                     break
                 if not continuation:
@@ -575,6 +608,7 @@ def generate_provider_text(
             prefix="",
             stream_callback=stream_callback,
             cancel_event=cancel_event,
+            usage_callback=usage_callback,
         )
         if not content:
             can_recover = (
@@ -599,6 +633,7 @@ def generate_provider_text(
                         request_timeout=request_timeout,
                         _recovery_attempt=_recovery_attempt + 1,
                         app_settings=app_settings,
+                        usage_callback=usage_callback,
                     )
             raise RuntimeError(f"{provider_id} returned no visible content (finish_reason={finish_reason})")
 
@@ -647,8 +682,11 @@ def generate_provider_text(
                         prefix=prefix,
                         stream_callback=stream_callback,
                         cancel_event=cancel_event,
+                        usage_callback=usage_callback,
                     )
             except Exception:
+                if usage_callback is not None:
+                    usage_callback(TokenUsage(final=False))
                 logging.warning(
                     "Automatic continuation failed after %s segment(s)",
                     len(segments),

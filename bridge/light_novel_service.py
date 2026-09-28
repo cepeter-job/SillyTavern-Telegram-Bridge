@@ -289,7 +289,7 @@ def ensure_choices(
         raw = None
         for attempt in range(_CHOICE_PROVIDER_ATTEMPTS):
             try:
-                raw = provider_port.generate(
+                raw = provider_port.for_usage(record.chat_id, record.session_id, "choices").generate(
                     app_settings.api_key,
                     model,
                     messages,

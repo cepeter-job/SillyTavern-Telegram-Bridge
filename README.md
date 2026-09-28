@@ -78,6 +78,7 @@ explains concepts and workflows; `/help` reflects the executable command catalog
 | [User guide](docs/user-guide.md) | Bot workflows, sessions, generation, native assets, groups, media |
 | [Operations](docs/operations.md) | Reliability, privacy, signed updates, downloads, database compatibility, troubleshooting |
 | [Mini App](docs/miniapp.md) | Mini App security model, pages, Funnel deployment, installer behavior |
+| [Token usage](docs/token-usage.md) | Provider-reported counts, coverage, privacy, retention and upgrade notes |
 | [Humanizer reference refresh](docs/humanizer-weekly-sync.md) | Maintainer procedure for the optional Humanizer reference process |
 
 Project-level references:

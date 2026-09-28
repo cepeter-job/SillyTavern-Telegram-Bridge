@@ -58,7 +58,7 @@ def render_response_language(
         },
         {"role": "user", "content": "<source_text>\n" + text + "\n</source_text>"},
     ]
-    return provider_port.generate(
+    return provider_port.for_purpose("language").generate(
         api_key, model, messages, session_id=f"{session_id}:language-render", settings=render_settings
     )
 
@@ -73,6 +73,7 @@ def render_session_response(
     provider_port: ProviderPort,
 ) -> str:
     session_id = str(session["session_id"])
+    provider_port = provider_port.for_usage(chat_id, session_id, "render")
     rendered = render_response_language(
         api_key,
         session["model_id"],
@@ -253,6 +254,7 @@ def _generation_generate_rendered_reply(
     novel_turn: NovelTurn | None = None,
 ):
     session_id = session["session_id"]
+    provider_port = provider_port.for_usage(chat_id, session_id, "generation")
     delivery_port.send_typing(token, chat_id)
     settings = get_generation_settings(
         db,

@@ -6,6 +6,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Added
 
+- Require an explicit signed `--release` or development-only `--unsafe-main` when the installer must clone its source; document verifying the signed release before executing first-install repository code.
+
 - Snapshot the operational SQLite database with the online backup API before verified update activation; add explicit manual backup and offline restore commands with integrity checks and pre-restore preservation.
 
 ### Fixed

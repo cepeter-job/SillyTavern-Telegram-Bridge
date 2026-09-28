@@ -1,7 +1,6 @@
 import {api,state,createSessionScope,registerPage,navigate} from './app.js';
 import {el,card,button,empty,confirmAction,notice} from './ui.js';
 import {icon} from './icons.js';
-import {usageOverview} from './usage.js';
 function healthCard(iconName,title,...children) {
   const view=card(title,...children),heading=view.querySelector('h2'),mark=icon(iconName);
   mark.classList.add('health-icon');mark.dataset.healthIcon=iconName;
@@ -14,34 +13,58 @@ function details(data) {
     healthCard('database','Database',el('p',{},'SQLite '+data.database.sqlite_version+' · '+data.database.state),el('p',{},data.database.sessions+' private sessions'),el('p',{},data.database.messages+' stored messages')));
 }
 async function dashboard() {
-  const [data,operations]=await Promise.all([api('/status'),api('/jobs')]);state.session=data.session;
+  const data=await api('/status');
+  const [sessions,personas,worlds,memory]=await Promise.all([
+    api('/sessions').catch(()=>({sessions:[data.session]})),
+    api('/personas').catch(()=>({personas:[],unavailable:true})),
+    api('/worlds').catch(()=>({worlds:[],unavailable:true})),
+    api('/memory').catch(()=>({mode:'unknown',unavailable:true})),
+  ]);
+  state.session=data.session;
   const session=data.session;
-  const sessionPortrait=el('img',{class:'session-portrait',alt:session.character_file,decoding:'async',referrerpolicy:'no-referrer'});
+  const characterName=String(session.character_file||'Character').replace(/\.[^.]+$/,'');
+  const activePersona=personas.personas.find(item=>item.id===session.persona_id);
+  const activeWorlds=worlds.worlds.filter(item=>item.active).map(item=>item.filename.replace(/\.json$/i,''));
+  const sessionPortrait=el('img',{class:'session-portrait',alt:characterName,decoding:'async',referrerpolicy:'no-referrer'});
   const sessionPortraitFrame=el('div',{class:'session-portrait-frame',hidden:true},sessionPortrait);
   const portraitSlot=el('div',{class:'session-portrait-slot','aria-hidden':'true'},icon('characters'),sessionPortraitFrame);
-  const summary=el('div',{class:'session-summary'},portraitSlot,el('div',{class:'session-meta'},el('span',{class:'eyebrow'},'CURRENT SESSION'),el('h3',{},session.title),el('p',{class:'muted session-model'},session.character_file),el('span',{class:'badge'},session.model_id)));
-  const back=button('Back to chat',()=>{const app=window.Telegram?.WebApp;if(typeof app?.close==='function')app.close();else notice('Continue in your Telegram bot chat.');});back.append(icon('arrow'));
-  const sessionCard=el('section',{class:'card dashboard-session dashboard-hero'},summary,el('div',{class:'session-actions'},back,button('Switch session',()=>navigate('sessions'),'secondary')));
-  api('/characters/'+encodeURIComponent(session.character_file)+'/portrait',{binary:true}).then(blob=>{
+  const status=el('div',{class:'story-status'},
+    storyStatus('personas','Persona',personas.unavailable?'Unavailable':activePersona?.name||'Off'),
+    storyStatus('worlds','World',worlds.unavailable?'Unavailable':activeWorlds.length?activeWorlds.join(', '):'None'),
+    storyStatus('memory','Memory',memory.unavailable?'Unavailable':memory.mode==='on'?'On':'Off'));
+  const summary=el('div',{class:'session-summary'},portraitSlot,
+    el('div',{class:'session-meta'},el('span',{class:'eyebrow'},'CONTINUE YOUR STORY'),el('h2',{},session.title),
+      el('p',{class:'story-character'},'with '+characterName),el('span',{class:'badge'},session.model_id)));
+  const back=button('Continue',()=>{const app=window.Telegram?.WebApp;if(typeof app?.close==='function')app.close();else notice('Continue in your Telegram bot chat.');});back.append(icon('arrow'));
+  const sessionCard=el('section',{class:'card dashboard-session story-card'},summary,status,
+    el('div',{class:'session-actions'},back,button('Sessions',()=>navigate('sessions'),'secondary')));
+  if(session.character_file)api('/characters/'+encodeURIComponent(session.character_file)+'/portrait',{binary:true}).then(blob=>{
     if(!blob||blob.size===0)throw new Error('empty portrait');
     const url=URL.createObjectURL(blob);let revoked=false;const revoke=()=>{if(!revoked){revoked=true;URL.revokeObjectURL(url);}};
     sessionPortrait.onload=()=>{sessionPortraitFrame.hidden=false;revoke();};sessionPortrait.onerror=()=>{revoke();sessionPortraitFrame.hidden=true;};sessionPortrait.src=url;
   }).catch(()=>{sessionPortraitFrame.hidden=true;});
-  const shortcuts=el('div',{class:'dashboard-shortcuts'});
-  for(const [key,label,hint] of [['characters','Characters','Find your next story'],['models','Models','Tune your generation'],['memory','Memory','Keep the important details'],['worlds','Worlds','Set the scene']]) {
-    const action=button(label,()=>navigate(key),'shortcut');action.prepend(icon(key));action.append(el('small',{},hint));shortcuts.append(action);
+
+  const recentList=el('div',{class:'recent-story-list'});
+  for(const item of sessions.sessions.slice(0,3)) {
+    const active=item.session_id===session.session_id;
+    const row=button('',()=>navigate('sessions'),'recent-story');
+    row.append(icon('sessions'),el('span',{class:'recent-story-copy'},el('strong',{},item.title),el('small',{},item.character_file+' · '+item.model_id)),active?el('span',{class:'badge'},'Active'):icon('chevron'));
+    recentList.append(row);
   }
-  const usageBody=el('div',{class:'usage-home-body'},el('p',{class:'muted'},'Loading reported usage…'));
-  const usage=el('section',{class:'card dashboard-usage'},el('div',{class:'section-header'},el('div',{},el('span',{class:'eyebrow'},'CURRENT SESSION · 7 DAYS'),el('h2',{},'Every token, in view.')),button('View usage',()=>navigate('usage'),'secondary')),usageBody);
-  api('/usage?period=7d&scope=session').then(result=>{
-    if(result.session_id!==session.session_id){usageBody.replaceChildren(el('p',{class:'muted'},'The active session changed. Refresh to see its usage.'));return;}
-    usageBody.replaceChildren(usageOverview(result,{compact:true}));
-  }).catch(()=>usageBody.replaceChildren(el('p',{class:'muted'},'Usage is temporarily unavailable. Open Usage to retry.')));
-  const latest=operations.jobs?.[0];
-  const recent=card('Recent activity',latest?el('div',{class:'row spaced'},el('div',{},el('strong',{},latest.kind.replaceAll('_',' ')),el('p',{class:'muted'},new Date(latest.created_at*1000).toLocaleString())),el('span',{class:'badge'},latest.state)):el('p',{class:'muted'},'Nothing running. Start a conversation or manage your characters.'));
-  recent.classList.add('dashboard-recent');recent.append(button('All operations',()=>navigate('system'),'secondary'));
+  if(!sessions.sessions.length)recentList.append(empty('Create a session to start a story.'));
+  const recent=el('section',{class:'recent-stories'},el('div',{class:'section-header'},el('h2',{},'Recent stories'),button('View all',()=>navigate('sessions'),'secondary')),recentList);
+
+  const shortcuts=el('div',{class:'dashboard-shortcuts'});
+  for(const [key,label,hint] of [['characters','Characters','Find your next story'],['models','Models','Choose story and utility models'],['memory','Memory','Keep important details'],['worlds','Worlds','Shape lore and context']]) {
+    const action=button(label,()=>navigate(key),'shortcut');action.prepend(icon(key));action.append(el('small',{},hint),icon('chevron'));shortcuts.append(action);
+  }
   const health=el('details',{class:'card dashboard-health'},el('summary',{},'Bridge health'),details(data));health.querySelector('.grid').classList.add('health-grid');
-  return el('div',{class:'dashboard-layout'},sessionCard,el('div',{class:'section-header'},el('h2',{},'Make it yours'),el('span',{class:'eyebrow'},'QUICK CONTROLS')),shortcuts,usage,recent,health);
+  return el('div',{class:'dashboard-layout'},sessionCard,recent,
+    el('div',{class:'section-header dashboard-quick-heading'},el('h2',{},'Quick actions')),shortcuts,health);
+}
+
+function storyStatus(iconName,label,value) {
+  return el('div',{class:'story-status-item'},icon(iconName),el('span',{},el('small',{},label),el('strong',{},value)));
 }
 
 async function renderSystem() {

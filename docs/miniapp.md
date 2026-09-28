@@ -6,17 +6,18 @@ Only IDs in `SILLYTAVERN_TELEGRAM_ALLOWED_USERS` are admitted. Open the Bridge m
 
 Private sessions use the authenticated user ID. Group chats and forum topics are not implicitly authorized by a launch link. Allowed users administer shared native character, persona and world files; use separate bridge instances for mutually untrusted users.
 
-The static UI uses native ES modules and needs no Node runtime or build. It ships inside `bridge/miniapp_assets` and is included in verified live-mirror updates. The responsive presentation uses a compact Telegram-themed status header, desktop sidebar, five-item mobile bottom navigation, and a More sheet for secondary pages. The Home dashboard emphasizes the active session, quick actions, recent operations and observed bridge health; loading states use skeletons instead of replacing the page with a generic loading card.
+The static UI uses native ES modules and needs no Node runtime or build. It ships inside `bridge/miniapp_assets` and is included in verified live-mirror updates. The responsive presentation uses a compact Telegram-themed status header, desktop sidebar and five-item mobile bottom navigation. Home leads with the active story, real persona/world/memory state, recent sessions and quick actions; loading states use skeletons instead of replacing the page with a generic loading card.
 
 ## Navigation and usage
 
-The primary destinations are **Home, Characters, Usage, Sessions and More**.
-More contains searchable links to Models, Memory, Personas, Worlds, Data Bank and
-System. Home puts the current session first, with a direct return to Telegram,
-quick controls and a token overview. Pages load on demand; a slower previous
-navigation cannot replace the page you just selected. Native theme/safe-area
-updates, labeled local SVG icons, keyboard focus and reduced-motion preferences
-are supported without an icon font or external font download.
+The primary destinations are **Home, Characters, Sessions, Manage and System**.
+Manage groups Models, Personas, Worlds, Generation, Memory, Data Bank and Advanced
+settings. Usage remains available under Advanced settings. Home puts the current
+story first, with a direct return to Telegram, recent sessions and quick controls.
+Pages load on demand; a slower previous navigation cannot replace the page you just
+selected. Native theme/safe-area updates, labeled local SVG icons, keyboard focus
+and reduced-motion preferences are supported without an icon font or external font
+download.
 
 **Usage** reports actual provider counters for the selected private session or
 all sessions in that private chat. See [Token usage](token-usage.md) for coverage,

@@ -1,5 +1,6 @@
 import {api,state,createSessionScope,registerPage,runJob,navigate} from './app.js';
 import {el,card,button,field,empty,confirmAction,notice} from './ui.js';
+import {icon} from './icons.js';
 const enc=encodeURIComponent;
 const rankTiers=new Set(['S','A','B','C','D']);
 let query='',offset=0,resumedProposal=null;
@@ -20,24 +21,42 @@ async function renderCharacters() {
   const scope=createSessionScope(),sessionBody=scope.body;
   async function load() {
     const data=await api('/characters?q='+enc(query)+'&offset='+offset); scope.set(data.session);
-    const search=el('input',{type:'search',value:query,placeholder:'Search filenames',maxlength:120});
-    const searchButton=button('Search',async()=>{query=search.value;offset=0;await load();});
+    const search=el('input',{type:'search',value:query,placeholder:'Search characters',maxlength:120,'aria-label':'Search characters'});
+    const searchButton=button('Search',async()=>{query=search.value;offset=0;await load();},'secondary icon-button');searchButton.replaceChildren(icon('search'));searchButton.setAttribute('aria-label','Search characters');
     search.addEventListener('keydown',e=>{if(e.key==='Enter')searchButton.click();});
-    const grid=el('div',{class:'grid character-grid'});
+    const file=el('input',{type:'file',accept:'.png',class:'character-file-input',hidden:true,'aria-label':'Character PNG'});
+    const add=button('Add character',()=>file.click(),'character-add');add.replaceChildren('+');add.setAttribute('aria-label','Add character');
+    async function uploadSelected() {
+      const selected=file.files[0];if(!selected)return;if(selected.size>10485760)throw new Error('Card must be 10 MB or smaller.');
+      const encoded=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=()=>reject(new Error('Could not read file.'));reader.readAsDataURL(selected);});
+      const result=await api('/characters',{method:'POST',body:sessionBody({filename:selected.name,data:encoded})});
+      if(result.nonce)await preview(result);else {notice('Character installed.');await load();}
+    }
+    file.addEventListener('change',async()=>{
+      add.disabled=true;add.setAttribute('aria-busy','true');
+      try{await uploadSelected();}catch(error){notice(error.message||'Upload failed.');}
+      finally{file.value='';add.disabled=false;add.removeAttribute('aria-busy');}
+    });
+    const header=el('div',{class:'character-page-header'},el('div',{},el('span',{class:'eyebrow'},'YOUR CAST'),el('h2',{},data.total+' Characters'),el('p',{class:'muted'},'Find a character. Start something new.')),add);
+    const searchToolbar=el('div',{class:'character-search'},search,searchButton);
+    const grid=el('div',{class:'character-grid'});
     for(const item of data.characters) {
       const image=el('img',{class:'portrait modern-portrait',alt:item.name,loading:'lazy',decoding:'async',referrerpolicy:'no-referrer'});
       const portrait=el('div',{class:'portrait-frame'},image,el('div',{class:'rank-overlay'},rankVisual(item.rank)),item.active?el('span',{class:'active-chip'},'Active'):null);
       const body=el('div',{class:'character-card-body'},el('div',{class:'character-card-heading'},el('div',{},el('h2',{},item.name),el('small',{},item.filename))));
-      const entry=el('section',{class:'card character-card'},portrait,body);
+      const entry=el('section',{class:'card character-card'+(item.active?' is-active':'')},portrait,body);
       if(item.unavailable){portraitUnavailable(image);body.append(el('p',{class:'muted'},'Card cannot be read.'));}
       else {
-        body.append(el('div',{class:'actions'},button('Info',()=>details(item),'secondary'),button('Use',async()=>{
+        const use=button('Use',async()=>{
           if(!await confirmAction('Create a new normal session with '+item.name+'? Existing conversations will not be changed.'))return;
           const result=await api('/characters/'+enc(item.filename)+'/select',{method:'POST',body:sessionBody({confirm:true})}); scope.set(result.session);notice(result.message);await load();
-        }),button('Optimize',()=>optimizer(item),'secondary'),button('Delete',async()=>{
-          if(!await confirmAction('Delete '+item.name+'? Active, default and referenced cards are protected.'))return;
-          await api('/characters/'+enc(item.filename),{method:'DELETE',body:sessionBody({digest:item.digest,confirm:true})});await load();
-        },'danger')));
+        },'character-use');
+        const menu=el('details',{class:'character-actions-menu'},el('summary',{'aria-label':'More actions'},'•••'),el('div',{class:'character-actions-popover'},
+          button('Info',()=>details(item),'secondary'),button('Optimize',()=>optimizer(item),'secondary'),button('Delete',async()=>{
+            if(!await confirmAction('Delete '+item.name+'? Active, default and referenced cards are protected.'))return;
+            await api('/characters/'+enc(item.filename),{method:'DELETE',body:sessionBody({digest:item.digest,confirm:true})});await load();
+          },'danger')));
+        body.append(el('div',{class:'character-primary-actions'},use,menu));
         api('/characters/'+enc(item.filename)+'/portrait',{binary:true}).then(blob=>{
           if(!blob||blob.size===0)throw new Error('empty portrait');
           const url=URL.createObjectURL(blob);let revoked=false;const revoke=()=>{if(!revoked){revoked=true;URL.revokeObjectURL(url);}};
@@ -46,19 +65,12 @@ async function renderCharacters() {
       }
       grid.append(entry);
     }
-    const file=el('input',{type:'file',accept:'.png'});
-    const upload=card('Upload character',el('p',{class:'muted'},'SillyTavern PNG, up to 10 MB. Replacing an existing card requires a preview and explicit Apply.'),file,button('Upload',async()=>{
-      const selected=file.files[0];if(!selected)throw new Error('Choose a PNG card first.');if(selected.size>10485760)throw new Error('Card must be 10 MB or smaller.');
-      const encoded=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=()=>reject(new Error('Could not read file.'));reader.readAsDataURL(selected);});
-      const result=await api('/characters',{method:'POST',body:sessionBody({filename:selected.name,data:encoded})});
-      if(result.nonce)await preview(result);else {notice('Character installed.');await load();}
-    }));
-    root.replaceChildren(card('Characters',el('p',{class:'muted'},data.total+' cards · '+data.session.title),el('div',{class:'search-toolbar'},field('Find a character',search),searchButton)),grid);
+    root.replaceChildren(header,file,searchToolbar,grid);
     if(!data.characters.length)grid.append(empty('No matching character cards.'));
     const pager=el('div',{class:'actions'});
     if(offset>0)pager.append(button('Previous',async()=>{offset=Math.max(0,offset-24);await load();},'secondary'));
     if(offset+24<data.total)pager.append(button('Next',async()=>{offset+=24;await load();},'secondary'));
-    root.append(pager,upload);
+    root.append(pager);
   }
   async function details(item) {
     const info=await api('/characters/'+enc(item.filename));

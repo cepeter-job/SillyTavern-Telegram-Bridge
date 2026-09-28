@@ -194,7 +194,16 @@ def test_every_management_page_has_auth_and_no_secret_response(tmp_path, monkeyp
                 response = await client.get("/api/v1/" + page, headers={"Authorization": "tma " + signed_data()})
                 assert response.status == 200, page
                 assert TOKEN not in await response.text()
-            for asset in ["app.js", "characters.js", "models.js", "management.js", "memory.js", "system.js"]:
+            assets = [
+                "app.js",
+                "characters.js",
+                "models.js",
+                "management.js",
+                "manage.js",
+                "memory.js",
+                "system.js",
+            ]
+            for asset in assets:
                 assert (await client.get("/miniapp/" + asset)).status == 200, asset
 
     asyncio.run(run())

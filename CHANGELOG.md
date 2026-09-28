@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- Implement the story-first Mini App design with a live Home story card, recent sessions, compact mobile character cards, and a grouped Manage hub while keeping Usage under Advanced settings and System directly accessible.
+
 ## [0.2.043] - 2026-09-28
 
 ### Changed

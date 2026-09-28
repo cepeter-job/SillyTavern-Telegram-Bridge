@@ -80,6 +80,8 @@ try {
       assert.equal(sessionPortrait.closest('.session-portrait-frame').hidden,false,'Dashboard portrait appears only after loading');
       assert.equal(dom.window.getComputedStyle(sessionPortrait).objectFit,'contain','Dashboard portrait preserves the full image');
       assert.equal(shellDocument.querySelectorAll('.story-status-item').length,3,'Home summarizes persona, world and memory state');
+      const statusCopy=shellDocument.querySelector('.story-status-item>span');
+      assert.equal(dom.window.getComputedStyle(statusCopy).minWidth,'0px','Status copy may shrink so long values cannot overlap adjacent columns');
       assert.equal(shellDocument.querySelectorAll('.dashboard-shortcuts button').length,4,'Dashboard exposes four quick actions');
       assert.ok(shellDocument.querySelector('.recent-stories'),'Home includes recent stories');
       assert.deepEqual([...shellDocument.querySelectorAll('.dashboard-health [data-health-icon]')].map(node=>node.dataset.healthIcon),['system','telegram','database'],'Dashboard Bridge health labels all three status cards with local icons');

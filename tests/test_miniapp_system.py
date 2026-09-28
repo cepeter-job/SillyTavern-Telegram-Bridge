@@ -58,6 +58,54 @@ def test_update_requires_owned_fresh_confirmation_and_reuses_guarded_engine(tmp_
         )
 
 
+def test_update_review_does_not_confirm_already_latest_and_invalidates_stale_review(tmp_path, monkeypatch):
+    import bridge.miniapp_system as system
+
+    s, w, p = setup(tmp_path)
+    installed = {"version": "0.2.032"}
+    monkeypatch.setattr(system, "latest_bridge_release", lambda: ("0.2.099", "Reviewed release"))
+    monkeypatch.setattr(system, "installed_bridge_version", lambda **kwargs: installed["version"])
+
+    previous = system.review_update(s, w, {})
+    assert previous["update_available"] is True
+    installed["version"] = "0.2.099"
+    current = system.review_update(s, w, {})
+
+    assert current["update_available"] is False
+    assert current["installed"] == current["latest"] == "0.2.099"
+    assert "confirmation" not in current
+    with pytest.raises(system.MiniAppError, match="expired or changed"):
+        system.perform_update(
+            s,
+            w,
+            {**p, "confirmation": previous["confirmation"], "version": "0.2.099", "confirm": True},
+        )
+
+
+def test_update_apply_rejects_already_latest_race(tmp_path, monkeypatch):
+    import bridge.miniapp_system as system
+    from bridge.self_update import UpdateOutcome, UpdateStatus
+
+    s, w, p = setup(tmp_path)
+    monkeypatch.setattr(system, "latest_bridge_release", lambda: ("0.2.099", "Reviewed release"))
+    monkeypatch.setattr(system, "installed_bridge_version", lambda **kwargs: "0.2.032")
+    review = system.review_update(s, w, {})
+    monkeypatch.setattr(
+        system,
+        "_run_update",
+        lambda **kwargs: UpdateOutcome(UpdateStatus.ALREADY_LATEST, "0.2.099"),
+    )
+
+    with pytest.raises(system.MiniAppError, match="Already latest") as exc:
+        system.perform_update(
+            s,
+            w,
+            {**p, "confirmation": review["confirmation"], "version": "0.2.099", "confirm": True},
+        )
+    assert exc.value.status == 409
+    assert exc.value.code == "already_latest"
+
+
 def test_health_snapshot_is_bound_to_boot_not_changed_files(tmp_path, monkeypatch):
     import bridge.runtime_health as health
 

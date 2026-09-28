@@ -14,7 +14,7 @@ from bridge.miniapp_context import require_confirmation, session_scope, text
 from bridge.miniapp_errors import MiniAppError
 from bridge.miniapp_status_repository import counts
 from bridge.miniapp_types import ApiRoute
-from bridge.self_update import UpdateStatus
+from bridge.self_update import UpdateStatus, version_tuple
 from bridge.sqlite_store import write_transaction
 from bridge.update import _run_update, format_update_outcome, installed_bridge_version, latest_bridge_release
 from bridge.update_ack import arm_pending_update_ack
@@ -53,22 +53,38 @@ def system_status(services: Any, who: MiniAppIdentity, values: dict) -> dict:
 def review_update(services: Any, who: MiniAppIdentity, values: dict) -> dict:
     try:
         version, notes = latest_bridge_release()
+        installed = installed_bridge_version(app_settings=services.config)
+        update_available = version_tuple(version) > version_tuple(installed)
     except Exception:
         raise MiniAppError("Release metadata could not be checked. Try again later.", status=503) from None
-    nonce = secrets.token_hex(24)
-    with session_scope(services, who, values) as scope:
-        set_meta(
-            scope.db,
-            f"miniapp_update_confirmation:{who.user_id}",
-            json.dumps({"nonce": nonce, "version": version, "expires": time.time() + 300}),
-        )
-    return {
-        "installed": installed_bridge_version(app_settings=services.config),
+
+    if update_available:
+        status = "update_available"
+    elif version == installed:
+        status = "already_latest"
+    else:
+        status = "local_newer"
+
+    key = f"miniapp_update_confirmation:{who.user_id}"
+    result = {
+        "installed": installed,
         "latest": version,
         "notes": notes,
-        "confirmation": nonce,
-        "expires_in": 300,
+        "update_available": update_available,
+        "status": status,
     }
+    with session_scope(services, who, values) as scope:
+        if not update_available:
+            set_meta(scope.db, key, "")
+            return result
+        nonce = secrets.token_hex(24)
+        set_meta(
+            scope.db,
+            key,
+            json.dumps({"nonce": nonce, "version": version, "expires": time.time() + 300}),
+        )
+    result.update({"confirmation": nonce, "expires_in": 300})
+    return result
 
 
 def perform_update(services: Any, who: MiniAppIdentity, values: dict) -> dict:
@@ -104,7 +120,9 @@ def perform_update(services: Any, who: MiniAppIdentity, values: dict) -> dict:
             "commit": outcome.commit,
             "message": format_update_outcome(outcome),
         }
-        if outcome.status not in {UpdateStatus.ALREADY_LATEST, UpdateStatus.RESTART_SCHEDULED}:
+        if outcome.status is UpdateStatus.ALREADY_LATEST:
+            raise MiniAppError(result["message"], status=409, code="already_latest")
+        if outcome.status is not UpdateStatus.RESTART_SCHEDULED:
             raise MiniAppError(result["message"], status=409)
         return result
 

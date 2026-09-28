@@ -511,8 +511,12 @@ guarantee. Review all pages of the proposed fields before applying; the preview
 includes system prompt and post-history instructions when changed. Application
 verifies that the exact approved fields produce the staged card bytes, preserves
 name/avatar/other metadata, backs up the original bytes, and atomically replaces
-the file. Unsupported dual `chara`/`ccv3` payloads are refused rather than
-partially rewritten. A failed or interrupted application may require generating
+the file. Consistent duplicate `chara` chunks and paired v2 `chara`/v3 `ccv3`
+metadata are updated together while preserving each schema's unrelated fields;
+conflicting or malformed embedded copies are refused rather than partially
+rewritten. Character display remains compatible with the canonical `chara`
+payload, while every Optimizer write validates all `chara` and `ccv3` copies
+before staging a preview. A failed or interrupted application may require generating
 a new preview; it never replays an already consumed confirmation automatically.
 After a successful optimizer Apply, the installed card is reranked immediately
 with the Utility model. If reranking is unavailable, the changed file revision

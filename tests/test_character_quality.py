@@ -18,17 +18,36 @@ from bridge.card_content import parse_png_chara_bytes
 from bridge.memory_curator import db_connect
 
 
-def _minimal_png(card: dict) -> bytes:
-    """Build a parseable PNG: signature plus one SillyTavern chara tEXt chunk."""
+def _raw_chunk(kind: bytes, data: bytes) -> bytes:
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+
+def _metadata_chunk(label: str, card: dict) -> bytes:
     encoded = base64.b64encode(json.dumps(card).encode("utf-8"))
-    chunk_data = b"chara\x00" + encoded
-    chunk = (
-        struct.pack(">I", len(chunk_data))
-        + b"tEXt"
-        + chunk_data
-        + struct.pack(">I", zlib.crc32(b"tEXt" + chunk_data) & 0xFFFFFFFF)
-    )
-    return b"\x89PNG\r\n\x1a\n" + chunk
+    return _raw_chunk(b"tEXt", label.encode() + b"\x00" + encoded)
+
+
+def _png_with_metadata(*items: tuple[str, dict]) -> bytes:
+    metadata = b"".join(_metadata_chunk(label, card) for label, card in items)
+    return b"\x89PNG\r\n\x1a\n" + metadata + _raw_chunk(b"IEND", b"")
+
+
+def _metadata_cards(raw: bytes) -> list[tuple[str, dict]]:
+    pos, cards = 8, []
+    while pos < len(raw):
+        size = struct.unpack(">I", raw[pos : pos + 4])[0]
+        kind = raw[pos + 4 : pos + 8]
+        data = raw[pos + 8 : pos + 8 + size]
+        pos += size + 12
+        if kind == b"tEXt" and data.split(b"\x00", 1)[0] in {b"chara", b"ccv3"}:
+            label, encoded = data.split(b"\x00", 1)
+            cards.append((label.decode(), json.loads(base64.b64decode(encoded).decode("utf-8"))))
+    return cards
+
+
+def _minimal_png(card: dict) -> bytes:
+    """Build a parseable PNG with one SillyTavern chara metadata chunk."""
+    return _png_with_metadata(("chara", card))
 
 
 class RankPresentationCleanupTests(unittest.TestCase):
@@ -92,6 +111,88 @@ class WritePngCharaBytesTests(unittest.TestCase):
         parsed = parse_png_chara_bytes(rewritten)
         self.assertEqual(parsed["description"], "new")
         self.assertEqual(parsed["name"], "Alice")
+
+    def test_updates_consistent_v2_and_v3_metadata_copies(self):
+        v2 = {
+            "spec": "chara_card_v2",
+            "data": {"name": "Alice", "description": "old", "extensions": {"version": 2}},
+        }
+        v3 = {
+            "spec": "chara_card_v3",
+            "data": {"name": "Alice", "description": "old", "extensions": {"version": 3}},
+        }
+        raw = _png_with_metadata(("chara", v2), ("ccv3", v3))
+
+        rewritten = quality.write_png_chara_bytes(raw, quality.merge_optimized_fields(v2, {"description": "new"}))
+        cards = _metadata_cards(rewritten)
+
+        self.assertEqual([label for label, _card in cards], ["chara", "ccv3"])
+        self.assertEqual([card["data"]["description"] for _label, card in cards], ["new", "new"])
+        self.assertEqual([card["data"]["extensions"]["version"] for _label, card in cards], [2, 3])
+        self.assertEqual([card["spec"] for _label, card in cards], ["chara_card_v2", "chara_card_v3"])
+
+    def test_updates_every_consistent_duplicate_chara_chunk(self):
+        card = {"name": "Alice", "description": "old"}
+        raw = _png_with_metadata(("chara", card), ("chara", card))
+
+        rewritten = quality.write_png_chara_bytes(raw, {**card, "description": "new"})
+
+        self.assertEqual(
+            [item["description"] for _label, item in _metadata_cards(rewritten)],
+            ["new", "new"],
+        )
+
+    def test_rejects_conflicting_metadata_copies(self):
+        v2 = {"data": {"name": "Alice", "description": "old"}}
+        v3 = {"data": {"name": "Alice", "description": "different"}}
+        raw = _png_with_metadata(("chara", v2), ("ccv3", v3))
+
+        with self.assertRaisesRegex(ValueError, "conflicting PNG character metadata"):
+            quality.write_png_chara_bytes(raw, quality.merge_optimized_fields(v2, {"description": "new"}))
+
+    def test_rejects_malformed_secondary_metadata(self):
+        card = {"name": "Alice", "description": "old"}
+        malformed = b"ccv3\x00" + base64.b64encode(b"not-json")
+        malformed_chunk = (
+            struct.pack(">I", len(malformed))
+            + b"tEXt"
+            + malformed
+            + struct.pack(">I", zlib.crc32(b"tEXt" + malformed) & 0xFFFFFFFF)
+        )
+        raw = _minimal_png(card)
+        raw = raw[:-12] + malformed_chunk + raw[-12:]
+
+        with self.assertRaisesRegex(ValueError, "invalid PNG character metadata"):
+            quality.write_png_chara_bytes(raw, {**card, "description": "new"})
+
+    def test_preserves_non_character_chunks_byte_for_byte(self):
+        card = {"name": "Alice", "description": "old"}
+        ancillary_data = b"Comment\x00keep-this-byte-for-byte"
+        ancillary = (
+            struct.pack(">I", len(ancillary_data))
+            + b"tEXt"
+            + ancillary_data
+            + struct.pack(">I", zlib.crc32(b"tEXt" + ancillary_data) & 0xFFFFFFFF)
+        )
+        raw = _minimal_png(card)
+        raw = raw[:-12] + ancillary + raw[-12:]
+
+        rewritten = quality.write_png_chara_bytes(raw, {**card, "description": "new"})
+
+        self.assertIn(ancillary, rewritten)
+
+    def test_validated_noop_preserves_every_input_byte(self):
+        v2 = {"spec": "chara_card_v2", "data": {"name": "Alice", "description": "old"}}
+        v3 = {"spec": "chara_card_v3", "data": {"name": "Alice", "description": "old"}}
+        raw = _png_with_metadata(("chara", v2), ("ccv3", v3))
+
+        self.assertEqual(quality.write_png_chara_bytes(raw, v2), raw)
+
+    def test_rejects_ccv3_only_card_until_the_canonical_reader_supports_it(self):
+        raw = _png_with_metadata(("ccv3", {"data": {"name": "Alice", "description": "old"}}))
+
+        with self.assertRaisesRegex(ValueError, "PNG has no SillyTavern chara metadata"):
+            quality.write_png_chara_bytes(raw, {"data": {"name": "Alice", "description": "new"}})
 
     def test_rejects_non_png(self):
         with self.assertRaises(ValueError):

@@ -122,7 +122,7 @@ prevents accidental changes.
 
 | Command | What it does |
 |---|---|
-| `/settings` | Open reasoning and generation controls |
+| `/settings` | Open sampling, token, stop-sequence, and Humanizer controls |
 | `/stream` | Open streaming preview controls |
 | `/preset` | Apply, save, or delete generation presets |
 | `/prompt` | Open the read-only prompt inspector |
@@ -363,7 +363,7 @@ visible.
 
 Normal mode generates no Light Novel choices or additional choice-model calls.
 `/swipe` remains a selector for alternate assistant responses, not user actions.
-Group-specific Light Novel behavior is not part of this version.
+Light Novel mode currently applies only to standard sessions; group orchestration remains unchanged.
 
 ### Memory boundaries
 
@@ -445,10 +445,7 @@ of semantic equivalence: review important prose as with any model-generated text
 The setting applies to normal replies, regeneration, continuation, edited-message
 regeneration, and image replies through their shared rendering paths.
 
-The [reference-refresh document](humanizer-weekly-sync.md) is a future
-implementation specification only. No weekly sync, timer, or automatic prompt
-promotion is installed. Prompt attribution is retained in
-[third-party notices](../THIRD_PARTY_NOTICES.md).
+No weekly Humanizer reference sync, timer, or automatic prompt promotion is installed. The active prompt changes only through reviewed source changes and the normal release process. Prompt attribution is retained in [third-party notices](../THIRD_PARTY_NOTICES.md).
 
 ### Telegram-safe model output
 

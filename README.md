@@ -11,7 +11,7 @@ and an optional private management Mini App.
 
 ## Quick start
 
-Linux installation is user-scoped. A first install uses an independently trusted maintainer key and verifies a signed release **before executing repository code**.
+Linux installation is user-scoped. Before the first install, ensure `git` and `ssh-keygen` are available as described in [Installation](docs/installation.md#before-you-start). A first install uses an independently trusted maintainer key and verifies a signed release **before executing repository code**.
 
 ### 1. One-time trust setup
 
@@ -56,7 +56,13 @@ git checkout -B main "$tag^{commit}"
 ./install.sh --system-deps --no-start
 ```
 
-The generated private `~/.local/share/sillytavern-telegram/.env` automatically points `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` at the same standard external trust file. Fill the Telegram bot/user ID, default model/provider, and provider credential, then rerun the installer. For the Mini App, install/sign in to Tailscale and run:
+The generated private `~/.local/share/sillytavern-telegram/.env` automatically points `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` at the same standard external trust file. Fill the Telegram bot/user ID, default model/provider, and provider credential, then start the normal Telegram bridge:
+
+```bash
+./install.sh --linger
+```
+
+For the optional Mini App, install/sign in to Tailscale and instead run:
 
 ```bash
 ./install.sh --with-tailscale-funnel --linger
@@ -85,11 +91,11 @@ For behavior and workflows, see the [User guide](docs/user-guide.md).
 
 ## Basic bot use
 
-1. Start the bot and choose a character/session.
-2. Send normal messages to continue the conversation.
-3. Use `/character`, `/session`, `/model`, `/settings`, `/persona`, `/world`,
+1. Start the bot and choose/configure a character and session.
+2. Use `/start` to choose the opening greeting for a new or reset session.
+3. Send normal messages to continue the conversation.
+4. Use `/character`, `/session`, `/providers`, `/settings`, `/persona`, `/world`,
    `/memory`, and `/databank` to manage the active session.
-4. Use `/start` to open or restart the selected character's opening flow.
 5. Use `/status` for the current session/runtime summary.
 
 Telegram `/help` is the **canonical command reference**. Use a command name for
@@ -105,8 +111,7 @@ explains concepts and workflows; `/help` reflects the executable command catalog
 | [User guide](docs/user-guide.md) | Bot workflows, sessions, generation, native assets, groups, media |
 | [Operations](docs/operations.md) | Reliability, privacy, signed updates, downloads, database compatibility, troubleshooting |
 | [Mini App](docs/miniapp.md) | Mini App security model, pages, Funnel deployment, installer behavior |
-| [Token usage](docs/token-usage.md) | Provider-reported counts, coverage, privacy, retention and upgrade notes |
-| [Humanizer reference refresh](docs/humanizer-weekly-sync.md) | Maintainer procedure for the optional Humanizer reference process |
+| [Token usage](docs/token-usage.md) | Provider-reported counts, coverage, privacy, retention and migration notes |
 
 Project-level references:
 

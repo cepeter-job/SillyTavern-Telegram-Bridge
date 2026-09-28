@@ -95,6 +95,9 @@ USER_ENVIRONMENT_VARIABLES = {
     "SILLYTAVERN_PROVIDER_CONFIG",
     "SILLYTAVERN_MODEL_CACHE",
     "SILLYTAVERN_MODEL_REFRESH_SECONDS",
+    "SILLYTAVERN_PROVIDER_ENDPOINT",
+    "SILLYTAVERN_PROVIDER_TRANSPORT",
+    "SILLYTAVERN_EXTRA_MODELS",
     "SILLYTAVERN_PROVIDER_ALLOWED_HOSTS",
     "SILLYTAVERN_PROVIDER_PRIVATE_HOSTS",
     "SILLYTAVERN_CONTEXT_WINDOW_TOKENS",
@@ -131,7 +134,11 @@ USER_ENVIRONMENT_VARIABLES = {
     "SILLYTAVERN_TTS_VOICE",
     "OPENCODE_CLIENT_VERSION",
     "SILLYTAVERN_UPDATE_ALLOWED_SIGNERS",
+    "SILLYTAVERN_UPDATE_PUBLIC_KEY",
     "SILLYTAVERN_UPDATE_SERVICE",
+    "SILLYTAVERN_MINIAPP_PUBLIC_URL",
+    "SILLYTAVERN_MINIAPP_PORT",
+    "SILLYTAVERN_MINIAPP_AUTH_MAX_AGE",
 }
 
 
@@ -142,6 +149,21 @@ def test_user_configuration_guide_and_env_example_cover_supported_environment_va
     missing_example = sorted(name for name in USER_ENVIRONMENT_VARIABLES if name not in example)
     assert missing_configuration == []
     assert missing_example == []
+
+
+def test_public_docs_do_not_advertise_retired_hindsight_allowlist():
+    documents = [ROOT / "README.md", *(ROOT / "docs").glob("*.md")]
+    offenders = [path for path in documents if "SILLYTAVERN_HINDSIGHT_ALLOWED_HOSTS" in path.read_text()]
+    assert offenders == []
+
+
+def test_configuration_manual_examples_do_not_clobber_private_files():
+    text = (ROOT / "docs/configuration.md").read_text()
+    assert "cp .env.example ~/.local/share/sillytavern-telegram/.env" not in text
+    assert (
+        "cp config/providers.example.yaml ~/.local/share/sillytavern-telegram/sillytavern_telegram_providers.yaml"
+        not in text
+    )
 
 
 def test_user_configuration_guide_documents_provider_catalog_controls():
@@ -165,6 +187,17 @@ def test_user_configuration_guide_documents_provider_catalog_controls():
         assert f"`{field}`" in readme, field
     provider_example = (ROOT / "config/providers.example.yaml").read_text()
     assert "image_default_size" not in provider_example
+
+
+def test_user_facing_docs_keep_reasoning_under_providers():
+    guide = (ROOT / "docs/user-guide.md").read_text()
+    assert "| `/settings` | Open reasoning and generation controls |" not in guide
+    assert "Both Story and Utility reasoning are configured from `/providers`" in guide
+
+
+def test_readme_does_not_index_design_only_humanizer_spec():
+    readme = (ROOT / "README.md").read_text()
+    assert "docs/humanizer-weekly-sync.md" not in readme
 
 
 def test_readme_is_a_compact_user_entrypoint_with_linked_guides():

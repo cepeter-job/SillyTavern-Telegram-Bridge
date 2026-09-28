@@ -224,7 +224,8 @@ Common configuration/update failures:
 | Symptom / updater code | What to check |
 |---|---|
 | Provider is refused before a request | Add the exact external host to `SILLYTAVERN_PROVIDER_ALLOWED_HOSTS`; private/LAN hosts also need `SILLYTAVERN_PROVIDER_PRIVATE_HOSTS`. |
-| RAG/Hindsight external endpoint refused | Configure the matching `*_ALLOWED_HOSTS` and, for private networks, `*_PRIVATE_HOSTS`. |
+| RAG external endpoint refused | Add the exact embedding host to `SILLYTAVERN_RAG_ALLOWED_HOSTS`; private/LAN hosts also need `SILLYTAVERN_RAG_PRIVATE_HOSTS`. |
+| Hindsight endpoint refused | Hindsight must use a numeric loopback origin. For a remote service, expose it through a separately trusted local loopback tunnel/proxy. |
 | `.env` permission error | On POSIX, ensure the file is owned by the bridge user and `chmod 600`. |
 | Changed `.env` appears ignored | Restart the service; settings are captured at application startup. |
 | `SILLYTAVERN_ENV_FILE` appears ignored | Set it in systemd/process environment, not only inside the alternate file. |

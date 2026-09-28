@@ -55,9 +55,7 @@ Before restart is scheduled, a protected pending notification binds the target v
 
 ## Installer options and external prerequisites
 
-Run `./install.sh --system-deps --no-start` as the non-root bridge user. Fill the
-`.env` bot/provider values, leaving `SILLYTAVERN_MINIAPP_PUBLIC_URL` blank for
-discovery. Install Tailscale **1.52+**, authenticate the device and run:
+Follow the canonical [Installation](installation.md) guide through the generated private `.env` and installer-managed user service. For Mini App discovery, leave `SILLYTAVERN_MINIAPP_PUBLIC_URL` blank. Install Tailscale **1.52+**, authenticate the device, then run:
 
 ```bash
 ./install.sh --with-tailscale-funnel --linger
@@ -72,8 +70,7 @@ installs only Debian/Ubuntu base prerequisites. Tailscale needs external setup:
   use `sudo tailscale up` if the device has not been authenticated.
 - Enable MagicDNS, HTTPS certificates and the `funnel` node attribute for this
   device. A tailnet administrator must authorize policy changes.
-- Run as a Tailscale-authorized operator. An administrator can set
-  `sudo tailscale set --operator="$USER"`; do not run the bridge installer as root.
+- Allow the bridge user to manage the local `tailscaled` daemon when needed. An administrator can set `sudo tailscale set --operator="$USER"`; this local operator permission does not itself grant Funnel authorization. Do not run the bridge installer as root.
 
 Funnel terminates TLS in `tailscaled` and uses the node's `*.ts.net` name, without
 custom DNS or inbound public ports. Certificate names are public in transparency
@@ -116,30 +113,13 @@ be modified while the service is active. `--no-deps` reuses a compatible venv;
 `--no-start` leaves the bridge and existing Funnel unchanged, but can prepare a
 blank URL. `--env-file PATH` selects another private configuration file.
 
-### Upgrade to the Mini App release
+### Upgrades
 
-Version 0.2.033 changes `requirements.lock` from v0.2.032. The signed `/update`
-refuses dependency changes, so install from a clean checkout explicitly:
+Use the bridge's verified `/update` flow for normal releases. The Mini App System page uses the same canonical signed updater as Telegram and does not bypass signature, source-cleanliness, dependency, or deployment guards.
 
-```bash
-systemctl --user stop sillytavern-telegram.service
-cd ~/sillytavern-telegram-bridge
-git fetch origin
-git switch main
-git pull --ff-only origin main
-./install.sh --with-tailscale-funnel --linger
-```
+If a signed release changes `requirements.lock`, automatic update refuses it. Follow the [manual signed update procedure](operations.md#manual-update), which verifies the release tag against the same external trust anchor before moving the checkout. Do not substitute `git pull origin main`; `main` may contain commits that are not a published signed release.
 
-Do not reset the database or replace `.env`. A prior custom-domain URL is preserved;
-review and clear only that assignment to let Funnel choose the node URL. The old
-proxy installer/configuration generator has been removed. Existing system proxy
-services/packages are left for their operator to manage, not automatically purged.
-
-For subsequent automatic signed releases, obtain the maintainer's public SSH key
-independently and set `SILLYTAVERN_UPDATE_PUBLIC_KEY` and an external
-`SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` path, then rerun preparation. Never provide a
-private key or put the trust file inside source/live directories. Without trust
-setup, manual installation and the Mini App work; automatic update stays refused.
+Do not reset the database or replace the generated `.env` during an upgrade. If a prior explicit Mini App URL should be replaced by Funnel discovery, review and clear only `SILLYTAVERN_MINIAPP_PUBLIC_URL` before rerunning the installer with `--with-tailscale-funnel`.
 
 ### Status and targeted shutdown
 

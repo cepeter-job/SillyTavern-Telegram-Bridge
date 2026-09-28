@@ -87,7 +87,10 @@ HELP_CATEGORIES = {
     "generation": [
         (
             "/settings",
-            "Open this session's generation panel — reasoning level, temperature, tokens, and sampling values.",
+            (
+                "Open this session's generation panel — temperature, tokens, sampling, stop sequences, and Humanizer. "
+                "Reasoning is under /providers."
+            ),
         ),
         (
             "/stream",

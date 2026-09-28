@@ -91,6 +91,7 @@ TYPE_TARGETS: tuple[str, ...] = (
     "bridge/callback_tokens.py",
     "bridge/config_values.py",
     "bridge/environment.py",
+    "bridge/database_backup.py",
     "bridge/subprocess_security.py",
     "bridge/self_update.py",
     "bridge/settings.py",
@@ -315,6 +316,7 @@ LOW_LEVEL_IMPORTS = {
         )
     ),
     "bridge.document_extraction": frozenset(("bridge.limits", "bridge.settings", "bridge.subprocess_security")),
+    "bridge.database_backup": frozenset({"bridge.subprocess_security"}),
     "bridge.subprocess_security": frozenset(),
     "bridge.embedding_transport": frozenset(("bridge.network_security", "bridge.settings")),
     "bridge.embedding_values": frozenset(("bridge.rag_retrieval", "bridge.settings")),

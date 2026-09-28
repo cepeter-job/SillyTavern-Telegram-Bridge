@@ -22,6 +22,7 @@ from bridge.composition import BridgeServices as _BridgeServices
 from bridge.composition import TelegramRuntime as _TelegramRuntime
 from bridge.config_values import ConfigurationError
 from bridge.conversation_service import ConversationService as _ConversationService
+from bridge.database_backup import create_database_backup, restore_database_backup
 from bridge.delivery_port import DeliveryPort as _DeliveryPort
 from bridge.director_goals import director_goal_policy
 from bridge.embedding_port import EmbeddingPort
@@ -428,14 +429,36 @@ def _main() -> int:
     auth_group.add_argument("--codex-login", action="store_true")
     auth_group.add_argument("--codex-status", action="store_true")
     auth_group.add_argument("--codex-logout", action="store_true")
+    auth_group.add_argument("--backup-database", action="store_true")
+    auth_group.add_argument("--restore-database", metavar="PATH")
     args = parser.parse_args()
     if getattr(args, "check", False) and any(
-        getattr(args, name, False) for name in ("codex_login", "codex_status", "codex_logout")
+        getattr(args, name, False)
+        for name in ("codex_login", "codex_status", "codex_logout", "backup_database", "restore_database")
     ):
-        parser.error("--check cannot be combined with a Codex OAuth action")
+        parser.error("--check cannot be combined with another maintenance action")
 
     environment = dict(os.environ)
     bootstrap_environment(environment)
+    if getattr(args, "backup_database", False) or getattr(args, "restore_database", None):
+        config = load_app_settings(environment, home=Path.home())
+        backup_dir = config.bridge_home / "backups/database"
+        restore_path = getattr(args, "restore_database", None)
+        if restore_path:
+            source = Path(restore_path).expanduser()
+            previous = restore_database_backup(
+                source,
+                config.db_file,
+                backup_dir,
+                service_name=config.update_service,
+            )
+            print(f"database restored from {source}")
+            if previous is not None:
+                print(f"pre-restore backup={previous}")
+            return 0
+        backup = create_database_backup(config.db_file, backup_dir, label="manual")
+        print(f"database backup={backup}")
+        return 0
     auth_action = next(
         (
             action

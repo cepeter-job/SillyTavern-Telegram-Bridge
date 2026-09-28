@@ -65,6 +65,8 @@ def test_module_entrypoint_help_is_supported_without_configuration(tmp_path):
     result = subprocess.run([sys.executable, "-m", "bridge.main", "--help"], env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert "--check" in result.stdout
+    assert "--backup-database" in result.stdout
+    assert "--restore-database" in result.stdout
 
 
 def test_two_explicit_settings_choose_distinct_default_character_names(tmp_path, *, app_settings_builder):

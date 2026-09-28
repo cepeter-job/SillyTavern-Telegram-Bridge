@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Snapshot the operational SQLite database with the online backup API before verified update activation; add explicit manual backup and offline restore commands with integrity checks and pre-restore preservation.
+
 ## [0.2.039] - 2026-09-28
 
 ### Added

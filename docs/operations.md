@@ -140,13 +140,29 @@ checksum, extract to a fresh directory, install the locked dependencies, run
 `--check`, then point your service at the new directory. Do not overlay a new ZIP
 onto an old source tree.
 
-### Pre-production database compatibility
+### Database migrations, backup and restore
 
-This project is still preproduction. SQLite starts from the current
-`initial_schema`; older development databases are not guaranteed upgrade paths.
-Before using a revision that explicitly requires a fresh database, stop the
-bridge and archive the existing SQLite file if you need it for inspection. The
-bridge never silently deletes or converts an unsupported old database.
+The operational SQLite database uses an ordered transactional migration ledger (`schema_migrations`). New releases append forward migrations; unknown or inconsistent migration history fails closed instead of being rewritten silently.
+
+Verified self-update takes an online SQLite snapshot **after** the signed release has been verified and compiled but **before** the source checkout or live mirror is changed. Snapshots use SQLite's online backup API, are integrity-checked, stored mode 0600 under `$SILLYTAVERN_BRIDGE_HOME/backups/database`, and retain the newest ten matching snapshots.
+
+Create an additional online snapshot at any time:
+
+```bash
+./.venv/bin/python sillytavern_telegram_bridge.py --backup-database
+```
+
+Restore is deliberately offline. Stop the configured user service first; the restore command refuses to replace the database while that service is active. It validates the selected snapshot, takes a `pre-restore` snapshot of the current database, clears stale WAL/SHM sidecars, and atomically replaces the database only with the verified copy:
+
+```bash
+systemctl --user stop sillytavern-telegram.service
+./.venv/bin/python sillytavern_telegram_bridge.py --restore-database \
+  ~/.local/share/sillytavern-telegram/backups/database/<snapshot>.sqlite3
+./.venv/bin/python sillytavern_telegram_bridge.py --check
+systemctl --user start sillytavern-telegram.service
+```
+
+Do not delete migration records to force an older binary onto a newer schema. Rollback across schema changes requires restoring the matching pre-upgrade database snapshot.
 
 ## 🧰 Troubleshooting
 

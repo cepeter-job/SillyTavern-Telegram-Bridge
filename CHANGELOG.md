@@ -4,6 +4,16 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.2.043] - 2026-09-28
+
+### Changed
+
+- Make the user-facing installation, configuration, Mini App, operations, token-usage, and command documentation match the current signed-release workflow, provider controls, Hindsight loopback policy, and installer-managed files without clobbering private configuration.
+
+### Fixed
+
+- Prevent the Mini App **Review latest release** flow from creating or applying an update confirmation when the installed version is already current; stale confirmations are invalidated and already-latest races are refused instead of being reported as successful installs.
+
 ## [0.2.042] - 2026-09-28
 
 ### Changed

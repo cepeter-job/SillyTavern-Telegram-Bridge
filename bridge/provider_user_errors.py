@@ -24,10 +24,7 @@ def provider_user_error(error: ProviderRequestError) -> ProviderUserError:
         message = f"Model {selected} is rate-limited{suffix}. Try again later or choose another model."
     elif error.kind == "authentication":
         suffix = f" (HTTP {status})" if status else ""
-        message = (
-            f"Model {selected} was rejected by the provider{suffix}. "
-            "Check its credentials or choose another model."
-        )
+        message = f"Model {selected} was rejected by the provider{suffix}. Check its credentials or choose another model."
     elif error.kind == "credits_required":
         suffix = f" (HTTP {status})" if status else ""
         message = f"The provider requires credits for {selected}{suffix}. Add credits or choose another model."

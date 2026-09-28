@@ -62,6 +62,9 @@ jobs:
           --cov --cov-report=term-missing:skip-covered
           --cov-report=json:coverage.json --cov-report=xml:coverage.xml
 
+      - name: Check security-critical coverage
+        run: python tools/check_security_coverage.py coverage.json
+
       - name: Publish application coverage
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -72,6 +75,24 @@ jobs:
             coverage.xml
           if-no-files-found: warn
           retention-days: 14
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout full history for secret scanning
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan repository history for secrets
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   dependency-audit:
     runs-on: ubuntu-latest
@@ -136,6 +157,13 @@ jobs:
 
       - name: Check Python formatting
         run: python -m ruff format --check .
+
+      - name: Check typed-surface baseline
+        run: |
+          count=$(python tools/static_analysis.py --print-type-target-count)
+          minimum=$(python -c 'import json; print(json.load(open("tools/type_surface_baseline.json"))["minimum_typed_files"])')
+          echo "typed_files=$count minimum=$minimum"
+          test "$count" -ge "$minimum"
 
       - name: Run mypy static surface
         run: python tools/static_analysis.py --print-type-targets | xargs python -m mypy

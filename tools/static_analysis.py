@@ -46,6 +46,8 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
+    "bridge/miniapp_auth.py",
+    "bridge/miniapp_config.py",
     "bridge/tailscale_funnel.py",
     "bridge/token_usage_values.py",
     "bridge/token_usage_schema.py",
@@ -618,8 +620,12 @@ def main() -> int:
         help="Print the incremental static target paths and exit.",
     )
     parser.add_argument("--print-type-targets", action="store_true", help="Print progressively typed module paths.")
+    parser.add_argument("--print-type-target-count", action="store_true", help="Print the current typed-file count.")
     args = parser.parse_args()
 
+    if args.print_type_target_count:
+        print(len(TYPE_TARGETS))
+        return 0
     if args.print_type_targets:
         print("\n".join(TYPE_TARGETS))
         return 0

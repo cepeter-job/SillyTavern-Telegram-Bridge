@@ -422,3 +422,35 @@ def test_optional_feature_owners_are_type_checked():
         "bridge/light_novel_service.py",
         "bridge/light_novel_turn.py",
     } <= set(policy.TYPE_TARGETS)
+
+
+def test_typed_surface_is_versioned_and_cannot_shrink():
+    import json
+
+    policy = load_policy()
+    baseline = json.loads((ROOT / "tools/type_surface_baseline.json").read_text(encoding="utf-8"))
+    assert {"bridge/miniapp_auth.py", "bridge/miniapp_config.py"} <= set(policy.TYPE_TARGETS)
+    assert len(policy.TYPE_TARGETS) >= int(baseline["minimum_typed_files"])
+    assert int(baseline["minimum_typed_files"]) >= 86
+
+
+def test_type_target_count_cli_reports_current_surface():
+    command = [sys.executable, str(POLICY)]
+    result = subprocess.run([*command, "--print-type-target-count"], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().isdigit()
+    assert int(result.stdout) == len(load_policy().TYPE_TARGETS)
+
+
+def test_ci_has_sha_pinned_secret_scan_job():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "  secret-scan:" in workflow
+    assert "fetch-depth: 0" in workflow
+    assert "gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7" in workflow
+    assert "gitleaks/gitleaks-action@v2" not in workflow
+
+
+def test_operations_docs_describe_generated_typed_surface_not_stale_fixed_count():
+    text = (ROOT / "docs/operations.md").read_text(encoding="utf-8")
+    assert "24 explicitly listed source files" not in text
+    assert "--print-type-target-count" in text

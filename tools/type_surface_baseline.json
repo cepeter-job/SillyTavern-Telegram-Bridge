@@ -1,0 +1,5 @@
+{
+  "source_commit": "3d11e208da52192ecc64f0ee95364768714e1cea",
+  "minimum_typed_files": 87,
+  "note": "The progressively typed surface may grow but must not shrink below this reviewed baseline."
+}

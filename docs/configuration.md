@@ -109,13 +109,13 @@ $SILLYTAVERN_BRIDGE_HOME/backups/sillytavern/personas/
 | `SILLYTAVERN_PROVIDER_PRIVATE_HOSTS` | empty | Separate opt-in for approved LAN/tailnet provider hosts. |
 | `SILLYTAVERN_RAG_ALLOWED_HOSTS` | empty | Exact external embedding hostnames. |
 | `SILLYTAVERN_RAG_PRIVATE_HOSTS` | empty | Separate LAN/tailnet embedding-host opt-in. |
-| `SILLYTAVERN_HINDSIGHT_ALLOWED_HOSTS` | empty | Exact external Hindsight hostnames. |
-| `SILLYTAVERN_HINDSIGHT_PRIVATE_HOSTS` | empty | Separate LAN/tailnet Hindsight-host opt-in. |
 
 Host entries are plain exact hostnames: no scheme, path, port, or wildcard. Local
-loopback HTTP is allowed for local services. External destinations require HTTPS.
-Private/LAN/tailnet destinations require both their normal allowlist and matching
-`*_PRIVATE_HOSTS` opt-in.
+loopback HTTP is allowed for hardened provider/RAG transports. External destinations
+require HTTPS, and private/LAN/tailnet destinations require both their normal allowlist
+and matching `*_PRIVATE_HOSTS` opt-in. Hindsight is intentionally different: because
+its third-party SDK owns the HTTP transport, the bridge accepts only numeric loopback
+Hindsight origins and explicitly bypasses environment proxy routing for loopback.
 
 #### Context planning and diagnostics
 
@@ -135,14 +135,16 @@ user turn.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `HINDSIGHT_API_URL` | `http://127.0.0.1:8890` | Hindsight service URL. |
+| `HINDSIGHT_API_URL` | `http://127.0.0.1:8890` | Numeric-loopback Hindsight origin. |
 | `HINDSIGHT_API_KEY` | empty | Optional Hindsight credential. Secret. |
-| `SILLYTAVERN_HINDSIGHT_ALLOWED_HOSTS` | empty | External Hindsight allowlist. |
-| `SILLYTAVERN_HINDSIGHT_PRIVATE_HOSTS` | empty | Private/LAN Hindsight opt-in. |
 
-Hindsight is optional. Session generation only recalls memory scoped to the active
-session. Reset/session deletion refuses destructive local cleanup when required
-Hindsight cleanup cannot be verified.
+Hindsight is optional. Its SDK transport is not treated as equivalent to the bridge's
+DNS-pinned provider transport, so direct external/LAN/tailnet Hindsight URLs are
+refused. When Hindsight runs elsewhere, expose it through a separately trusted local
+tunnel or reverse proxy bound to `127.0.0.1` or `::1`. The bridge adds both loopback
+addresses to `NO_PROXY/no_proxy` before constructing the SDK client. Session
+generation only recalls memory scoped to the active session. Reset/session deletion
+refuses destructive local cleanup when required Hindsight cleanup cannot be verified.
 
 #### Data Bank semantic embeddings
 

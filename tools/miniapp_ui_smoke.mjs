@@ -19,9 +19,9 @@ const initialDocument=dom.window.document;
 assert.ok(initialDocument.querySelector('.app-shell'),'Telegram-native app shell is present');
 assert.ok(initialDocument.querySelector('.app-header .connection-dot'),'Compact header exposes connection status');
 assert.ok(initialDocument.querySelector('#content .skeleton-shell'),'Initial content uses a skeleton instead of a loading card');
-assert.ok(initialDocument.querySelector('#more-menu.more-sheet'),'Secondary navigation has a More sheet');
+assert.equal(initialDocument.querySelector('#more-menu'),null,'Management is a full page, not a navigation sheet');
 const context=dom.getInternalVMContext(),errors=[],expectedFailures=new Set(),observedFailures=[];
-let portraitMode='success',scrollResets=0;
+let portraitMode='success',forcedFailure='',scrollResets=0;
 dom.window.scrollTo=()=>{scrollResets++;};
 process.on('unhandledRejection',error=>errors.push(error));
 dom.window.Telegram={WebApp:{initData:ready.initData,initDataUnsafe:{start_param:'dashboard'},ready(){},expand(){},BackButton:{onClick(){},hide(){},show(){}}}};
@@ -30,6 +30,7 @@ dom.window.URL.createObjectURL=()=> 'blob:test-fixture';
 dom.window.URL.revokeObjectURL=()=>{};
 dom.window.fetch=async (path,options)=>{
   assert.ok(String(path).startsWith('/api/v1/'),'Only local API requests are permitted');
+  if(String(path)===forcedFailure)return new Response(JSON.stringify({error:{message:'forced optional failure'}}),{status:503,headers:{'Content-Type':'application/json'}});
   if(/^\/api\/v1\/characters\/[^/]+\/portrait$/.test(String(path))) {
     return new Response(new Blob([portraitMode==='success'?'portrait':''],{type:'image/png'}),{status:200,headers:{'Content-Type':'image/png'}});
   }
@@ -60,32 +61,39 @@ try {
   const app=await moduleFor('app.js');await app.link(linker);await app.evaluate();
   await until(()=>dom.window.document.querySelectorAll('#navigation button').length===5,'five primary navigation actions');
   const shellDocument=dom.window.document;
-  assert.deepEqual([...shellDocument.querySelectorAll('#navigation button')].map(n=>n.textContent.trim()),['Home','Characters','Usage','Sessions','More']);
-  const more=[...shellDocument.querySelectorAll('#navigation button')].find(n=>n.textContent.trim()==='More');
+  assert.deepEqual([...shellDocument.querySelectorAll('#navigation button')].map(n=>n.textContent.trim()),['Home','Characters','Sessions','Manage','System']);
   assert.equal(shellDocument.querySelectorAll('#navigation svg').length,5,'Every primary destination has a local SVG icon');
   assert.ok(shellDocument.querySelector('.skip-link'),'Keyboard users can skip navigation');
-  more.click();
-  await until(()=>shellDocument.querySelector('#more-menu[open]'),'More sheet opens');
-  assert.deepEqual([...shellDocument.querySelectorAll('#more-navigation button')].map(n=>n.getAttribute('aria-label')||n.textContent.trim()),['Models','Memory','Personas','Worlds','Data Bank','System']);
-  shellDocument.getElementById('more-menu').close();
-  for(const page of ['dashboard','characters','usage','models','sessions','personas','worlds','memory','databank','system']) {
+  for(const page of ['dashboard','characters','sessions','manage','advanced','usage','models','personas','worlds','memory','databank','system']) {
     await app.namespace.navigate(page);
     assert.ok(shellDocument.getElementById('page-title').textContent.trim().length>0,page+' updates the compact page title');
     const body=dom.window.document.querySelector('main').textContent;
     assert.ok(!body.includes('Could not load this page'),page+': '+body);
     assert.ok(body.length>30,page+' rendered content');
     if(page==='dashboard') {
-      assert.ok(shellDocument.querySelector('.dashboard-hero'),'Dashboard uses a clear hero hierarchy');
-      assert.ok(shellDocument.querySelector('.dashboard-session'),'Dashboard shows the current session summary');
+      assert.ok(shellDocument.querySelector('.story-card'),'Home leads with the current story');
+      assert.ok(shellDocument.querySelector('.dashboard-session'),'Home shows the current session summary');
       const sessionPortrait=shellDocument.querySelector('.dashboard-session .session-portrait');
-      assert.ok(sessionPortrait,'Dashboard shows the active character portrait');
+      assert.ok(sessionPortrait,'Home shows the active character portrait');
       await until(()=>sessionPortrait.getAttribute('src')==='blob:test-fixture','dashboard portrait loaded');
       sessionPortrait.dispatchEvent(new dom.window.Event('load'));
       assert.equal(sessionPortrait.closest('.session-portrait-frame').hidden,false,'Dashboard portrait appears only after loading');
       assert.equal(dom.window.getComputedStyle(sessionPortrait).objectFit,'contain','Dashboard portrait preserves the full image');
+      assert.equal(shellDocument.querySelectorAll('.story-status-item').length,3,'Home summarizes persona, world and memory state');
       assert.equal(shellDocument.querySelectorAll('.dashboard-shortcuts button').length,4,'Dashboard exposes four quick actions');
+      assert.ok(shellDocument.querySelector('.recent-stories'),'Home includes recent stories');
       assert.deepEqual([...shellDocument.querySelectorAll('.dashboard-health [data-health-icon]')].map(node=>node.dataset.healthIcon),['system','telegram','database'],'Dashboard Bridge health labels all three status cards with local icons');
       portraitMode='empty';
+    }
+    if(page==='manage') {
+      assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['models','personas','worlds','generation','memory','databank','advanced'],'Manage exposes unique design destinations in order');
+      assert.deepEqual([...shellDocument.querySelectorAll('.manage-section-title')].map(node=>node.textContent.trim()),['Story setup','Knowledge','Advanced']);
+      const generation=[...shellDocument.querySelectorAll('.manage-link')].find(node=>node.textContent.includes('Generation'));
+      generation.click();
+      await until(()=>shellDocument.getElementById('page-title').textContent==='Models','Generation opens the existing generation controls');
+    }
+    if(page==='advanced') {
+      assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['usage'],'Advanced settings keeps Usage reachable');
     }
     if(page==='usage') {
       assert.ok(shellDocument.querySelector('.usage-dashboard'),'Dedicated usage page renders');
@@ -103,6 +111,12 @@ try {
     }
     if(page==='characters') {
       assert.ok(shellDocument.querySelector('.character-card .portrait-frame'),'Character cards use a portrait-first visual layout');
+      assert.ok(shellDocument.querySelector('.character-page-header'),'Characters exposes the compact concept header');
+      assert.ok(shellDocument.querySelector('.character-card details.character-actions-menu'),'Secondary character actions use a compact menu');
+      assert.ok(shellDocument.querySelector('.character-card button.character-use'),'Use remains the primary character action');
+      const uploadInput=shellDocument.querySelector('input.character-file-input[type="file"]');
+      assert.ok(uploadInput&&uploadInput.isConnected,'Add character keeps its upload input connected to the page');
+      assert.equal(uploadInput.hidden,true,'Upload input stays visually hidden behind the add action');
       const characterPortrait=shellDocument.querySelector('.character-card img.portrait');
       assert.equal(dom.window.getComputedStyle(characterPortrait).objectFit,'contain','Character portraits show the complete image without cropping');
       const pageDocument=dom.window.document;
@@ -116,6 +130,11 @@ try {
   await app.namespace.navigate('dashboard');
   await until(()=>shellDocument.querySelector('.dashboard-session .session-portrait-frame')?.hidden===true,'dashboard missing portrait fallback');
   assert.ok(shellDocument.querySelector('.dashboard-session').textContent.includes('Default session'),'Dashboard text remains when its portrait is unavailable');
+  forcedFailure='/api/v1/personas';
+  await app.namespace.navigate('dashboard');
+  assert.ok(shellDocument.querySelector('.story-card'),'An optional status failure cannot blank Home');
+  assert.ok([...shellDocument.querySelectorAll('.story-status-item')].some(node=>node.textContent.includes('Unavailable')),'Unavailable optional status is labeled');
+  forcedFailure='';
   await app.namespace.navigate('models');
   const document=dom.window.document;
   const reasoningLabel=[...document.querySelectorAll('label')].find(n=>n.textContent==='Reasoning level');
@@ -178,7 +197,8 @@ try {
   [...document.querySelectorAll('main button')].find(n=>n.textContent==='Apply').click();
   await until(()=>document.querySelector('dialog[open]'),'apply confirmation');
   [...document.querySelectorAll('dialog button')].find(n=>n.textContent==='Confirm').click();
-  await until(()=>document.querySelector('main').textContent.includes('Upload character'),'proposal applied');
+  await until(()=>document.querySelector('main .character-page-header'),'proposal applied');
+  assert.ok(document.querySelector('main input.character-file-input')?.isConnected,'Upload remains available after applying a proposal');
   const updated=await app.namespace.api('/characters/Alice.png');
   assert.equal(updated.fields.description,'A thoughtful companion with clear motivations and consistent habits.');
   assert.ok(scrollResets>0,'Page navigation resets the old scroll position');
@@ -198,7 +218,7 @@ try {
   const newView=document.createElement('div');newView.textContent='Current view';finishNew(newView);await newNavigation;
   assert.equal(document.querySelector('main').textContent,'Current view','Only the latest page is committed');
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
-  console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=10 passed; browser-errors=0');
+  console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=12 passed; browser-errors=0');
 } finally {
   dom.window.close();lines.close();child.kill('SIGTERM');
 }

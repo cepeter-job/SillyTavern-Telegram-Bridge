@@ -30,20 +30,22 @@ export function createSessionScope() {
 export function sessionBody(extra={}) { if (!state.session) throw new Error('Open or create a session first.'); return {session_id:state.session.session_id,...extra}; }
 
 const pageInfo = {
-  dashboard:{label:'Home',module:'system',hint:'YOUR WORKSPACE',description:'Your story, one tap away.'},
+  dashboard:{label:'Home',module:'system',hint:'YOUR STORY',description:'Continue where you left off.'},
   characters:{label:'Characters',module:'characters',hint:'YOUR CAST',description:'Find a character. Start something new.'},
-  usage:{label:'Usage',module:'usage',hint:'TOKEN INSIGHTS',description:'Know where your tokens go.'},
   sessions:{label:'Sessions',module:'management',hint:'CONVERSATIONS',description:'Pick up where you left off.'},
+  manage:{label:'Manage',module:'manage',hint:'YOUR WORKSPACE',description:'Shape the story around you.'},
+  system:{label:'System',module:'system',hint:'BRIDGE HEALTH',description:'Status, operations and verified updates.'},
   models:{label:'Models',module:'models',hint:'GENERATION',description:'The right model for every task.'},
-  memory:{label:'Memory',module:'memory',hint:'CONTINUITY',description:'Keep the details that matter.'},
   personas:{label:'Personas',module:'management',hint:'YOUR IDENTITY',description:'Choose who you are in each story.'},
   worlds:{label:'Worlds',module:'management',hint:'LORE & CONTEXT',description:'Give your conversation a setting.'},
+  memory:{label:'Memory',module:'memory',hint:'CONTINUITY',description:'Keep the details that matter.'},
   databank:{label:'Data Bank',module:'memory',hint:'REFERENCE LIBRARY',description:'Ground replies in your documents.'},
-  system:{label:'System',module:'system',hint:'BRIDGE HEALTH',description:'Status, operations and verified updates.'},
+  advanced:{label:'Advanced settings',module:'manage',hint:'FINE TUNE',description:'Usage and workspace diagnostics.'},
+  usage:{label:'Usage',module:'usage',hint:'TOKEN INSIGHTS',description:'Know where your tokens go.'},
 };
 const pages = {};
-const primaryPages = [['dashboard','Home'],['characters','Characters'],['usage','Usage'],['sessions','Sessions']];
-const secondaryPages = ['models','memory','personas','worlds','databank','system'];
+const primaryPages = [['dashboard','Home'],['characters','Characters'],['sessions','Sessions'],['manage','Manage'],['system','System']];
+const managedPages = new Set(['manage','models','personas','worlds','memory','databank','advanced','usage']);
 const loadedModules = new Map();
 async function loadPage(key) {
   const name=pageInfo[key].module;
@@ -53,39 +55,20 @@ async function loadPage(key) {
 export function registerPage(key, label, render) { pages[key] = {label,render}; }
 let current='dashboard', generation=0;
 
-function closeMore() {
-  const sheet=document.getElementById('more-menu');
-  if(!sheet?.hasAttribute('open'))return;
-  if(typeof sheet.close==='function')sheet.close();else sheet.removeAttribute('open');
-}
-function renderMoreNavigation() {
-  const target=document.getElementById('more-navigation');
-  target.replaceChildren(...secondaryPages.map(key=>{
-    const page=pageInfo[key];if(!page)return document.createDocumentFragment();
-    const control=button(page.label,async()=>{closeMore();await navigate(key);},'more-link');
-    control.prepend(icon(key));control.setAttribute('aria-label',page.label);control.append(el('small',{},page.description));
-    control.hidden=!((page.label+' '+page.description).toLowerCase().includes((document.getElementById('more-search')?.value||'').toLowerCase()));
-    control.setAttribute('data-page',key);
-    if(key===current)control.setAttribute('aria-current','page');
-    return control;
-  }));
-}
-function openMore() {
-  renderMoreNavigation();
-  const sheet=document.getElementById('more-menu');
-  if(typeof sheet.showModal==='function')sheet.showModal();else sheet.setAttribute('open','');
+function goBack() {
+  if(managedPages.has(current)&&current!=='manage')return navigate('manage');
+  return navigate('dashboard');
 }
 function renderNavigation() {
   const controls=primaryPages.map(([key,label])=>{
     const control=button(label,()=>navigate(key),'nav-button');control.prepend(icon(key));control.setAttribute('data-page',key);
-    if(key===current)control.setAttribute('aria-current','page');return control;
+    if(key===current||(key==='manage'&&managedPages.has(current)))control.setAttribute('aria-current','page');return control;
   });
-  const more=button('More',openMore,'nav-button');more.prepend(icon('more'));more.setAttribute('data-page','more');
-  if(secondaryPages.includes(current))more.setAttribute('aria-current','page');
-  controls.push(more);document.getElementById('navigation').replaceChildren(...controls);renderMoreNavigation();
+  document.getElementById('navigation').replaceChildren(...controls);
 }
 function updateShell(key) {
   const page=pageInfo[key];
+  document.body.dataset.page=key;
   document.getElementById('page-title').textContent=page?.label||'Home';
   document.getElementById('page-kicker').textContent=page?.hint||'YOUR WORKSPACE';
   document.getElementById('page-description').textContent=page?.description||'';
@@ -99,7 +82,7 @@ export async function navigate(key=current) {
   if (!Object.hasOwn(pageInfo,key)) key='dashboard';
   const changed=key!==current;current=key;const seq=++generation;
   if(changed)selectionFeedback();
-  renderNavigation();updateShell(key);closeMore();
+  renderNavigation();updateShell(key);
   const content=document.getElementById('content');content.setAttribute('aria-busy','true');content.inert=true;
   const loading=setTimeout(()=>{if(seq===generation)content.replaceChildren(loadingView());},120);
   try {
@@ -119,11 +102,8 @@ export async function navigate(key=current) {
 async function start() {
   setupNative(telegram);
   document.getElementById('refresh').replaceChildren(icon('refresh'));
-  document.getElementById('more-close').replaceChildren(icon('close'));
-  document.getElementById('more-search').addEventListener('input',renderMoreNavigation);
-  try { telegram?.ready(); telegram?.expand(); telegram?.BackButton?.onClick(()=>{if(document.getElementById('more-menu').open)closeMore();else navigate('dashboard');}); } catch {}
+  try { telegram?.ready(); telegram?.expand(); telegram?.BackButton?.onClick(goBack); } catch {}
   document.getElementById('refresh').addEventListener('click',()=>navigate());
-  document.getElementById('more-close').addEventListener('click',closeMore);
   try {
     const data=await api('/me'); state.user=data.user;
     document.getElementById('identity').textContent=data.user.name+' · Private bot chat';

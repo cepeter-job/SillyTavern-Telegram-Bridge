@@ -35,6 +35,7 @@ _ASSETS = {
     "characters.js": "text/javascript",
     "models.js": "text/javascript",
     "management.js": "text/javascript",
+    "manage.js": "text/javascript",
     "memory.js": "text/javascript",
     "system.js": "text/javascript",
 }

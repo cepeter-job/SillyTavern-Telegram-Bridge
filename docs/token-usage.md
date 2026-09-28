@@ -1,9 +1,8 @@
 # Token usage
 
-Open **Usage** in the Mini App's bottom navigation (or desktop sidebar). Home also
-shows a seven-day summary for its current session. Choose **Last 24 hours**,
-**Last 7 days**, or **Last 30 days**, and **Current session** or **All my sessions**.
-Refresh after a request completes to see new activity.
+Open **Manage → Advanced settings → Usage** in the Mini App. Choose **Last
+24 hours**, **Last 7 days**, or **Last 30 days**, and **Current session** or
+**All my sessions**. Refresh after a request completes to see new activity.
 
 ## Reading the numbers
 

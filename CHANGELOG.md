@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Normalize known provider transport failures into bounded canonical errors before application handling, then surface safe actionable messages for character replies and optimizer flows without exposing upstream bodies, URLs, credentials, paths, or swallowing unrelated runtime defects.
+
 ## [0.2.039] - 2026-09-28
 
 ### Added

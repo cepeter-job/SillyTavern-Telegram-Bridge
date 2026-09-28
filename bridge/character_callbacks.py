@@ -36,8 +36,7 @@ from bridge.native_imports import (
     verify_character_card_backup,
 )
 from bridge.operations import begin_operation, record_operation
-from bridge.provider_errors import ProviderRequestError
-from bridge.provider_port import ProviderPort
+from bridge.provider_port import ProviderPort, ProviderRequestError
 from bridge.provider_user_errors import provider_user_error
 from bridge.telegram import send_panel_photo, send_panel_request
 

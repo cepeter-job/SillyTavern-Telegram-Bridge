@@ -113,7 +113,7 @@ def process_message_job(
                 else:
                     failure_message = "The command failed. Use /status for details, then retry the command."
             else:
-                provider_failure = actionable_provider_user_error(exc, model)
+                provider_failure = actionable_provider_user_error(exc)
                 failure_message = (
                     str(provider_failure)
                     if provider_failure is not None

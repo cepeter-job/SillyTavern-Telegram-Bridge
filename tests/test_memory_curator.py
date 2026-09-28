@@ -112,6 +112,8 @@ class MemoryCuratorTests(SettingsTestCase):
         self.assertEqual(retained[0][0][6], "curated")
 
     def test_retain_hook_queues_curator_only_when_memory_enabled(self):
+        import bridge.scene_state as scene_state
+
         self._add_turn()
         queued = []
         old_submit = _m_memory_curator.submit_background
@@ -120,26 +122,27 @@ class MemoryCuratorTests(SettingsTestCase):
         _m_memory.submit_background = lambda *_args, **_kwargs: True
         provider = make_test_provider_port()
         try:
-            _m_session_naming.set_meta(self.db, "memory_mode:chat", "off")
-            _m_memory.retain_session_memory(
-                self.db,
-                "chat",
-                self.session,
-                {"name": "Mira"},
-                provider_port=provider,
-                app_settings=self.app_settings_builder.build(),
-            )
-            self.assertNotIn("memory_curator", queued)
+            with patch.object(scene_state, "submit_background", return_value=False):
+                _m_session_naming.set_meta(self.db, "memory_mode:chat", "off")
+                _m_memory.retain_session_memory(
+                    self.db,
+                    "chat",
+                    self.session,
+                    {"name": "Mira"},
+                    provider_port=provider,
+                    app_settings=self.app_settings_builder.build(),
+                )
+                self.assertNotIn("memory_curator", queued)
 
-            _m_session_naming.set_meta(self.db, "memory_mode:chat", "on")
-            _m_memory.retain_session_memory(
-                self.db,
-                "chat",
-                self.session,
-                {"name": "Mira"},
-                provider_port=provider,
-                app_settings=self.app_settings_builder.build(),
-            )
+                _m_session_naming.set_meta(self.db, "memory_mode:chat", "on")
+                _m_memory.retain_session_memory(
+                    self.db,
+                    "chat",
+                    self.session,
+                    {"name": "Mira"},
+                    provider_port=provider,
+                    app_settings=self.app_settings_builder.build(),
+                )
         finally:
             _m_memory_curator.submit_background = old_submit
             _m_memory.submit_background = old_memory_submit

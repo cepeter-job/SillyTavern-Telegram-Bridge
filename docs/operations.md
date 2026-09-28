@@ -141,23 +141,43 @@ Do not move/delete:
 
 ### Manual update
 
+Use this only when the signed `/update` flow refuses automatic installation—for
+example, because `requirements.lock` changed—or when you intentionally want a
+reviewed offline update. Keep the same external trust anchor used by `/update`.
+
 For a Git installation:
 
 ```bash
-systemctl --user stop sillytavern-telegram.service
+set -euo pipefail
 cd ~/sillytavern-telegram-bridge
-git fetch origin --tags --prune
 git switch main
-git pull --ff-only origin main
-./.venv/bin/python -m pip install --require-hashes -r requirements.lock
+test -z "$(git status --porcelain)" || { echo "Source checkout is dirty" >&2; exit 1; }
+
+signers="$HOME/.config/sillytavern-telegram/trusted-maintainers"
+git fetch origin --tags --prune --prune-tags
+tag="$(git tag --list 'v*' --sort=-version:refname | sed -n '1p')"
+test -n "$tag" || { echo "No release tag found" >&2; exit 1; }
+
+git -c gpg.format=ssh \
+  -c "gpg.ssh.allowedSignersFile=$signers" \
+  -c gpg.minTrustLevel=fully verify-tag "$tag"
+
+systemctl --user stop sillytavern-telegram.service
+git checkout -B main "$tag^{commit}"
+./install.sh --no-start
 ./.venv/bin/python sillytavern_telegram_bridge.py --check
 systemctl --user start sillytavern-telegram.service
 ```
 
+Signature verification occurs before the checkout moves. Do not substitute
+`git pull origin main`: the branch can contain commits newer than the latest
+published signed release.
+
 For a release ZIP installation, download the latest ZIP and `.sha256`, verify the
-checksum, extract to a fresh directory, install the locked dependencies, run
-`--check`, then point your service at the new directory. Do not overlay a new ZIP
-onto an old source tree.
+checksum, and establish authenticity from the corresponding signed release/tag
+before extraction. Extract to a fresh directory, install the locked dependencies,
+run `--check`, then point your service at the new directory. Do not overlay a new
+ZIP onto an old source tree.
 
 ### Database migrations, backup and restore
 

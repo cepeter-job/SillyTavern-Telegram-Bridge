@@ -36,10 +36,18 @@ and permissions; POSIX file-mode validation is not a Windows ACL implementation.
 Run only software and native configuration you trust under the same account.
 
 Provider catalog URLs do not authorize credential egress. Keep endpoint and
-private-network grants explicit and minimal. The hardened urllib provider client
-uses an independently configured endpoint policy, validated DNS addresses and
-verified TLS. Third-party SDKs have their own transports; do not infer identical
-transport guarantees for every integration or arbitrary external program.
+private-network grants explicit and minimal. Egress guarantees are transport-specific:
+
+| Integration | Bridge-enforced destination/transport guarantee |
+|---|---|
+| OpenAI-compatible, Anthropic, images, model discovery, embeddings and native Codex OAuth | Explicit hostname policy, private-network opt-in, DNS validation/pinning, verified TLS, credential-safe redirects, and environment/request proxies refused by `strict_urlopen`. |
+| Live Sync | Loopback origin only, fixed SillyTavern API path allowlist, redirects refused, and environment proxies disabled. |
+| Hindsight | Third-party SDK retained for its API surface, but the bridge confines its base URL to numeric loopback (`127.0.0.1` / `::1`) and forces loopback into `NO_PROXY/no_proxy`. External Hindsight must be reached through a separately trusted local tunnel/proxy. |
+| Telegram Bot API | Fixed `api.telegram.org` origin constructed by bridge code; callers cannot configure its host. |
+| TTS/ffmpeg, PDF worker, Tailscale CLI and other helper processes | Spawned with the scrubbed minimal subprocess environment; their own network behavior is not represented as DNS-pinned bridge HTTP. |
+
+Do not infer the hardened provider guarantees for a third-party SDK or arbitrary
+external executable merely because the bridge validates its configuration.
 
 Self-update requires an SSH-signed annotated release tag authorized by an
 independently provisioned public allowed-signers file outside both updated trees.

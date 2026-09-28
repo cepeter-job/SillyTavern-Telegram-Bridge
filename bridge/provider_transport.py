@@ -714,6 +714,7 @@ def _generate_provider_text(
 
         return " ".join(segment for segment in segments if segment)
 
+
 def generate_provider_text(
     model_router: ModelRouter,
     api_key: str,
@@ -757,4 +758,3 @@ def generate_provider_text(
         raise ProviderRequestError("timeout", model) from None
     except (urllib.error.URLError, ConnectionError):
         raise ProviderRequestError("connection", model) from None
-

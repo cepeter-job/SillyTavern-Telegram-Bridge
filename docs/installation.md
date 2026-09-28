@@ -2,13 +2,20 @@
 
 ## Install with the user-scope script
 
-For a fresh Linux installation, run as your normal user:
+For a fresh Linux installation, run as your normal user and verify the chosen signed release before executing repository code. First provision the public allowed-signers file from the independently verified key in [Operations](operations.md#verified-update-flow), then replace `vX.Y.Z` below with the release you intend to install:
 
 ```bash
-git clone https://github.com/cepeter/SillyTavern-Telegram-Bridge.git ~/sillytavern-telegram-bridge
+git clone --no-checkout https://github.com/cepeter/SillyTavern-Telegram-Bridge.git ~/sillytavern-telegram-bridge
 cd ~/sillytavern-telegram-bridge
+git -c gpg.format=ssh \
+  -c gpg.ssh.allowedSignersFile="$HOME/.config/sillytavern-telegram/trusted-maintainers" \
+  -c gpg.minTrustLevel=fully verify-tag vX.Y.Z
+commit=$(git rev-parse 'vX.Y.Z^{commit}')
+git checkout -B main "$commit"
 ./install.sh --system-deps --no-start
 ```
+
+This keeps the working branch named `main` for the built-in signed updater while pinning the initial contents to the verified release commit. If an independently obtained bootstrap copy of `install.sh` is outside a checkout, it can perform the clone/verify/checkout step with `--release vX.Y.Z --allowed-signers PATH`. `--unsafe-main` explicitly opts into cloning unsigned development `main`; it is not the recommended first-install path.
 
 Fill `~/.local/share/sillytavern-telegram/.env` with your bot and provider values:
 
@@ -94,14 +101,7 @@ installation or a root-owned service.
 
 ### 1. Install the bridge source
 
-**Recommended:** clone with Git. A clean `main` checkout is required for the
-built-in signed `/update` flow.
-
-```bash
-cd ~
-git clone https://github.com/cepeter/SillyTavern-Telegram-Bridge.git sillytavern-telegram-bridge
-cd ~/sillytavern-telegram-bridge
-```
+**Recommended:** use the signed-release verification sequence at the top of this guide. A clean branch named `main`, positioned at the verified release commit, remains compatible with the built-in signed `/update` flow. Do not execute `install.sh` from a newly cloned repository until the selected release tag has been verified against the independently provisioned allowed-signers file.
 
 For a manual/offline install, the latest GitHub release also includes an explicit
 `SillyTavern-Telegram-Bridge-vX.Y.Z.zip` asset and matching `.sha256` checksum.

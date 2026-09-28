@@ -1,4 +1,4 @@
-import {api,state,createSessionScope,registerPage,runJob} from './app.js';
+import {api,state,createSessionScope,registerPage,runJob,navigate} from './app.js';
 import {el,card,button,field,empty,confirmAction,notice} from './ui.js';
 const enc=encodeURIComponent;
 async function renderSessions() {
@@ -15,7 +15,7 @@ async function renderSessions() {
         field('Session title',title),el('div',{class:'actions'},button('Rename',async()=>{
           await api('/sessions/'+enc(item.session_id),{method:'PATCH',body:sessionBody({title:title.value})});await load(query);
         },'secondary'),button('Open',async()=>{
-          const result=await api('/sessions/'+enc(item.session_id)+'/select',{method:'POST',body:sessionBody()});scope.set(result.session);await load(query);
+          const result=await api('/sessions/'+enc(item.session_id)+'/select',{method:'POST',body:sessionBody()});scope.set(result.session);await navigate('dashboard');
         }),button('Delete',async()=>{
           if(!await confirmAction('Delete '+item.title+' and its stored conversation? Active sessions cannot be deleted.'))return;
           await runJob('/sessions/'+enc(item.session_id)+'/delete',sessionBody({confirm:true}),root);await load(query);

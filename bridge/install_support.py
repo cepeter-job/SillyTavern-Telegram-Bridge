@@ -184,6 +184,12 @@ def prepare_install(source: Path, home: Path, env_path: Path, unit_dir: Path, *,
     template = template.replace(
         "SILLYTAVERN_MODEL=example-provider::example-model", "SILLYTAVERN_MODEL=default::replace-model"
     )
+    if not re.search(r"(?m)^SILLYTAVERN_UPDATE_ALLOWED_SIGNERS=", template):
+        marker = "# SILLYTAVERN_UPDATE_ALLOWED_SIGNERS=/path/to/private-config/trusted-maintainers"
+        if marker not in template:
+            raise ValueError("Environment template is missing the update signer setting")
+        signer_path = home / ".config/sillytavern-telegram/trusted-maintainers"
+        template = template.replace(marker, f"SILLYTAVERN_UPDATE_ALLOWED_SIGNERS={signer_path}", 1)
     _new_file(env_path, template.encode())
     settings = installation_settings(source, home, env_path)
     config = load_miniapp_config(settings)

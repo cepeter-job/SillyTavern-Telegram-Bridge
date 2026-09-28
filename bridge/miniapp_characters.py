@@ -26,7 +26,7 @@ from bridge.native_imports import (
     character_delete_references,
     verify_character_card_backup,
 )
-from bridge.provider_errors import ProviderRequestError
+from bridge.port_contracts import ProviderRequestError
 from bridge.provider_user_errors import provider_user_error
 from bridge.sqlite_store import write_transaction
 

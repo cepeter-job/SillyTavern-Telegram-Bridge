@@ -3,14 +3,37 @@
 from __future__ import annotations
 
 import logging
+import socket
 import time
+import urllib.error
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
 
-from bridge.port_contracts import CancellationEvent, ProviderGenerate
-from bridge.provider_errors import ProviderRequestError, normalize_provider_transport_error
+from bridge.port_contracts import (
+    CancellationEvent,
+    ProviderGenerate,
+    ProviderRequestError,
+    ProviderSelectionError,
+    provider_error_for_http_status,
+)
 from bridge.token_usage_values import TokenUsage, UsageEvent, UsageRecorder, UsageScope
+
+
+
+def normalize_provider_transport_error(error: BaseException, model: str) -> ProviderRequestError | None:
+    """Normalize known provider-boundary failures and leave unrelated runtime defects untouched."""
+    if isinstance(error, ProviderRequestError):
+        return error
+    if isinstance(error, ProviderSelectionError):
+        return ProviderRequestError("model_unavailable", model)
+    if isinstance(error, urllib.error.HTTPError):
+        return provider_error_for_http_status(model, int(error.code))
+    if isinstance(error, (TimeoutError, socket.timeout)):
+        return ProviderRequestError("timeout", model)
+    if isinstance(error, (urllib.error.URLError, ConnectionError)):
+        return ProviderRequestError("connection", model)
+    return None
 
 
 @dataclass(frozen=True)

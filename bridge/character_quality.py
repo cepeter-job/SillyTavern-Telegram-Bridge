@@ -25,7 +25,6 @@ from pathlib import Path
 
 import bridge.limits as _limits
 from bridge.metadata import get_meta, set_meta
-from bridge.model_router import ModelRoutingError
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
@@ -359,17 +358,13 @@ def optimize_character(
         "stop_sequences": "",
     }
     model = _utility_model(db, chat_id, session, app_settings=app_settings)
-    try:
-        raw = provider_port.for_usage(chat_id, session["session_id"], "optimizer").generate(
-            "",
-            model,
-            optimize_prompt(fields, suggestion=suggestion),
-            session_id=f"character-optimize:{chat_id}:{session['session_id']}",
-            settings=settings,
-            force_non_stream=True,
-            request_timeout=30.0,
-        )
-    except ModelRoutingError:
-        logging.warning("Character optimization model resolution failed; leaving the card unchanged")
-        return None
+    raw = provider_port.for_usage(chat_id, session["session_id"], "optimizer").generate(
+        "",
+        model,
+        optimize_prompt(fields, suggestion=suggestion),
+        session_id=f"character-optimize:{chat_id}:{session['session_id']}",
+        settings=settings,
+        force_non_stream=True,
+        request_timeout=30.0,
+    )
     return parse_optimized_fields(raw)

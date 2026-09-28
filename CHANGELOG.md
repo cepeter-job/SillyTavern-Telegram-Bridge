@@ -19,6 +19,7 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 ### Fixed
 
 - Make `/reset` best-effort delete tracked user inputs, assistant replies, open choices, and consumed Light Novel choice quotes for the active session, including choice panels that were already consumed.
+- Scrub bridge credentials from every helper subprocess environment while preserving only the process plumbing needed by TTS/ffmpeg, document parsing, runtime-health Git, Tailscale and self-update supervisor commands.
 - Reject duplicate keys in the private environment file so appended allowlist or credential changes cannot be silently ignored; existing process environment variables retain precedence.
 
 ## [0.2.038] - 2026-09-28

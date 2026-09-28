@@ -13,6 +13,7 @@ from pathlib import Path
 
 from bridge.self_update import APPLICATION, MARKER
 from bridge.settings import AppSettings
+from bridge.subprocess_security import minimal_subprocess_environment
 
 
 @dataclass(frozen=True)
@@ -38,7 +39,12 @@ def capture_deployment(settings: AppSettings) -> DeploymentIdentity:
             if not git:
                 return DeploymentIdentity()
             result = subprocess.run(  # noqa: S603 -- fixed git executable/arguments, trusted loaded package root
-                [git, "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5, check=True
+                [git, "-C", str(root), "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=True,
+                env=minimal_subprocess_environment(),
             )
             commit = result.stdout.strip()
             status = subprocess.run(  # noqa: S603 -- fixed read-only git command, never a shell
@@ -47,6 +53,7 @@ def capture_deployment(settings: AppSettings) -> DeploymentIdentity:
                 text=True,
                 timeout=5,
                 check=True,
+                env=minimal_subprocess_environment(),
             )
             if status.stdout.strip():
                 return DeploymentIdentity()

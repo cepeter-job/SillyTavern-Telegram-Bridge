@@ -15,6 +15,7 @@ from defusedxml import ElementTree as ET
 
 from bridge.limits import RAG_CHUNK_CHARS, RAG_CHUNK_OVERLAP, RAG_MAX_FILE_BYTES, RAG_SUPPORTED_SUFFIXES
 from bridge.settings import AppSettings
+from bridge.subprocess_security import minimal_subprocess_environment
 
 
 def extract_pdf_data_bank_text(raw: bytes, *, app_settings: AppSettings) -> str:
@@ -37,6 +38,7 @@ def extract_pdf_data_bank_text(raw: bytes, *, app_settings: AppSettings) -> str:
             stderr=subprocess.DEVNULL,
             timeout=app_settings.rag_pdf_parse_timeout_seconds,
             check=False,
+            env=minimal_subprocess_environment(),
         )
     except subprocess.TimeoutExpired as exc:
         raise ValueError("PDF parsing timed out") from exc

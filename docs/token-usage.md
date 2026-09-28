@@ -34,9 +34,7 @@ quota. No money amounts or billing estimates are generated.
 
 ## What is covered
 
-Tracking starts **after this version is installed and the bridge is restarted**.
-Existing conversations do not contain historical provider usage, so there is no
-backfill.
+Tracking starts only after a bridge version containing the usage ledger is installed and restarted. Existing conversations do not contain historical provider usage, so there is no backfill.
 
 Covered session-owned calls include ordinary stories, edited and image replies,
 regeneration/continuation, response-language rendering, Humanizer, Light Novel
@@ -71,8 +69,4 @@ authoritative billing record.
 
 ## Upgrade and rollback
 
-This release adds forward migration **3 — token_usage_ledger**. Existing messages
-and session settings are preserved. Back up the SQLite database before upgrading.
-Older bridge versions reject unknown migrations; rollback requires restoring the
-matching pre-upgrade database backup. Do not delete migration records to bypass
-that guard. There are no new runtime dependencies or required settings.
+Token usage is stored by forward migration **3 — token_usage_ledger**. Existing messages and session settings are preserved when that migration is first applied. Older bridge versions that do not know migration 3 reject the newer schema; rollback across that boundary requires restoring a matching pre-upgrade database backup. Do not delete migration records to bypass the guard.

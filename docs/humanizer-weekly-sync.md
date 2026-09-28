@@ -36,12 +36,7 @@ fetching reproducible without implying that it automatically tracks upstream.
 
 ## Network and resource policy
 
-A standalone task must use the existing `bridge.network_security.strict_urlopen`
-transport with an explicit, task-specific allowlist. There is no `EndpointPolicy`
-class to instantiate. Allow only HTTPS on the approved raw GitHub host and do not
-forward provider keys, bot tokens, or other credentials. Existing redirect and
-DNS-address checks must remain enabled. Do not change the bridge's normal
-provider allowlists to make an administrative fetch work.
+A standalone task must use the existing `bridge.network_security.strict_urlopen` transport with an explicit, task-specific `EndpointPolicy`. Allow only HTTPS on the approved raw GitHub host, disable loopback, and do not forward provider keys, bot tokens, or other credentials. Existing redirect and DNS-address checks must remain enabled. Do not change the bridge's normal provider allowlists to make an administrative fetch work.
 
 Use a finite request timeout, a finite overall task deadline, no unbounded
 retries, and read at most 64 KiB plus one byte **per file** before refusing an

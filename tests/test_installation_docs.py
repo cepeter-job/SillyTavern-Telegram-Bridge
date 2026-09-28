@@ -29,6 +29,28 @@ def test_readme_quick_start_discovers_latest_signed_release_before_main_checkout
     assert "--unsafe-main" not in quick
 
 
+def test_readme_basic_flow_uses_providers_and_starts_before_chatting():
+    text = (ROOT / "README.md").read_text()
+    basic = _section(text, "## Basic bot use", "## Documentation")
+    assert "/model" not in basic
+    assert "/providers" in basic
+    assert basic.index("/start") < basic.index("Send normal messages")
+
+
+def test_readme_shows_telegram_only_start_before_optional_funnel():
+    quick = _section((ROOT / "README.md").read_text(), "## Quick start", "## What you can do")
+    assert "./install.sh --linger" in quick
+    assert "./install.sh --with-tailscale-funnel --linger" in quick
+    assert quick.index("./install.sh --linger") < quick.index("./install.sh --with-tailscale-funnel --linger")
+
+
+def test_miniapp_upgrade_guidance_never_pulls_unsigned_main():
+    text = (ROOT / "docs/miniapp.md").read_text()
+    assert "git pull --ff-only origin main" not in text
+    assert "Version 0.2.033" not in text
+    assert "operations.md#manual-update" in text
+
+
 def test_installation_guide_keeps_bootstrap_and_unsafe_paths_in_advanced_section():
     text = (ROOT / "docs/installation.md").read_text()
     leading = text.split("## Advanced / development", 1)[0]

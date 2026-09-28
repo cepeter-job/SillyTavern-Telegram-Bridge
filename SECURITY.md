@@ -51,10 +51,14 @@ external executable merely because the bridge validates its configuration.
 
 Self-update requires an SSH-signed annotated release tag authorized by an
 independently provisioned public allowed-signers file outside both updated trees.
-Never use a private signing key as that file or trust keys fetched from the same
-release they would authorize. Do not rewrite old tags to bypass verification.
-The updater refuses changed runtime dependency locks for automatic installation;
-use the reviewed manual installation procedure in that case.
+The policy supports **multiple public signer entries** so operators can deploy an
+overlap window during release-key rotation. Keep all **private signing keys**
+offline and under separate custody; the trust file contains public material only.
+Never trust keys fetched from the same release they would authorize, and never
+rewrite old tags to bypass verification or revocation. The detailed rotation and
+emergency-compromise procedure is in `docs/operations.md`. The updater refuses
+changed runtime dependency locks for automatic installation; use the reviewed
+manual installation procedure in that case.
 
 Source-checkout advancement, live-mirror activation and service restart are not
 one filesystem-wide atomic transaction. Inspect explicit partial-update or

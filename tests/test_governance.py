@@ -205,3 +205,19 @@ def test_completed_superpowers_planning_artifacts_are_not_shipped_as_user_docs()
         "docs/superpowers/specs/2026-09-27-miniapp-design.md",
     )
     assert all(not (ROOT / path).exists() for path in retired)
+
+
+def test_release_signing_rotation_runbook_requires_overlap_and_revocation_steps():
+    operations = (ROOT / "docs/operations.md").read_text(encoding="utf-8")
+    security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
+    required = (
+        "second offline signing key",
+        "overlap period",
+        "remove the old public key",
+        "do not rewrite historical tags",
+        "compromised",
+    )
+    for phrase in required:
+        assert phrase in operations.casefold(), phrase
+    assert "multiple public signer entries" in security.casefold()
+    assert "private signing keys" in security.casefold()

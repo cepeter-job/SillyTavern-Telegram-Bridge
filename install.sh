@@ -11,9 +11,9 @@ Usage: ./install.sh [options]
   --system-deps          Install Debian/Ubuntu prerequisites (sudo required).
   --linger               Enable user services after logout.
   --replace-service      Back up and replace an existing custom bridge unit.
-  --release TAG          Clone and verify one signed release tag (recommended first install).
+  --release TAG          Clone and verify one signed release tag (advanced/bootstrap).
   --allowed-signers PATH Trusted SSH allowed-signers file used by --release.
-  --unsafe-main          Explicitly clone unsigned development main instead of a release.
+  --unsafe-main          Explicitly clone unsigned development main (advanced only).
   --env-file PATH        Choose the private .env location.
   --help                 Show this help without changing anything.
 
@@ -25,8 +25,9 @@ URL is filled automatically using a free supported port; existing routes are kep
 --no-start never publishes a new Funnel. The bridge API still requires Telegram auth.
 A running bridge is never upgraded in place: stop it before installing dependencies,
 or use --no-deps when its existing environment already satisfies requirements.lock.
-When this script must clone the repository, choose a signed --release and independently
-provision its allowed-signers file. --unsafe-main is for explicit development installs only.
+When an independently obtained copy of this script must bootstrap the repository,
+use the advanced --release flow with an independently provisioned allowed-signers file.
+--unsafe-main is for explicit unsigned development installs only.
 HELP
 }
 START=1; DEPS=1; FUNNEL=0; SYSTEM_DEPS=0; LINGER=0; REPLACE=0; UNSAFE_MAIN=0

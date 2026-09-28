@@ -37,6 +37,30 @@ def test_fresh_install_has_private_config_starters_service_and_idempotency(tmp_p
     assert len(cards) == 1
 
 
+def test_fresh_install_sets_standard_update_signer_path(tmp_path):
+    from bridge.install_support import prepare_install
+
+    home, source, env, units = inputs(tmp_path)
+    prepare_install(source, home, env, units)
+    active = [line for line in env.read_text().splitlines() if line.startswith("SILLYTAVERN_UPDATE_ALLOWED_SIGNERS=")]
+    assert active == [f"SILLYTAVERN_UPDATE_ALLOWED_SIGNERS={home / '.config/sillytavern-telegram/trusted-maintainers'}"]
+
+
+def test_fresh_install_preserves_active_template_update_signer_path(tmp_path):
+    from bridge.install_support import prepare_install
+
+    home, source, env, units = inputs(tmp_path)
+    template = (source / ".env.example").read_text()
+    template = template.replace(
+        "# SILLYTAVERN_UPDATE_ALLOWED_SIGNERS=/path/to/private-config/trusted-maintainers",
+        "SILLYTAVERN_UPDATE_ALLOWED_SIGNERS=/custom/trusted-maintainers",
+    )
+    (source / ".env.example").write_text(template)
+    prepare_install(source, home, env, units)
+    active = [line for line in env.read_text().splitlines() if line.startswith("SILLYTAVERN_UPDATE_ALLOWED_SIGNERS=")]
+    assert active == ["SILLYTAVERN_UPDATE_ALLOWED_SIGNERS=/custom/trusted-maintainers"]
+
+
 def test_existing_private_env_native_files_and_custom_service_are_preserved(tmp_path):
     from bridge.install_support import prepare_install
 

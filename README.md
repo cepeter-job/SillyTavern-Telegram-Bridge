@@ -11,39 +11,60 @@ and an optional private management Mini App.
 
 ## Quick start
 
-Linux installation is user-scoped. For a first install, verify a signed release **before executing repository code**. Provision the maintainer public key independently as described in [Operations](docs/operations.md), choose a release tag such as `vX.Y.Z`, then:
+Linux installation is user-scoped. A first install uses an independently trusted maintainer key and verifies a signed release **before executing repository code**.
+
+### 1. One-time trust setup
+
+Create the external allowed-signers file once:
 
 ```bash
-git clone --no-checkout https://github.com/cepeter/SillyTavern-Telegram-Bridge.git ~/sillytavern-telegram-bridge
-cd ~/sillytavern-telegram-bridge
+mkdir -p "$HOME/.config/sillytavern-telegram"
+chmod 700 "$HOME/.config/sillytavern-telegram"
+cat > "$HOME/.config/sillytavern-telegram/trusted-maintainers" <<'EOF'
+cepeter namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGRaxgobK+D+zdXdUzLb1xTQ2EPs9iYkeQGOOlepl+35 cepeter-release-signing
+EOF
+chmod 600 "$HOME/.config/sillytavern-telegram/trusted-maintainers"
+awk '{print $3, $4, $5}' "$HOME/.config/sillytavern-telegram/trusted-maintainers" | ssh-keygen -lf -
+```
+
+Before trusting that file, independently compare the printed fingerprint through a separate trusted maintainer channel. The documented fingerprint is:
+
+```text
+SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI
+```
+
+Do not treat this README itself as the independent verification channel. See [Operations](docs/operations.md) for key rotation and revocation procedures.
+
+### 2. Install latest signed release
+
+Copy and paste this block. It clones without checking out files, selects the newest `v*` tag, verifies that tag against the external trust file, then creates local branch `main` at that verified release commit before running the installer:
+
+```bash
+set -euo pipefail
+repo="https://github.com/cepeter/SillyTavern-Telegram-Bridge.git"
+dest="$HOME/sillytavern-telegram-bridge"
+signers="$HOME/.config/sillytavern-telegram/trusted-maintainers"
+
+git clone --no-checkout "$repo" "$dest"
+cd "$dest"
+tag="$(git tag --list 'v*' --sort=-version:refname | sed -n '1p')"
+test -n "$tag" || { echo "No release tag found" >&2; exit 1; }
 git -c gpg.format=ssh \
-  -c gpg.ssh.allowedSignersFile="$HOME/.config/sillytavern-telegram/trusted-maintainers" \
-  -c gpg.minTrustLevel=fully verify-tag vX.Y.Z
-commit=$(git rev-parse 'vX.Y.Z^{commit}')
-git checkout -B main "$commit"
+  -c "gpg.ssh.allowedSignersFile=$signers" \
+  -c gpg.minTrustLevel=fully verify-tag "$tag"
+git checkout -B main "$tag^{commit}"
 ./install.sh --system-deps --no-start
 ```
 
-Cloning unsigned `main` is a development-only choice. When an independently obtained bootstrap copy of `install.sh` must clone the repository itself, use `--release vX.Y.Z --allowed-signers PATH`; `--unsafe-main` is the explicit opt-in for an unsigned development clone.
-
-Fill the generated private file:
-
-```text
-~/.local/share/sillytavern-telegram/.env
-```
-
-At minimum, configure your Telegram bot token/user ID, default model/provider,
-and provider credential. The maintained `.env.example` is the source of starter
-configuration. For the Mini App, install/sign in to Tailscale and then run:
+The generated private `~/.local/share/sillytavern-telegram/.env` automatically points `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` at the same standard external trust file. Fill the Telegram bot/user ID, default model/provider, and provider credential, then rerun the installer. For the Mini App, install/sign in to Tailscale and run:
 
 ```bash
 ./install.sh --with-tailscale-funnel --linger
 ```
 
-The default Mini App listener is loopback-only; Tailscale Funnel provides public
-HTTPS while Telegram `initData` and the allowed-user list remain the application
-authorization boundary. See [Installation](docs/installation.md) for the full
-fresh-install, upgrade, systemd, and Tailscale procedure.
+This remains a real Git checkout on branch `main`, so the built-in verified `/update` flow keeps the same trust anchor. Alternative bootstrap, development, and release-archive paths are documented under [Advanced / development installation](docs/installation.md#advanced--development-installation).
+
+The default Mini App listener is loopback-only; Tailscale Funnel provides public HTTPS while Telegram `initData` and the allowed-user list remain the application authorization boundary. See [Installation](docs/installation.md) for the full fresh-install, upgrade, systemd, and Tailscale procedure.
 
 ## What you can do
 

@@ -2,22 +2,52 @@
 
 ## Install with the user-scope script
 
-For a fresh Linux installation, run as your normal user and verify the chosen signed release before executing repository code. First provision the public allowed-signers file from the independently verified key in [Operations](operations.md#verified-update-flow), then replace `vX.Y.Z` below with the release you intend to install:
+For a fresh Linux installation, run as your normal user. The primary path has two trust-preserving steps: provision the external maintainer key once, then install the newest signed `v*` release without executing repository code before its tag verifies.
+
+### 1. One-time trust setup
+
+Create the standard external allowed-signers file:
 
 ```bash
-git clone --no-checkout https://github.com/cepeter/SillyTavern-Telegram-Bridge.git ~/sillytavern-telegram-bridge
-cd ~/sillytavern-telegram-bridge
+mkdir -p "$HOME/.config/sillytavern-telegram"
+chmod 700 "$HOME/.config/sillytavern-telegram"
+cat > "$HOME/.config/sillytavern-telegram/trusted-maintainers" <<'EOF'
+cepeter namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGRaxgobK+D+zdXdUzLb1xTQ2EPs9iYkeQGOOlepl+35 cepeter-release-signing
+EOF
+chmod 600 "$HOME/.config/sillytavern-telegram/trusted-maintainers"
+awk '{print $3, $4, $5}' "$HOME/.config/sillytavern-telegram/trusted-maintainers" | ssh-keygen -lf -
+```
+
+Independently compare the printed fingerprint through a separate trusted maintainer channel before proceeding:
+
+```text
+SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI
+```
+
+The repository documentation is not the independent channel. Key rotation and revocation procedures are in [Operations](operations.md#automatic-signed-update).
+
+### 2. Install latest signed release
+
+```bash
+set -euo pipefail
+repo="https://github.com/cepeter/SillyTavern-Telegram-Bridge.git"
+dest="$HOME/sillytavern-telegram-bridge"
+signers="$HOME/.config/sillytavern-telegram/trusted-maintainers"
+
+git clone --no-checkout "$repo" "$dest"
+cd "$dest"
+tag="$(git tag --list 'v*' --sort=-version:refname | sed -n '1p')"
+test -n "$tag" || { echo "No release tag found" >&2; exit 1; }
 git -c gpg.format=ssh \
-  -c gpg.ssh.allowedSignersFile="$HOME/.config/sillytavern-telegram/trusted-maintainers" \
-  -c gpg.minTrustLevel=fully verify-tag vX.Y.Z
-commit=$(git rev-parse 'vX.Y.Z^{commit}')
-git checkout -B main "$commit"
+  -c "gpg.ssh.allowedSignersFile=$signers" \
+  -c gpg.minTrustLevel=fully verify-tag "$tag"
+git checkout -B main "$tag^{commit}"
 ./install.sh --system-deps --no-start
 ```
 
-This keeps the working branch named `main` for the built-in signed updater while pinning the initial contents to the verified release commit. If an independently obtained bootstrap copy of `install.sh` is outside a checkout, it can perform the clone/verify/checkout step with `--release vX.Y.Z --allowed-signers PATH`. `--unsafe-main` explicitly opts into cloning unsigned development `main`; it is not the recommended first-install path.
+This leaves a real Git checkout on local branch `main` whose initial contents are exactly the verified release commit. The external signer file remains outside the repository and is reused by the built-in signed `/update` flow.
 
-Fill `~/.local/share/sillytavern-telegram/.env` with your bot and provider values:
+The generated `~/.local/share/sillytavern-telegram/.env` automatically points `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` at the standard trust file. Fill the bot and provider values:
 
 ```dotenv
 SILLYTAVERN_TELEGRAM_BOT_TOKEN=your-bot-token
@@ -30,56 +60,45 @@ LLM_API_KEY=your-provider-key
 SILLYTAVERN_MINIAPP_PUBLIC_URL=
 ```
 
-Install and sign in to [Tailscale](https://tailscale.com/download/linux) on this
-server first. Requires **Tailscale 1.52+**, running `tailscaled`, MagicDNS, HTTPS
-certificates, Funnel authorization and an account allowed to configure Tailscale.
-An administrator can designate the account with `sudo tailscale set --operator="$USER"`.
-Account login and tailnet approval are external prerequisites; the bridge does not
-invent or bypass them. Then run:
+Install and sign in to [Tailscale](https://tailscale.com/download/linux) on this server first. Requires **Tailscale 1.52+**, running `tailscaled`, MagicDNS, HTTPS certificates, Funnel authorization and an account allowed to configure Tailscale. An administrator can designate the account with `sudo tailscale set --operator="$USER"`. Account login and tailnet approval are external prerequisites; the bridge does not invent or bypass them. Then run:
 
 ```bash
 ./install.sh --with-tailscale-funnel --linger
 ```
 
-Deployment: **public HTTPS → Tailscale Funnel → `127.0.0.1:8787`**. No additional
-reverse proxy, custom domain, inbound public ports or port forwarding is required.
-Funnel manages TLS and the public hostname. The bot's **Bridge** menu opens the app.
-Funnel is public; private API operations still require signed Telegram `initData`
-and an allowed-user ID. The same root proxy carries both `/miniapp/*` and `/api/v1/*`.
+Deployment: **public HTTPS → Tailscale Funnel → `127.0.0.1:8787`**. No additional reverse proxy, custom domain, inbound public ports or port forwarding is required. Funnel manages TLS and the public hostname. The bot's **Bridge** menu opens the app. Funnel is public; private API operations still require signed Telegram `initData` and an allowed-user ID. The same root proxy carries both `/miniapp/*` and `/api/v1/*`.
 
-A blank URL reuses only an exact already-public Mini App proxy, or selects the first
-unused HTTPS port: **443, 8443, then 10000**. Only that URL assignment is saved in
-`.env`. Existing private Serve and public Funnel routes are not reset or replaced.
-An explicit URL must match this node and an available supported port; conflicts
-stop setup. The backend uses `SILLYTAVERN_MINIAPP_PORT` (default `8787`).
+A blank URL reuses only an exact already-public Mini App proxy, or selects the first unused HTTPS port: **443, 8443, then 10000**. Only that URL assignment is saved in `.env`. Existing private Serve and public Funnel routes are not reset or replaced. An explicit URL must match this node and an available supported port; conflicts stop setup. The backend uses `SILLYTAVERN_MINIAPP_PORT` (default `8787`).
 
-The installer prepares user-local Python, hash-locked dependencies, a starter
-character/avatar, an env-derived provider catalog and a user systemd service.
-`--system-deps` installs Debian/Ubuntu base prerequisites, **not Tailscale**.
-Existing `.env` values, custom provider YAML, native files and custom service units
-are preserved. `--replace-service` explicitly replaces a custom unit with a backup.
-`--no-start` prepares files but never starts the bridge or publishes a new Funnel.
-Publishing requires a ready loopback Mini App and an unauthenticated API rejection.
+The installer prepares user-local Python, hash-locked dependencies, a starter character/avatar, an env-derived provider catalog and a user systemd service. `--system-deps` installs Debian/Ubuntu base prerequisites, **not Tailscale**. Existing `.env` values, custom provider YAML, native files and custom service units are preserved. `--replace-service` explicitly replaces a custom unit with a backup. `--no-start` prepares files but never starts the bridge or publishes a new Funnel. Publishing requires a ready loopback Mini App and an unauthenticated API rejection.
 
-Keep the generated starter-character value initially. Add optional model IDs with
-`SILLYTAVERN_EXTRA_MODELS=model-two,model-three`, or use custom provider YAML for
-multiple providers. Without the Funnel flag, a blank URL keeps the listener off.
-The Mini App manages Characters/Optimizer, Models/Generation, Sessions, Personas,
-Worlds, Memory, Data Bank and System/Update. Ordinary conversation stays in Telegram.
+Keep the generated starter-character value initially. Add optional model IDs with `SILLYTAVERN_EXTRA_MODELS=model-two,model-three`, or use custom provider YAML for multiple providers. Without the Funnel flag, a blank URL keeps the listener off. The Mini App manages Characters/Optimizer, Models/Generation, Sessions, Personas, Worlds, Memory, Data Bank and System/Update. Ordinary conversation stays in Telegram.
 
-**Upgrade:** stop the user service before changing dependencies, update the clean
-checkout to `main`, and rerun `./install.sh --with-tailscale-funnel --linger`.
-Version **0.2.033** changes the dependency lock from previous releases, requiring
-this manual installation; `/update` keeps its dependency-change guard.
+**Upgrade:** stop the user service before changing dependencies, update the clean checkout to `main`, and rerun `./install.sh --with-tailscale-funnel --linger`. Version **0.2.033** changes the dependency lock from previous releases, requiring this manual installation; `/update` keeps its dependency-change guard.
 
-Allowed users share administration of native assets; use separate bridge instances
-for mutually untrusted users. Existing unrelated proxy packages and system services
-are not uninstalled. Funnel `--bg` persists across daemon restarts and reboot.
-Tailscale still documents Funnel as beta with non-configurable bandwidth limits.
+Allowed users share administration of native assets; use separate bridge instances for mutually untrusted users. Existing unrelated proxy packages and system services are not uninstalled. Funnel `--bg` persists across daemon restarts and reboot. Tailscale still documents Funnel as beta with non-configurable bandwidth limits.
 
-See [Mini App installation and operations](miniapp.md) for authorization,
-upgrade commands, status and troubleshooting. The manual installation steps below
-remain available for customized deployments.
+See [Mini App installation and operations](miniapp.md) for authorization, upgrade commands, status and troubleshooting.
+
+## Advanced / development installation
+
+These paths are intentionally outside the primary Quick start.
+
+**Bootstrap with an independently obtained installer.** Keep `--release TAG` for cases where a separately authenticated copy of `install.sh` must perform the clone itself:
+
+```bash
+./install.sh --release vX.Y.Z \
+  --allowed-signers "$HOME/.config/sillytavern-telegram/trusted-maintainers" \
+  --system-deps --no-start
+```
+
+**Unsigned development `main`.** Use this only for development when signature-pinned bootstrap is deliberately not required:
+
+```bash
+./install.sh --unsafe-main --system-deps --no-start
+```
+
+**Manual/offline release ZIP.** GitHub releases include `SillyTavern-Telegram-Bridge-vX.Y.Z.zip` and its matching `.sha256`. Verify the checksum, extract into a fresh directory, install the locked dependencies, and point the service at that directory. Do not overlay archives onto an existing source tree. Release-ZIP installations do not satisfy the Git-checkout-on-`main` requirement for automatic `/update`.
 
 ---
 
@@ -101,12 +120,9 @@ installation or a root-owned service.
 
 ### 1. Install the bridge source
 
-**Recommended:** use the signed-release verification sequence at the top of this guide. A clean branch named `main`, positioned at the verified release commit, remains compatible with the built-in signed `/update` flow. Do not execute `install.sh` from a newly cloned repository until the selected release tag has been verified against the independently provisioned allowed-signers file.
+**Recommended:** use the two-step signed-release sequence at the top of this guide. A clean branch named `main`, positioned at the verified release commit, remains compatible with the built-in signed `/update` flow. Do not execute repository code until the selected release tag has been verified against the independently provisioned external allowed-signers file.
 
-For a manual/offline install, the latest GitHub release also includes an explicit
-`SillyTavern-Telegram-Bridge-vX.Y.Z.zip` asset and matching `.sha256` checksum.
-Release-ZIP installs are supported for manual updates, but `/update` expects a Git
-checkout on `main`.
+Alternative bootstrap, unsigned-development, and release-archive procedures are intentionally kept in the **Advanced / development installation** section above.
 
 ### 2. Create a private virtual environment
 

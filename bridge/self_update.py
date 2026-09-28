@@ -418,6 +418,21 @@ def _clean_source(source: Path, git: str) -> str:
     return _git(["rev-parse", "HEAD"], source, executable=git)
 
 
+def _live_matches_release(live: Path, version: str, commit: str) -> bool:
+    marker = live / MARKER
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return (
+        isinstance(data, dict)
+        and data.get("application") == APPLICATION
+        and data.get("format") == 1
+        and data.get("version") == version
+        and data.get("commit") == commit
+    )
+
+
 def _activate_live(payload: Path, live: Path, backup: Path) -> None:
     existed = live.exists()
     if existed:
@@ -457,7 +472,7 @@ def apply_update(plan: UpdatePlan, *, before_restart: Callable[[UpdateOutcome], 
                 _git(["merge-base", "--is-ancestor", old, commit], bare, executable=tools["git"])
             except subprocess.CalledProcessError:
                 raise UpdateRefused("ancestry") from None
-            if old == commit:
+            if old == commit and _live_matches_release(plan.live, plan.release_version, commit):
                 return UpdateOutcome(UpdateStatus.ALREADY_LATEST, plan.release_version, commit)
             phase = "prepare"
             release = _extract_release(bare, commit, workspace, tools["git"])
@@ -484,13 +499,14 @@ def apply_update(plan: UpdatePlan, *, before_restart: Callable[[UpdateOutcome], 
                 except (OSError, RuntimeError, sqlite3.Error):
                     raise UpdateRefused("database_backup") from None
             phase = "activate"
-            _git(
-                ["fetch", "--no-tags", "--no-recurse-submodules", str(bare), commit],
-                plan.source,
-                executable=tools["git"],
-            )
-            _git(["merge", "--ff-only", commit], plan.source, executable=tools["git"])
-            source_changed = True
+            if old != commit:
+                _git(
+                    ["fetch", "--no-tags", "--no-recurse-submodules", str(bare), commit],
+                    plan.source,
+                    executable=tools["git"],
+                )
+                _git(["merge", "--ff-only", commit], plan.source, executable=tools["git"])
+                source_changed = True
             # A failed activation AND failed restoration must not let temporary
             # workspace cleanup erase the old deployment. Retain this sibling
             # backup for operator recovery, including supervisor failures.

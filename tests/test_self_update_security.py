@@ -378,6 +378,23 @@ def test_successful_activation_does_not_keep_obsolete_python_modules(engine, rel
     assert not (data.live / "bridge" / "obsolete.py").exists()
 
 
+def test_current_source_reconciles_stale_managed_live_mirror(engine, release_tree, monkeypatch):
+    data = release_tree
+    managed_mirror(engine, data)
+    git(data.source, "fetch", "origin", "main")
+    git(data.source, "merge", "--ff-only", "origin/main")
+    assert git(data.source, "rev-parse", "HEAD") == data.new
+    fake_supervisor(monkeypatch, engine)
+
+    outcome = engine.apply_update(make_plan(engine, data))
+
+    assert outcome.status is engine.UpdateStatus.RESTART_SCHEDULED
+    assert outcome.commit == data.new
+    assert outcome.source_changed is False
+    assert outcome.live_changed is True
+    assert (data.live / "bridge" / "feature.py").read_text() == "VALUE = 2\n"
+
+
 def test_signed_release_symlink_is_rejected(engine, release_tree, monkeypatch):
     data = release_tree
     git(data.remote, "tag", "-d", "v0.0.2")

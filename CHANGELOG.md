@@ -25,7 +25,6 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Fixed
 
-
 - Optimize character PNGs with consistent duplicate `chara` or paired `chara`/`ccv3` metadata by updating every embedded copy while preserving schema-specific data and all unrelated PNG chunks; conflicting or malformed copies remain safely rejected.
 
 ### Changed

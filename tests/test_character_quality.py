@@ -14,10 +14,10 @@ from unittest import mock
 from settings_test_support import SettingsTestCase
 
 import bridge.character_quality as quality
-from bridge.model_router import ModelRoutingError
-from bridge.provider_errors import ProviderRequestError
 from bridge.card_content import parse_png_chara_bytes
 from bridge.memory_curator import db_connect
+from bridge.model_router import ModelRoutingError
+from bridge.provider_errors import ProviderRequestError
 
 
 def _raw_chunk(kind: bytes, data: bytes) -> bytes:

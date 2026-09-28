@@ -1,0 +1,11 @@
+{
+  "source_commit": "3d11e208da52192ecc64f0ee95364768714e1cea",
+  "metric": "coverage.py combined statement+branch percent_covered",
+  "minimum_combined_percent": {
+    "bridge/miniapp_auth.py": 91,
+    "bridge/network_security.py": 84,
+    "bridge/self_update.py": 79,
+    "bridge/environment.py": 93
+  },
+  "note": "Dedicated security floors are the fresh integer floors of measured combined statement+branch coverage; they must ratchet upward as tests improve."
+}

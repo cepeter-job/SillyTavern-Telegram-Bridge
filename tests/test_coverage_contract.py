@@ -65,3 +65,45 @@ def test_coverage_floor_matches_measured_baseline():
     assert floor == baseline["minimum_combined_percent"]
     assert floor >= math.floor(measured)
     assert 0 < floor <= measured
+
+
+def test_security_critical_coverage_gate_is_wired_into_ci():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert "python tools/check_security_coverage.py coverage.json" in workflow
+    policy = ROOT / "tools/security_coverage_baseline.json"
+    assert policy.is_file()
+    data = __import__("json").loads(policy.read_text(encoding="utf-8"))
+    assert {
+        "bridge/miniapp_auth.py",
+        "bridge/network_security.py",
+        "bridge/self_update.py",
+        "bridge/environment.py",
+    } <= set(data["minimum_combined_percent"])
+    assert all(float(value) > 68 for value in data["minimum_combined_percent"].values())
+
+
+def test_security_coverage_checker_rejects_regression(tmp_path):
+    import json
+    import subprocess
+    import sys
+
+    coverage = tmp_path / "coverage.json"
+    policy = tmp_path / "policy.json"
+    coverage.write_text(
+        json.dumps({"files": {"bridge/security.py": {"summary": {"percent_covered": 89.9}}}}),
+        encoding="utf-8",
+    )
+    policy.write_text(json.dumps({"minimum_combined_percent": {"bridge/security.py": 90}}), encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "tools/check_security_coverage.py"),
+            str(coverage),
+            "--policy",
+            str(policy),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "bridge/security.py" in result.stdout and "89.90" in result.stdout

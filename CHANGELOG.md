@@ -23,6 +23,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Changed
 
+- Ratchet security CI with a non-shrinking typed-surface baseline, dedicated coverage floors for authentication/network/update/environment modules, and SHA-pinned full-history secret scanning.
+
 - Show the active Story and Utility models plus both reasoning budgets in a Telegram block quote when `/providers` opens.
 - Keep one active management panel per actor and chat/topic: opening a new command panel or confirmation closes the previous one while leaving Light Novel choices and conversation artifacts alone.
 - Keep `/new` non-destructive to the previous conversation while closing stale management UI before session-name input.

@@ -26,8 +26,10 @@
 - **✅ `/stscript` is allowlisted** and cannot execute arbitrary commands.
 - **🧱 Architecture is CI-enforced.** The repository rejects import cycles and
   reverse imports from the isolated service/port layer. Ruff linting, security
-  rules, and formatting cover the complete Python tree. Mypy currently checks
-  24 explicitly listed source files, including the network and callback-token policy.
+  rules, and formatting cover the complete Python tree. Mypy checks a progressively
+  typed surface emitted by `python tools/static_analysis.py --print-type-targets`;
+  CI reports `--print-type-target-count` and refuses to shrink below the versioned
+  `tools/type_surface_baseline.json` minimum.
 - **🛡️ Use the systemd hardening template** for production deployments.
 
 ---

@@ -1,21 +1,21 @@
 {
-  "source_commit": "f58cc3d3845d26427334b2030eb0aff2175c188e",
+  "source_commit": "3d11e208da52192ecc64f0ee95364768714e1cea",
   "python": "3.11",
   "pytest_cov": "7.1.0",
-  "coverage_py": "7.15.4",
+  "coverage_py": "7.16.1",
   "source": [
     "bridge"
   ],
   "branch": true,
   "subprocess_included": true,
-  "combined_percent": 68.6993006993007,
-  "minimum_combined_percent": 68,
+  "combined_percent": 76.29749977434787,
+  "minimum_combined_percent": 76,
   "totals": {
-    "covered_lines": 7893,
-    "num_statements": 10846,
-    "covered_branches": 1931,
-    "num_branches": 3454
+    "covered_lines": 13600,
+    "num_statements": 16960,
+    "covered_branches": 3306,
+    "num_branches": 5198
   },
   "command": "python -m pytest -q -n 2 --dist=loadfile --cov --cov-report=json:coverage.json --cov-report=xml:coverage.xml",
-  "note": "Coverage.py combines statement and branch opportunities. This floor is the measured whole-number floor, not a claim of exhaustive security coverage."
+  "note": "Coverage.py combines statement and branch opportunities. This floor is the fresh whole-number floor and must not be lowered to hide regressions."
 }

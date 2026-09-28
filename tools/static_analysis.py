@@ -26,6 +26,7 @@ STATIC_TARGETS: tuple[str, ...] = (
 
 
 REPOSITORY_TARGETS: tuple[str, ...] = (
+    "bridge/token_usage_repository.py",
     "bridge/rag_repository.py",
     "bridge/variant_repository.py",
     "bridge/director_goal_repository.py",
@@ -46,6 +47,10 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
     "bridge/tailscale_funnel.py",
+    "bridge/token_usage_values.py",
+    "bridge/token_usage_schema.py",
+    "bridge/token_usage.py",
+    "bridge/miniapp_usage.py",
     *STATIC_TARGETS,
     *REPOSITORY_TARGETS,
     "bridge/humanize.py",
@@ -99,16 +104,23 @@ TYPE_TARGETS: tuple[str, ...] = (
 
 
 PURE_CONTRACT_IMPORTS = {
+    "bridge.token_usage_values": frozenset(),
     "bridge.rag_contracts": frozenset(),
-    "bridge.port_contracts": frozenset({"bridge.request_types"}),
+    "bridge.port_contracts": frozenset({"bridge.request_types", "bridge.token_usage_values"}),
     "bridge.request_types": frozenset({"bridge.settings"}),
     "bridge.settings": frozenset({"bridge.config_values"}),
     "bridge.config_values": frozenset(),
 }
-SERVICE_CONTRACT_IMPORTS = frozenset({"bridge.port_contracts", "bridge.request_types", "bridge.rag_contracts"})
+SERVICE_CONTRACT_IMPORTS = frozenset(
+    {"bridge.port_contracts", "bridge.request_types", "bridge.rag_contracts", "bridge.token_usage_values"}
+)
 
 
 LOW_LEVEL_IMPORTS = {
+    "bridge.token_usage_schema": frozenset(),
+    "bridge.token_usage": frozenset(
+        {"bridge.sqlite_store", "bridge.token_usage_repository", "bridge.token_usage_values"}
+    ),
     "bridge.light_novel_contracts": frozenset(
         [
             "bridge.persona_service",

@@ -10,6 +10,7 @@
   <script type="module" src="/miniapp/app.js"></script>
 </head>
 <body>
+  <a class="skip-link" href="#content">Skip to content</a>
   <div class="app-shell">
     <header class="app-header">
       <div class="brand-block">
@@ -31,9 +32,10 @@
       <section class="workspace-main">
         <div class="page-heading">
           <span id="page-kicker" class="eyebrow">PRIVATE WORKSPACE</span>
-          <h2 id="page-title">Home</h2>
+          <h2 id="page-title" tabindex="-1">Home</h2>
+          <p id="page-description" class="muted">Your story, one tap away.</p>
         </div>
-        <main id="content" aria-live="polite">
+        <main id="content" aria-live="polite" tabindex="-1">
           <section class="skeleton-shell" aria-label="Opening your workspace">
             <div class="skeleton skeleton-title"></div>
             <div class="skeleton skeleton-line"></div>
@@ -50,6 +52,8 @@
         <div><span class="eyebrow">MANAGE</span><h2 id="more-title">More</h2></div>
         <button id="more-close" class="icon-button secondary" type="button" aria-label="Close more menu">×</button>
       </div>
+      <label class="sr-only" for="more-search">Find a tool</label>
+      <input id="more-search" type="search" placeholder="Find a tool…" autocomplete="off">
       <div id="more-navigation" class="more-navigation"></div>
     </dialog>
 

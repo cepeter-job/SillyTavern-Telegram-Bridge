@@ -186,7 +186,7 @@ def refresh_scene_state_now(
     )
     try:
         model = task_model_for_session(db, chat_id, session, "scene_state", app_settings=app_settings)
-        raw = provider_port.generate(
+        raw = provider_port.for_usage(chat_id, session["session_id"], "scene").generate(
             api_key,
             model,
             scene_messages,

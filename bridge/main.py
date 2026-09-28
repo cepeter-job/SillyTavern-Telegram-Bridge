@@ -104,6 +104,7 @@ from bridge.sync_core import sync_binding
 from bridge.sync_service import SyncService as _SyncService
 from bridge.telegram import download_telegram_file, send_panel_request, send_text, send_typing, telegram_request
 from bridge.text_action_input import start_text_action_input
+from bridge.token_usage import record_usage
 
 
 def validate_startup_credential(model: str, model_router: _ModelRouter, *, app_settings: AppSettings) -> None:
@@ -157,7 +158,12 @@ def _build_startup_services(
     model_router: _ModelRouter,
 ) -> _BridgeServices:
     durable_worker_guard = _DurableWorkerGuard(_sqlite_store._lightweight_db_connect)
-    provider = _ProviderPort(generate_backend=_partial(generate_provider_text, model_router, app_settings=config))
+    provider = _ProviderPort(
+        generate_backend=_partial(generate_provider_text, model_router, app_settings=config),
+        usage_recorder=_partial(
+            record_usage, db_factory=_partial(_sqlite_store._lightweight_db_connect, config.db_file, timeout=2.0)
+        ),
+    )
     embedding = EmbeddingPort(
         embed_backend=_partial(embed_rag_text, app_settings=config),
         batch_backend=_partial(embed_rag_batch, app_settings=config),

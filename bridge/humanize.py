@@ -109,7 +109,7 @@ def render_humanized_response(
         {"role": "user", "content": "<source_text>\n" + text + "\n</source_text>"},
     ]
     try:
-        rewritten = provider_port.generate(
+        rewritten = provider_port.for_purpose("humanizer").generate(
             api_key,
             model,
             messages,

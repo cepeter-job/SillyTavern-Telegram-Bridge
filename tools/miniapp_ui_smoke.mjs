@@ -84,6 +84,7 @@ try {
       assert.equal(sessionPortrait.closest('.session-portrait-frame').hidden,false,'Dashboard portrait appears only after loading');
       assert.equal(dom.window.getComputedStyle(sessionPortrait).objectFit,'contain','Dashboard portrait preserves the full image');
       assert.equal(shellDocument.querySelectorAll('.dashboard-shortcuts button').length,4,'Dashboard exposes four quick actions');
+      assert.deepEqual([...shellDocument.querySelectorAll('.dashboard-health [data-health-icon]')].map(node=>node.dataset.healthIcon),['system','telegram','database'],'Dashboard Bridge health labels all three status cards with local icons');
       portraitMode='empty';
     }
     if(page==='usage') {
@@ -94,6 +95,7 @@ try {
       assert.ok(body.includes('provider-reported'),'Usage describes its measurement source');
     }
     if(page==='system') {
+      assert.deepEqual([...shellDocument.querySelectorAll('main [data-health-icon]')].map(node=>node.dataset.healthIcon),['system','telegram','database'],'System status labels all three health cards with local icons');
       const review=[...shellDocument.querySelectorAll('main button')].find(n=>n.textContent==='Review latest release');
       assert.ok(review,'System exposes release review');review.click();
       await until(()=>shellDocument.querySelector('main').textContent.includes('Already latest'),'already-latest review state');

@@ -2,10 +2,16 @@ import {api,state,createSessionScope,registerPage,navigate} from './app.js';
 import {el,card,button,empty,confirmAction,notice} from './ui.js';
 import {icon} from './icons.js';
 import {usageOverview} from './usage.js';
+function healthCard(iconName,title,...children) {
+  const view=card(title,...children),heading=view.querySelector('h2'),mark=icon(iconName);
+  mark.classList.add('health-icon');mark.dataset.healthIcon=iconName;
+  heading.classList.add('health-card-title');heading.prepend(mark);
+  return view;
+}
 function details(data) {
-  return el('div',{class:'grid'},card('Bridge',el('p',{},'Running: v'+data.deployment.version),el('p',{class:'muted'},'Revision: '+(data.deployment.commit.slice(0,12)||'unverified')),el('p',{},'Uptime: '+Math.floor(data.uptime_seconds/60)+' minutes'),el('p',{class:'muted'},'Installed files: v'+data.installed_version)),
-    card('Telegram',el('span',{class:'badge'},data.telegram.state),el('p',{class:'muted'},data.telegram.last_success?'Last successful poll: '+new Date(data.telegram.last_success*1000).toLocaleTimeString():'No successful polling observation yet.')),
-    card('Database',el('p',{},'SQLite '+data.database.sqlite_version+' · '+data.database.state),el('p',{},data.database.sessions+' private sessions'),el('p',{},data.database.messages+' stored messages')));
+  return el('div',{class:'grid'},healthCard('system','Bridge',el('p',{},'Running: v'+data.deployment.version),el('p',{class:'muted'},'Revision: '+(data.deployment.commit.slice(0,12)||'unverified')),el('p',{},'Uptime: '+Math.floor(data.uptime_seconds/60)+' minutes'),el('p',{class:'muted'},'Installed files: v'+data.installed_version)),
+    healthCard('telegram','Telegram',el('span',{class:'badge'},data.telegram.state),el('p',{class:'muted'},data.telegram.last_success?'Last successful poll: '+new Date(data.telegram.last_success*1000).toLocaleTimeString():'No successful polling observation yet.')),
+    healthCard('database','Database',el('p',{},'SQLite '+data.database.sqlite_version+' · '+data.database.state),el('p',{},data.database.sessions+' private sessions'),el('p',{},data.database.messages+' stored messages')));
 }
 async function dashboard() {
   const [data,operations]=await Promise.all([api('/status'),api('/jobs')]);state.session=data.session;

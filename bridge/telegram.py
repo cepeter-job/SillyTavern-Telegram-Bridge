@@ -13,7 +13,13 @@ import urllib.request
 from pathlib import Path
 
 from bridge.limits import MAX_TELEGRAM_LENGTH, SYNC_MAX_BYTES
-from bridge.panel_bindings import bind_panel_session
+from bridge.panel_bindings import (
+    active_management_panel,
+    bind_management_panel,
+    bind_panel_session,
+    clear_management_panel,
+    discard_panel_session,
+)
 from bridge.request_types import RequestContext
 from bridge.settings import AppSettings
 from bridge.topic_scope import parse_topic_scope
@@ -88,10 +94,45 @@ def delete_pending_input_prompts(token: str, chat_id: str, state: dict) -> None:
             )
 
 
-def send_panel_request(token: str, method: str, payload: dict, *, request_context: RequestContext) -> dict:
+def close_active_management_panel(token: str, chat_id: str, *, request_context: RequestContext) -> None:
+    owner = str(request_context.actor_id or "")
+    previous = active_management_panel(request_context.db, chat_id, owner)
+    if previous is None:
+        return
+    try:
+        telegram_request(token, "deleteMessage", {"chat_id": chat_id, "message_id": previous})
+    except Exception:
+        logging.info("Could not delete previous management panel; closing it in place", exc_info=True)
+        try:
+            telegram_request(
+                token,
+                "editMessageText",
+                {
+                    "chat_id": chat_id,
+                    "message_id": previous,
+                    "text": "Panel closed.",
+                    "reply_markup": {"inline_keyboard": []},
+                },
+            )
+        except Exception:
+            logging.info("Could not close previous management panel", exc_info=True)
+    discard_panel_session(request_context.db, chat_id, previous)
+    clear_management_panel(request_context.db, chat_id, owner, previous)
+
+
+def send_panel_request(
+    token: str,
+    method: str,
+    payload: dict,
+    *,
+    request_context: RequestContext,
+    track_management: bool = True,
+) -> dict:
     scoped_chat_id = str(payload.get("chat_id", "")) if payload.get("chat_id") is not None else ""
-    result = telegram_request(token, method, payload)
     panel_content = payload.get("reply_markup")
+    if track_management and panel_content and method == "sendMessage" and request_context.actor_id:
+        close_active_management_panel(token, scoped_chat_id, request_context=request_context)
+    result = telegram_request(token, method, payload)
     if panel_content and method in {"sendMessage", "editMessageText"}:
         bound_message_id = result.get("message_id") if isinstance(result, dict) else None
         bound_message_id = bound_message_id or payload.get("message_id")
@@ -102,6 +143,13 @@ def send_panel_request(token: str, method: str, payload: dict, *, request_contex
                 bound_message_id,
                 request_context.session_id,
                 request_context.actor_id,
+            )
+        if track_management and bound_message_id and request_context.actor_id:
+            bind_management_panel(
+                request_context.db,
+                scoped_chat_id,
+                request_context.actor_id,
+                bound_message_id,
             )
     return result
 
@@ -120,6 +168,8 @@ def send_panel_photo(
     raw = Path(photo_path).read_bytes()
     if not raw:
         raise ValueError("character photo is empty")
+    if reply_markup and request_context.actor_id:
+        close_active_management_panel(token, chat_id, request_context=request_context)
     boundary = f"----BridgePanelPhoto{time.time_ns()}"
     fields = [("chat_id", real_chat_id), ("caption", str(caption)[:1024]), ("reply_markup", json.dumps(reply_markup))]
     if thread_id is not None:
@@ -159,6 +209,8 @@ def send_panel_photo(
             request_context.session_id,
             request_context.actor_id,
         )
+    if message_id and request_context.actor_id:
+        bind_management_panel(request_context.db, str(chat_id), request_context.actor_id, message_id)
     return result
 
 

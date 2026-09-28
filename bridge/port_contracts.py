@@ -52,7 +52,13 @@ class SendReply(Protocol):
 
 class SendPanelRequest(Protocol):
     def __call__(
-        self, token: str, method: str, payload: JsonObject, *, request_context: RequestContext
+        self,
+        token: str,
+        method: str,
+        payload: JsonObject,
+        *,
+        request_context: RequestContext,
+        track_management: bool = True,
     ) -> JsonObject: ...
 
 

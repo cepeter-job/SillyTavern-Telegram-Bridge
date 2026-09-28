@@ -25,7 +25,7 @@ from bridge.light_novel_repository import (
     load_choice_set,
     reserve_choice_set,
 )
-from bridge.model_selection import task_model_for_session
+from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
@@ -245,8 +245,10 @@ def ensure_choices(
     model = record.model_id
     started_at = time.monotonic()
     try:
+        choice_reasoning = 0
         if record.strategy == "b":
             model = task_model_for_session(db, record.chat_id, session, "utility", app_settings=app_settings)
+            choice_reasoning = utility_reasoning_for_session(db, record.chat_id, record.session_id)
         history = db.execute(
             "SELECT role,content FROM messages WHERE chat_id=? AND session_id=? ORDER BY rowid DESC LIMIT 6",
             (record.chat_id, record.session_id),
@@ -294,7 +296,12 @@ def ensure_choices(
                     model,
                     messages,
                     session_id=f"lightnovel:{record.session_id}:{nonce}",
-                    settings={"max_tokens": 1200, "temperature": 0.7, "reasoning_budget": 0, "stop_sequences": ""},
+                    settings={
+                        "max_tokens": 1200,
+                        "temperature": 0.7,
+                        "reasoning_budget": choice_reasoning,
+                        "stop_sequences": "",
+                    },
                     force_non_stream=True,
                     request_timeout=_CHOICE_REQUEST_TIMEOUT_SECONDS,
                 )

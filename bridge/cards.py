@@ -41,6 +41,7 @@ def send_panel_message(
     message_id: int | None = None,
     *,
     request_context: RequestContext,
+    entities: list[dict[str, object]] | None = None,
 ) -> None:
     """Send a panel message, or edit the existing one in place."""
     method, payload = panel_message_request(
@@ -48,6 +49,7 @@ def send_panel_message(
         text,
         reply_markup,
         message_id,
+        entities=entities,
     )
     send_panel_request(
         token,

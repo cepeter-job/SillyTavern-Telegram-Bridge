@@ -43,7 +43,7 @@ from bridge.memory_backend import memory_recall_filter as memory_recall_filter
 from bridge.memory_backend import recall_memory_context as recall_memory_context
 from bridge.memory_backend import remember_fact as remember_fact
 from bridge.metadata import set_meta
-from bridge.model_selection import task_model_for_session
+from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect
@@ -229,7 +229,13 @@ def generate_session_summary(
         {"role": "user", "content": f"{prompt_prefix}\n\n{source[:50000]}"},
     ]
     settings = get_generation_settings(db, chat_id, session["session_id"])
-    settings.update({"temperature": 0.2, "max_tokens": SUMMARY_MAX_OUTPUT_TOKENS, "reasoning_budget": 0})
+    settings.update(
+        {
+            "temperature": 0.2,
+            "max_tokens": SUMMARY_MAX_OUTPUT_TOKENS,
+            "reasoning_budget": utility_reasoning_for_session(db, chat_id, session["session_id"]),
+        }
+    )
     try:
         summary_model = task_model_for_session(db, chat_id, session, "summary", app_settings=app_settings)
         summary = (

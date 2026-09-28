@@ -16,6 +16,7 @@ from bridge.memory_backend import hindsight_session_lock
 from bridge.memory_service import MemoryService
 from bridge.meta_repository import store_meta_value
 from bridge.metadata import get_meta
+from bridge.model_selection import utility_reasoning_key
 from bridge.operation_repository import claim_operation, mark_operation_applied
 from bridge.persona_sync import default_persona_id, get_persona
 from bridge.response_variants import swipe_state_key
@@ -222,6 +223,7 @@ def delete_session_data(
                     f"swipe_message:{chat_id}:{target_session_id}",
                     expression_mode_key(chat_id, target_session_id),
                     expression_last_key(chat_id, target_session_id),
+                    utility_reasoning_key(chat_id, target_session_id),
                 ),
             )
             mark_operation_applied(db, operation_id, "session_delete", time.time())

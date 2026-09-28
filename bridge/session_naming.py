@@ -18,7 +18,7 @@ from bridge.pending_input import _cancel_pending, pending_character_for_session
 from bridge.request_types import RequestContext
 from bridge.session_core import create_session, update_session
 from bridge.settings import AppSettings
-from bridge.telegram import delete_pending_input_prompts, send_text
+from bridge.telegram import close_active_management_panel, delete_pending_input_prompts, send_text
 
 _SESSION_PENDING_PREFIXES = (
     "settings_input",
@@ -61,8 +61,11 @@ def start_session_name_input(
     *,
     group_service: GroupService,
     app_settings: AppSettings,
+    request_context=None,
 ) -> None:
     """Close the old panel and request a scoped name without creating a session."""
+    if request_context is not None and message is None:
+        close_active_management_panel(token, chat_id, request_context=request_context)
     meta_key = f"session_name_input:{chat_id}"
     old_raw = get_meta(db, meta_key, "")
     try:

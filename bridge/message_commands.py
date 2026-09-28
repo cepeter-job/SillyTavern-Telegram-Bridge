@@ -42,7 +42,12 @@ from bridge.rag_service import RagService
 from bridge.regeneration import regenerate_last
 from bridge.request_types import PreparedMessage, RequestContext
 from bridge.reset_panel import reset_confirmation_request
-from bridge.response_delivery import delete_outgoing_messages, queue_user_quote_tts, send_reply
+from bridge.response_delivery import (
+    delete_incoming_messages,
+    delete_outgoing_messages,
+    queue_user_quote_tts,
+    send_reply,
+)
 from bridge.response_variants import save_response_variant, swipe_state_key
 from bridge.session_core import ensure_session, list_sessions, load_session
 from bridge.settings import AppSettings
@@ -78,6 +83,7 @@ def reset_session(
             set_operation_phase(db, operation_id, "reset", "memory_purged")
         db.commit()
     delete_outgoing_messages(db, token, chat_id, session["session_id"])
+    delete_incoming_messages(db, token, chat_id, session["session_id"])
     db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
     db.execute("DELETE FROM response_variants WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
     db.execute("DELETE FROM failed_turns WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
@@ -98,11 +104,11 @@ def reset_session(
         try:
             telegram_request(
                 token,
-                "editMessageReplyMarkup",
-                {"chat_id": chat_id, "message_id": panel_id, "reply_markup": {"inline_keyboard": []}},
+                "deleteMessage",
+                {"chat_id": chat_id, "message_id": panel_id},
             )
         except Exception:
-            logging.info("Could not remove reset choice panel")
+            logging.info("Could not delete reset choice panel")
     if operation_id is not None:
         record_operation(db, operation_id, "reset")
         db.commit()

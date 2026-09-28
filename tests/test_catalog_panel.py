@@ -94,7 +94,8 @@ class CatalogPanelTests(SettingsTestCase):
         ]
         self.assertIn("modeltarget:story", callbacks)
         self.assertIn("modeltarget:utility", callbacks)
-        self.assertIn("Where should the next selected model be used?", calls[0][1]["text"])
+        self.assertIn("Current models", calls[0][1]["text"])
+        self.assertIn("Configure models:", calls[0][1]["text"])
 
     def test_model_panel_treats_not_modified_as_success(self):
         db = sqlite3.connect(":memory:")

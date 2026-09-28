@@ -27,7 +27,7 @@ from bridge.memory_backend import _retain_with_client, hindsight_session_prefix,
 from bridge.meta_repository import delete_meta_value as _repo_delete_meta_value
 from bridge.meta_repository import load_meta_value as _repo_load_meta_value
 from bridge.meta_repository import store_meta_value as _repo_store_meta_value
-from bridge.model_selection import task_model_for_session
+from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.provider_port import ProviderPort
 from bridge.session_core import load_session
 from bridge.settings import AppSettings
@@ -210,7 +210,7 @@ def curate_memory_now(
         {
             "temperature": 0.0,
             "max_tokens": 1400,
-            "reasoning_budget": 0,
+            "reasoning_budget": utility_reasoning_for_session(db, chat_id, session_id),
             "stop_sequences": "",
         }
     )

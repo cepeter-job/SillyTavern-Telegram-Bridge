@@ -57,6 +57,8 @@ def panel_message_request(
     text: str,
     reply_markup: dict,
     message_id: int | None = None,
+    *,
+    entities: list[dict[str, object]] | None = None,
 ) -> tuple[str, dict]:
     method = "editMessageText" if message_id else "sendMessage"
     payload: dict = {
@@ -64,6 +66,8 @@ def panel_message_request(
         "text": text,
         "reply_markup": reply_markup,
     }
+    if entities:
+        payload["entities"] = entities
     if message_id:
         payload["message_id"] = message_id
     return method, payload

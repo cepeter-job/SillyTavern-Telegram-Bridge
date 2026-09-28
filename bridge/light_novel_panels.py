@@ -66,7 +66,7 @@ def render_choices(db: sqlite3.Connection, token: str, record: ChoiceSet, *, app
         method = "editMessageText"
         payload["message_id"] = message_id
     try:
-        result = send_panel_request(token, method, payload, request_context=context)
+        result = send_panel_request(token, method, payload, request_context=context, track_management=False)
     except RuntimeError as exc:
         detail = str(exc).casefold()
         if message_id is not None and "not modified" in detail:
@@ -74,7 +74,7 @@ def render_choices(db: sqlite3.Connection, token: str, record: ChoiceSet, *, app
         if message_id is None or "message to edit not found" not in detail:
             raise
         payload.pop("message_id", None)
-        result = send_panel_request(token, "sendMessage", payload, request_context=context)
+        result = send_panel_request(token, "sendMessage", payload, request_context=context, track_management=False)
     sent_id = result.get("message_id") if isinstance(result, dict) else None
     sent_id = int(sent_id or message_id or 0)
     if not sent_id:

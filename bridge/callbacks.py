@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 
+from bridge.panel_bindings import discard_panel_session
 from bridge.telegram import telegram_request
 
 
@@ -39,11 +40,8 @@ def close_panel_message(
         except Exception:
             logging.warning("Panel close fallback failed", exc_info=True)
     try:
-        db.execute(
-            "DELETE FROM panel_sessions WHERE chat_id=? AND message_id=?",
-            (str(chat_id), str(message_id)),
-        )
-        db.commit()
+        if message_id is not None:
+            discard_panel_session(db, chat_id, message_id)
     except Exception:
         logging.debug("Could not remove closed panel binding", exc_info=True)
 
@@ -55,11 +53,7 @@ def discard_panel_binding(
 ) -> None:
     if message_id is None:
         return
-    db.execute(
-        "DELETE FROM panel_sessions WHERE chat_id=? AND message_id=?",
-        (str(chat_id), str(message_id)),
-    )
-    db.commit()
+    discard_panel_session(db, chat_id, message_id)
 
 
 def is_session_scoped_panel_callback(data: str) -> bool:
@@ -87,6 +81,7 @@ def is_session_scoped_panel_callback(data: str) -> bool:
             "models",
             "provider",
             "model",
+            "utilityreasoning:",
             "group",
             "groupchars",
             "groupmode",

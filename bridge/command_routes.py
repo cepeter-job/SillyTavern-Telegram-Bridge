@@ -89,7 +89,13 @@ def _handle_basic(
         return True
     if command == "/new":
         start_session_name_input(
-            db, token, chat_id, session, group_service=group_service, app_settings=request_context.app_settings
+            db,
+            token,
+            chat_id,
+            session,
+            group_service=group_service,
+            app_settings=request_context.app_settings,
+            request_context=request_context,
         )
         return True
     if command == "/status":

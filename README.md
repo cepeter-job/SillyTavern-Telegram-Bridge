@@ -102,6 +102,35 @@ Telegram `/help` is the **canonical command reference**. Use a command name for
 focused detail, for example `/help scene refresh`. The repository documentation
 explains concepts and workflows; `/help` reflects the executable command catalog.
 
+## Mini App — planned design concept
+
+> [!IMPORTANT]
+> **Concept mockups — not shipped.** The current Mini App is documented in
+> [Telegram Mini App](docs/miniapp.md). These images show an approved design
+> direction for a future story-first mobile workspace; they are not screenshots
+> of the current release.
+
+The concept makes the active story and character the visual center, gives
+**Continue in Telegram** one dominant action, consolidates story configuration,
+and moves detailed usage and operations away from the first viewport.
+
+<table>
+  <tr>
+    <th>Concept: Home</th>
+    <th>Concept: Characters</th>
+    <th>Concept: Manage</th>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/miniapp-concept/home.png" alt="Planned Mini App Home concept with the active story, character portrait, Continue in Telegram action, and compact story setup" width="280"></td>
+    <td><img src="docs/assets/miniapp-concept/characters.png" alt="Planned Mini App Characters concept with a mobile-first single-column character list and progressive actions" width="280"></td>
+    <td><img src="docs/assets/miniapp-concept/manage.png" alt="Planned Mini App Manage concept grouping story setup, memory, and Data Bank controls" width="280"></td>
+  </tr>
+</table>
+
+The intended navigation is **Home, Characters, Sessions, Manage, System**. It
+uses larger mobile typography, progressive disclosure for secondary and
+destructive actions, and fewer visually equivalent dashboard cards.
+
 ## Documentation
 
 | Guide | Use it for |

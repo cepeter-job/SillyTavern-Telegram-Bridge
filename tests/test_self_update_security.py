@@ -189,6 +189,34 @@ def test_wrong_signer_refused(engine, release_tree, monkeypatch):
     assert git(data.source, "rev-parse", "HEAD") == data.old
 
 
+def test_two_key_rotation_overlap_accepts_release_signed_by_new_key(engine, release_tree, monkeypatch):
+    data = release_tree
+    next_key = data.signers.parent / "next-signing-key"
+    subprocess.run([executable("ssh-keygen"), "-q", "-t", "ed25519", "-N", "", "-f", str(next_key)], check=True)
+    data.signers.write_text(
+        "current " + data.key.with_suffix(".pub").read_text() + "next " + next_key.with_suffix(".pub").read_text()
+    )
+    git(data.remote, "tag", "-d", "v0.0.2")
+    git(
+        data.remote,
+        "-c",
+        "gpg.format=ssh",
+        "-c",
+        f"user.signingkey={next_key}",
+        "tag",
+        "-s",
+        "v0.0.2",
+        "-m",
+        "release",
+    )
+    fake_supervisor(monkeypatch, engine)
+    result = engine.apply_update(make_plan(engine, data))
+    assert result.status is engine.UpdateStatus.RESTART_SCHEDULED
+    policy = engine._read_public_signer_policy(data.signers)
+    assert len(policy.entries) == 2
+    assert policy.render().count('namespaces="git"') == 2
+
+
 def test_verified_release_snapshots_database_before_source_activation(engine, release_tree, monkeypatch):
     data = release_tree
     database = data.live.parent / "bridge.sqlite3"

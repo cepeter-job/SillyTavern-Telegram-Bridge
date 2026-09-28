@@ -99,6 +99,23 @@ recovery, and requests a nonblocking user-service restart.
 If `requirements.lock` changed, automatic installation refuses the update; use a
 manual reviewed install so dependency changes are explicit.
 
+#### Release-signing key redundancy, rotation, and revocation
+
+Maintain a **second offline signing key** under separate custody from the primary key. Never place either private key on the bridge host, in Git, in release assets, or in the allowed-signers file. Only independently verified public keys belong in the external trust file.
+
+The updater accepts **multiple public signer entries**. Use that capability as an overlap mechanism, not as a requirement for multi-signature tags: each release tag still needs one valid authorized SSH signature. A planned rotation is:
+
+1. Generate the next signing key offline and record its fingerprint through an independent maintainer channel.
+2. Add the next **public** key as a second line in every installation's external `trusted-maintainers` file while retaining the current public key. This is the **overlap period**.
+3. Verify both public fingerprints locally and deploy the updated trust file before any release is signed only by the next key.
+4. Sign a reviewed release with the next private key and confirm a representative installation accepts it while both public keys are trusted.
+5. After all active installations trust the next key and the cutover release is verified, sign future releases with the next key.
+6. End the overlap by **remove the old public key** from each installation's allowed-signers file. Keep any historical trust-policy record offline if you need archival verification; **do not rewrite historical tags**.
+
+For emergency revocation, treat a suspected **compromised** signing key differently from a planned rotation: remove its public key from the trust file immediately, distribute an uncompromised public key through an independent channel, and resume releases only with that uncompromised key. Never “repair” trust by force-moving or re-signing an existing release tag. If every trusted private key is lost or compromised, automatic update must remain unavailable until operators manually provision a new independently verified public trust anchor.
+
+The repository intentionally does not publish or invent a production backup public key until a real second offline key exists and its fingerprint has been verified out of band.
+
 #### First update from a pre-hardening installation
 
 If your old `live` directory is a nonempty code copy without

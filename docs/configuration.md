@@ -190,7 +190,7 @@ not chat-file polling or JSONL transfer.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` | unset | External OpenSSH allowed-signers file containing trusted **public** release keys. Required for automatic installation. |
+| `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` | unset | External OpenSSH allowed-signers file containing one or more trusted **public** release keys. Required for automatic installation; multiple public entries support a controlled key-rotation overlap. |
 | `SILLYTAVERN_UPDATE_SERVICE` | `sillytavern-telegram.service` | User systemd unit restarted after a verified update. |
 | `SILLYTAVERN_BRIDGE_SOURCE_DIR` | repository root | Clean `main` checkout that the updater fast-forwards. |
 | `SILLYTAVERN_LIVE_BRIDGE_DIR` | `$SILLYTAVERN_BRIDGE_HOME/live` | Managed mirror replaced after verification/staging. |

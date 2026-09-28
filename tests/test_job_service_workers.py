@@ -20,14 +20,13 @@ ensure_application_extensions()
 
 import tempfile
 import unittest
-import urllib.error
 from dataclasses import replace
-from email.message import Message
 from pathlib import Path
 from unittest.mock import patch
 
 import bridge.memory_curator as _m_memory_curator
 import bridge.worker_orchestration as _m_workers
+from bridge.provider_errors import ProviderRequestError
 from bridge.composition import BackgroundRuntime, BridgeServices, TelegramRuntime
 
 
@@ -210,13 +209,7 @@ class JobWorkerServiceTests(SettingsTestCase):
         )
 
     def test_message_worker_reports_sanitized_provider_rate_limit(self):
-        error = urllib.error.HTTPError(
-            "https://provider.example/private",
-            429,
-            "upstream secret body",
-            Message(),
-            None,
-        )
+        error = ProviderRequestError("rate_limit", "openrouter-free::qwen/qwen3.8-27b:free", status=429)
         with (
             patch.object(_owner_transcript_repository, "committed_assistant_for_message", return_value=None),
             patch.object(self.services.conversation, "process_message", side_effect=error),

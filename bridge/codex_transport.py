@@ -11,6 +11,7 @@ from typing import Any
 
 from bridge.codex_auth import codex_headers, resolve_access_token, validate_codex_endpoint
 from bridge.network_security import strict_urlopen
+from bridge.provider_errors import ProviderTransportError, provider_category_for_status
 from bridge.settings import AppSettings
 from bridge.token_usage_values import UsageCallback, UsageCapture
 
@@ -259,9 +260,9 @@ def generate_codex_response(
                 )
                 continue
             if status == 401:
-                raise RuntimeError("OpenAI Codex OAuth is no longer valid; run --codex-login") from None
+                raise ProviderTransportError("authentication", 401) from None
             if isinstance(status, int):
-                raise RuntimeError(f"OpenAI Codex request failed with HTTP {status}") from None
+                raise ProviderTransportError(provider_category_for_status(status), status) from None
             raise
     else:  # pragma: no cover - the bounded loop always breaks or raises
         output = ""

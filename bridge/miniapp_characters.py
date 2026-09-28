@@ -26,6 +26,7 @@ from bridge.native_imports import (
     character_delete_references,
     verify_character_card_backup,
 )
+from bridge.provider_errors import ProviderRequestError
 from bridge.sqlite_store import write_transaction
 
 
@@ -174,16 +175,19 @@ def optimize_character(services: Any, who: MiniAppIdentity, values: dict) -> dic
     with session_scope(services, who, values, write=True) as scope:
         path, raw = _card(services, text(values, "filename"))
         original = card_fields(parse_png_chara_bytes(raw), app_settings=services.config)
-        draft = prepare_character_optimization(
-            scope.db,
-            scope.chat_id,
-            scope.session,
-            path.name,
-            provider_port=services.provider,
-            request_context=scope.context,
-            suggestion=text(values, "suggestion", 2000, required=False),
-            expected_digest=expected,
-        )
+        try:
+            draft = prepare_character_optimization(
+                scope.db,
+                scope.chat_id,
+                scope.session,
+                path.name,
+                provider_port=services.provider,
+                request_context=scope.context,
+                suggestion=text(values, "suggestion", 2000, required=False),
+                expected_digest=expected,
+            )
+        except ProviderRequestError as exc:
+            raise MiniAppError(str(exc), status=exc.miniapp_status, code=exc.miniapp_code) from None
         return {
             "filename": draft.filename,
             "nonce": draft.nonce,

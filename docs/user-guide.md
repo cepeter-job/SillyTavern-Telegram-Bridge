@@ -62,7 +62,10 @@ Beyond basic generation, the bridge handles:
 - 💾 Presets
 
 Health checks, model discovery, endpoint validation, and streaming configuration
-are all built in.
+are all built in. Recognized provider rate limits, authentication/credit failures,
+timeouts, unavailable models, upstream outages, and network failures are converted
+to bounded actionable messages. Raw upstream response bodies, URLs, credentials,
+and local paths are never shown in those user-facing errors.
 
 ### 🧠 Memory and retrieval
 

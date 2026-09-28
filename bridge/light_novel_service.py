@@ -27,6 +27,7 @@ from bridge.light_novel_repository import (
 )
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.persona_service import PersonaService
+from bridge.provider_errors import ProviderRequestError
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
@@ -43,6 +44,8 @@ class _EmptyChoiceResponse(RuntimeError):
 
 
 def _choice_http_status(exc: BaseException) -> int | None:
+    if isinstance(exc, ProviderRequestError):
+        return exc.status
     value = getattr(exc, "code", None)
     if value is None:
         value = getattr(exc, "status", None)
@@ -55,6 +58,8 @@ def _choice_http_status(exc: BaseException) -> int | None:
 def _retryable_choice_provider_error(exc: BaseException) -> bool:
     if isinstance(exc, _EmptyChoiceResponse):
         return True
+    if isinstance(exc, ProviderRequestError):
+        return exc.category in {"rate_limit", "timeout", "provider_unavailable", "network"}
     if isinstance(exc, urllib.error.HTTPError):
         return _choice_http_status(exc) in _TRANSIENT_HTTP_STATUSES
     if isinstance(exc, (TimeoutError, urllib.error.URLError, ConnectionError, OSError)):
@@ -83,6 +88,8 @@ def _choice_failure_reason(exc: BaseException, stage: str) -> str:
                 return "non_text_choice"
             return "invalid_choice_payload"
         return "parse_error"
+    if isinstance(exc, ProviderRequestError):
+        return exc.category
     if isinstance(exc, _EmptyChoiceResponse):
         return "empty_response"
     if isinstance(exc, urllib.error.HTTPError):

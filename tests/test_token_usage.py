@@ -105,17 +105,21 @@ def test_scoped_port_records_all_responses_without_changing_text_or_scope():
     assert "secret" not in repr(seen)
 
 
-def test_failed_generation_records_unknown_and_preserves_exception(caplog):
+def test_failed_generation_records_unknown_and_normalizes_provider_timeout(caplog):
+    from bridge.provider_errors import ProviderRequestError
+
     seen = []
 
     def fail(*args, **kwargs):
         raise TimeoutError("PRIVATE failure")
 
     port = ProviderPort(fail, usage_recorder=seen.append).for_usage("123", "s", "choices")
-    with pytest.raises(TimeoutError, match="PRIVATE failure"):
+    with pytest.raises(ProviderRequestError, match="timed out") as raised:
         port.generate("PRIVATE key", "p::model", [])
+    assert raised.value.category == "timeout"
     assert len(seen) == 1 and seen[0].status == "failed"
     assert seen[0].readings == ()
+    assert "PRIVATE" not in str(raised.value)
     assert "PRIVATE" not in caplog.text
 
 

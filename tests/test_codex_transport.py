@@ -267,6 +267,30 @@ class CodexTransportTests(SettingsTestCase):
 
         self.assertEqual(result, "completed fallback")
 
+    def test_http_failure_raises_typed_provider_transport_error(self):
+        from bridge.provider_errors import ProviderTransportError
+
+        class RateLimited(RuntimeError):
+            code = 429
+
+            def close(self):
+                return None
+
+        with self.assertRaises(ProviderTransportError) as raised:
+            codex_transport.generate_codex_response(
+                "gpt-5.4",
+                [{"role": "user", "content": "Hello"}],
+                {"max_tokens": 64},
+                self.spec,
+                "session",
+                app_settings=self.settings,
+                open_request=lambda *_args, **_kwargs: (_ for _ in ()).throw(RateLimited("secret")),
+            )
+
+        self.assertEqual(raised.exception.category, "rate_limit")
+        self.assertEqual(raised.exception.status, 429)
+        self.assertNotIn("secret", str(raised.exception))
+
     def test_failed_response_raises_bounded_provider_error(self):
         with self.assertRaisesRegex(RuntimeError, "OpenAI Codex request failed; provider response was unsuccessful"):
             codex_transport.generate_codex_response(

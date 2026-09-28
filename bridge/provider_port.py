@@ -9,6 +9,7 @@ from dataclasses import dataclass, replace
 from functools import partial
 
 from bridge.port_contracts import CancellationEvent, ProviderGenerate
+from bridge.provider_errors import provider_request_error_from_exception
 from bridge.token_usage_values import TokenUsage, UsageEvent, UsageRecorder, UsageScope
 
 
@@ -63,6 +64,11 @@ class ProviderPort:
             )
             status = "cancelled" if tracking and cancel_event is not None and cancel_event.is_set() else "succeeded"
             return result
+        except Exception as exc:
+            normalized = provider_request_error_from_exception(exc, model)
+            if normalized is not None:
+                raise normalized from None
+            raise
         finally:
             if tracking and self.usage_recorder is not None and self.usage_scope is not None:
                 event = UsageEvent(

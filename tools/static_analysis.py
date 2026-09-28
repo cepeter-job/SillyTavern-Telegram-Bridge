@@ -96,6 +96,7 @@ TYPE_TARGETS: tuple[str, ...] = (
     "bridge/self_update.py",
     "bridge/settings.py",
     "bridge/port_contracts.py",
+    "bridge/provider_errors.py",
     "bridge/request_types.py",
     "bridge/composition.py",
     "bridge/topic_scope.py",
@@ -109,12 +110,19 @@ PURE_CONTRACT_IMPORTS = {
     "bridge.token_usage_values": frozenset(),
     "bridge.rag_contracts": frozenset(),
     "bridge.port_contracts": frozenset({"bridge.request_types", "bridge.token_usage_values"}),
+    "bridge.provider_errors": frozenset(),
     "bridge.request_types": frozenset({"bridge.settings"}),
     "bridge.settings": frozenset({"bridge.config_values"}),
     "bridge.config_values": frozenset(),
 }
 SERVICE_CONTRACT_IMPORTS = frozenset(
-    {"bridge.port_contracts", "bridge.request_types", "bridge.rag_contracts", "bridge.token_usage_values"}
+    {
+        "bridge.port_contracts",
+        "bridge.provider_errors",
+        "bridge.request_types",
+        "bridge.rag_contracts",
+        "bridge.token_usage_values",
+    }
 )
 
 
@@ -231,6 +239,7 @@ LOW_LEVEL_IMPORTS = {
             "bridge.light_novel_format",
             "bridge.light_novel_repository",
             "bridge.model_selection",
+            "bridge.provider_errors",
             "bridge.provider_port",
             "bridge.settings",
             "bridge.sqlite_store",
@@ -252,6 +261,7 @@ LOW_LEVEL_IMPORTS = {
             "bridge.limits",
             "bridge.metadata",
             "bridge.model_selection",
+            "bridge.provider_errors",
             "bridge.provider_port",
             "bridge.settings",
             "bridge.sqlite_store",
@@ -287,6 +297,7 @@ LOW_LEVEL_IMPORTS = {
             "bridge.character_optimizer_panels",
             "bridge.limits",
             "bridge.metadata",
+            "bridge.provider_errors",
             "bridge.provider_port",
             "bridge.request_types",
             "bridge.telegram",

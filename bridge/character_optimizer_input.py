@@ -16,6 +16,7 @@ from bridge.character_optimizer_panels import (
 )
 from bridge.limits import PENDING_SETTINGS_TTL_SECONDS
 from bridge.metadata import get_meta, set_meta
+from bridge.provider_errors import ProviderRequestError
 from bridge.provider_port import ProviderPort
 from bridge.request_types import RequestContext
 from bridge.telegram import delete_pending_input_prompts, send_text
@@ -137,6 +138,9 @@ def handle_character_optimizer_suggestion_input(
             expected_digest=expected_digest,
             base_fields=dict(state.get("base_fields") or {}),
         )
+    except ProviderRequestError as exc:
+        send_text(token, chat_id, str(exc))
+        return True
     except (OSError, ValueError) as exc:
         send_text(token, chat_id, f"{exc} Try again or send /cancel.")
         return True

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 from dataclasses import replace
+from email.message import Message
 
 import pytest
 from application_test_setup import make_test_application_services, make_test_rag_service
@@ -148,6 +150,51 @@ def test_optimizer_callback_preview_apply_and_replay_use_exact_proposal(card_con
     assert len(model_calls) == (1 if rank_fails else 2)
 
 
+def test_optimizer_callback_reports_sanitized_provider_failure(card_context, monkeypatch):
+    db, ctx, _ = card_context
+    target = ctx.app_settings.character_dir / "Alice.png"
+    target.write_bytes(_card_png("Alice", "original"))
+    outputs = []
+    error = urllib.error.HTTPError(
+        "https://provider.example/private",
+        429,
+        "upstream secret body",
+        Message(),
+        None,
+    )
+
+    def fail_provider(*_args, **_kwargs):
+        raise error
+
+    services = make_test_application_services(
+        app_settings=ctx.app_settings,
+        provider=ProviderPort(fail_provider),
+    )
+    session = services.session.create(db, "chat", ctx.app_settings.default_model, session_id="session")
+    bind_panel_session(db, "chat", 55, session["session_id"], "actor")
+    token = dynamic_callback_token("character", "Alice.png", "chat", db=db)
+    callback = {
+        "id": "callback",
+        "from": {"id": "actor"},
+        "data": "characteroptimizeauto:" + token,
+        "message": {"message_id": 55, "chat": {"id": "chat"}},
+    }
+
+    monkeypatch.setattr(callback_dispatch, "answer_callback", lambda *a, **k: None)
+    monkeypatch.setattr(character_quality, "task_model_for_session", lambda *a, **k: "provider::model")
+    monkeypatch.setattr(
+        character_callbacks, "send_panel_request", lambda _t, _m, payload, **_k: outputs.append(payload)
+    )
+
+    callback_dispatch.process_callback(db, "token", callback, services=services)  # type: ignore[arg-type]
+
+    assert outputs[-1]["text"] == (
+        "Model provider::model is rate-limited (HTTP 429). Try again later or choose another model.\n\n"
+        "The installed card is unchanged."
+    )
+    assert target.read_bytes() == _card_png("Alice", "original")
+
+
 def test_manual_optimizer_suggestion_pending_input_reaches_utility_prompt(card_context, monkeypatch):
     from bridge import character_optimizer_input, character_optimizer_panels, input_flows
     from bridge.metadata import set_meta
@@ -203,6 +250,69 @@ def test_manual_optimizer_suggestion_pending_input_reaches_utility_prompt(card_c
     prompt_text = "\n".join(str(message["content"]) for message in calls[0][0][2])
     assert suggestion in prompt_text
     assert "<user_suggestion>" in prompt_text
+    assert target.read_bytes() == original
+
+
+def test_manual_optimizer_suggestion_preserves_safe_fallback_on_provider_failure(card_context, monkeypatch):
+    from bridge import character_optimizer_input, input_flows
+    from bridge.metadata import get_meta, set_meta
+
+    db, ctx, _ = card_context
+    original = _card_png("Alice", "original")
+    target = ctx.app_settings.character_dir / "Alice.png"
+    target.write_bytes(original)
+    error = urllib.error.HTTPError(
+        "https://provider.example/private",
+        429,
+        "upstream secret body",
+        Message(),
+        None,
+    )
+
+    def fail_provider(*_args, **_kwargs):
+        raise error
+
+    services = make_test_application_services(
+        app_settings=ctx.app_settings,
+        provider=ProviderPort(fail_provider),
+    )
+    session = services.session.create(db, "chat", ctx.app_settings.default_model, session_id="session")
+    key = character_optimizer_input.optimizer_suggestion_key("chat", "actor")
+    state = {
+        "session_id": session["session_id"],
+        "actor_id": "actor",
+        "character_file": "Alice.png",
+        "expected_digest": __import__("hashlib").sha256(original).hexdigest(),
+        "expires_at": __import__("time").time() + 600,
+        "prompt_message_ids": [],
+    }
+    set_meta(db, key, json.dumps(state))
+    delivered = []
+    monkeypatch.setattr(character_optimizer_input, "send_text", lambda _t, _c, text: delivered.append(text) or [77])
+    monkeypatch.setattr(character_quality, "task_model_for_session", lambda *a, **k: "provider::model")
+
+    handled = input_flows.handle_pending_input(
+        db,
+        "token",
+        "chat",
+        session,
+        "Make the motivation clearer.",
+        fields={"name": "Alice"},
+        handle_session_name=lambda *a, **k: False,
+        group_service=services.group,
+        provider_port=services.provider,
+        memory_service=services.memory,
+        persona_service=services.persona,
+        request_context=RequestContext(db, session["session_id"], "actor", app_settings=ctx.app_settings),
+        rag_service=services.rag,
+    )
+
+    assert handled
+    assert delivered[-1] == (
+        "Model provider::model is rate-limited (HTTP 429). Try again later or choose another model."
+    )
+    assert "upstream secret body" not in delivered[-1]
+    assert get_meta(db, key)
     assert target.read_bytes() == original
 
 

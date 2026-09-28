@@ -63,7 +63,7 @@ def test_provider_port_is_pure_and_delegates_exact_call_shape():
     module = importlib.import_module("bridge.provider_port")
     assert {
         name for name in imported_modules("provider_port.py") if name == "bridge" or name.startswith("bridge.")
-    } <= {"bridge.port_contracts", "bridge.token_usage_values"}
+    } <= {"bridge.port_contracts", "bridge.provider_errors", "bridge.token_usage_values"}
     calls = []
 
     def backend(*args, **kwargs):

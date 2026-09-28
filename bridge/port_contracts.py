@@ -18,10 +18,6 @@ T = TypeVar("T")
 JsonObject = dict[str, Any]
 
 
-class ProviderSelectionError(RuntimeError):
-    """A configured model/provider selection cannot be resolved."""
-
-
 class ProviderRequestError(RuntimeError):
     """A bounded provider failure containing no upstream body, URL, credential, or path."""
 

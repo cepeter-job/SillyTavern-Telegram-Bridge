@@ -53,6 +53,16 @@ OPTIMIZABLE_FIELDS = (
 _RANK_MAX_TOKENS = 120
 _OPTIMIZE_MAX_TOKENS = 4000
 
+
+class CharacterProviderError(RuntimeError):
+    """Preserve a failed optimizer invocation for application-level presentation."""
+
+    def __init__(self, model: str, cause: BaseException) -> None:
+        super().__init__("character provider failed")
+        self.model = model
+        self.cause = cause
+
+
 _JSON_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
 
@@ -356,8 +366,8 @@ def optimize_character(
         "reasoning_budget": 0,
         "stop_sequences": "",
     }
+    model = _utility_model(db, chat_id, session, app_settings=app_settings)
     try:
-        model = _utility_model(db, chat_id, session, app_settings=app_settings)
         raw = provider_port.for_usage(chat_id, session["session_id"], "optimizer").generate(
             "",
             model,
@@ -367,7 +377,7 @@ def optimize_character(
             force_non_stream=True,
             request_timeout=30.0,
         )
-    except Exception:
-        logging.warning("Character optimization failed; leaving the card unchanged")
-        return None
+    except Exception as exc:
+        logging.warning("Character optimization provider failed; leaving the card unchanged")
+        raise CharacterProviderError(model, exc) from exc
     return parse_optimized_fields(raw)

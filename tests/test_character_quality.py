@@ -7,7 +7,9 @@ import json
 import struct
 import tempfile
 import unittest
+import urllib.error
 import zlib
+from email.message import Message
 from pathlib import Path
 from unittest import mock
 
@@ -308,6 +310,31 @@ class CharacterQualityModelTests(SettingsTestCase):
                 app_settings=self.app_settings,
             )
         self.assertIsNone(result)
+
+    def test_optimize_character_raises_sanitized_provider_failure(self):
+        error = urllib.error.HTTPError(
+            "https://provider.example/private",
+            429,
+            "upstream secret body",
+            Message(),
+            None,
+        )
+        port = make_test_provider_port(generate_backend=mock.Mock(side_effect=error))
+        with (
+            mock.patch.object(quality, "task_model_for_session", return_value="provider::model"),
+            self.assertRaises(quality.CharacterProviderError) as raised,
+        ):
+            quality.optimize_character(
+                self.db,
+                "chat",
+                self.session,
+                {"name": "Alice"},
+                provider_port=port,
+                app_settings=self.app_settings,
+            )
+
+        self.assertEqual(raised.exception.model, "provider::model")
+        self.assertIs(raised.exception.cause, error)
 
 
 if __name__ == "__main__":

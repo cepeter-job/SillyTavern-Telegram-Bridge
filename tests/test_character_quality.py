@@ -7,15 +7,15 @@ import json
 import struct
 import tempfile
 import unittest
-import urllib.error
 import zlib
-from email.message import Message
 from pathlib import Path
 from unittest import mock
 
 from settings_test_support import SettingsTestCase
 
 import bridge.character_quality as quality
+from bridge.model_router import ModelRoutingError
+from bridge.provider_errors import ProviderRequestError
 from bridge.card_content import parse_png_chara_bytes
 from bridge.memory_curator import db_connect
 
@@ -312,8 +312,8 @@ class CharacterQualityModelTests(SettingsTestCase):
         self.assertIsNone(result)
 
     def test_optimize_character_returns_none_when_utility_model_resolution_fails(self):
-        port = make_test_provider_port(generate_backend=lambda *a, **k: self.fail("provider must not be called"))
-        with mock.patch.object(quality, "task_model_for_session", side_effect=ValueError("bad model selection")):
+        port = make_test_provider_port(generate_backend=mock.Mock(side_effect=ModelRoutingError("bad model selection")))
+        with mock.patch.object(quality, "task_model_for_session", return_value="missing::model"):
             result = quality.optimize_character(
                 self.db,
                 "chat",
@@ -325,18 +325,12 @@ class CharacterQualityModelTests(SettingsTestCase):
 
         self.assertIsNone(result)
 
-    def test_optimize_character_raises_sanitized_provider_failure(self):
-        error = urllib.error.HTTPError(
-            "https://provider.example/private",
-            429,
-            "upstream secret body",
-            Message(),
-            None,
-        )
+    def test_optimize_character_raises_canonical_provider_failure(self):
+        error = ProviderRequestError("rate_limit", "provider::model", status=429)
         port = make_test_provider_port(generate_backend=mock.Mock(side_effect=error))
         with (
             mock.patch.object(quality, "task_model_for_session", return_value="provider::model"),
-            self.assertRaises(quality.CharacterProviderError) as raised,
+            self.assertRaises(ProviderRequestError) as raised,
         ):
             quality.optimize_character(
                 self.db,
@@ -347,8 +341,7 @@ class CharacterQualityModelTests(SettingsTestCase):
                 app_settings=self.app_settings,
             )
 
-        self.assertEqual(raised.exception.model, "provider::model")
-        self.assertIs(raised.exception.cause, error)
+        self.assertIs(raised.exception, error)
 
 
 if __name__ == "__main__":

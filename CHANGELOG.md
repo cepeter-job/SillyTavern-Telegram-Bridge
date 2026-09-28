@@ -4,6 +4,13 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.2.042] - 2026-09-28
+
+### Changed
+
+- Simplify first-install bootstrap into a one-time external signing-key trust setup followed by one copy/paste command block that discovers the newest `v*` tag, verifies it before checkout, and creates local branch `main` at the exact verified release commit for signed `/update` compatibility.
+- Generate new private `.env` files with `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` pointing at the standard external `~/.config/sillytavern-telegram/trusted-maintainers` path while preserving explicit template values, and move `--release`, `--unsafe-main`, and manual/offline ZIP procedures into Advanced / development documentation.
+
 ## [0.2.041] - 2026-09-28
 
 ### Fixed

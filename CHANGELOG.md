@@ -14,6 +14,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Changed
 
+- Confine the third-party Hindsight SDK to numeric loopback with explicit proxy bypass, retire misleading external Hindsight allowlist settings, and document transport-specific egress guarantees.
+
 - Move session-scoped Story reasoning controls from `/settings` into `/providers` beside Utility reasoning, preserving the existing budget and preset values.
 
 ### Fixed

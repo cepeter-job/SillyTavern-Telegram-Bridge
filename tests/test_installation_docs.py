@@ -38,3 +38,37 @@ def test_installation_guide_keeps_bootstrap_and_unsafe_paths_in_advanced_section
     assert "--release" in advanced
     assert "--unsafe-main" in advanced
     assert "ZIP" in advanced
+
+
+def test_installation_primary_flow_does_not_overwrite_installer_managed_state():
+    text = (ROOT / "docs/installation.md").read_text()
+    primary = text.split("## Advanced / development installation", 1)[0]
+    assert "cp .env.example" not in primary
+    assert "systemd/sillytavern-telegram.service.example" not in primary
+    assert "./install.sh --linger" in primary
+    assert "./install.sh --with-tailscale-funnel --linger" in primary
+
+
+def test_installation_guide_has_no_second_competing_installation_flow():
+    text = (ROOT / "docs/installation.md").read_text()
+    assert "## 📦 Installation guide" not in text
+    assert "Version **0.2.033**" not in text
+
+
+def test_installation_bootstrap_lists_preverification_tools():
+    text = (ROOT / "docs/installation.md").read_text()
+    prerequisites = _section(text, "## Before you start", "## Install with the user-scope script")
+    assert "git" in prerequisites
+    assert "ssh-keygen" in prerequisites
+    assert "openssh-client" in prerequisites
+
+
+def test_manual_git_update_verifies_signed_tag_before_checkout():
+    text = (ROOT / "docs/operations.md").read_text()
+    manual = _section(text, "### Manual update", "### Database migrations")
+    verify = 'verify-tag "$tag"'
+    checkout = 'git checkout -B main "$tag^{commit}"'
+    assert verify in manual
+    assert checkout in manual
+    assert manual.index(verify) < manual.index(checkout)
+    assert "git pull --ff-only origin main" not in manual

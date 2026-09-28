@@ -1,8 +1,34 @@
 # Installation
 
+## Before you start
+
+The maintained installation path targets Linux with user systemd and runs as the
+intended non-root user.
+
+The trust/bootstrap steps happen **before** `install.sh` can provision system
+packages, so `git` and `ssh-keygen` must already exist. On Debian/Ubuntu:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git openssh-client ca-certificates
+```
+
+Have these application values ready:
+
+- Telegram bot token from BotFather.
+- Numeric Telegram user ID to allow.
+- Story provider/model and its credential.
+- A SillyTavern data location, or use the starter data created by the installer.
+
+The installer can provision user-local Python 3.11+, locked Python dependencies,
+a starter character/avatar, the private environment file, and a hardened user
+systemd service. Tailscale is optional and is needed only for the public Mini App.
+
 ## Install with the user-scope script
 
-For a fresh Linux installation, run as your normal user. The primary path has two trust-preserving steps: provision the external maintainer key once, then install the newest signed `v*` release without executing repository code before its tag verifies.
+A fresh install has two trust-preserving bootstrap steps: provision the external
+maintainer key once, then install the newest signed `v*` release without
+executing repository code before its tag verifies.
 
 ### 1. One-time trust setup
 
@@ -18,13 +44,16 @@ chmod 600 "$HOME/.config/sillytavern-telegram/trusted-maintainers"
 awk '{print $3, $4, $5}' "$HOME/.config/sillytavern-telegram/trusted-maintainers" | ssh-keygen -lf -
 ```
 
-Independently compare the printed fingerprint through a separate trusted maintainer channel before proceeding:
+Independently compare the printed fingerprint through a separate trusted
+maintainer channel before proceeding:
 
 ```text
 SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI
 ```
 
-The repository documentation is not the independent channel. Key rotation and revocation procedures are in [Operations](operations.md#automatic-signed-update).
+The repository documentation is not the independent verification channel.
+Rotation and revocation procedures are in
+[Operations](operations.md#automatic-signed-update).
 
 ### 2. Install latest signed release
 
@@ -45,9 +74,22 @@ git checkout -B main "$tag^{commit}"
 ./install.sh --system-deps --no-start
 ```
 
-This leaves a real Git checkout on local branch `main` whose initial contents are exactly the verified release commit. The external signer file remains outside the repository and is reused by the built-in signed `/update` flow.
+This leaves a real Git checkout on local branch `main` whose initial contents
+are exactly the verified release commit. The external signer file remains
+outside the repository and is reused by the built-in signed `/update` flow.
 
-The generated `~/.local/share/sillytavern-telegram/.env` automatically points `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` at the standard trust file. Fill the bot and provider values:
+### 3. Configure the generated private environment
+
+The first installer run creates:
+
+```text
+~/.local/share/sillytavern-telegram/.env
+```
+
+Edit that generated file in place. **Do not replace it with `.env.example`.**
+The generated file already contains the installer-selected starter values and
+points `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` at the standard external trust file.
+At minimum, fill:
 
 ```dotenv
 SILLYTAVERN_TELEGRAM_BOT_TOKEN=your-bot-token
@@ -56,35 +98,79 @@ SILLYTAVERN_MODEL=default::your-model-id
 SILLYTAVERN_PROVIDER_ENDPOINT=https://your-provider.example/v1
 SILLYTAVERN_PROVIDER_ALLOWED_HOSTS=your-provider.example
 LLM_API_KEY=your-provider-key
-# Leave blank for automatic Funnel URL discovery.
-SILLYTAVERN_MINIAPP_PUBLIC_URL=
 ```
 
-Install and sign in to [Tailscale](https://tailscale.com/download/linux) on this server first. Requires **Tailscale 1.52+**, running `tailscaled`, MagicDNS, HTTPS certificates, Funnel authorization and an account allowed to configure Tailscale. An administrator can designate the account with `sudo tailscale set --operator="$USER"`. Account login and tailnet approval are external prerequisites; the bridge does not invent or bypass them. Then run:
+For additional providers, Codex OAuth, network allowlists, native paths, memory,
+RAG, voice, and other settings, see [Configuration](configuration.md).
+
+### 4. Start the bridge
+
+For a Telegram-only deployment, rerun the installer without Funnel:
+
+```bash
+cd ~/sillytavern-telegram-bridge
+./install.sh --linger
+```
+
+This validates the private configuration, keeps the installer-managed service
+unit, enables/restarts the user service, and enables lingering so it can continue
+after logout. It does **not** publish the Mini App.
+
+For the optional public Mini App, first install and sign in to Tailscale. This
+project supports the current Serve/Funnel CLI and therefore requires Tailscale
+1.52+. On Linux, an administrator can allow the bridge user to manage the local
+`tailscaled` daemon with:
+
+```bash
+sudo tailscale set --operator="$USER"
+```
+
+That operator setting controls the **local daemon only**. Funnel separately
+requires the tailnet prerequisites and authorization, including MagicDNS, HTTPS
+certificates, and permission to use Funnel. Then run:
 
 ```bash
 ./install.sh --with-tailscale-funnel --linger
 ```
 
-Deployment: **public HTTPS → Tailscale Funnel → `127.0.0.1:8787`**. No additional reverse proxy, custom domain, inbound public ports or port forwarding is required. Funnel manages TLS and the public hostname. The bot's **Bridge** menu opens the app. Funnel is public; private API operations still require signed Telegram `initData` and an allowed-user ID. The same root proxy carries both `/miniapp/*` and `/api/v1/*`.
+Funnel is public internet exposure. Telegram `initData` validation and the
+allowed-user list remain the application's authorization boundary. The installer
+uses the supported Funnel HTTPS ports 443, 8443, then 10000 without resetting
+unrelated Serve/Funnel routes. See [Mini App](miniapp.md) for deployment,
+authorization, and troubleshooting details.
 
-A blank URL reuses only an exact already-public Mini App proxy, or selects the first unused HTTPS port: **443, 8443, then 10000**. Only that URL assignment is saved in `.env`. Existing private Serve and public Funnel routes are not reset or replaced. An explicit URL must match this node and an available supported port; conflicts stop setup. The backend uses `SILLYTAVERN_MINIAPP_PORT` (default `8787`).
+### 5. Verify the service
 
-The installer prepares user-local Python, hash-locked dependencies, a starter character/avatar, an env-derived provider catalog and a user systemd service. `--system-deps` installs Debian/Ubuntu base prerequisites, **not Tailscale**. Existing `.env` values, custom provider YAML, native files and custom service units are preserved. `--replace-service` explicitly replaces a custom unit with a backup. `--no-start` prepares files but never starts the bridge or publishes a new Funnel. Publishing requires a ready loopback Mini App and an unauthenticated API rejection.
+```bash
+systemctl --user status sillytavern-telegram.service
+journalctl --user -u sillytavern-telegram.service -n 80 --no-pager
+./.venv/bin/python sillytavern_telegram_bridge.py --check
+```
 
-Keep the generated starter-character value initially. Add optional model IDs with `SILLYTAVERN_EXTRA_MODELS=model-two,model-three`, or use custom provider YAML for multiple providers. Without the Funnel flag, a blank URL keeps the listener off. The Mini App manages Characters/Optimizer, Models/Generation, Sessions, Personas, Worlds, Memory, Data Bank and System/Update. Ordinary conversation stays in Telegram.
+The installer preserves existing private `.env` values, native files, custom
+provider YAML, and custom service units. Use `--replace-service` only when you
+explicitly want the installer to back up and replace a custom unit.
 
-**Upgrade:** stop the user service before changing dependencies, update the clean checkout to `main`, and rerun `./install.sh --with-tailscale-funnel --linger`. Version **0.2.033** changes the dependency lock from previous releases, requiring this manual installation; `/update` keeps its dependency-change guard.
+## Updates
 
-Allowed users share administration of native assets; use separate bridge instances for mutually untrusted users. Existing unrelated proxy packages and system services are not uninstalled. Funnel `--bg` persists across daemon restarts and reboot. Tailscale still documents Funnel as beta with non-configurable bandwidth limits.
+Use the bridge's signed `/update` flow for normal upgrades. It requires a clean
+Git checkout on branch `main`, verifies the signed release tag against the
+external trust file, and refuses automatic installation when
+`requirements.lock` changed.
 
-See [Mini App installation and operations](miniapp.md) for authorization, upgrade commands, status and troubleshooting.
+When dependency changes require a reviewed manual update, use the
+[manual signed update procedure](operations.md#manual-update). Do **not** replace
+release verification with `git pull origin main`; `main` can contain commits
+that are not a published signed release.
 
 ## Advanced / development installation
 
-These paths are intentionally outside the primary Quick start.
+These paths are intentionally outside the primary user installation flow.
 
-**Bootstrap with an independently obtained installer.** Keep `--release TAG` for cases where a separately authenticated copy of `install.sh` must perform the clone itself:
+### Bootstrap from an independently obtained installer
+
+Keep `--release TAG` for cases where a separately authenticated copy of
+`install.sh` must clone the repository itself:
 
 ```bash
 ./install.sh --release vX.Y.Z \
@@ -92,129 +178,54 @@ These paths are intentionally outside the primary Quick start.
   --system-deps --no-start
 ```
 
-**Unsigned development `main`.** Use this only for development when signature-pinned bootstrap is deliberately not required:
+### Unsigned development `main`
+
+Use this only for development when signature-pinned bootstrap is deliberately
+not required:
 
 ```bash
 ./install.sh --unsafe-main --system-deps --no-start
 ```
 
-**Manual/offline release ZIP.** GitHub releases include `SillyTavern-Telegram-Bridge-vX.Y.Z.zip` and its matching `.sha256`. Verify the checksum, extract into a fresh directory, install the locked dependencies, and point the service at that directory. Do not overlay archives onto an existing source tree. Release-ZIP installations do not satisfy the Git-checkout-on-`main` requirement for automatic `/update`.
+### Manual/offline release ZIP
 
----
+GitHub releases include `SillyTavern-Telegram-Bridge-vX.Y.Z.zip` and a matching
+`.sha256`. Verify the checksum before extraction and never overlay an archive
+onto an existing source tree.
 
-## 🔧 Requirements
+The checksum detects corruption or accidental modification; it does **not**
+independently authenticate the publisher. Establish release authenticity from
+the corresponding signed release/tag and independently trusted maintainer key
+before trusting the archive. ZIP installations also do not satisfy the
+Git-checkout-on-`main` requirement for automatic `/update`.
 
-- **Python 3.11**
-- A Telegram bot token and your Telegram user ID
-- A local SillyTavern installation with at least one PNG character card
-- A configured Story model from the private provider catalog — OpenAI-compatible, native OpenAI Codex OAuth, Anthropic Messages, or OpenCode Muse
-- Optional: a separate Utility model, Hindsight, embeddings, image generation, STT, and TTS services
+For customized manual environments, use [Configuration](configuration.md) and
+the repository's systemd example as references. Do not run manual copy steps on
+top of an installer-managed deployment unless you intentionally want to replace
+installer-managed state.
 
----
+## Generated locations
 
-## 📦 Installation guide
+| Purpose | Default path |
+|---|---|
+| Verified Git checkout | `~/sillytavern-telegram-bridge` |
+| Private environment | `~/.local/share/sillytavern-telegram/.env` |
+| Installer state/live data | `~/.local/share/sillytavern-telegram` |
+| User systemd unit | `~/.config/systemd/user/sillytavern-telegram.service` |
+| Default SillyTavern user data | `~/.local/share/SillyTavern/data/default-user` |
+| External update trust file | `~/.config/sillytavern-telegram/trusted-maintainers` |
 
-The recommended Linux setup keeps the bridge, its virtual environment, and its
-runtime data under your user account. You do not need a system-wide Python
-installation or a root-owned service.
+## Troubleshooting
 
-### 1. Install the bridge source
-
-**Recommended:** use the two-step signed-release sequence at the top of this guide. A clean branch named `main`, positioned at the verified release commit, remains compatible with the built-in signed `/update` flow. Do not execute repository code until the selected release tag has been verified against the independently provisioned external allowed-signers file.
-
-Alternative bootstrap, unsigned-development, and release-archive procedures are intentionally kept in the **Advanced / development installation** section above.
-
-### 2. Create a private virtual environment
-
-Install only the locked runtime dependencies required to run the bridge:
-
-```bash
-python3.11 -m venv .venv
-./.venv/bin/python -m pip install -r requirements.lock
-```
-
-`requirements-dev.txt` is for contributors and CI; it is not required for a
-normal bridge installation.
-
-### 3. Create the user-scoped environment file
-
-The launcher reads `~/.local/share/sillytavern-telegram/.env` by default:
-
-```bash
-mkdir -p ~/.local/share/sillytavern-telegram
-cp .env.example ~/.local/share/sillytavern-telegram/.env
-chmod 600 ~/.local/share/sillytavern-telegram/.env
-```
-
-Edit that file with your Telegram token, allowed user ID, SillyTavern path,
-default character, provider credentials, and model. The
-[Configuration](configuration.md) and [Provider catalog](configuration.md#provider-catalog)
-guides describe the available settings.
-
-### 4. Validate and run the bridge
-
-Check the installation without starting Telegram polling:
+Run the built-in configuration check and inspect the user service:
 
 ```bash
 cd ~/sillytavern-telegram-bridge
 ./.venv/bin/python sillytavern_telegram_bridge.py --check
-```
-
-When the check passes, run the bridge manually:
-
-```bash
-cd ~/sillytavern-telegram-bridge
-./.venv/bin/python sillytavern_telegram_bridge.py
-```
-
-Press `Ctrl+C` to stop a manual run.
-
-### 5. Run it persistently with user systemd
-
-The repository includes a hardened **user-service** template. The default
-template expects:
-
-- bridge checkout: `~/sillytavern-telegram-bridge`
-- virtual environment: `~/sillytavern-telegram-bridge/.venv`
-- environment file: `~/.local/share/sillytavern-telegram/.env`
-- bridge runtime data: `~/.local/share/sillytavern-telegram`
-- update staging: `~/.local/share/sillytavern-telegram/live`
-- SillyTavern user data: `~/.local/share/SillyTavern/data/default-user`
-
-If your paths differ, edit the copied service file before enabling it. In
-particular, keep `WorkingDirectory`, `ExecStart`,
-`SILLYTAVERN_BRIDGE_SOURCE_DIR`, `SILLYTAVERN_LIVE_BRIDGE_DIR`, and
-`ReadWritePaths` aligned with your actual bridge and SillyTavern locations.
-
-Install and start the service for your user account:
-
-```bash
-mkdir -p ~/.config/systemd/user
-cp systemd/sillytavern-telegram.service.example \
-  ~/.config/systemd/user/sillytavern-telegram.service
-
-systemctl --user daemon-reload
-systemctl --user enable --now sillytavern-telegram.service
 systemctl --user status sillytavern-telegram.service
+journalctl --user -u sillytavern-telegram.service -n 100 --no-pager
 ```
 
-Useful service commands:
-
-```bash
-systemctl --user restart sillytavern-telegram.service
-systemctl --user stop sillytavern-telegram.service
-journalctl --user -u sillytavern-telegram.service -f
-```
-
-`systemctl --user enable` starts the bridge automatically when your user
-systemd manager starts. If you also want it to start at boot without an
-interactive login and remain running after logout, enable lingering for the
-account once:
-
-```bash
-loginctl enable-linger "$USER"
-```
-
-Some distributions require an administrator to enable lingering for a user.
-
----
+For signed-update failures, database recovery, network policy, and operational
+diagnostics, see [Operations](operations.md). For Mini App/Funnel problems, see
+[Mini App](miniapp.md).

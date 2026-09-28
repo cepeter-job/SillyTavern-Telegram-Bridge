@@ -24,7 +24,7 @@ from bridge.character_optimizer_panels import (
     send_character_optimize_result,
 )
 from bridge.character_proposals import load_character_proposal
-from bridge.character_quality import CharacterProviderError, character_rank, rank_character
+from bridge.character_quality import character_rank, rank_character
 from bridge.conversation_setup import begin_setup
 from bridge.conversation_setup_panels import send_setup_panel
 from bridge.group_service import GroupService
@@ -36,6 +36,7 @@ from bridge.native_imports import (
     verify_character_card_backup,
 )
 from bridge.operations import begin_operation, record_operation
+from bridge.provider_errors import ProviderRequestError
 from bridge.provider_port import ProviderPort
 from bridge.provider_user_errors import provider_user_error
 from bridge.telegram import send_panel_photo, send_panel_request
@@ -270,8 +271,8 @@ def handle_character_callback(
                 message.get("message_id"),
                 request_context=request_context,
             )
-        except CharacterProviderError as exc:
-            failure = provider_user_error(exc.cause, exc.model)
+        except ProviderRequestError as exc:
+            failure = provider_user_error(exc)
             send_panel_request(
                 token,
                 "editMessageText",

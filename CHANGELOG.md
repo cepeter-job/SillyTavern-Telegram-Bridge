@@ -4,6 +4,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.2.040] - 2026-09-28
+
 ### Added
 
 - Add opt-in `-900k` context variants for OpenAI Codex Sol, Terra and Luna, with model-aware prompt budgeting and wire-safe base model IDs.

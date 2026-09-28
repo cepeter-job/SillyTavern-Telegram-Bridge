@@ -3,36 +3,14 @@
 from __future__ import annotations
 
 import logging
-import socket
 import time
-import urllib.error
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
 
-from bridge.port_contracts import (
-    CancellationEvent,
-    ProviderGenerate,
-    ProviderRequestError,
-    ProviderSelectionError,
-    provider_error_for_http_status,
-)
+from bridge.port_contracts import CancellationEvent, ProviderGenerate
+from bridge.port_contracts import ProviderRequestError as ProviderRequestError
 from bridge.token_usage_values import TokenUsage, UsageEvent, UsageRecorder, UsageScope
-
-
-def normalize_provider_transport_error(error: BaseException, model: str) -> ProviderRequestError | None:
-    """Normalize known provider-boundary failures and leave unrelated runtime defects untouched."""
-    if isinstance(error, ProviderRequestError):
-        return error
-    if isinstance(error, ProviderSelectionError):
-        return ProviderRequestError("model_unavailable", model)
-    if isinstance(error, urllib.error.HTTPError):
-        return provider_error_for_http_status(model, int(error.code))
-    if isinstance(error, (TimeoutError, socket.timeout)):
-        return ProviderRequestError("timeout", model)
-    if isinstance(error, (urllib.error.URLError, ConnectionError)):
-        return ProviderRequestError("connection", model)
-    return None
 
 
 @dataclass(frozen=True)
@@ -71,27 +49,19 @@ class ProviderPort:
         started = time.monotonic()
         status = "failed"
         try:
-            try:
-                result = str(
-                    backend(
-                        api_key,
-                        model,
-                        messages,
-                        session_id=session_id,
-                        settings=settings,
-                        stream_callback=stream_callback,
-                        cancel_event=cancel_event,
-                        force_non_stream=force_non_stream,
-                        request_timeout=request_timeout,
-                    )
+            result = str(
+                backend(
+                    api_key,
+                    model,
+                    messages,
+                    session_id=session_id,
+                    settings=settings,
+                    stream_callback=stream_callback,
+                    cancel_event=cancel_event,
+                    force_non_stream=force_non_stream,
+                    request_timeout=request_timeout,
                 )
-            except ProviderRequestError:
-                raise
-            except Exception as exc:
-                normalized = normalize_provider_transport_error(exc, model)
-                if normalized is not None:
-                    raise normalized from None
-                raise
+            )
             status = "cancelled" if tracking and cancel_event is not None and cancel_event.is_set() else "succeeded"
             return result
         finally:

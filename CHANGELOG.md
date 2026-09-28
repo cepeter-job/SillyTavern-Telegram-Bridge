@@ -7,13 +7,15 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 ### Added
 
 - Require an explicit signed `--release` or development-only `--unsafe-main` when the installer must clone its source; document verifying the signed release before executing first-install repository code.
-
 - Snapshot the operational SQLite database with the online backup API before verified update activation; add explicit manual backup and offline restore commands with integrity checks and pre-restore preservation.
+
+### Changed
+
+- Move session-scoped Story reasoning controls from `/settings` into `/providers` beside Utility reasoning, preserving the existing budget and preset values.
 
 ### Fixed
 
 - Normalize recognized provider HTTP, timeout, and network failures at the provider boundary into sanitized typed errors, then surface actionable messages consistently in story jobs, Telegram character optimization, and Mini App optimization without exposing upstream bodies, URLs, credentials, or filesystem details.
-
 
 ## [0.2.039] - 2026-09-28
 

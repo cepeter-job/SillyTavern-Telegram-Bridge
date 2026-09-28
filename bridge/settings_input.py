@@ -40,19 +40,21 @@ def _show_model_target_menu(db, token: str, chat_id: str, session_id: str, *, re
 def _handle_settings_input(
     db, token: str, chat_id: str, session_id: str, stripped: str, state: dict, *, request_context
 ) -> bool:
-    utility_reasoning = state.get("scope") == "utility_reasoning"
+    reasoning_scope = str(state.get("scope") or "")
+    utility_reasoning = reasoning_scope == "utility_reasoning"
+    provider_reasoning = reasoning_scope in {"story_reasoning", "utility_reasoning"}
     if stripped.casefold() in {"/cancel", "cancel"}:
         _cancel_pending(db, token, chat_id, f"settings_input:{chat_id}", state)
-        if utility_reasoning:
+        if provider_reasoning:
             _show_model_target_menu(db, token, chat_id, session_id, request_context=request_context)
         else:
             send_settings_menu(token, chat_id, db, session_id, request_context=request_context)
         return True
     try:
         key, value = parse_generation_setting(str(state.get("key") or ""), stripped)
+        if provider_reasoning and key != "reasoning_budget":
+            raise ValueError("provider reasoning input accepts reasoning budget only")
         if utility_reasoning:
-            if key != "reasoning_budget":
-                raise ValueError("utility input accepts reasoning budget only")
             set_utility_reasoning(db, chat_id, session_id, int(value))
         else:
             update_generation_settings(db, chat_id, session_id, **{key: value})
@@ -67,7 +69,7 @@ def _handle_settings_input(
         )
         return True
     _cancel_pending(db, token, chat_id, f"settings_input:{chat_id}", state)
-    if utility_reasoning:
+    if provider_reasoning:
         _show_model_target_menu(db, token, chat_id, session_id, request_context=request_context)
     else:
         send_settings_menu(token, chat_id, db, session_id, request_context=request_context)

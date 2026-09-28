@@ -266,8 +266,25 @@ providers:
     adapter: openai_codex
     discover_models: false
     models:
+      - gpt-5.6-sol
+      - gpt-5.6-sol-900k
       - gpt-5.6-terra
+      - gpt-5.6-terra-900k
+      - gpt-5.6-luna
+      - gpt-5.6-luna-900k
 ```
+
+The `-900k` entries are bridge picker aliases, not OpenAI model IDs. They opt
+Sol, Terra, or Luna into a conservative 900,000-token bridge planning ceiling inside the model's larger supported context window; the bridge preserves
+the alias in session state for budgeting and strips it only from the Codex wire
+request. Other models—including invented `-900k` names—keep the configured
+`SILLYTAVERN_CONTEXT_WINDOW_TOKENS` budget and are sent unchanged so invalid
+names fail honestly. The output reserve is still subtracted, so the default
+900K input budget is 895,904 tokens.
+
+`SILLYTAVERN_CONTEXT_HISTORY_CANDIDATES` remains an independent resource cap.
+Increase it, up to 512, if a long-running 900K session should load more than the
+default 96 recent transcript messages before compaction.
 
 Allow both OAuth and inference hosts, then complete a separate bridge login:
 

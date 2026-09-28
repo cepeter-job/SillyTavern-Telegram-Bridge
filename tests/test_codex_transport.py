@@ -119,6 +119,29 @@ class CodexTransportTests(SettingsTestCase):
         self.assertRegex(request.headers["User-agent"], r"^codex_cli_rs/0\.0\.0")
         self.assertEqual(request.headers["Chatgpt-account-id"], "acct-1")
 
+    def test_strips_large_context_alias_before_codex_request(self):
+        bodies = []
+
+        def fake_open(request, timeout, *, environ):
+            del timeout, environ
+            bodies.append(json.loads(request.data.decode()))
+            return _StreamingResponse(
+                [{"type": "response.output_text.delta", "delta": "ok"}, {"type": "response.completed", "response": {}}]
+            )
+
+        result = codex_transport.generate_codex_response(
+            "gpt-5.6-luna-900k",
+            [{"role": "user", "content": "Hello"}],
+            {"reasoning_budget": 0},
+            self.spec,
+            "session",
+            app_settings=self.settings,
+            open_request=fake_open,
+        )
+
+        self.assertEqual(result, "ok")
+        self.assertEqual(bodies[0]["model"], "gpt-5.6-luna")
+
     def test_reasoning_budget_is_optional_and_clamped_per_model(self):
         bodies = []
 

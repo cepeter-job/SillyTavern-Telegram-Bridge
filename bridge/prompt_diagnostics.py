@@ -35,7 +35,7 @@ def prompt_diagnostics(
         "\nMessages: "
         f"""{message_count}"""
         "\nContext input budget: ~"
-        f"""{context_input_budget_tokens(app_settings=app_settings)}"""
+        f"""{context_input_budget_tokens(session.get("model_id", ""), app_settings=app_settings)}"""
         " tokens\nHistory candidates: "
         f"""{context_history_candidate_limit(app_settings=app_settings)}"""
         " messages\nSession summary: "

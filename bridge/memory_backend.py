@@ -76,9 +76,7 @@ def _ensure_hindsight_loopback_proxy_bypass(host: str) -> None:
 
 
 def hindsight_client(*, app_settings: AppSettings):
-    base_url, host = _validated_hindsight_base_url(
-        app_settings.environ.get("HINDSIGHT_API_URL", HINDSIGHT_DEFAULT_URL)
-    )
+    base_url, host = _validated_hindsight_base_url(app_settings.environ.get("HINDSIGHT_API_URL", HINDSIGHT_DEFAULT_URL))
     _ensure_hindsight_loopback_proxy_bypass(host)
 
     from hindsight_client import Hindsight

@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Snapshot the operational SQLite database with the online backup API before verified update activation; add explicit manual backup and offline restore commands with integrity checks and pre-restore preservation.
+
 ### Fixed
 
 - Normalize known provider transport failures into bounded canonical errors before application handling, then surface safe actionable messages for character replies and optimizer flows without exposing upstream bodies, URLs, credentials, paths, or swallowing unrelated runtime defects.

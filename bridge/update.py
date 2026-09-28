@@ -159,6 +159,8 @@ def _run_update(
             trusted_signers=trust,
             release_version=latest,
             unit=app_settings.update_service,
+            database=app_settings.db_file,
+            database_backup_dir=app_settings.bridge_home / "backups/database",
         ),
         **({"before_restart": before_restart} if before_restart is not None else {}),
     )
@@ -192,6 +194,7 @@ def format_update_outcome(outcome: UpdateOutcome) -> str:
         "dependencies": (
             "runtime dependencies changed; install the signed release manually with its locked requirements"
         ),
+        "database_backup": "the operational SQLite database could not be snapshotted safely",
         "busy": "another update is already running",
         "archive": "the release contains unsafe or unsupported files",
         "size": "the release exceeds the bounded deployment size",

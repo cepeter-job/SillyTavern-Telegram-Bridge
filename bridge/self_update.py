@@ -18,6 +18,7 @@ import os
 import re
 import shlex
 import shutil
+import sqlite3
 import stat
 import subprocess
 import sys
@@ -30,6 +31,7 @@ from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from bridge.database_backup import create_database_backup
 from bridge.subprocess_security import minimal_subprocess_environment
 
 APPLICATION = "cepeter/SillyTavern-Telegram-Bridge"
@@ -66,6 +68,8 @@ class UpdatePlan:
     release_version: str
     unit: str = "sillytavern-telegram.service"
     remote_url: str = CANONICAL_GIT_URL
+    database: Path | None = None
+    database_backup_dir: Path | None = None
 
 
 class UpdateRefused(RuntimeError):
@@ -471,6 +475,14 @@ def apply_update(plan: UpdatePlan, *, before_restart: Callable[[UpdateOutcome], 
             if _clean_source(plan.source, tools["git"]) != old:
                 raise UpdateRefused("changed")
             _validate_live_contents(plan.live)
+            if (plan.database is None) != (plan.database_backup_dir is None):
+                raise UpdateRefused("database_backup")
+            if plan.database is not None and plan.database_backup_dir is not None:
+                phase = "database_backup"
+                try:
+                    create_database_backup(plan.database, plan.database_backup_dir, label="pre-update")
+                except (OSError, RuntimeError, sqlite3.Error):
+                    raise UpdateRefused("database_backup") from None
             phase = "activate"
             _git(
                 ["fetch", "--no-tags", "--no-recurse-submodules", str(bare), commit],

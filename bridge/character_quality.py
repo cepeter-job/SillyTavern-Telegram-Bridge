@@ -25,8 +25,8 @@ from pathlib import Path
 
 import bridge.limits as _limits
 from bridge.metadata import get_meta, set_meta
-from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.model_router import ModelRoutingError
+from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction

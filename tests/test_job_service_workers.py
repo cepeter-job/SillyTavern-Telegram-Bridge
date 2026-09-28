@@ -26,8 +26,8 @@ from unittest.mock import patch
 
 import bridge.memory_curator as _m_memory_curator
 import bridge.worker_orchestration as _m_workers
-from bridge.provider_errors import ProviderRequestError
 from bridge.composition import BackgroundRuntime, BridgeServices, TelegramRuntime
+from bridge.provider_errors import ProviderRequestError
 
 
 class FakeJobs:

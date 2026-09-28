@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from bridge.provider_errors import ProviderRequestError
+from bridge.port_contracts import ProviderRequestError
 
 
 class ProviderUserError(RuntimeError):

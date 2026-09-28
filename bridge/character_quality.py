@@ -26,6 +26,7 @@ from pathlib import Path
 import bridge.limits as _limits
 from bridge.metadata import get_meta, set_meta
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
+from bridge.provider_errors import ProviderRequestError
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
@@ -358,6 +359,10 @@ def optimize_character(
     }
     try:
         model = _utility_model(db, chat_id, session, app_settings=app_settings)
+    except Exception:
+        logging.warning("Character optimization model resolution failed; leaving the card unchanged")
+        return None
+    try:
         raw = provider_port.for_usage(chat_id, session["session_id"], "optimizer").generate(
             "",
             model,
@@ -367,6 +372,8 @@ def optimize_character(
             force_non_stream=True,
             request_timeout=30.0,
         )
+    except ProviderRequestError:
+        raise
     except Exception:
         logging.warning("Character optimization failed; leaving the card unchanged")
         return None

@@ -254,7 +254,7 @@ def test_choice_generation_retries_transient_timeout_once(novel_db, caplog):
     assert result.choices == ("Go inside", "Wait outside")
     assert calls == [60, 60]
     assert "stage=provider" in caplog.text
-    assert "error_type=TimeoutError" in caplog.text
+    assert "error_type=ProviderRequestError" in caplog.text
     assert "reason=timeout" in caplog.text
     assert "retrying" in caplog.text
 
@@ -310,7 +310,7 @@ def test_choice_generation_retries_transient_http_status_and_hides_url(novel_db,
     assert result.generation_status == "ready"
     assert calls == [60, 60]
     assert "http_status=503" in caplog.text
-    assert "reason=http_transient" in caplog.text
+    assert "reason=provider_unavailable" in caplog.text
     assert "PRIVATE_PROVIDER_URL" not in caplog.text
 
 

@@ -207,6 +207,31 @@ class JobWorkerServiceTests(SettingsTestCase):
             "The character backend failed for this message. Use /retry or /status.",
         )
 
+    def test_message_worker_reports_sanitized_provider_rate_limit(self):
+        from bridge.provider_errors import ProviderRequestError
+
+        error = ProviderRequestError("openrouter-free::qwen/qwen3.8-27b:free", "rate_limit", 429)
+        with (
+            patch.object(_owner_transcript_repository, "committed_assistant_for_message", return_value=None),
+            patch.object(self.services.conversation, "process_message", side_effect=error),
+        ):
+            _m_workers.process_message_job(
+                self.services,
+                {"name": "Mira"},
+                "chat",
+                "hello",
+                10,
+                model_override="openrouter-free::qwen/qwen3.8-27b:free",
+                job_id=41,
+            )
+
+        self.assertEqual(
+            self.sent[-1][2],
+            "Model openrouter-free::qwen/qwen3.8-27b:free is rate-limited (HTTP 429). "
+            "Try again later or choose another model.",
+        )
+        self.assertNotIn("provider.example", self.sent[-1][2])
+
     def test_command_worker_deletes_queue_notice_after_failure(self):
         requests = []
         services = replace(

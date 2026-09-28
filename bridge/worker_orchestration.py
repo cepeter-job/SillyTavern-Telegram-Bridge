@@ -19,6 +19,7 @@ from bridge.job_service import DurableJob, JobSubmission
 from bridge.light_novel_jobs import process_light_novel_choices_job
 from bridge.limits import IMAGE_MAX_BYTES
 from bridge.operations import operation_phase, operation_was_applied, record_operation
+from bridge.provider_errors import ProviderRequestError
 from bridge.response_delivery import send_reply
 from bridge.sqlite_store import write_transaction
 from bridge.transcript_repository import committed_assistant_for_message, native_edit_target
@@ -112,7 +113,11 @@ def process_message_job(
                 else:
                     failure_message = "The command failed. Use /status for details, then retry the command."
             else:
-                failure_message = "The character backend failed for this message. Use /retry or /status."
+                failure_message = (
+                    str(exc)
+                    if isinstance(exc, ProviderRequestError)
+                    else "The character backend failed for this message. Use /retry or /status."
+                )
             services.telegram.send_text(token, chat_id, failure_message)
         finally:
             for queue_message_id in queue_notice_message_ids or []:

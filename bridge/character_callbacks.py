@@ -36,6 +36,7 @@ from bridge.native_imports import (
     verify_character_card_backup,
 )
 from bridge.operations import begin_operation, record_operation
+from bridge.provider_errors import ProviderRequestError
 from bridge.provider_port import ProviderPort
 from bridge.telegram import send_panel_photo, send_panel_request
 
@@ -267,6 +268,18 @@ def handle_character_callback(
                 draft.fields,
                 draft.nonce,
                 message.get("message_id"),
+                request_context=request_context,
+            )
+        except ProviderRequestError as exc:
+            send_panel_request(
+                token,
+                "editMessageText",
+                {
+                    "chat_id": chat_id,
+                    "message_id": message.get("message_id"),
+                    "text": f"{exc}\n\nThe installed card is unchanged.",
+                    "reply_markup": {"inline_keyboard": [[{"text": "Back", "callback_data": "character:optimize"}]]},
+                },
                 request_context=request_context,
             )
         except (ValueError, OSError):

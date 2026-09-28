@@ -137,6 +137,9 @@ def handle_character_optimizer_suggestion_input(
             expected_digest=expected_digest,
             base_fields=dict(state.get("base_fields") or {}),
         )
+    except RuntimeError:
+        send_text(token, chat_id, "Optimization unavailable. Try again or send /cancel.")
+        return True
     except (OSError, ValueError) as exc:
         send_text(token, chat_id, f"{exc} Try again or send /cancel.")
         return True

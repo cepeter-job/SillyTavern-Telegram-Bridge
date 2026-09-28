@@ -4,6 +4,12 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.2.045] - 2026-09-28
+
+### Fixed
+
+- Keep long Home Persona, World, and Memory status values contained within their own Mini App status columns on narrow Telegram viewports instead of overlapping adjacent columns.
+
 ## [0.2.044] - 2026-09-28
 
 ### Added

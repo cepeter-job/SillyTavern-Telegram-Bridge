@@ -13,6 +13,7 @@ import copy
 import math
 import re
 
+from bridge.codex_models import codex_context_window_tokens
 from bridge.settings import AppSettings
 
 DEFAULT_CONTEXT_WINDOW_TOKENS = 32768
@@ -21,18 +22,19 @@ DEFAULT_CONTEXT_HISTORY_CANDIDATES = 96
 MIN_CONTEXT_INPUT_BUDGET_TOKENS = 2048
 
 
-def context_window_tokens(*, app_settings: AppSettings) -> int:
-    return app_settings.context_window_tokens
+def context_window_tokens(model: str = "", *, app_settings: AppSettings) -> int:
+    return codex_context_window_tokens(model) or app_settings.context_window_tokens
 
 
 def context_output_reserve_tokens(*, app_settings: AppSettings) -> int:
     return app_settings.context_output_reserve_tokens
 
 
-def context_input_budget_tokens(*, app_settings: AppSettings) -> int:
+def context_input_budget_tokens(model: str = "", *, app_settings: AppSettings) -> int:
     return max(
         MIN_CONTEXT_INPUT_BUDGET_TOKENS,
-        context_window_tokens(app_settings=app_settings) - context_output_reserve_tokens(app_settings=app_settings),
+        context_window_tokens(model, app_settings=app_settings)
+        - context_output_reserve_tokens(app_settings=app_settings),
     )
 
 

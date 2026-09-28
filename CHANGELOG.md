@@ -4,6 +4,10 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- Reconcile a stale managed live mirror when the signed release commit is already checked out in the source tree, so manual fast-forwarding of `main` cannot leave `/update` reporting the previous installed version.
+
 ## [0.2.040] - 2026-09-28
 
 ### Added

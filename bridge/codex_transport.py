@@ -10,6 +10,7 @@ from collections.abc import Callable
 from typing import Any
 
 from bridge.codex_auth import codex_headers, resolve_access_token, validate_codex_endpoint
+from bridge.codex_models import codex_wire_model
 from bridge.network_security import strict_urlopen
 from bridge.settings import AppSettings
 from bridge.token_usage_values import UsageCallback, UsageCapture
@@ -213,7 +214,7 @@ def generate_codex_response(
     )
     instructions, inputs = _codex_input(messages)
     body = {
-        "model": actual_model,
+        "model": codex_wire_model(actual_model),
         "instructions": instructions,
         "input": inputs,
         "store": False,

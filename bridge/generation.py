@@ -8,7 +8,7 @@ from pathlib import Path
 
 from bridge.card_content import active_world_files, build_system_prompt, build_world_info, replace_macros
 from bridge.config import GENERATION_DEFAULTS
-from bridge.context_compaction import compact_chat_messages
+from bridge.context_compaction import compact_chat_messages, context_input_budget_tokens
 from bridge.delivery_port import DeliveryPort
 from bridge.generation_settings import get_generation_settings
 from bridge.humanize import render_humanized_response
@@ -213,7 +213,11 @@ def build_chat_messages(
         )
     else:
         messages.append({"role": "user", "content": user_content})
-    compacted, stats = compact_chat_messages(messages, app_settings=app_settings)
+    compacted, stats = compact_chat_messages(
+        messages,
+        budget_tokens=context_input_budget_tokens(session.get("model_id", ""), app_settings=app_settings),
+        app_settings=app_settings,
+    )
     if stats["original_tokens"] != stats["final_tokens"]:
         logging.info(
             (

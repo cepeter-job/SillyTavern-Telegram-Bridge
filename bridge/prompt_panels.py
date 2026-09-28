@@ -26,7 +26,8 @@ def prompt_panel_text(
 ):
     if section == "budget":
         return (
-            f"Prompt budget\nContext input budget: ~{context_input_budget_tokens(app_settings=app_settings)} tokens\n"
+            "Prompt budget\nContext input budget: ~"
+            f"{context_input_budget_tokens(session.get('model_id', ''), app_settings=app_settings)} tokens\n"
             f"History candidates: {context_history_candidate_limit(app_settings=app_settings)} messages\n"
             f"Session summary: {len(get_session_summary(db, chat_id, session['session_id'])[0])} chars"
         )

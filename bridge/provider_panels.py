@@ -6,6 +6,9 @@ import logging
 
 from bridge.callback_tokens import dynamic_callback_token
 from bridge.cards import send_panel_message
+from bridge.config import REASONING_LEVELS
+from bridge.generation_settings import get_generation_settings
+from bridge.model_selection import utility_reasoning_for_session
 from bridge.panel_utils import panel_label, panel_page
 from bridge.provider_discovery import get_model_groups, provider_health_checks
 
@@ -120,23 +123,78 @@ def send_model_menu(
         raise
 
 
+def _reasoning_label(budget: int) -> str:
+    label = next((name.title() for name, value in REASONING_LEVELS.items() if value == budget), "Custom")
+    return f"{label} ({budget})"
+
+
 def send_model_target_menu(
     token: str, chat_id: str, current_model: str, utility_model: str, message_id: int | None = None, *, request_context
 ) -> None:
+    if request_context.db is None:
+        story_reasoning = utility_reasoning = 0
+    else:
+        story_settings = get_generation_settings(request_context.db, chat_id, request_context.session_id)
+        story_reasoning = int(story_settings.get("reasoning_budget") or 0)
+        utility_reasoning = utility_reasoning_for_session(request_context.db, chat_id, request_context.session_id)
+    quote = (
+        "Current models\n"
+        f"📖 Story: {current_model}\n"
+        f"🧠 Story reasoning: {_reasoning_label(story_reasoning)}\n"
+        f"🛠 Utility: {utility_model}\n"
+        f"🧠 Utility reasoning: {_reasoning_label(utility_reasoning)}"
+    )
     markup = {
         "inline_keyboard": [
             [
-                {"text": ("✅ " if current_model else "") + "📖 Story model", "callback_data": "modeltarget:story"},
-                {"text": ("✅ " if utility_model else "") + "🛠️ Utility model", "callback_data": "modeltarget:utility"},
+                {"text": "📖 Story model", "callback_data": "modeltarget:story"},
+                {"text": "🛠️ Utility model", "callback_data": "modeltarget:utility"},
             ],
+            [{"text": "🧠 Utility reasoning", "callback_data": "models:utility-reasoning"}],
             [{"text": "❌ Cancel", "callback_data": "models:cancel"}],
         ]
     }
     send_panel_message(
         token,
         chat_id,
-        "Where should the next selected model be used?",
+        quote + "\n\nConfigure models:",
         markup,
+        message_id,
+        request_context=request_context,
+        entities=[{"type": "blockquote", "offset": 0, "length": len(quote.encode("utf-16-le")) // 2}],
+    )
+
+
+def send_utility_reasoning_menu(
+    token: str,
+    chat_id: str,
+    message_id: int | None = None,
+    *,
+    request_context,
+) -> None:
+    current = utility_reasoning_for_session(request_context.db, chat_id, request_context.session_id)
+    rows = [
+        [
+            {
+                "text": ("✅ " if budget == current else "") + f"{label.title()} ({budget})",
+                "callback_data": f"utilityreasoning:{label}",
+            }
+        ]
+        for label, budget in REASONING_LEVELS.items()
+    ]
+    rows.append([{"text": "✏️ Custom (0–32000)", "callback_data": "utilityreasoning:custom"}])
+    rows.append(
+        [
+            {"text": "⬅️ Back", "callback_data": "models:target"},
+            {"text": "❌ Cancel", "callback_data": "models:cancel"},
+        ]
+    )
+    send_panel_message(
+        token,
+        chat_id,
+        f"Utility reasoning\nCurrent: {_reasoning_label(current)}\n\n"
+        "Choose the reasoning budget used by Utility-model tasks.",
+        {"inline_keyboard": rows},
         message_id,
         request_context=request_context,
     )

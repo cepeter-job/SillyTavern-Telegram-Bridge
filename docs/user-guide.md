@@ -44,7 +44,12 @@ success. **No silent overwrites. Ever.**
 A private provider catalog drives model selection. You can use
 OpenAI-compatible Chat Completions, native OpenAI Codex OAuth, Anthropic
 Messages, the keyless OpenCode Muse `/responses` transport, or an opt-in image
-provider — all from the same panel.
+provider — all from the same panel. `/providers` starts with a block-quoted
+snapshot of the active session's Story and Utility models and their reasoning
+budgets. Story reasoning stays under `/settings`; Utility reasoning is configured
+from `/providers` and is independent per session. It applies to Utility-model
+tasks such as summaries, curated memory, scene state, Light Novel strategy B
+choices, and character ranking/optimization.
 
 Beyond basic generation, the bridge handles:
 
@@ -202,9 +207,11 @@ through the normal confirmation flow.
 ### Session lifecycle
 
 `/new` asks for a name (1–80 characters), creates a fresh session, and switches
-to it. `/session` lists all sessions and lets you switch, create, or delete
-inactive ones. Both the custom name and the internal session ID show up in
-`/status`.
+to it. Starting the flow closes your previous unclosed management panel in the
+same chat/topic, but does **not** delete the previous session's Telegram messages
+or stored conversation. `/session` lists all sessions and lets you switch, create,
+or delete inactive ones. Both the custom name and the internal session ID show up
+in `/status`.
 
 New standard sessions are **unstarted**. Use `/character` to configure the story,
 then `/start` to choose the character's Default or Alternate opening message.
@@ -222,7 +229,7 @@ Each session carries its own:
 
 ```text
 Conversation transcript
-Selected model and generation settings
+Selected Story/Utility models and reasoning settings
 Response language
 Persona and World Info
 Author's Note and System Prompt
@@ -237,14 +244,19 @@ Forum Topic group state, when applicable
 
 1. Opens a confirmation panel — nothing is touched yet.
 2. On confirm, purges Hindsight documents for that session only.
-3. Clears the local conversation, variants, failed turns, summary, and data.
-4. The session stays available, now empty.
-5. Preserves Character, Normal/Light Novel mode, A/B/C strategy, Persona, World
+3. Best-effort deletes the current session's tracked Telegram user inputs,
+   assistant replies, and Light Novel choice/selection messages.
+4. Clears the local conversation, variants, failed turns, summary, and data.
+5. The session stays available, now empty.
+6. Preserves Character, Normal/Light Novel mode, A/B/C strategy, Persona, World
    and System Prompt, but invalidates old choices and returns the standard session
    to unstarted. Use `/start` to choose the opening greeting again.
 
-The confirmation text spells out exactly what gets deleted: the conversation,
-Hindsight memories, SQLite session data, and session documents.
+The confirmation text spells out exactly what gets deleted. Telegram deletion is
+best-effort because Telegram can reject old messages or group deletions without
+sufficient permissions; such failures do not roll back the durable reset. Cleanup
+is scoped to the active session and chat/topic, so other sessions/topics are not
+touched.
 
 `/session` deletion is stricter. It only targets inactive sessions, refuses
 sessions with running or queued jobs, and requires Hindsight cleanup to succeed

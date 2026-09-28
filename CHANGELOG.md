@@ -4,6 +4,20 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Add independent session-scoped Utility reasoning controls to `/providers`, reusing the canonical None/Low/Medium/High/Max/Custom budgets for Utility-model summaries, curated memory, scene state, Light Novel strategy B choices, and character rank/optimizer work.
+
+### Changed
+
+- Show the active Story and Utility models plus both reasoning budgets in a Telegram block quote when `/providers` opens.
+- Keep one active management panel per actor and chat/topic: opening a new command panel or confirmation closes the previous one while leaving Light Novel choices and conversation artifacts alone.
+- Keep `/new` non-destructive to the previous conversation while closing stale management UI before session-name input.
+
+### Fixed
+
+- Make `/reset` best-effort delete tracked user inputs, assistant replies, open choices, and consumed Light Novel choice quotes for the active session, including choice panels that were already consumed.
+
 ## [0.2.038] - 2026-09-28
 
 ### Fixed

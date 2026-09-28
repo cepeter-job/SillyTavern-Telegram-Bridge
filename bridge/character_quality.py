@@ -25,7 +25,7 @@ from pathlib import Path
 
 import bridge.limits as _limits
 from bridge.metadata import get_meta, set_meta
-from bridge.model_selection import task_model_for_session
+from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
@@ -312,7 +312,7 @@ def rank_character(
     settings = {
         "temperature": 0.0,
         "max_tokens": _RANK_MAX_TOKENS,
-        "reasoning_budget": 0,
+        "reasoning_budget": utility_reasoning_for_session(db, chat_id, session["session_id"]),
         "stop_sequences": "",
     }
     try:
@@ -353,7 +353,7 @@ def optimize_character(
     settings = {
         "temperature": 0.4,
         "max_tokens": _OPTIMIZE_MAX_TOKENS,
-        "reasoning_budget": 0,
+        "reasoning_budget": utility_reasoning_for_session(db, chat_id, session["session_id"]),
         "stop_sequences": "",
     }
     try:

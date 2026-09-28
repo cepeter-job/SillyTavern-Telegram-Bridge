@@ -23,7 +23,7 @@ from bridge.extension_registry import register_post_retain_hook as _register_pos
 from bridge.extension_registry import register_summary_clear_hook as _register_summary_clear_hook
 from bridge.extension_registry import register_summary_context_hook as _register_summary_context_hook
 from bridge.generation_settings import get_generation_settings
-from bridge.model_selection import task_model_for_session
+from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.provider_port import ProviderPort
 from bridge.scene_panel import scene_panel
 from bridge.scene_repository import delete_scene_state as _repo_delete_scene_state
@@ -180,7 +180,7 @@ def refresh_scene_state_now(
         {
             "temperature": 0.0,
             "max_tokens": 1000,
-            "reasoning_budget": 0,
+            "reasoning_budget": utility_reasoning_for_session(db, chat_id, session_id),
             "stop_sequences": "",
         }
     )

@@ -9,25 +9,53 @@ from bridge.generation_settings_values import parse_generation_setting
 from bridge.language import normalize_stt_language, stt_language_label
 from bridge.message_commands import send_pending_input_message
 from bridge.metadata import set_meta
+from bridge.model_selection import set_utility_reasoning, task_model_for_session
 from bridge.note_panels import send_note_menu
 from bridge.pending_input import _cancel_pending
 from bridge.preset_panels import send_preset_menu
-from bridge.session_core import update_session
+from bridge.provider_panels import send_model_target_menu
+from bridge.session_core import load_session, update_session
 from bridge.settings_panels import send_settings_menu
 from bridge.telegram import send_text
 from bridge.voice_panels import send_stt_language_menu, send_voice_input_menu
 
 
+def _show_model_target_menu(db, token: str, chat_id: str, session_id: str, *, request_context) -> None:
+    session = load_session(
+        db,
+        chat_id,
+        session_id,
+        request_context.app_settings.default_model,
+        app_settings=request_context.app_settings,
+    )
+    send_model_target_menu(
+        token,
+        chat_id,
+        session.get("model_id") or request_context.app_settings.default_model,
+        task_model_for_session(db, chat_id, session, "utility", app_settings=request_context.app_settings),
+        request_context=request_context,
+    )
+
+
 def _handle_settings_input(
     db, token: str, chat_id: str, session_id: str, stripped: str, state: dict, *, request_context
 ) -> bool:
+    utility_reasoning = state.get("scope") == "utility_reasoning"
     if stripped.casefold() in {"/cancel", "cancel"}:
         _cancel_pending(db, token, chat_id, f"settings_input:{chat_id}", state)
-        send_settings_menu(token, chat_id, db, session_id, request_context=request_context)
+        if utility_reasoning:
+            _show_model_target_menu(db, token, chat_id, session_id, request_context=request_context)
+        else:
+            send_settings_menu(token, chat_id, db, session_id, request_context=request_context)
         return True
     try:
         key, value = parse_generation_setting(str(state.get("key") or ""), stripped)
-        update_generation_settings(db, chat_id, session_id, **{key: value})
+        if utility_reasoning:
+            if key != "reasoning_budget":
+                raise ValueError("utility input accepts reasoning budget only")
+            set_utility_reasoning(db, chat_id, session_id, int(value))
+        else:
+            update_generation_settings(db, chat_id, session_id, **{key: value})
     except ValueError as exc:
         send_pending_input_message(
             db,
@@ -39,7 +67,10 @@ def _handle_settings_input(
         )
         return True
     _cancel_pending(db, token, chat_id, f"settings_input:{chat_id}", state)
-    send_settings_menu(token, chat_id, db, session_id, request_context=request_context)
+    if utility_reasoning:
+        _show_model_target_menu(db, token, chat_id, session_id, request_context=request_context)
+    else:
+        send_settings_menu(token, chat_id, db, session_id, request_context=request_context)
     return True
 
 

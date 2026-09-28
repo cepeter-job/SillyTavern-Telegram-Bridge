@@ -146,6 +146,7 @@ def handle_session_callback(
                 message=message,
                 group_service=group_service,
                 app_settings=request_context.app_settings,
+                request_context=request_context,
             )
         else:
             available = {item["session_id"] for item in list_sessions(db, chat_id)}

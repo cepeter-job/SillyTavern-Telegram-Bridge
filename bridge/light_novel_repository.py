@@ -135,6 +135,17 @@ def attach_choice_set(
         )
 
 
+def choice_panel_message_ids(db: sqlite3.Connection, chat_id: str, session_id: str) -> list[int]:
+    return [
+        int(row[0])
+        for row in db.execute(
+            "SELECT DISTINCT panel_message_id FROM light_novel_choice_sets "
+            "WHERE chat_id=? AND session_id=? AND panel_message_id IS NOT NULL",
+            (chat_id, session_id),
+        ).fetchall()
+    ]
+
+
 def invalidate_choice_sets(db: sqlite3.Connection, chat_id: str, session_id: str, except_nonce: str = "") -> list[int]:
     require_active_transaction(db)
     panels = [

@@ -39,6 +39,25 @@ def delete_outgoing_messages(
                 logging.info("Could not delete outgoing Telegram message %s", message_id, exc_info=True)
 
 
+def delete_incoming_messages(db: sqlite3.Connection, token: str, chat_id: str, session_id: str) -> None:
+    rows = db.execute(
+        "SELECT telegram_message_id FROM messages "
+        "WHERE chat_id=? AND session_id=? AND role='user' AND telegram_message_id IS NOT NULL",
+        (chat_id, session_id),
+    ).fetchall()
+    for (raw_id,) in rows:
+        try:
+            message_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if message_id <= 0:
+            continue
+        try:
+            telegram_request(token, "deleteMessage", {"chat_id": chat_id, "message_id": message_id})
+        except Exception:
+            logging.info("Could not delete incoming Telegram message %s", message_id, exc_info=True)
+
+
 def delete_outgoing_message_row(db: sqlite3.Connection, token: str, chat_id: str, rowid: int) -> None:
     row = db.execute(
         "SELECT telegram_message_ids FROM messages WHERE rowid=? AND chat_id=? AND role='assistant'", (rowid, chat_id)

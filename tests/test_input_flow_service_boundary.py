@@ -82,7 +82,8 @@ def test_prepare_message_forwards_pending_context_through_service(monkeypatch):
 
     captured = []
     db = object()
-    fields = {"name": "Mira"}
+    fields = {"name": "Alisha"}
+    session_fields = {"name": "Mira"}
     session = {
         "session_id": "session",
         "character_file": "mira.png",
@@ -116,6 +117,12 @@ def test_prepare_message_forwards_pending_context_through_service(monkeypatch):
         "ensure_session",
         lambda *_args, app_settings=None, **_kwargs: session,
     )
+    monkeypatch.setattr(message_commands, "has_pending_management_input", lambda *_args: True)
+    monkeypatch.setattr(
+        message_commands,
+        "card_fields_from_file",
+        lambda filename, *, app_settings=None: session_fields if filename == "mira.png" else fields,
+    )
 
     result = message_commands.prepare_message(
         db,
@@ -141,7 +148,7 @@ def test_prepare_message_forwards_pending_context_through_service(monkeypatch):
     args, kwargs = captured[0]
     assert args == (db, "token", "chat", session, "pending text")
     assert kwargs["api_key"] == "api-key"
-    assert kwargs["fields"] is fields
+    assert kwargs["fields"] is session_fields
     assert kwargs["operation_id"] is None
     assert kwargs["group_service"] is group
     assert kwargs["provider_port"] is provider

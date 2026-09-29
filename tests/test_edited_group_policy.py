@@ -29,7 +29,7 @@ def case(tmp_path):
         allowed_users=frozenset({"100", "200"}),
     )
     db = db_connect(app_settings=config)
-    session = create_session(db, CHAT, config.default_model, session_id="target", app_settings=config)
+    session = create_session(db, CHAT, "target::model", session_id="target", app_settings=config)
     db.execute(
         "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_id,created_at) VALUES(?,?,?,?,?,?)",
         (CHAT, "target", "user", "original", "77", 1.0),
@@ -106,6 +106,7 @@ def test_valid_edits_still_queue_and_preserve_actor_and_topic(case, mode, enable
     args = case.services.jobs.enqueue.call_args.args
     assert args[2:6] == (CHAT, "target", 77, "edit")
     assert args[6]["actor_id"] == sender
+    assert args[6]["model"] == "target::model"
     assert case.services.jobs.submit.call_count == 1
 
 
@@ -124,6 +125,19 @@ def test_edit_checks_original_message_session_not_new_active_session(case):
     update_message_routing.route_edited_message_update(case.services, case.db, edited(), 90, frozenset({"100", "200"}))
     case.services.jobs.enqueue.assert_not_called()
     assert case.sent == [DENIED]
+
+
+def test_deleted_original_session_is_rejected_without_default_fallback(case, monkeypatch):
+    def missing_session(*_args, **_kwargs):
+        raise ValueError("queued session no longer exists")
+
+    monkeypatch.setattr(SessionService, "load", missing_session)
+    update_message_routing.route_edited_message_update(
+        case.services, case.db, edited("100"), 90, frozenset({"100", "200"})
+    )
+    case.services.jobs.enqueue.assert_not_called()
+    case.services.jobs.submit.assert_not_called()
+    assert case.sent == ["Edited message was not found."]
 
 
 @pytest.mark.parametrize("actor", ["200", ""])

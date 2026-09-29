@@ -12,7 +12,13 @@ from bridge.cards import send_session_menu
 from bridge.character_identity import reconcile_session_character
 from bridge.context_compaction import context_history_candidate_limit
 from bridge.continuation import continue_last
-from bridge.conversation_lifecycle import START_REQUIRED, is_command_text, require_started, reset_conversation
+from bridge.conversation_lifecycle import (
+    START_REQUIRED,
+    has_pending_management_input,
+    is_command_text,
+    require_started,
+    reset_conversation,
+)
 from bridge.edit_messages import edit_last_user
 from bridge.failed_turns import clear_failed_turn
 from bridge.generation import build_chat_messages, render_response_language
@@ -462,6 +468,9 @@ def prepare_message(
             request_context=request_context,
         )
         return
+    pending_fields = fields
+    if has_pending_management_input(db, chat_id, session_id, actor_id):
+        pending_fields = card_fields_from_file(session["character_file"], app_settings=app_settings)
     if input_flow_service.handle_pending(
         db,
         token,
@@ -469,7 +478,7 @@ def prepare_message(
         session,
         stripped,
         api_key=api_key,
-        fields=fields,
+        fields=pending_fields,
         operation_id=operation_id,
         group_service=group_service,
         provider_port=provider_port,

@@ -403,6 +403,80 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
             "applied",
         )
 
+    def test_edit_deletes_replaced_light_novel_choice_panel(self):
+        from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
+        from bridge.light_novel_repository import attach_choice_set, bind_choice_panel, reserve_choice_set
+        from bridge.light_novel_service import story_digest
+        from bridge.sqlite_store import write_transaction
+
+        configure_conversation(self.db, "chat", self.session["session_id"], "lightnovel", "a")
+        state = conversation_state(self.db, "chat", self.session["session_id"])
+        self.assertTrue(mark_started(self.db, "chat", self.session["session_id"], state.epoch))
+        user_rowid, assistant_rowid = self._turns("original", "old response")
+        self.db.execute(
+            "UPDATE messages SET telegram_message_ids=? WHERE rowid=?",
+            ("[91]", assistant_rowid),
+        )
+        now = time.time()
+        with write_transaction(self.db):
+            old_panel = reserve_choice_set(
+                self.db,
+                "chat",
+                self.session["session_id"],
+                state.epoch,
+                "edited-turn",
+                "a",
+                2,
+                "owner",
+                self.session["model_id"],
+                now,
+            )
+            attach_choice_set(
+                self.db,
+                old_panel.nonce,
+                assistant_rowid,
+                story_digest("old response"),
+                ["Left", "Right"],
+            )
+            bind_choice_panel(self.db, old_panel.nonce, 82)
+
+        fields = {
+            "name": "Mira",
+            "system_prompt": "",
+            "description": "",
+            "personality": "",
+            "scenario": "",
+            "mes_example": "",
+            "first_mes": "",
+            "post_history_instructions": "",
+            "alternate_greetings": "[]",
+        }
+        telegram = Mock(return_value={})
+        with (
+            patch.object(_owner_edit_messages, "telegram_request", telegram),
+            patch.object(_owner_edit_messages, "send_reply"),
+            patch.object(_owner_edit_messages, "send_typing"),
+        ):
+            _owner_edit_messages.regenerate_edited_turn(
+                self.db,
+                "token",
+                "key",
+                self.session,
+                fields,
+                "chat",
+                user_rowid,
+                "replacement",
+                operation_id=608,
+                provider_port=make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "new response"),
+                memory_service=make_test_memory_service(),
+                persona_service=make_test_persona_service(),
+                app_settings=self.app_settings_builder.build(),
+                rag_service=make_test_rag_service(),
+            )
+
+        deleted = [call.args[2]["message_id"] for call in telegram.call_args_list if call.args[1] == "deleteMessage"]
+        self.assertEqual(deleted, [91, 82])
+
     def test_edit_local_committed_redelivers_without_generation(self):
         operation_id = 608
         user_rowid, _assistant_rowid = self._turns(

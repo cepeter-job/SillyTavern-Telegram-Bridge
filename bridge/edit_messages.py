@@ -9,6 +9,7 @@ import time
 from bridge.card_content import card_fields_from_file
 from bridge.generation import build_chat_messages, render_session_response
 from bridge.generation_settings import get_generation_settings
+from bridge.light_novel_repository import regeneration_choice_panel_message_ids
 from bridge.light_novel_turn import begin_novel_turn
 from bridge.memory_service import MemoryService
 from bridge.metadata import get_meta
@@ -193,6 +194,17 @@ def regenerate_edited_turn(
         chat_id,
         session_id,
         int(user_rowid),
+    )
+    old_message_ids = list(
+        dict.fromkeys(
+            [
+                *old_message_ids,
+                *(
+                    str(message_id)
+                    for message_id in regeneration_choice_panel_message_ids(db, chat_id, session_id, int(user_rowid))
+                ),
+            ]
+        )
     )
     _COMMAND_OPERATION_RECOVERY.set_payload(
         db,

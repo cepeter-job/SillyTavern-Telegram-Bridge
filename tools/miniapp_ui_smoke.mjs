@@ -64,6 +64,9 @@ try {
   assert.deepEqual([...shellDocument.querySelectorAll('#navigation button')].map(n=>n.textContent.trim()),['Home','Characters','Sessions','Manage','System']);
   assert.equal(shellDocument.querySelectorAll('#navigation svg').length,5,'Every primary destination has a local SVG icon');
   assert.ok(shellDocument.querySelector('.skip-link'),'Keyboard users can skip navigation');
+  const sessionsTab=[...shellDocument.querySelectorAll('#navigation button')].find(n=>n.textContent.trim()==='Sessions');
+  assert.ok(sessionsTab,'Sessions navigation button exists');sessionsTab.click();
+  await until(()=>shellDocument.getElementById('page-title').textContent==='Sessions'&&shellDocument.querySelector('main').textContent.includes('Create session'),'Sessions tab click renders Sessions');
   for(const page of ['dashboard','characters','sessions','manage','advanced','usage','models','personas','worlds','memory','databank','system']) {
     await app.namespace.navigate(page);
     assert.ok(shellDocument.getElementById('page-title').textContent.trim().length>0,page+' updates the compact page title');
@@ -185,6 +188,18 @@ try {
   [...document.querySelectorAll('main button')].find(n=>n.textContent==='Create and open').click();
   await until(()=>document.querySelector('main').textContent.includes('DOM verified session'),'create session');
   const sessions=await app.namespace.api('/sessions');assert.equal(sessions.session.title,'DOM verified session');
+  const defaultCard=[...document.querySelectorAll('main .card')].find(node=>node.querySelector('h2')?.textContent==='Default session');
+  assert.ok(defaultCard,'Inactive Default session card is present');
+  const defaultOpen=[...defaultCard.querySelectorAll('button')].find(n=>n.textContent==='Open');
+  assert.ok(defaultOpen,'Inactive session exposes Open');defaultOpen.click();
+  await until(()=>document.getElementById('page-title').textContent==='Home'&&document.querySelector('main .story-card')?.textContent.includes('Default session'),'Opening inactive session returns Home');
+  let opened=await app.namespace.api('/sessions');assert.equal(opened.session.title,'Default session','Open switches the backend active session');
+  await app.namespace.navigate('sessions');
+  const activeDefaultCard=[...document.querySelectorAll('main .card')].find(node=>node.querySelector('h2')?.textContent==='Default session');
+  const activeOpen=[...activeDefaultCard.querySelectorAll('button')].find(n=>n.textContent==='Open');
+  activeOpen.click();
+  await until(()=>document.getElementById('page-title').textContent==='Home'&&document.querySelector('main .story-card')?.textContent.includes('Default session'),'Opening active session still returns Home');
+  opened=await app.namespace.api('/sessions');assert.equal(opened.session.title,'Default session');
   const info=await app.namespace.api('/characters/Alice.png');
   let job=await app.namespace.api('/characters/Alice.png/optimize',{method:'POST',body:app.namespace.sessionBody({digest:info.digest,suggestion:'Clarify motivation.',operation_id:'dom-optimizer'})});
   for(let i=0;i<50&&['queued','running'].includes(job.state);i++) {

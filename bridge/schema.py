@@ -398,11 +398,27 @@ def migrate_episodic_memory_layer(db: sqlite3.Connection) -> None:
     )
 
 
+def migrate_episodic_memory_visibility(db: sqlite3.Connection) -> None:
+    db.execute("""CREATE TABLE IF NOT EXISTS episodic_memory_visibility (
+        memory_id INTEGER PRIMARY KEY,
+        chat_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        visibility TEXT NOT NULL DEFAULT 'shared',
+        known_by_json TEXT NOT NULL DEFAULT '[]',
+        FOREIGN KEY(memory_id) REFERENCES episodic_memories(memory_id) ON DELETE CASCADE
+    )""")
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS episodic_memory_visibility_session_idx "
+        "ON episodic_memory_visibility(chat_id, session_id)"
+    )
+
+
 SCHEMA_MIGRATIONS = (
     _Migration(1, "initial_schema", _create_initial_schema),
     _Migration(2, "conversation_modes", migrate_conversation_modes),
     _Migration(3, "token_usage_ledger", migrate_token_usage),
     _Migration(4, "episodic_memory_layer", migrate_episodic_memory_layer),
+    _Migration(5, "episodic_memory_visibility", migrate_episodic_memory_visibility),
 )
 
 

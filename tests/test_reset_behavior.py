@@ -22,6 +22,7 @@ from pathlib import Path
 import bridge.memory_curator as _m_memory_curator
 import bridge.message_commands as _m_message_commands
 import bridge.session_naming as _m_session_naming
+from bridge.episodic_memory import store_episodic_memory
 
 
 class ResetBehaviorTests(SettingsTestCase):
@@ -105,6 +106,35 @@ class ResetBehaviorTests(SettingsTestCase):
         self.assertTrue(handled)
         self.assertEqual(sent, ["Reset complete. The active session was cleared."])
         self.assertEqual(removed, [callback])
+
+    def test_reset_clears_episodic_memories(self):
+        store_episodic_memory(
+            self.db,
+            "chat",
+            self.session["session_id"],
+            kind="fact",
+            importance=0.9,
+            summary="Old red key fact.",
+            source_start_rowid=1,
+            source_end_rowid=8,
+        )
+        self.db.commit()
+
+        _m_message_commands.reset_session(
+            self.db,
+            "token",
+            "chat",
+            self.session,
+            memory_service=make_test_memory_service(),
+        )
+
+        self.assertEqual(
+            self.db.execute(
+                "SELECT COUNT(*) FROM episodic_memories WHERE chat_id=? AND session_id=?",
+                ("chat", self.session["session_id"]),
+            ).fetchone()[0],
+            0,
+        )
 
     def test_reset_clears_curated_memory_and_deletes_outgoing_telegram_messages(self):
         curator_key = _m_memory_curator.memory_curator_key("chat", self.session["session_id"])

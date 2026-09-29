@@ -31,6 +31,8 @@ _SESSION_OWNED_TABLES = (
     "panel_sessions",
     "jobs",
     "hindsight_documents",
+    "episodic_memory_visibility",
+    "episodic_memories",
     "sessions",
 )
 

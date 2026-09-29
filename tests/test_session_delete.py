@@ -23,6 +23,7 @@ import bridge.memory_curator as _m_memory_curator
 import bridge.message_commands as _m_message_commands
 import bridge.session_callbacks as _owner_session_callbacks
 import bridge.session_naming as _m_session_naming
+from bridge.episodic_memory import store_episodic_memory
 
 
 class SessionDeletionTests(SettingsTestCase):
@@ -59,6 +60,16 @@ class SessionDeletionTests(SettingsTestCase):
         self.db.execute(
             "INSERT INTO group_sessions(chat_id,session_id,updated_at) VALUES(?,?,?)",
             ("chat", inactive["session_id"], time.time()),
+        )
+        store_episodic_memory(
+            self.db,
+            "chat",
+            inactive["session_id"],
+            kind="fact",
+            importance=0.9,
+            summary="Inactive session secret.",
+            source_start_rowid=1,
+            source_end_rowid=8,
         )
         self.db.commit()
 
@@ -100,6 +111,9 @@ class SessionDeletionTests(SettingsTestCase):
         self.assertEqual(self.db.execute("SELECT COUNT(*) FROM messages WHERE session_id='inactive'").fetchone()[0], 0)
         self.assertEqual(
             self.db.execute("SELECT COUNT(*) FROM group_sessions WHERE session_id='inactive'").fetchone()[0], 0
+        )
+        self.assertEqual(
+            self.db.execute("SELECT COUNT(*) FROM episodic_memories WHERE session_id='inactive'").fetchone()[0], 0
         )
         self.assertEqual(self.purged, [("chat", "inactive")])
 

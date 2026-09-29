@@ -24,6 +24,8 @@ class EpisodicCandidate:
     kind: str
     importance: float
     summary: str
+    visibility: str = "shared"
+    known_by: tuple[str, ...] = ()
 
 
 def _unfence(value: str) -> str:
@@ -52,12 +54,26 @@ def parse_episodic_candidates(source: str) -> list[EpisodicCandidate]:
             continue
         kind = str(item.get("kind") or "").strip().casefold()
         summary = str(item.get("summary") or "").strip()
+        raw_visibility = item.get("visibility")
+        visibility = (
+            "restricted"
+            if raw_visibility is None and kind == "secret"
+            else str(raw_visibility or "shared").strip().casefold()
+        )
+        known_by_raw = item.get("known_by") or []
+        known_by = (
+            tuple(name for name in (" ".join(str(value or "").split()).strip() for value in known_by_raw) if name)
+            if isinstance(known_by_raw, list)
+            else ()
+        )
         try:
             importance = float(item.get("importance"))
         except (TypeError, ValueError):
             continue
         if (
             kind not in EPISODIC_KINDS
+            or visibility not in {"shared", "restricted"}
+            or (visibility == "restricted" and not known_by)
             or not summary
             or not 0 <= importance <= 1
             or importance < EPISODIC_MIN_IMPORTANCE
@@ -68,6 +84,8 @@ def parse_episodic_candidates(source: str) -> list[EpisodicCandidate]:
                 kind=kind,
                 importance=importance,
                 summary=summary[:EPISODIC_MAX_SUMMARY_CHARS],
+                visibility=visibility,
+                known_by=known_by if visibility == "restricted" else (),
             )
         )
         if len(result) >= EPISODIC_MAX_EVENTS:
@@ -98,8 +116,10 @@ def extract_episodic_memories(
                 "world changes, and secrets. Exclude transient scene posture, ordinary dialogue, "
                 "style instructions, and speculation stated as fact. Preserve uncertainty. "
                 "Return only a JSON array with objects containing kind, importance (0 to 1), "
-                "and summary. Allowed kinds: scene_event, relationship_change, fact, goal, "
-                "world_change, secret."
+                "summary, visibility, and known_by. visibility must be shared or restricted. "
+                "For restricted memories, known_by must list only character names explicitly "
+                "established as knowing the fact. Allowed kinds: scene_event, relationship_change, "
+                "fact, goal, world_change, secret."
             ),
         },
         {"role": "user", "content": str(source_text)[:50000]},
@@ -132,6 +152,8 @@ def extract_episodic_memories(
                 summary=candidate.summary,
                 source_start_rowid=source_start_rowid,
                 source_end_rowid=source_end_rowid,
+                visibility=candidate.visibility,
+                known_by=candidate.known_by,
             )
         )
     if inserted:

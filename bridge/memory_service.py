@@ -58,7 +58,9 @@ class MemoryService:
             else:
                 summary = self.summary_for_prompt(db, chat_id, session)
         episodic = (
-            self.episodic_context(db, chat_id, session, fields, query) if self.episodic_context is not None else ""
+            self.episodic_context(db, chat_id, session, fields, query)
+            if edited_user_rowid is None and self.episodic_context is not None
+            else ""
         )
         return MemoryPromptContext(
             recall=str(recall or ""),

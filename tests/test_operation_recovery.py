@@ -403,6 +403,65 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
             "applied",
         )
 
+    def test_edit_invalidates_episodic_memory_from_rewritten_history(self):
+        from bridge.episodic_memory import store_episodic_memory
+
+        user_rowid, assistant_rowid = self._turns("original secret", "old response")
+        store_episodic_memory(
+            self.db,
+            "chat",
+            self.session["session_id"],
+            kind="secret",
+            importance=0.95,
+            summary="Mira knows the original secret.",
+            source_start_rowid=user_rowid,
+            source_end_rowid=assistant_rowid,
+            visibility="restricted",
+            known_by=("Mira",),
+        )
+        self.db.commit()
+        fields = {
+            "name": "Mira",
+            "system_prompt": "",
+            "description": "",
+            "personality": "",
+            "scenario": "",
+            "mes_example": "",
+            "first_mes": "",
+            "post_history_instructions": "",
+            "alternate_greetings": "[]",
+        }
+
+        with (
+            patch.object(_owner_edit_messages, "telegram_request", return_value={}),
+            patch.object(_owner_edit_messages, "send_reply"),
+            patch.object(_owner_edit_messages, "send_typing"),
+        ):
+            _owner_edit_messages.regenerate_edited_turn(
+                self.db,
+                "token",
+                "key",
+                self.session,
+                fields,
+                "chat",
+                user_rowid,
+                "replacement",
+                operation_id=650,
+                provider_port=make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "new response"),
+                memory_service=make_test_memory_service(),
+                persona_service=make_test_persona_service(),
+                app_settings=self.app_settings_builder.build(),
+                rag_service=make_test_rag_service(),
+            )
+
+        self.assertEqual(
+            self.db.execute(
+                "SELECT COUNT(*) FROM episodic_memories WHERE chat_id=? AND session_id=?",
+                ("chat", self.session["session_id"]),
+            ).fetchone()[0],
+            0,
+        )
+
     def test_edit_deletes_replaced_light_novel_choice_panel(self):
         from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
         from bridge.light_novel_repository import attach_choice_set, bind_choice_panel, reserve_choice_set

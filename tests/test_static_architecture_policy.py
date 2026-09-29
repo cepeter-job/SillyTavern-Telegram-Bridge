@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import re
 import subprocess
 import sys
 import tomllib
@@ -446,8 +447,10 @@ def test_ci_has_sha_pinned_secret_scan_job():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "  secret-scan:" in workflow
     assert "fetch-depth: 0" in workflow
-    assert "gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7" in workflow
-    assert "gitleaks/gitleaks-action@v2" not in workflow
+    match = re.search(r"gitleaks/gitleaks-action@([0-9a-f]{40})(?:\s|$)", workflow)
+    assert match is not None
+    assert "gitleaks/gitleaks-action@v" not in workflow
+    assert match.group(1) != "ff98106e4c7b2bc287b24eaf42907196329070c7"
 
 
 def test_operations_docs_describe_generated_typed_surface_not_stale_fixed_count():

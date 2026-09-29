@@ -74,6 +74,7 @@ def process_image_message(
         caption,
     )
     memory_context = memory_prompt.recall
+    episodic_context = memory_prompt.episodic
     session_summary = memory_prompt.summary
     messages = build_chat_messages(
         session,
@@ -82,6 +83,7 @@ def process_image_message(
         history_rows,
         image_data_uri=image_data_uri,
         memory_context=memory_context,
+        episodic_context=episodic_context,
         session_summary=session_summary,
         rag_context=rag_service.context_for_prompt(db, chat_id, caption, rag_bundle),
         group_context=group_context,

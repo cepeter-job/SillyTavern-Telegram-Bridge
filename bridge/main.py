@@ -28,6 +28,7 @@ from bridge.director_goals import director_goal_policy
 from bridge.embedding_port import EmbeddingPort
 from bridge.embedding_transport import embed_rag_batch, embed_rag_text
 from bridge.environment import bootstrap_environment
+from bridge.episodic_memory import episodic_context_for_prompt
 from bridge.generation_settings import get_generation_settings
 from bridge.group_core import (
     advance_group_turn,
@@ -221,6 +222,7 @@ def _build_startup_services(
             )
         ),
         purge_session_memory=_partial(purge_hindsight_session, app_settings=config),
+        episodic_context=episodic_context_for_prompt,
     )
     session = _SessionService(
         load_backend=_partial(load_session, app_settings=config),

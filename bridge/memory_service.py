@@ -14,6 +14,7 @@ class MemoryPromptContext:
 
     recall: str
     summary: str
+    episodic: str = ""
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class MemoryService:
     summary_state: ReadSummaryState
     retain_session: RetainSessionMemory
     purge_session_memory: PurgeSessionMemory
+    episodic_context: RecallMemory | None = None
 
     def prompt_context(
         self,
@@ -55,9 +57,13 @@ class MemoryService:
                 summary = ""
             else:
                 summary = self.summary_for_prompt(db, chat_id, session)
+        episodic = (
+            self.episodic_context(db, chat_id, session, fields, query) if self.episodic_context is not None else ""
+        )
         return MemoryPromptContext(
             recall=str(recall or ""),
             summary=str(summary or ""),
+            episodic=str(episodic or ""),
         )
 
     def summary_status(

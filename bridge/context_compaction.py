@@ -172,7 +172,7 @@ def compact_chat_messages(
         if latest is None:
             return
         text = _text_content(latest)
-        for tag in ("untrusted_data_bank_references", "untrusted_memory"):
+        for tag in ("untrusted_data_bank_references", "untrusted_memory", "untrusted_episodic_memory"):
             if current_tokens() <= budget:
                 break
             if compute_target:

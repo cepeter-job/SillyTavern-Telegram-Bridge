@@ -108,6 +108,7 @@ def continue_last(
         instruction,
         history_rows,
         memory_context=memory_prompt.recall,
+        episodic_context=memory_prompt.episodic,
         session_summary=memory_prompt.summary,
         persona_service=persona_service,
         rag_context=rag_service.context_for_prompt(db, chat_id, instruction, rag_bundle),

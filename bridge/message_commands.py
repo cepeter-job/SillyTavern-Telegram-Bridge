@@ -186,6 +186,7 @@ def generate_and_store_reply(
         text,
     )
     memory_context = memory_prompt.recall
+    episodic_context = memory_prompt.episodic
     session_summary = memory_prompt.summary
     messages = timed_call(
         "prompt_assembly",
@@ -195,6 +196,7 @@ def generate_and_store_reply(
         text,
         history_rows,
         memory_context=memory_context,
+        episodic_context=episodic_context,
         session_summary=session_summary,
         rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
         group_context=group_context,

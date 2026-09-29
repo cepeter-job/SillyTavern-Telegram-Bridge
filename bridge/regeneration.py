@@ -8,6 +8,7 @@ import time
 from bridge.delivery_port import DeliveryPort
 from bridge.generation import _generation_generate_rendered_reply, build_chat_messages
 from bridge.generation_recovery import _generation_operation_recovery
+from bridge.light_novel_repository import regeneration_choice_panel_message_ids
 from bridge.light_novel_turn import begin_novel_turn
 from bridge.memory_service import MemoryService
 from bridge.operations import set_operation_phase
@@ -145,6 +146,17 @@ def regenerate_last(
         chat_id,
         session_id,
         last_user_rowid,
+    )
+    old_message_ids = list(
+        dict.fromkeys(
+            [
+                *old_message_ids,
+                *(
+                    str(message_id)
+                    for message_id in regeneration_choice_panel_message_ids(db, chat_id, session_id, last_user_rowid)
+                ),
+            ]
+        )
     )
     recovery.set_payload(
         db,

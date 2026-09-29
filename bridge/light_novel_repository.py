@@ -146,6 +146,38 @@ def choice_panel_message_ids(db: sqlite3.Connection, chat_id: str, session_id: s
     ]
 
 
+def regeneration_choice_panel_message_ids(
+    db: sqlite3.Connection, chat_id: str, session_id: str, user_rowid: int
+) -> list[int]:
+    """Return only choice panels owned by the turn being regenerated."""
+    panel_ids: list[int] = []
+    selected = db.execute(
+        "SELECT telegram_message_id FROM messages WHERE rowid=? AND chat_id=? AND session_id=? AND role='user'",
+        (user_rowid, chat_id, session_id),
+    ).fetchone()
+    try:
+        selected_choice_id = -int(selected[0]) if selected and int(selected[0]) < 0 else 0
+    except (TypeError, ValueError):
+        selected_choice_id = 0
+    if selected_choice_id:
+        row = db.execute(
+            "SELECT panel_message_id FROM light_novel_choice_sets "
+            "WHERE id=? AND chat_id=? AND session_id=? AND state='consumed' AND panel_message_id IS NOT NULL",
+            (selected_choice_id, chat_id, session_id),
+        ).fetchone()
+        if row:
+            panel_ids.append(int(row[0]))
+    panel_ids.extend(
+        int(row[0])
+        for row in db.execute(
+            "SELECT panel_message_id FROM light_novel_choice_sets "
+            "WHERE chat_id=? AND session_id=? AND assistant_rowid>? AND panel_message_id IS NOT NULL ORDER BY id",
+            (chat_id, session_id, user_rowid),
+        ).fetchall()
+    )
+    return list(dict.fromkeys(panel_ids))
+
+
 def invalidate_choice_sets(db: sqlite3.Connection, chat_id: str, session_id: str, except_nonce: str = "") -> list[int]:
     require_active_transaction(db)
     panels = [

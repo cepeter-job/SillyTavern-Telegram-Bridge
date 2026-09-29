@@ -7,6 +7,7 @@ import sqlite3
 import time
 
 from bridge.card_content import card_fields_from_file
+from bridge.episodic_memory import invalidate_episodic_memories_from_row
 from bridge.generation import build_chat_messages, render_session_response
 from bridge.generation_settings import get_generation_settings
 from bridge.light_novel_repository import regeneration_choice_panel_message_ids
@@ -217,6 +218,7 @@ def regenerate_edited_turn(
     )
 
     def persist_edit():
+        invalidate_episodic_memories_from_row(db, chat_id, session_id, int(user_rowid))
         db.execute(
             "DELETE FROM session_summaries WHERE chat_id=? AND session_id=?",
             (chat_id, session_id),

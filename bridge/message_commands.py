@@ -20,6 +20,7 @@ from bridge.conversation_lifecycle import (
     reset_conversation,
 )
 from bridge.edit_messages import edit_last_user
+from bridge.episodic_memory import purge_episodic_memories
 from bridge.failed_turns import clear_failed_turn
 from bridge.generation import build_chat_messages, render_response_language
 from bridge.generation_settings import get_generation_settings
@@ -94,6 +95,7 @@ def reset_session(
     db.execute("DELETE FROM response_variants WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
     db.execute("DELETE FROM failed_turns WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
     clear_session_summary(db, chat_id, session["session_id"])
+    purge_episodic_memories(db, chat_id, session["session_id"])
     clear_curated_memory_state(db, chat_id, session["session_id"])
     db.execute(
         "DELETE FROM meta WHERE key IN (?, ?)",

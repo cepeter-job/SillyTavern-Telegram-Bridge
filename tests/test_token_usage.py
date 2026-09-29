@@ -239,7 +239,12 @@ def test_upgrade_preserves_existing_sessions_and_adds_usage_ledger(tmp_path):
         run_migrations(db, SCHEMA_MIGRATIONS)
         assert db.execute("SELECT title FROM sessions WHERE chat_id='123'").fetchone()[0] == "Keep me"
         assert db.execute("SELECT count(*) FROM token_usage_events").fetchone()[0] == 0
-        assert db.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall() == [(1,), (2,), (3,)]
+        assert db.execute("SELECT version FROM schema_migrations ORDER BY version").fetchall() == [
+            (1,),
+            (2,),
+            (3,),
+            (4,),
+        ]
         run_migrations(db, SCHEMA_MIGRATIONS)
     finally:
         db.close()

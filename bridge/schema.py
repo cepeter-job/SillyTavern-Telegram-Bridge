@@ -390,7 +390,12 @@ def migrate_episodic_memory_layer(db: sqlite3.Connection) -> None:
         source_end_rowid INTEGER NOT NULL DEFAULT 0,
         created_at REAL NOT NULL
     )""")
-    db.execute("CREATE INDEX IF NOT EXISTS episodic_memories_session_idx ON episodic_memories(chat_id, session_id, importance)")
+    db.execute(
+        """
+        CREATE INDEX IF NOT EXISTS episodic_memories_session_idx
+        ON episodic_memories(chat_id, session_id, importance)
+        """
+    )
 
 
 SCHEMA_MIGRATIONS = (

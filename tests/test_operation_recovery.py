@@ -210,6 +210,120 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
             "",
         )
 
+    def test_regen_deletes_selected_choice_and_replaced_story_panel(self):
+        from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
+        from bridge.light_novel_repository import (
+            attach_choice_set,
+            bind_choice_panel,
+            consume_choice_set,
+            reserve_choice_set,
+        )
+        from bridge.light_novel_service import story_digest
+        from bridge.sqlite_store import write_transaction
+
+        configure_conversation(self.db, "chat", self.session["session_id"], "lightnovel", "a")
+        state = conversation_state(self.db, "chat", self.session["session_id"])
+        self.assertTrue(mark_started(self.db, "chat", self.session["session_id"], state.epoch))
+        now = time.time()
+        story = self.db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+            ("chat", self.session["session_id"], "assistant", "story", now),
+        )
+        self.assertIsNotNone(story.lastrowid)
+        with write_transaction(self.db):
+            selected = reserve_choice_set(
+                self.db,
+                "chat",
+                self.session["session_id"],
+                state.epoch,
+                "selected-turn",
+                "a",
+                2,
+                "owner",
+                self.session["model_id"],
+                now,
+            )
+            attach_choice_set(self.db, selected.nonce, int(story.lastrowid), story_digest("story"), ["Go", "Stay"])
+            bind_choice_panel(self.db, selected.nonce, 81)
+            consume_choice_set(
+                self.db,
+                selected.nonce,
+                0,
+                "chat",
+                self.session["session_id"],
+                "owner",
+                state.epoch,
+                81,
+            )
+        user = self.db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_id,created_at) VALUES(?,?,?,?,?,?)",
+            ("chat", self.session["session_id"], "user", "Go", f"-{selected.id}", now + 1),
+        )
+        self.assertIsNotNone(user.lastrowid)
+        replaced = self.db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_ids,created_at) VALUES(?,?,?,?,?,?)",
+            ("chat", self.session["session_id"], "assistant", "old response", "[91]", now + 2),
+        )
+        self.assertIsNotNone(replaced.lastrowid)
+        with write_transaction(self.db):
+            old_panel = reserve_choice_set(
+                self.db,
+                "chat",
+                self.session["session_id"],
+                state.epoch,
+                "replaced-turn",
+                "a",
+                2,
+                "owner",
+                self.session["model_id"],
+                now + 2,
+            )
+            attach_choice_set(
+                self.db,
+                old_panel.nonce,
+                int(replaced.lastrowid),
+                story_digest("old response"),
+                ["Left", "Right"],
+            )
+            bind_choice_panel(self.db, old_panel.nonce, 82)
+
+        fields = {
+            "name": "Mira",
+            "system_prompt": "",
+            "description": "",
+            "personality": "",
+            "scenario": "",
+            "mes_example": "",
+            "first_mes": "",
+            "post_history_instructions": "",
+            "alternate_greetings": "[]",
+        }
+        telegram = Mock(return_value={})
+        delivery = make_test_delivery_port(request=telegram, send_reply=Mock())
+        with patch.object(_owner_regeneration, "_generation_generate_rendered_reply", return_value="new response"):
+            _owner_regeneration.regenerate_last(
+                self.db,
+                "token",
+                "key",
+                self.session,
+                fields,
+                "chat",
+                operation_id=604,
+                delivery_port=delivery,
+                provider_port=make_test_provider_port(),
+                memory_service=make_test_memory_service(),
+                persona_service=make_test_persona_service(),
+                app_settings=self.app_settings_builder.build(),
+                rag_service=make_test_rag_service(),
+            )
+
+        deleted = [call.args[2]["message_id"] for call in telegram.call_args_list if call.args[1] == "deleteMessage"]
+        self.assertEqual(deleted, [91, 81, 82])
+        self.assertEqual(
+            self.db.execute("SELECT content FROM messages WHERE rowid=?", (int(user.lastrowid),)).fetchone()[0],
+            "Go",
+        )
+
     def test_regen_incomplete_recovery_raises_without_finishing(self):
         operation_id = 603
         self._operation(operation_id, "local_committed", "regen")

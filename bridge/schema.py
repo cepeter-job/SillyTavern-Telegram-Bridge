@@ -378,10 +378,26 @@ def _create_initial_schema(db: sqlite3.Connection) -> None:
     )
 
 
+def migrate_episodic_memory_layer(db: sqlite3.Connection) -> None:
+    db.execute("""CREATE TABLE IF NOT EXISTS episodic_memories (
+        memory_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        importance REAL NOT NULL DEFAULT 0.0,
+        summary TEXT NOT NULL,
+        source_start_rowid INTEGER NOT NULL DEFAULT 0,
+        source_end_rowid INTEGER NOT NULL DEFAULT 0,
+        created_at REAL NOT NULL
+    )""")
+    db.execute("CREATE INDEX IF NOT EXISTS episodic_memories_session_idx ON episodic_memories(chat_id, session_id, importance)")
+
+
 SCHEMA_MIGRATIONS = (
     _Migration(1, "initial_schema", _create_initial_schema),
     _Migration(2, "conversation_modes", migrate_conversation_modes),
     _Migration(3, "token_usage_ledger", migrate_token_usage),
+    _Migration(4, "episodic_memory_layer", migrate_episodic_memory_layer),
 )
 
 

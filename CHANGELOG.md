@@ -7,6 +7,7 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 ### Fixed
 
 - Delete the consumed Light Novel selection panel and the replaced story's choice panel only after `/regen` commits successfully, while retaining the newly generated panel.
+- Keep edits bound to the owning session's model and character fields, and remove replaced Light Novel choice panels after the edited branch commits.
 
 ## [0.2.045] - 2026-09-28
 

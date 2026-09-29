@@ -93,12 +93,18 @@ def route_edited_message_update(
     edited_message_id = int(edited_message.get("message_id") or 0)
     target = native_edit_target(db, edited_chat_id, edited_message_id)
     # Native Telegram edits target their original message, which may belong to
-    # an inactive bridge session. Enforce the policy for that exact session.
-    edited_session_id = (
-        str(target[1])
-        if target is not None and target[2] == "user"
-        else services.session.ensure(db, edited_chat_id, model)["session_id"]
-    )
+    # an inactive bridge session. Enforce the policy and durable model snapshot
+    # for that exact session.
+    if target is not None and target[2] == "user":
+        try:
+            edited_session = services.session.load(db, edited_chat_id, str(target[1]), model)
+        except ValueError:
+            services.telegram.send_text(token, edited_chat_id, "Edited message was not found.")
+            return
+    else:
+        edited_session = services.session.ensure(db, edited_chat_id, model)
+    edited_session_id = str(edited_session["session_id"])
+    edited_model = str(edited_session.get("model_id") or model)
     if not services.group.user_turn_allowed(db, edited_chat_id, edited_session_id, edited_sender):
         services.telegram.send_text(token, edited_chat_id, "It is not your turn in manual group mode.")
         return
@@ -112,7 +118,7 @@ def route_edited_message_update(
         "edit",
         {
             "text": truncated_text,
-            "model": model,
+            "model": edited_model,
             "actor_id": edited_sender,
         },
     )

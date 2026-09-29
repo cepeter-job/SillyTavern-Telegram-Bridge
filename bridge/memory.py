@@ -7,6 +7,7 @@ from collections.abc import Callable
 from functools import partial as _partial
 
 from bridge.background import submit_background
+from bridge.episodic_extraction import extract_episodic_memories
 from bridge.extension_registry import apply_summary_context_hooks as _apply_summary_context_hooks
 from bridge.extension_registry import run_post_retain_hooks as _run_post_retain_hooks
 from bridge.extension_registry import run_summary_clear_hooks as _run_summary_clear_hooks
@@ -202,6 +203,7 @@ def generate_session_summary(
     target_rowid = int(stable_rows[-1][0])
     if not force and existing and target_rowid <= covered_until:
         return existing
+    new_rows: list[tuple[int, str, str, float]] = []
     if force:
         source = transcript_for_summary(rows)
         prompt_prefix = "Create a fresh summary from the complete transcript below."
@@ -262,6 +264,25 @@ def generate_session_summary(
         (chat_id, session["session_id"], summary, target_rowid, time.time()),
     )
     db.commit()
+    if not force and new_rows:
+        try:
+            extract_episodic_memories(
+                db,
+                chat_id,
+                session,
+                source_text=transcript_for_summary(new_rows),
+                source_start_rowid=int(new_rows[0][0]),
+                source_end_rowid=target_rowid,
+                provider_port=provider_port,
+                app_settings=app_settings,
+            )
+        except Exception:
+            logging.warning(
+                "Episodic memory extraction failed for %s/%s",
+                chat_id,
+                session["session_id"],
+                exc_info=True,
+            )
     return summary
 
 

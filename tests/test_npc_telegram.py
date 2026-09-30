@@ -138,9 +138,7 @@ def test_npc_detail_hides_restricted_fields_from_wrong_active_character(monkeypa
             _fields(),
             npc_id,
             npc_service=service,
-            request_context=make_test_request_context(
-                db, "s1", "actor", app_settings=SettingsBuilder().build()
-            ),
+            request_context=make_test_request_context(db, "s1", "actor", app_settings=SettingsBuilder().build()),
         )
 
         text, markup = delivered[-1]
@@ -194,9 +192,7 @@ def test_npc_refresh_callback_runs_extractor_and_redraws(monkeypatch):
             _fields(),
             npc_service=service,
             provider_port=make_test_provider_port(),
-            request_context=make_test_request_context(
-                db, "s1", "actor", app_settings=SettingsBuilder().build()
-            ),
+            request_context=make_test_request_context(db, "s1", "actor", app_settings=SettingsBuilder().build()),
         )
 
         assert handled is True
@@ -230,9 +226,7 @@ def test_npc_command_opens_panel(monkeypatch):
             _session(),
             _fields(),
             None,
-            request_context=make_test_request_context(
-                db, "s1", "actor", app_settings=SettingsBuilder().build()
-            ),
+            request_context=make_test_request_context(db, "s1", "actor", app_settings=SettingsBuilder().build()),
             delivery_port=make_test_delivery_port(),
             group_service=object(),
             memory_service=make_test_memory_service(),

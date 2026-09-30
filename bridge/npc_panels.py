@@ -56,7 +56,7 @@ def send_npc_menu(
         ]
         for npc_id, label in page_options
     ]
-    navigation = panel_navigation("npc:page", current_page, total_pages)
+    navigation = panel_navigation("npc", current_page, total_pages)
     if navigation:
         rows.append(navigation)
     rows.append(

@@ -257,7 +257,7 @@ class SqliteContentionTests(SettingsTestCase):
         self.assertTrue(
             _m_workers.native_edit_committed_after_failure(self.db, operation_id, RuntimeError("database is locked"))
         )
-        self.assertFalse(
+        self.assertTrue(
             _m_workers.native_edit_committed_after_failure(
                 self.db, operation_id, RuntimeError("Telegram sendMessage failed: Not Found")
             )

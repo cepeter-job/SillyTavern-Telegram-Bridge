@@ -19,6 +19,7 @@ from bridge.conversation_lifecycle import (
     require_started,
     reset_conversation,
 )
+from bridge.delivery_progress import bind_committed_turn
 from bridge.edit_messages import edit_last_user
 from bridge.episodic_memory import purge_episodic_memories
 from bridge.failed_turns import clear_failed_turn
@@ -300,7 +301,7 @@ def generate_and_store_reply(
     def persist_turn():
         with write_transaction(db):
             now = time.time()
-            db.execute(
+            user_cursor = db.execute(
                 (
                     "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_id"
                     ",created_at) VALUES(?,?,?,?,?,?)"
@@ -319,6 +320,7 @@ def generate_and_store_reply(
                 (chat_id, session_id, "assistant", stored_reply, now + 0.001),
             )
             assistant_rowid = assistant_cursor.lastrowid
+            bind_committed_turn(db, operation_id, int(user_cursor.lastrowid), int(assistant_rowid), stored_reply)
             if novel_turn:
                 novel_turn.commit(db, int(assistant_rowid), stored_reply)
             save_response_variant(db, chat_id, session_id, text, stored_reply)
@@ -345,6 +347,7 @@ def generate_and_store_reply(
         session_id,
         assistant_rowid,
         replace_message_id=stream_message_id,
+        expected_job_id=operation_id,
         app_settings=app_settings,
     )
 

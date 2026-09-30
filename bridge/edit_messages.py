@@ -7,6 +7,7 @@ import sqlite3
 import time
 
 from bridge.card_content import card_fields_from_file
+from bridge.delivery_progress import DeliveryTargetExpired
 from bridge.episodic_memory import invalidate_episodic_memories_from_row
 from bridge.generation import build_chat_messages, render_session_response
 from bridge.generation_settings import get_generation_settings
@@ -27,6 +28,7 @@ from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
 from bridge.telegram import send_text, send_typing, telegram_request
 from bridge.transcript_repository import native_edit_target
+from bridge.variant_repository import prune_variants_from
 
 _COMMAND_OPERATION_RECOVERY = _OperationRecovery(
     operation_phase=lambda db, operation_id: operation_phase(
@@ -96,10 +98,11 @@ def regenerate_edited_turn(
             chat_id,
             session_id,
         )
-        assistant_row = _COMMAND_OPERATION_RECOVERY.latest_assistant_row(
+        assistant_row = _COMMAND_OPERATION_RECOVERY.target_assistant_row(
             db,
             chat_id,
             session_id,
+            operation_id,
         )
         if not user_row or not assistant_row:
             raise RuntimeError("edit recovery state is incomplete")
@@ -117,6 +120,7 @@ def regenerate_edited_turn(
             db,
             session_id,
             int(assistant_row[0]),
+            expected_job_id=operation_id,
             app_settings=app_settings,
         )
         _COMMAND_OPERATION_RECOVERY.finish(
@@ -230,6 +234,7 @@ def regenerate_edited_turn(
     )
 
     def persist_edit():
+        prune_variants_from(db, chat_id, session_id, int(user_rowid))
         invalidate_episodic_memories_from_row(db, chat_id, session_id, int(user_rowid))
         npc_service.rollback_from_row(db, chat_id, session_id, int(user_rowid))
         db.execute(
@@ -255,6 +260,9 @@ def regenerate_edited_turn(
             ),
         )
         assistant_rowid = int(assistant_cursor.lastrowid)
+        _COMMAND_OPERATION_RECOVERY.record_delivery_target(
+            db, operation_id, assistant_rowid, reply, f"✏️ Edited message regenerated.\n\n{reply}"
+        )
         if novel_turn:
             novel_turn.commit(db, assistant_rowid, reply)
         save_response_variant(db, chat_id, session_id, new_text, reply, user_rowid=int(user_rowid))
@@ -288,6 +296,7 @@ def regenerate_edited_turn(
         db,
         session_id,
         assistant_rowid,
+        expected_job_id=operation_id,
         app_settings=app_settings,
     )
     _COMMAND_OPERATION_RECOVERY.finish(
@@ -321,6 +330,8 @@ def edit_last_user(
     ).fetchall()
     last_user = next((row for row in reversed(rows) if row[1] == "user"), None)
     if last_user is None:
+        if operation_phase(db, operation_id) == "local_committed":
+            raise DeliveryTargetExpired("Saved edit target was deleted or replaced")
         send_text(token, chat_id, "Belum ada pesan user untuk diedit.")
         return
     regenerate_edited_turn(
@@ -361,6 +372,8 @@ def edit_telegram_user_message(
 ) -> None:
     row = native_edit_target(db, chat_id, message_id)
     if row is None or row[2] != "user":
+        if operation_phase(db, operation_id) == "local_committed":
+            raise DeliveryTargetExpired("Saved edit target was deleted or replaced")
         send_text(token, chat_id, "Edited message was not found.")
         return
     if not new_text.strip():

@@ -47,6 +47,10 @@ class FakeJobs:
         self.calls.append(("fail", db, job_id, str(error)))
         return True
 
+    def retry_delivery(self, db, job_id, error):
+        self.calls.append(("retry_delivery", db, job_id))
+        return True
+
     def actor_id(self, db, job_id):
         self.calls.append(("actor", db, job_id))
         return self.actor
@@ -470,7 +474,7 @@ class JobWorkerServiceTests(SettingsTestCase):
             "Native message edit failed; the previous branch was preserved.",
         )
 
-    def test_locally_committed_edit_failure_completes_instead_of_failing(self):
+    def test_locally_committed_edit_failure_requeues_delivery_instead_of_completing(self):
         with (
             patch.object(
                 _m_workers,
@@ -493,7 +497,7 @@ class JobWorkerServiceTests(SettingsTestCase):
 
         self.assertEqual(
             self.lifecycle_names(),
-            ["start", "complete"],
+            ["start", "retry_delivery"],
         )
         self.assertFalse(any(call[0] == "fail" for call in self.jobs.calls))
         edit.assert_called_once()

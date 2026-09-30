@@ -2,9 +2,11 @@ import sqlite3
 import time
 
 from bridge.conversation_schema import migrate_conversation_modes
+from bridge.delivery_schema import migrate_delivery_progress, migrate_job_delivery_intents
 from bridge.migrations import Migration as _Migration
 from bridge.migrations import run_migrations as _run_migrations
 from bridge.token_usage_schema import migrate_token_usage
+from bridge.transcript_schema import migrate_message_identity
 
 PROCESSED_UPDATE_RETENTION_SECONDS = 30 * 86400
 
@@ -480,6 +482,9 @@ SCHEMA_MIGRATIONS = (
     _Migration(4, "episodic_memory_layer", migrate_episodic_memory_layer),
     _Migration(5, "episodic_memory_visibility", migrate_episodic_memory_visibility),
     _Migration(6, "npc_bank_core", migrate_npc_bank_core),
+    _Migration(7, "message_identity", migrate_message_identity),
+    _Migration(8, "assistant_delivery_progress", migrate_delivery_progress),
+    _Migration(9, "job_delivery_intents", migrate_job_delivery_intents),
 )
 
 

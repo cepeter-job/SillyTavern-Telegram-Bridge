@@ -59,9 +59,9 @@ def last_user_variant_rows(
         return None, []
     variants = db.execute(
         "SELECT variant_index,response,selected FROM response_variants WHERE chat_id=? AND ses"
-        "sion_id=? AND user_rowid=? "
+        "sion_id=? AND user_rowid=? AND user_content=? "
         "ORDER BY variant_index",
-        (chat_id, session_id, int(row[0])),
+        (chat_id, session_id, int(row[0]), str(row[1])),
     ).fetchall()
     return row, variants
 
@@ -84,8 +84,17 @@ def select_variant(
         "UPDATE response_variants SET selected=1 WHERE chat_id=? AND session_id=? AND user_rowid=? AND variant_index=?",
         (chat_id, session_id, user_rowid, index),
     )
+    prune_variants_from(db, chat_id, session_id, user_rowid + 1)
     db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=? AND rowid>?", (chat_id, session_id, user_rowid))
     db.execute(
         "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
         (chat_id, session_id, "assistant", response, now),
+    )
+
+
+def prune_variants_from(db: sqlite3.Connection, chat_id: str, session_id: str, rowid: int) -> None:
+    require_active_transaction(db)
+    db.execute(
+        "DELETE FROM response_variants WHERE chat_id=? AND session_id=? AND user_rowid>=?",
+        (chat_id, session_id, rowid),
     )

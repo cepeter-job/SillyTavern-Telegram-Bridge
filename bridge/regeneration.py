@@ -47,10 +47,11 @@ def regenerate_last(
             chat_id,
             session_id,
         )
-        assistant_row = recovery.latest_assistant_row(
+        assistant_row = recovery.target_assistant_row(
             db,
             chat_id,
             session_id,
+            operation_id,
         )
         if not user_row or not assistant_row:
             raise RuntimeError("regen recovery state is incomplete")
@@ -74,6 +75,7 @@ def regenerate_last(
             db,
             session_id,
             int(assistant_row[0]),
+            expected_job_id=operation_id,
         )
         recovery.finish(
             db,
@@ -200,6 +202,9 @@ def regenerate_last(
         if novel_turn:
             novel_turn.commit(db, assistant_rowid, reply)
         variant = save_response_variant(db, chat_id, session_id, user_text, reply, user_rowid=last_user_rowid)
+        recovery.record_delivery_target(
+            db, operation_id, assistant_rowid, reply, f"♻️ Regenerated response (variant {variant})\n\n{reply}"
+        )
         if operation_id is not None:
             set_operation_phase(
                 db,
@@ -230,6 +235,7 @@ def regenerate_last(
         db,
         session_id,
         assistant_rowid,
+        expected_job_id=operation_id,
     )
     recovery.finish(
         db,

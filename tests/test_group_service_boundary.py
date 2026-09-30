@@ -247,6 +247,7 @@ def test_committed_recovery_uses_group_service_for_advance(monkeypatch):
         "load",
         lambda *_args, app_settings=None: {"session_id": "session"},
     )
+    monkeypatch.setattr(workers, "delivery_complete", lambda *_args: False)
     monkeypatch.setattr(workers, "send_reply", lambda *_args, app_settings=None, **_kwargs: None)
     monkeypatch.setattr(workers, "clear_failed_turn", lambda *_args: None)
 

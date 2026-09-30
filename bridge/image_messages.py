@@ -8,6 +8,7 @@ import time
 
 from bridge.card_content import card_fields_from_file
 from bridge.conversation_lifecycle import START_REQUIRED, require_started
+from bridge.delivery_progress import bind_committed_turn
 from bridge.generation import build_chat_messages, render_session_response
 from bridge.generation_settings import get_generation_settings
 from bridge.group_director_service import GroupDirectorService
@@ -38,6 +39,7 @@ def process_image_message(
     mime_type: str = "image/jpeg",
     telegram_message_id: int | None = None,
     *,
+    operation_id: int | None = None,
     group_service: GroupService,
     provider_port: ProviderPort,
     memory_service: MemoryService,
@@ -130,7 +132,7 @@ def process_image_message(
     )
     stored_text = f"[Image input] {caption}"
     with write_transaction(db):
-        db.execute(
+        user_cursor = db.execute(
             "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_id,created_at) VALUES(?,?,?,?,?,?)",
             (
                 chat_id,
@@ -146,10 +148,20 @@ def process_image_message(
             (chat_id, session["session_id"], "assistant", stored_reply, time.time()),
         )
         assistant_rowid = assistant_cursor.lastrowid
+        bind_committed_turn(db, operation_id, int(user_cursor.lastrowid), int(assistant_rowid), stored_reply)
         if novel_turn:
             novel_turn.commit(db, int(assistant_rowid), stored_reply)
         save_response_variant(db, chat_id, session["session_id"], stored_text, stored_reply)
         if group_turn:
             group_service.advance_turn(db, chat_id, session["session_id"])
     memory_service.retain(db, chat_id, session, fields)
-    send_reply(token, chat_id, stored_reply, db, session["session_id"], assistant_rowid, app_settings=app_settings)
+    send_reply(
+        token,
+        chat_id,
+        stored_reply,
+        db,
+        session["session_id"],
+        assistant_rowid,
+        expected_job_id=operation_id,
+        app_settings=app_settings,
+    )

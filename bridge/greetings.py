@@ -16,19 +16,37 @@ from bridge.conversation_lifecycle import (
     lifecycle_key,
     mark_started,
 )
+from bridge.delivery_progress import delivery_complete
 from bridge.light_novel_service import attach_turn, prepare_turn
 from bridge.limits import CARD_FIELD_MAX_CHARS
 from bridge.metadata import get_meta, set_meta
-from bridge.operations import operation_was_applied, record_operation
+from bridge.operation_recovery import OperationRecovery
+from bridge.operations import (
+    begin_operation,
+    operation_phase,
+    operation_was_applied,
+    record_operation,
+    set_operation_phase,
+)
 from bridge.panel_utils import PANEL_PAGE_SIZE, panel_page
-from bridge.response_delivery import persist_assistant_delivery_ids
+from bridge.response_delivery import delete_outgoing_message_row, send_reply
 from bridge.session_repository import load_session_row
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
-from bridge.telegram import send_panel_request, send_text
+from bridge.telegram import send_panel_request, send_text, telegram_request
 from bridge.telegram_output import telegram_safe_output
 
 _GREETING_PREVIEW_MAX_CHARS = 3200
+_GREETING_RECOVERY = OperationRecovery(
+    operation_phase=operation_phase,
+    begin_operation=begin_operation,
+    record_operation=record_operation,
+    write_transaction=write_transaction,
+    get_meta=get_meta,
+    telegram_request=telegram_request,
+    delete_outgoing_message_row=delete_outgoing_message_row,
+    log_info=logging.info,
+)
 
 
 def greeting_options(fields: dict) -> list[str]:
@@ -182,6 +200,22 @@ def send_character_greeting(
     state = conversation_state(db, chat_id, session_id)
     if expected_epoch is not None and state.epoch != expected_epoch:
         return False
+    if operation_phase(db, operation_id) == "local_committed":
+        row = _GREETING_RECOVERY.target_assistant_row(db, chat_id, session_id, operation_id)
+        if row is None:
+            return False
+        send_reply(
+            token,
+            chat_id,
+            str(row[1]),
+            db,
+            None,
+            int(row[0]),
+            expected_job_id=operation_id,
+            app_settings=app_settings,
+        )
+        _GREETING_RECOVERY.finish(db, operation_id, operation_kind)
+        return True
     opening_key = lifecycle_key("opening", chat_id, session_id)
     with write_transaction(db):
         state = conversation_state(db, chat_id, session_id)
@@ -201,7 +235,7 @@ def send_character_greeting(
             ).fetchone()
             if row is None:
                 return False
-            if json.loads(row[1] or "[]"):
+            if delivery_complete(db, int(opening["rowid"])):
                 record_operation(db, operation_id, operation_kind)
                 return False
             rowid, greeting = int(opening["rowid"]), str(row[0])
@@ -234,7 +268,9 @@ def send_character_greeting(
                 raise ValueError("Session no longer exists")
             record = prepare_turn(db, chat_id, opening_session, f"opening:{state.epoch}", actor_id)
             attach_turn(db, record, rowid, greeting)
-    message_ids = send_text(token, chat_id, greeting)
-    persist_assistant_delivery_ids(db, rowid, message_ids)
-    record_operation(db, operation_id, operation_kind)
+        begin_operation(db, operation_id, operation_kind)
+        _GREETING_RECOVERY.record_delivery_target(db, operation_id, rowid, greeting, greeting)
+        set_operation_phase(db, operation_id, operation_kind, "local_committed")
+    send_reply(token, chat_id, greeting, db, None, rowid, expected_job_id=operation_id, app_settings=app_settings)
+    _GREETING_RECOVERY.finish(db, operation_id, operation_kind)
     return True

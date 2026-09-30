@@ -106,7 +106,7 @@ def _image_services(download_file, sent):
             actor_id=lambda *_args: "actor",
         ),
         telegram=SimpleNamespace(download_file=download_file, send_text=lambda *args, **_kwargs: sent.append(args)),
-        group=object(),
+        group=SimpleNamespace(user_turn_allowed=lambda *_args: True),
         provider=make_test_provider_port(),
         memory=object(),
         npc=object(),
@@ -136,6 +136,8 @@ def test_image_worker_rejects_oversize_before_transport(monkeypatch):
         lambda *args, **kwargs: delegated.append((args, kwargs)),
         raising=False,
     )
+
+    monkeypatch.setattr(SessionService, "ensure", lambda *_args: {"session_id": "queued-session"})
 
     workers.process_image_job(
         services,
@@ -248,6 +250,7 @@ def test_committed_image_recovery_returns_before_download(monkeypatch):
         "send_reply",
         lambda *args, app_settings=None, **kwargs: replies.append((args, kwargs)),
     )
+    monkeypatch.setattr(workers, "delivery_complete", lambda *_args: False)
     monkeypatch.setattr(workers, "clear_failed_turn", lambda *_args: None)
 
     workers.process_image_job(
@@ -401,7 +404,7 @@ def test_document_job_passes_configured_api_key_and_canonical_image_collaborator
             fail=lambda *_args: True,
             actor_id=lambda *_args: "actor",
         ),
-        group="group",
+        group=SimpleNamespace(user_turn_allowed=lambda *_a: True),
         telegram=SimpleNamespace(send_text=lambda *_args, **_kwargs: None),
         provider=make_test_provider_port(),
         memory="memory",
@@ -411,6 +414,7 @@ def test_document_job_passes_configured_api_key_and_canonical_image_collaborator
         session=SimpleNamespace(ensure=lambda *_args: {"session_id": "session"}),
         rag=make_test_rag_service(),
     )
+    monkeypatch.setattr(_owner_document_jobs, "committed_assistant_for_message", lambda *_a: None)
     monkeypatch.setattr(
         _owner_document_jobs,
         "import_telegram_document",

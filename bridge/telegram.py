@@ -10,6 +10,7 @@ import urllib
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 
 from bridge.limits import MAX_TELEGRAM_LENGTH, SYNC_MAX_BYTES
@@ -274,7 +275,9 @@ def split_telegram_text(text: str, limit: int = MAX_TELEGRAM_LENGTH) -> list[str
     return chunks
 
 
-def send_text(token: str, chat_id: str, text: str) -> list[int]:
+def send_text(
+    token: str, chat_id: str, text: str, *, acknowledged_chunk: Callable[[int], None] | None = None
+) -> list[int]:
     message_ids = []
     for chunk in split_telegram_text(text):
         result = telegram_request(
@@ -286,8 +289,12 @@ def send_text(token: str, chat_id: str, text: str) -> list[int]:
                 "disable_web_page_preview": True,
             },
         )
+        if acknowledged_chunk is not None and result.get("message_id") is None:
+            raise RuntimeError("Telegram did not acknowledge the reply chunk")
         if result.get("message_id") is not None:
             message_ids.append(int(result["message_id"]))
+            if acknowledged_chunk is not None:
+                acknowledged_chunk(int(result["message_id"]))
     return message_ids
 
 

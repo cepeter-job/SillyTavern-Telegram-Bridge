@@ -194,7 +194,7 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
         self.db.close()
 
     def test_initial_schema_preserved_with_conversation_migration(self):
-        self.assertEqual(len(schema.SCHEMA_MIGRATIONS), 6)
+        self.assertEqual(len(schema.SCHEMA_MIGRATIONS), 9)
         migration = schema.SCHEMA_MIGRATIONS[0]
         self.assertEqual((migration.version, migration.name), (1, "initial_schema"))
 
@@ -210,6 +210,9 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
                 (4, "episodic_memory_layer"),
                 (5, "episodic_memory_visibility"),
                 (6, "npc_bank_core"),
+                (7, "message_identity"),
+                (8, "assistant_delivery_progress"),
+                (9, "job_delivery_intents"),
             ],
         )
 
@@ -334,7 +337,7 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
         self.assertIsNone(self.db.execute("SELECT 1 FROM callback_tokens WHERE token='expired'").fetchone())
         self.assertEqual(
             self.db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0],
-            6,
+            9,
         )
 
 

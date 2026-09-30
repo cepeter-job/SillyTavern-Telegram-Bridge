@@ -55,6 +55,7 @@ from bridge.job_store import (
     mark_job_running,
     mark_job_scheduled,
     recover_jobs,
+    retry_delivery_job,
     store_job_payload,
 )
 from bridge.memory import (
@@ -268,6 +269,7 @@ def _build_startup_services(
         recover_backend=recover_jobs,
         submit_chat=background.submit_chat,
         prepare_worker=durable_worker_guard.prepare,
+        delivery_retry_backend=retry_delivery_job,
     )
 
     def dispatch(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 
 from bridge.delivery_port import DeliveryPort
+from bridge.delivery_repository import clear_progress
 from bridge.generation import _generation_generate_rendered_reply, build_chat_messages
 from bridge.generation_recovery import _generation_operation_recovery
 from bridge.light_novel_turn import begin_novel_turn
@@ -39,10 +40,11 @@ def continue_last(
     recovery = _generation_operation_recovery(delivery_port)
 
     def deliver_recovered_continue():
-        assistant_row = recovery.latest_assistant_row(
+        assistant_row = recovery.target_assistant_row(
             db,
             chat_id,
             session_id,
+            operation_id,
         )
         if not assistant_row:
             raise RuntimeError("continue recovery state is incomplete")
@@ -60,6 +62,7 @@ def continue_last(
             db,
             session_id,
             int(assistant_row[0]),
+            expected_job_id=operation_id,
         )
         recovery.finish(
             db,
@@ -158,6 +161,7 @@ def continue_last(
     )
 
     def persist_continuation():
+        clear_progress(db, int(assistant_row[0]))
         if novel_turn:
             novel_turn.commit(db, int(assistant_row[0]), combined)
         db.execute(
@@ -169,6 +173,9 @@ def continue_last(
             None,
         )
         if user_row:
+            recovery.set_payload(
+                db, operation_id, dict(recovery.get_payload(db, operation_id), user_rowid=int(user_row[0]))
+            )
             db.execute(
                 "UPDATE response_variants SET response=? "
                 "WHERE chat_id=? AND session_id=? "
@@ -180,6 +187,9 @@ def continue_last(
                     int(user_row[0]),
                 ),
             )
+        recovery.record_delivery_target(
+            db, operation_id, int(assistant_row[0]), combined, f"↪️ Continued response\n\n{combined}"
+        )
         if operation_id is not None:
             set_operation_phase(
                 db,
@@ -210,6 +220,7 @@ def continue_last(
         db,
         session_id,
         int(assistant_row[0]),
+        expected_job_id=operation_id,
     )
     recovery.finish(
         db,

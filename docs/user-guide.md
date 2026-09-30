@@ -131,7 +131,7 @@ prevents accidental changes.
 | `/branch` | Choose the active response branch |
 | `/continue` | Continue the latest assistant response |
 | `/edit` | Edit the latest user turn and regenerate |
-| `/retry` | Retry the latest failed response |
+| `/retry` | Recover a failed response or incomplete saved delivery |
 | `/language` | Choose the model reply language |
 | `/expression` | Choose native expression behavior |
 | `/macro` | Preview supported SillyTavern macros |
@@ -466,10 +466,24 @@ limited tag set cannot safely render arbitrary model-generated web markup.
 | `/swipe` | Browse and pick from stored variants |
 | `/branch` | Switch the active response branch |
 | `/edit` | Replace your last message and regenerate |
-| `/retry` | Replay a failed response without creating a duplicate |
+| `/retry` | Recover a failed response or incomplete saved delivery |
 
-Every operation gets a durable marker, so restart recovery and Telegram
-delivery are idempotent — **no duplicates after a crash**.
+Queued `/edit`, `/regen` and `/continue` commands keep the session selected when
+they were queued. Switching the active session does not redirect their work or
+their restart recovery.
+
+When an answer has been saved but Telegram delivery fails, durable jobs allow
+three total delivery attempts, including interrupted attempts across restarts.
+Recovery uses the saved answer and skips chunks
+whose Telegram acknowledgements were recorded; it does not generate another
+answer. If automatic attempts are exhausted, the original actor can use `/retry`
+in the original session. A deleted or replaced answer cannot be recovered.
+
+Telegram delivery and the local database are separate systems. A crash after
+Telegram accepts a chunk but before its acknowledgement is saved can still
+leave delivery uncertain. Recorded acknowledgements prevent those known chunks
+from being resent; the bridge cannot promise exactly-once delivery across an
+unrecorded external response.
 
 ---
 
@@ -660,10 +674,16 @@ expose Live Sync credentials in Telegram.
 
 ### Forum Topic groups
 
-In manual mode, native Telegram message edits obey the same user-turn rule as
-new text. The rule is checked before enqueue and again before regeneration,
-including recovered jobs. An edit targets the session containing its original
-message, not whichever session is currently active.
+In manual mode, native Telegram message edits, photos, image documents and voice
+messages obey the same user-turn rule as new text. The rule is checked before
+enqueue and again before downloading, transcription or generation, including
+recovered jobs. An edit targets the session containing its original message.
+Delivery of an already saved answer can recover after the turn owner changes.
+
+A PNG document might be a character card or a conversation image, so it must
+pass the turn check before downloading, including uploads reported as generic
+binary files. This also restricts out-of-turn PNG character-card uploads. JSON
+management uploads remain available under their existing policies.
 
 `/group` only works inside a Telegram Forum Topic. Each topic gets its own
 isolated session and group state. The setup wizard lets you create a group

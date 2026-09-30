@@ -360,13 +360,13 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
 
     def test_continue_local_committed_redelivers_without_generation(self):
         operation_id = 607
-        self._turns("question", "committed continuation")
+        _, assistant_rowid = self._turns("question", "committed continuation")
         self._operation(operation_id, "local_committed", "continue")
         self._payload(
             operation_id,
             {
                 "old_message_ids": ["51"],
-                "assistant_rowid": 1,
+                "assistant_rowid": assistant_rowid,
             },
         )
 

@@ -37,7 +37,9 @@ def add_rows(db, count, size=2000):
     db.commit()
 
 
-@pytest.mark.parametrize("change", ["reset", "delete", "recreate", "manual", "transcript", "clear"])
+@pytest.mark.parametrize(
+    "change", ["reset", "delete", "recreate", "manual", "transcript", "transcript_recreate", "clear"]
+)
 def test_curator_reset_discards_inflight_completion(session_db, monkeypatch, change):
     settings, db, session = session_db
     add_rows(db, 2)
@@ -90,6 +92,10 @@ def test_curator_reset_discards_inflight_completion(session_db, monkeypatch, cha
             if change == "recreate":
                 create_session(db, "chat", "dummy::model", session_id="s1", app_settings=settings)
                 add_rows(db, 2)
+        elif change == "transcript_recreate":
+            with write_transaction(db):
+                db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=?", ("chat", "s1"))
+            add_rows(db, 2)
         elif change == "manual":
             set_meta(
                 db,

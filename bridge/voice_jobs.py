@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from bridge.composition import BridgeServices as _BridgeServices
 
-import json
 import logging
 import sqlite3
 from pathlib import Path
@@ -16,6 +15,8 @@ from bridge.background import chat_job_lock
 from bridge.config import STT_DEFAULT_MODEL
 from bridge.conversation_jobs import narrative_job_is_current
 from bridge.conversation_lifecycle import START_REQUIRED, require_started
+from bridge.delivery_progress import DeliveryFailure, delivery_complete
+from bridge.delivery_recovery import handle_delivery_failure, resume_committed_turn
 from bridge.failed_turns import clear_failed_turn
 from bridge.limits import STT_MAX_BYTES
 from bridge.metadata import get_meta
@@ -24,6 +25,7 @@ from bridge.session_core import ensure_session
 from bridge.speech import transcribe_audio_bytes
 from bridge.telegram import download_telegram_file, send_text
 from bridge.transcript_repository import committed_assistant_for_message
+from bridge.turn_delivery_repository import turn_delivery_target
 
 
 def process_voice_message(
@@ -38,9 +40,13 @@ def process_voice_message(
     queued_session_id: str | None = None,
     *,
     actor_id: str = "",
+    operation_id: int | None = None,
     services: _BridgeServices,
 ) -> None:
     session_id = queued_session_id or ensure_session(db, chat_id, model, app_settings=services.config)["session_id"]
+    if not services.group.user_turn_allowed(db, chat_id, session_id, actor_id):
+        send_text(token, chat_id, "It is not your turn in manual group mode.")
+        return
     if not require_started(db, chat_id, session_id):
         send_text(token, chat_id, START_REQUIRED)
         return
@@ -67,6 +73,7 @@ def process_voice_message(
         message_id,
         queued_session_id=queued_session_id,
         actor_id=actor_id,
+        operation_id=operation_id,
     )
 
 
@@ -86,8 +93,13 @@ def process_voice_job(
     jobs = services.jobs
     with chat_job_lock(chat_id):
         db = services.db_factory()
+        claimed = False
         try:
             if job_id is not None and not jobs.start(db, job_id):
+                return
+            claimed = True
+            if resume_committed_turn(services, db, job_id):
+                clear_failed_turn(db, chat_id, message_id)
                 return
             if not narrative_job_is_current(db, job_id):
                 if job_id is not None:
@@ -96,7 +108,7 @@ def process_voice_job(
             actor_id = jobs.actor_id(db, job_id)
             existing = committed_assistant_for_message(db, chat_id, message_id)
             if existing:
-                if json.loads(existing[2] or "[]"):
+                if delivery_complete(db, int(existing[0])):
                     clear_failed_turn(db, chat_id, message_id)
                     if job_id is not None:
                         jobs.complete(db, job_id)
@@ -128,11 +140,17 @@ def process_voice_job(
                 message_id,
                 queued_session_id=queued_session_id,
                 actor_id=actor_id,
+                operation_id=job_id,
                 services=services,
             )
             if job_id is not None:
                 jobs.complete(db, job_id)
         except Exception as exc:
+            if not claimed:
+                raise
+            if isinstance(exc, DeliveryFailure) or turn_delivery_target(db, job_id) is not None:
+                handle_delivery_failure(services, db, chat_id, job_id, exc)
+                return
             logging.error("Voice job failed: %s", exc, exc_info=True)
             if job_id is not None:
                 jobs.fail(db, job_id, exc)

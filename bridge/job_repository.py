@@ -65,6 +65,7 @@ def schedule_job(db: sqlite3.Connection, job_id: int, now: float) -> bool:
 
 def start_job(db: sqlite3.Connection, job_id: int, now: float) -> bool:
     require_active_transaction(db)
+    exhaust_committed_deliveries(db, now, job_id)
     return (
         db.execute(
             "UPDATE jobs SET state='running', attempts=attempts+1, updated_at=? WHERE job_id=? AND stat"
@@ -82,6 +83,7 @@ def finish_job_row(db: sqlite3.Connection, job_id: int, state: str, error: str, 
 
 def reset_running_jobs(db: sqlite3.Connection, now: float) -> None:
     require_active_transaction(db)
+    exhaust_committed_deliveries(db, now)
     db.execute("UPDATE jobs SET state='queued', updated_at=? WHERE state IN ('running','scheduled')", (now,))
 
 
@@ -90,3 +92,27 @@ def queued_job_rows(db: sqlite3.Connection) -> list[tuple]:
         "SELECT job_id,chat_id,session_id,telegram_message_id,kind,payload_json "
         "FROM jobs WHERE state='queued' ORDER BY created_at LIMIT 128"
     ).fetchall()
+
+
+def retry_delivery_row(db: sqlite3.Connection, job_id: int, error: str, now: float, limit: int) -> bool:
+    require_active_transaction(db)
+    return (
+        db.execute(
+            "UPDATE jobs SET state='queued',last_error=?,updated_at=? "
+            "WHERE job_id=? AND state='running' AND attempts<?",
+            (error, now, job_id, limit),
+        ).rowcount
+        == 1
+    )
+
+
+def exhaust_committed_deliveries(db: sqlite3.Connection, now: float, job_id: int | None = None) -> None:
+    require_active_transaction(db)
+    db.execute(
+        """UPDATE jobs SET state='failed',last_error='delivery incomplete: automatic attempt limit reached; use /retry',
+        updated_at=? WHERE state IN ('queued','scheduled','running') AND attempts>=3
+          AND (? IS NULL OR job_id=?) AND (EXISTS (SELECT 1 FROM job_delivery_intents d WHERE d.job_id=jobs.job_id)
+            OR EXISTS (SELECT 1 FROM operations o WHERE o.operation_id=CAST(jobs.job_id AS TEXT)
+              AND o.state='local_committed'))""",
+        (now, job_id, job_id),
+    )

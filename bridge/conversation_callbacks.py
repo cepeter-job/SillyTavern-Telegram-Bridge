@@ -9,6 +9,7 @@ from bridge.callbacks import close_panel_message, discard_panel_binding, remove_
 from bridge.card_content import card_fields_from_file
 from bridge.conversation_lifecycle import ALREADY_STARTED, conversation_state, is_group_conversation
 from bridge.delivery_port import DeliveryPort
+from bridge.delivery_progress import delivery_complete
 from bridge.greetings import greeting_choice_label, greeting_options, send_character_greeting, send_greeting_menu
 from bridge.message_commands import reset_session
 from bridge.metadata import get_meta
@@ -201,7 +202,7 @@ def handle_greeting_callback(
                     (chat_id, session_id),
                 ).fetchone()
                 undelivered = bool(
-                    pending and pending[0] == opening.get("rowid") and not json.loads(pending[1] or "[]")
+                    pending and pending[0] == opening.get("rowid") and not delivery_complete(db, int(pending[0]))
                 )
             except (ValueError, TypeError, AttributeError):
                 opening_operation, undelivered = None, False

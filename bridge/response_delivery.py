@@ -7,9 +7,12 @@ import json
 import logging
 import re
 import sqlite3
+from collections.abc import Callable
 from functools import partial as _partial
 
 from bridge.background import submit_background
+from bridge.delivery_progress import DeliveryFailure, DeliveryTargetExpired, checkpoint, prepare_progress
+from bridge.delivery_repository import clear_progress, store_delivery_ids
 from bridge.expressions import deliver_expression
 from bridge.metadata import get_meta
 from bridge.settings import AppSettings
@@ -73,8 +76,8 @@ def delete_outgoing_message_row(db: sqlite3.Connection, token: str, chat_id: str
             telegram_request(token, "deleteMessage", {"chat_id": chat_id, "message_id": int(message_id)})
         except Exception:
             logging.info("Could not delete outgoing Telegram message %s", message_id, exc_info=True)
-    db.execute("UPDATE messages SET telegram_message_ids='[]' WHERE rowid=?", (rowid,))
-    db.commit()
+    with write_transaction(db):
+        clear_progress(db, rowid)
 
 
 def quoted_speech_from_reply(text: str) -> str:
@@ -119,9 +122,7 @@ def persist_assistant_delivery_ids(db: sqlite3.Connection, assistant_rowid: int,
     try:
 
         def write():
-            db.execute(
-                "UPDATE messages SET telegram_message_ids=? WHERE rowid=?", (json.dumps(message_ids), assistant_rowid)
-            )
+            store_delivery_ids(db, assistant_rowid, message_ids)
 
             return True
 
@@ -144,43 +145,70 @@ def send_reply(
     assistant_rowid: int | None = None,
     *,
     replace_message_id: int | None = None,
+    expected_job_id: int | str | None = None,
     app_settings: AppSettings,
 ) -> None:
     text = telegram_safe_output(text)
-    if db is not None and session_id:
-        deliver_expression(token, chat_id, text, db, session_id, app_settings=app_settings)
-    if replace_message_id is None:
-        message_ids = send_text(token, chat_id, text)
-    else:
-        chunks = split_telegram_text(text)
-        reused_preview = True
-        try:
-            telegram_request(
-                token,
-                "editMessageText",
-                {
-                    "chat_id": chat_id,
-                    "message_id": replace_message_id,
-                    "text": chunks[0],
-                    "disable_web_page_preview": True,
-                },
-            )
-        except RuntimeError as exc:
-            detail = str(exc).casefold()
-            if "message to edit not found" in detail:
-                reused_preview = False
-                message_ids = send_text(token, chat_id, text)
-            elif "message is not modified" in detail:
-                message_ids = [replace_message_id]
-            else:
-                raise
-        else:
-            message_ids = [replace_message_id]
-        if reused_preview:
-            for chunk in chunks[1:]:
-                message_ids.extend(send_text(token, chat_id, chunk))
+    message_ids: list[int] = []
+    complete = False
+    expected_source = None
     if db is not None and assistant_rowid is not None:
-        persist_assistant_delivery_ids(db, assistant_rowid, message_ids)
+        try:
+            text, message_ids, complete, expected_source = prepare_progress(
+                db, assistant_rowid, text, expected_job_id=expected_job_id
+            )
+        except DeliveryTargetExpired:
+            raise
+        except Exception as exc:
+            raise DeliveryFailure("Reply committed; delivery checkpoint could not be prepared") from exc
+        if complete:
+            return
+    chunks = split_telegram_text(text)
+
+    def acknowledged(message_id: int) -> None:
+        message_ids.append(message_id)
+        if db is not None and assistant_rowid is not None:
+            checkpoint(
+                db,
+                assistant_rowid,
+                message_ids,
+                expected_job_id=expected_job_id,
+                expected_source=expected_source,
+                expected_payload=text,
+            )
+
+    try:
+        if db is not None and session_id and not message_ids:
+            deliver_expression(token, chat_id, text, db, session_id, app_settings=app_settings)
+        if db is None or assistant_rowid is None:
+            # Preserve the public adapter's ordinary untracked send behavior.
+            if replace_message_id is None:
+                send_text(token, chat_id, text)
+            else:
+                _send_preview(token, chat_id, chunks, replace_message_id, acknowledged)
+        else:
+            if not message_ids and replace_message_id is not None:
+                _send_preview(token, chat_id, chunks[:1], replace_message_id, acknowledged)
+            remaining = chunks[len(message_ids) :]
+            if remaining:
+                send_text(token, chat_id, "".join(remaining), acknowledged_chunk=acknowledged)
+            if len(message_ids) != len(chunks):
+                raise DeliveryFailure("Telegram did not acknowledge every reply chunk")
+            checkpoint(
+                db,
+                assistant_rowid,
+                message_ids,
+                complete=True,
+                expected_job_id=expected_job_id,
+                expected_source=expected_source,
+                expected_payload=text,
+            )
+    except DeliveryFailure:
+        raise
+    except Exception as exc:
+        if db is None or assistant_rowid is None:
+            raise
+        raise DeliveryFailure("Reply committed; Telegram delivery is incomplete") from exc
     if db is not None and session_id and get_meta(db, f"voice_mode:{chat_id}", "off") == "tts":
         speech = quoted_speech_from_reply(text)
         if speech:
@@ -192,3 +220,31 @@ def send_reply(
                 "tts", _partial(send_tts, app_settings=app_settings), token, chat_id, speech, operation_id
             ):
                 logging.warning("Automatic TTS dropped for chat %s", chat_id)
+
+
+def _send_preview(
+    token: str, chat_id: str, chunks: list[str], preview_id: int, acknowledged: Callable[[int], None]
+) -> None:
+    try:
+        telegram_request(
+            token,
+            "editMessageText",
+            {
+                "chat_id": chat_id,
+                "message_id": preview_id,
+                "text": chunks[0],
+                "disable_web_page_preview": True,
+            },
+        )
+    except RuntimeError as exc:
+        detail = str(exc).casefold()
+        if "message to edit not found" in detail:
+            send_text(token, chat_id, chunks[0], acknowledged_chunk=acknowledged)
+        elif "message is not modified" in detail:
+            acknowledged(preview_id)
+        else:
+            raise
+    else:
+        acknowledged(preview_id)
+    for chunk in chunks[1:]:
+        send_text(token, chat_id, chunk, acknowledged_chunk=acknowledged)

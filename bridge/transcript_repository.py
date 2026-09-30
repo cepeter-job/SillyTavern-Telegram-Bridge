@@ -17,6 +17,9 @@ def committed_assistant_for_message(
          AND assistant.role='assistant'
          AND assistant.rowid > user_message.rowid
         WHERE user_message.chat_id=? AND user_message.role='user' AND user_message.telegram_message_id=?
+        AND NOT EXISTS (SELECT 1 FROM messages intervening WHERE intervening.chat_id=user_message.chat_id
+            AND intervening.session_id=user_message.session_id AND intervening.role='user'
+            AND intervening.rowid>user_message.rowid AND intervening.rowid<assistant.rowid)
         ORDER BY assistant.rowid LIMIT 1""",
         (chat_id, str(telegram_message_id)),
     ).fetchone()
@@ -28,4 +31,11 @@ def native_edit_target(db: sqlite3.Connection, chat_id: str, message_id: int) ->
         "SELECT rowid,session_id,role FROM messages WHERE chat_id=? AND "
         "telegram_message_id=? ORDER BY rowid DESC LIMIT 1",
         (chat_id, str(message_id)),
+    ).fetchone()
+
+
+def assistant_by_row(db: sqlite3.Connection, rowid: int, chat_id: str, session_id: str) -> tuple[int, str] | None:
+    return db.execute(
+        "SELECT rowid,content FROM messages WHERE rowid=? AND chat_id=? AND session_id=? AND role='assistant'",
+        (rowid, chat_id, session_id),
     ).fetchone()

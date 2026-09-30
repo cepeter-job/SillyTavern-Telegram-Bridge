@@ -19,6 +19,7 @@ from bridge.help_details import send_help_command
 from bridge.job_service import JobSubmission
 from bridge.light_novel_panels import hide_choice_panels
 from bridge.light_novel_repository import invalidate_choice_sets
+from bridge.media_policy import conversational_document
 from bridge.request_types import RequestContext
 from bridge.sqlite_store import write_transaction
 from bridge.topic_scope import topic_scope_from_message
@@ -176,18 +177,13 @@ def route_message_update(
         )
         return True
 
-    conversational_media = bool(
-        voice
-        or photos
-        or (
-            document
-            and Path(str(document.get("file_name") or "")).suffix.casefold() != ".png"
-            and str(document.get("mime_type") or "").startswith("image/")
-        )
-    )
+    conversational_media = bool(voice or photos or (document and conversational_document(document)))
     conversational_text = bool(text and not is_command_text(str(text)))
     if conversational_media or conversational_text:
         gate_session = services.session.ensure(db, chat_id, model)
+        if not services.group.user_turn_allowed(db, chat_id, gate_session["session_id"], sender):
+            services.telegram.send_text(token, chat_id, "It is not your turn in manual group mode.")
+            return True
         pending_input = conversational_text and has_pending_management_input(
             db, chat_id, gate_session["session_id"], sender
         )
@@ -433,7 +429,7 @@ def route_message_update(
         payload = {
             "text": str(text),
             "model": model,
-            "resolve_active": True,
+            "resolve_active": False,
             "actor_id": sender,
         }
         job_id = services.jobs.enqueue(
@@ -470,8 +466,8 @@ def route_message_update(
                     str(text),
                     message_id,
                     queue_notice_message_ids,
-                    None,
-                    None,
+                    queued_session_id,
+                    model,
                 ),
             ),
         )

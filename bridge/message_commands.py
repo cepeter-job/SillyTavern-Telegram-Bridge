@@ -35,6 +35,7 @@ from bridge.memory import clear_session_summary
 from bridge.memory_curator import clear_curated_memory_state
 from bridge.memory_service import MemoryService
 from bridge.metadata import get_meta, set_meta
+from bridge.npc_service import NpcService
 from bridge.operations import (
     begin_operation,
     operation_phase,
@@ -152,6 +153,7 @@ def generate_and_store_reply(
     group_service: GroupService,
     provider_port: ProviderPort,
     memory_service: MemoryService,
+    npc_service: NpcService,
     persona_service: PersonaService,
     app_settings: AppSettings,
     rag_service: RagService,
@@ -190,6 +192,14 @@ def generate_and_store_reply(
     memory_context = memory_prompt.recall
     episodic_context = memory_prompt.episodic
     session_summary = memory_prompt.summary
+    npc_context = npc_service.context_for_prompt(
+        db,
+        chat_id,
+        session,
+        fields,
+        text,
+        history_rows,
+    )
     messages = timed_call(
         "prompt_assembly",
         _partial(build_chat_messages, app_settings=app_settings),
@@ -199,6 +209,7 @@ def generate_and_store_reply(
         history_rows,
         memory_context=memory_context,
         episodic_context=episodic_context,
+        npc_context=npc_context,
         session_summary=session_summary,
         rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
         group_context=group_context,
@@ -365,6 +376,7 @@ def prepare_message(
     group_director_service,
     input_flow_service,
     memory_service,
+    npc_service,
     persona_service,
     provider_port,
     rag_service: RagService,
@@ -406,6 +418,7 @@ def prepare_message(
                 provider_port=provider_port,
                 delivery_port=delivery_port,
                 memory_service=memory_service,
+                npc_service=npc_service,
                 persona_service=persona_service,
                 app_settings=app_settings,
                 rag_service=rag_service,
@@ -423,6 +436,7 @@ def prepare_message(
                 provider_port=provider_port,
                 delivery_port=delivery_port,
                 memory_service=memory_service,
+                npc_service=npc_service,
                 persona_service=persona_service,
                 app_settings=app_settings,
                 rag_service=rag_service,
@@ -442,6 +456,7 @@ def prepare_message(
                 operation_id=operation_id,
                 provider_port=provider_port,
                 memory_service=memory_service,
+                npc_service=npc_service,
                 persona_service=persona_service,
                 app_settings=app_settings,
                 rag_service=rag_service,
@@ -487,6 +502,7 @@ def prepare_message(
         group_service=group_service,
         provider_port=provider_port,
         memory_service=memory_service,
+        npc_service=npc_service,
         persona_service=persona_service,
         request_context=request_context,
         rag_service=rag_service,

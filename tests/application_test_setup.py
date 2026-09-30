@@ -17,6 +17,7 @@ from bridge.delivery_port import DeliveryPort
 from bridge.input_flow_service import InputFlowService
 from bridge.memory_service import MemoryService
 from bridge.model_router import ModelRouter
+from bridge.npc_service import NpcService
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
 from bridge.request_types import RequestContext
@@ -113,6 +114,11 @@ def make_test_memory_service(*, purge_session_memory=None) -> MemoryService:
             purge_session_memory if purge_session_memory is not None else (lambda *_args, **_kwargs: 0)
         ),
     )
+
+
+def make_test_npc_service() -> NpcService:
+    """Return a stateless explicit NpcService for tests."""
+    return NpcService()
 
 
 def make_test_persona_service(*, personas=None) -> PersonaService:
@@ -241,6 +247,7 @@ def make_test_conversation_service(
     delivery=None,
     provider=None,
     memory=None,
+    npc=None,
     persona=None,
     group=None,
     input_flow=None,
@@ -259,6 +266,7 @@ def make_test_conversation_service(
     delivery = delivery or make_test_delivery_port()
     provider = provider or make_test_provider_port()
     memory = memory or make_test_memory_service()
+    npc = npc or make_test_npc_service()
     persona = persona or make_test_persona_service()
     group = group or make_test_group_service(app_settings=app_settings)
     input_flow = input_flow or make_test_input_flow_service(app_settings=app_settings)
@@ -302,6 +310,7 @@ def make_test_conversation_service(
             delivery_port=delivery,
             provider_port=provider,
             memory_service=memory,
+            npc_service=npc,
             persona_service=persona,
             group_service=group,
             sync_service=sync,
@@ -317,6 +326,7 @@ def make_test_conversation_service(
             delivery_port=delivery,
             provider_port=provider,
             memory_service=memory,
+            npc_service=npc,
             persona_service=persona,
             group_service=group,
             input_flow_service=input_flow,
@@ -331,6 +341,7 @@ def make_test_conversation_service(
             group_service=group,
             provider_port=provider,
             memory_service=memory,
+            npc_service=npc,
             persona_service=persona,
             rag_service=rag,
         ),
@@ -342,6 +353,7 @@ def make_test_application_services(
     *,
     rag=None,
     memory=None,
+    npc=None,
     persona=None,
     sync=None,
     group=None,
@@ -360,6 +372,7 @@ def make_test_application_services(
     delivery = delivery or make_test_delivery_port()
     provider = provider or make_test_provider_port()
     memory = memory or make_test_memory_service()
+    npc = npc or make_test_npc_service()
     persona = persona or make_test_persona_service()
     sync = sync or make_test_sync_service()
     group = group or make_test_group_service(app_settings=app_settings)
@@ -371,6 +384,7 @@ def make_test_application_services(
         delivery=delivery,
         provider=provider,
         memory=memory,
+        npc=npc,
         persona=persona,
         sync=sync,
         group=group,
@@ -381,6 +395,7 @@ def make_test_application_services(
         rag=rag,
         config=app_settings,
         memory=memory,
+        npc=npc,
         persona=persona,
         sync=sync,
         group=group,

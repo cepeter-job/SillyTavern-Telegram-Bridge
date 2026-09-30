@@ -14,6 +14,7 @@ from bridge.light_novel_repository import regeneration_choice_panel_message_ids
 from bridge.light_novel_turn import begin_novel_turn
 from bridge.memory_service import MemoryService
 from bridge.metadata import get_meta
+from bridge.npc_service import NpcService
 from bridge.operation_recovery import OperationRecovery as _OperationRecovery
 from bridge.operations import begin_operation, operation_phase, record_operation, set_operation_phase
 from bridge.persona_service import PersonaService
@@ -82,6 +83,7 @@ def regenerate_edited_turn(
     *,
     provider_port: ProviderPort,
     memory_service: MemoryService,
+    npc_service: NpcService,
     persona_service: PersonaService,
     app_settings: AppSettings,
     rag_service: RagService,
@@ -152,6 +154,14 @@ def regenerate_edited_turn(
         edited_user_rowid=int(user_rowid),
     )
     rag_bundle = rag_service.bundle(db, chat_id, new_text)
+    npc_context = npc_service.context_for_prompt(
+        db,
+        chat_id,
+        session,
+        fields,
+        new_text,
+        history_rows,
+    )
     messages = build_chat_messages(
         session,
         fields,
@@ -159,6 +169,7 @@ def regenerate_edited_turn(
         history_rows,
         memory_context=memory_prompt.recall,
         episodic_context=memory_prompt.episodic,
+        npc_context=npc_context,
         session_summary=memory_prompt.summary,
         persona_service=persona_service,
         rag_context=rag_service.context_for_prompt(db, chat_id, new_text, rag_bundle),
@@ -296,6 +307,7 @@ def edit_last_user(
     *,
     provider_port: ProviderPort,
     memory_service: MemoryService,
+    npc_service: NpcService,
     persona_service: PersonaService,
     app_settings: AppSettings,
     rag_service: RagService,
@@ -321,6 +333,7 @@ def edit_last_user(
         operation_id=operation_id,
         provider_port=provider_port,
         memory_service=memory_service,
+        npc_service=npc_service,
         persona_service=persona_service,
         app_settings=app_settings,
         rag_service=rag_service,
@@ -339,6 +352,7 @@ def edit_telegram_user_message(
     *,
     provider_port: ProviderPort,
     memory_service: MemoryService,
+    npc_service: NpcService,
     persona_service: PersonaService,
     app_settings: AppSettings,
     rag_service: RagService,
@@ -364,6 +378,7 @@ def edit_telegram_user_message(
         operation_id=operation_id,
         provider_port=provider_port,
         memory_service=memory_service,
+        npc_service=npc_service,
         persona_service=persona_service,
         app_settings=app_settings,
         rag_service=rag_service,

@@ -11,6 +11,7 @@ from bridge.conversation_setup_callbacks import handle_setup_name_input
 from bridge.group_service import GroupService
 from bridge.memory_service import MemoryService
 from bridge.metadata import set_meta
+from bridge.npc_service import NpcService
 from bridge.pending_input import _pending_state
 from bridge.persona_input import _handle_persona_input
 from bridge.persona_service import PersonaService
@@ -35,6 +36,7 @@ def handle_pending_input(
     group_service: GroupService,
     provider_port: ProviderPort,
     memory_service: MemoryService,
+    npc_service: NpcService,
     persona_service: PersonaService,
     request_context,
     rag_service: RagService,
@@ -91,6 +93,7 @@ def handle_pending_input(
             operation_id,
             provider_port=provider_port,
             memory_service=memory_service,
+            npc_service=npc_service,
             persona_service=persona_service,
             request_context=request_context,
             rag_service=rag_service,

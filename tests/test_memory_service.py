@@ -4,6 +4,7 @@ from application_test_setup import (
     make_test_conversation_service,
     make_test_group_service,
     make_test_input_flow_service,
+    make_test_npc_service,
     make_test_persona_service,
     make_test_provider_port,
     make_test_rag_service,
@@ -347,6 +348,7 @@ class MemoryServiceMessageIntegrationTests(SettingsTestCase):
                 provider_port=make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "reply"),
                 group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
                 memory_service=FakeMemory(),
+                npc_service=make_test_npc_service(),
                 persona_service=make_test_persona_service(),
                 app_settings=self.app_settings_builder.build(),
                 rag_service=make_test_rag_service(),
@@ -479,6 +481,7 @@ class MemoryServiceMessageIntegrationTests(SettingsTestCase):
                 "new text",
                 provider_port=make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "new reply"),
                 memory_service=FakeMemory(),
+                npc_service=make_test_npc_service(),
                 persona_service=make_test_persona_service(),
                 app_settings=self.app_settings_builder.build(),
                 rag_service=make_test_rag_service(),
@@ -543,6 +546,9 @@ class MemoryServiceMessageIntegrationTests(SettingsTestCase):
                 memory_service=make_test_application_services(
                     memory=memory, app_settings=self.app_settings_builder.build()
                 ).memory,
+                npc_service=make_test_application_services(
+                    memory=memory, app_settings=self.app_settings_builder.build()
+                ).npc,
                 persona_service=make_test_application_services(
                     memory=memory, app_settings=self.app_settings_builder.build()
                 ).persona,
@@ -699,6 +705,7 @@ class MemoryServiceMessageIntegrationTests(SettingsTestCase):
                 provider_port=make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "image reply"),
                 group_service=group_service,
                 memory_service=FakeMemory(),
+                npc_service=make_test_npc_service(),
                 persona_service=make_test_persona_service(),
                 group_director_service=make_test_application_services(
                     app_settings=self.app_settings_builder.build()

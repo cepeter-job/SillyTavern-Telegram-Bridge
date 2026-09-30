@@ -9,6 +9,7 @@ from bridge.generation import _generation_generate_rendered_reply, build_chat_me
 from bridge.generation_recovery import _generation_operation_recovery
 from bridge.light_novel_turn import begin_novel_turn
 from bridge.memory_service import MemoryService
+from bridge.npc_service import NpcService
 from bridge.operations import set_operation_phase
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
@@ -29,6 +30,7 @@ def continue_last(
     provider_port: ProviderPort,
     delivery_port: DeliveryPort,
     memory_service: MemoryService,
+    npc_service: NpcService,
     persona_service: PersonaService,
     app_settings: AppSettings,
     rag_service: RagService,
@@ -102,6 +104,14 @@ def continue_last(
         fields,
         instruction,
     )
+    npc_context = npc_service.context_for_prompt(
+        db,
+        chat_id,
+        session,
+        fields,
+        instruction,
+        history_rows,
+    )
     messages = build_chat_messages(
         session,
         fields,
@@ -109,6 +119,7 @@ def continue_last(
         history_rows,
         memory_context=memory_prompt.recall,
         episodic_context=memory_prompt.episodic,
+        npc_context=npc_context,
         session_summary=memory_prompt.summary,
         persona_service=persona_service,
         rag_context=rag_service.context_for_prompt(db, chat_id, instruction, rag_bundle),

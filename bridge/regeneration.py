@@ -11,6 +11,7 @@ from bridge.generation_recovery import _generation_operation_recovery
 from bridge.light_novel_repository import regeneration_choice_panel_message_ids
 from bridge.light_novel_turn import begin_novel_turn
 from bridge.memory_service import MemoryService
+from bridge.npc_service import NpcService
 from bridge.operations import set_operation_phase
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
@@ -32,6 +33,7 @@ def regenerate_last(
     provider_port: ProviderPort,
     delivery_port: DeliveryPort,
     memory_service: MemoryService,
+    npc_service: NpcService,
     persona_service: PersonaService,
     app_settings: AppSettings,
     rag_service: RagService,
@@ -113,6 +115,14 @@ def regenerate_last(
         fields,
         user_text,
     )
+    npc_context = npc_service.context_for_prompt(
+        db,
+        chat_id,
+        session,
+        fields,
+        user_text,
+        history_rows,
+    )
     messages = build_chat_messages(
         session,
         fields,
@@ -120,6 +130,7 @@ def regenerate_last(
         history_rows,
         memory_context=memory_prompt.recall,
         episodic_context=memory_prompt.episodic,
+        npc_context=npc_context,
         session_summary=memory_prompt.summary,
         persona_service=persona_service,
         rag_context=rag_service.context_for_prompt(db, chat_id, user_text, rag_bundle),

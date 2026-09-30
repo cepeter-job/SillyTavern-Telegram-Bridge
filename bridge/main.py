@@ -70,6 +70,7 @@ from bridge.miniapp_config import load_miniapp_config
 from bridge.miniapp_runtime import MiniAppRuntime, configure_miniapp_menu
 from bridge.model_router import ModelRouter as _ModelRouter
 from bridge.network_security import validate_provider_endpoint
+from bridge.npc_service import NpcService as _NpcService
 from bridge.persona_service import PersonaService as _PersonaService
 from bridge.persona_sync import (
     PERSONA_EDIT_LOCK,
@@ -224,6 +225,7 @@ def _build_startup_services(
         purge_session_memory=_partial(purge_hindsight_session, app_settings=config),
         episodic_context=episodic_context_for_prompt,
     )
+    npc = _NpcService()
     session = _SessionService(
         load_backend=_partial(load_session, app_settings=config),
         ensure_backend=_partial(ensure_session, app_settings=config),
@@ -305,6 +307,7 @@ def _build_startup_services(
             delivery_port=delivery,
             provider_port=provider,
             memory_service=memory,
+            npc_service=npc,
             persona_service=persona,
             group_service=group,
             sync_service=sync,
@@ -319,6 +322,7 @@ def _build_startup_services(
             delivery_port=delivery,
             provider_port=provider,
             memory_service=memory,
+            npc_service=npc,
             persona_service=persona,
             group_service=group,
             input_flow_service=input_flow,
@@ -332,6 +336,7 @@ def _build_startup_services(
             group_service=group,
             provider_port=provider,
             memory_service=memory,
+            npc_service=npc,
             persona_service=persona,
             rag_service=rag,
         ),
@@ -353,6 +358,7 @@ def _build_startup_services(
         provider=provider,
         rag=rag,
         memory=memory,
+        npc=npc,
         persona=persona,
         sync=sync,
         jobs=jobs,

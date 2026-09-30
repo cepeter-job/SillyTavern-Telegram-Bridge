@@ -85,6 +85,7 @@ class JobWorkerServiceTests(SettingsTestCase):
             jobs=self.jobs,
             group_director=object(),
             memory=object(),
+            npc=object(),
             persona=object(),
             sync=object(),
             conversation=make_test_conversation_service(app_settings=self.app_settings_builder.build()),

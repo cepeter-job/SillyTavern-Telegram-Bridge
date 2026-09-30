@@ -4,10 +4,6 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
-### Added
-
-- Add opt-in session-scoped Grounded User mode that preserves explicit Persona/story advantages while preventing unearned competence, automatic NPC favoritism, and protagonist-centered world reactions; apply the same grounding to Light Novel choices and Group Director speaker selection without adding a second model pass.
-
 ## [0.2.049] - 2026-09-30
 
 ### Fixed

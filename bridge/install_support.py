@@ -81,7 +81,6 @@ def _starter_png() -> bytes:
     )
 
 
-
 _ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
 
@@ -117,11 +116,7 @@ def _inspect_sillytavern(root: Path, *, home: Path) -> dict[str, object] | None:
     if not data_root.is_dir():
         return None
     try:
-        users = sorted(
-            child.name
-            for child in data_root.iterdir()
-            if child.is_dir() and (child / "characters").is_dir()
-        )
+        users = sorted(child.name for child in data_root.iterdir() if child.is_dir() and (child / "characters").is_dir())
     except OSError:
         return None
     return {"root": str(root), "data_root": str(data_root), "users": users}

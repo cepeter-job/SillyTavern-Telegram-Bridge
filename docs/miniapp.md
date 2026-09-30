@@ -11,8 +11,8 @@ The static UI uses native ES modules and needs no Node runtime or build. It ship
 ## Navigation and usage
 
 The primary destinations are **Home, Characters, Sessions, Manage and System**.
-Manage groups Models, Personas, Worlds, Generation, Memory, Data Bank and Advanced
-settings. Usage remains available under Advanced settings. Home puts the current
+Manage groups Models, Personas, Worlds, Generation, Memory, NPC Bank, Data Bank
+and Advanced settings. Usage remains available under Advanced settings. Home puts the current
 story first, with a direct return to Telegram, recent sessions and quick controls.
 Pages load on demand; a slower previous navigation cannot replace the page you just
 selected. Native theme/safe-area updates, labeled local SVG icons, keyboard focus
@@ -26,7 +26,17 @@ No historical token totals, currency costs or subscription quotas are invented.
 
 ## Characters and optimizer
 
-Use Characters to browse/search PNG cards, view portraits/info, upload cards and create a new normal conversation session. Ranked cards show the canonical S/A/B/C/D WEBM animation from `assets/character-ranks/telegram`; reduced-motion clients and media failures fall back to the static tier badge. Empty or failed portrait loads show the explicit portrait-unavailable state instead of a broken image. Selecting a character creates a new session instead of changing existing conversation history; send `/start` in Telegram for its opening. Active/default/referenced characters cannot be deleted; deletion verifies a backup and the revision you reviewed.
+Use Characters to browse/search PNG cards, view portraits/info, upload cards,
+restore verified backups and create a new normal conversation session. Ranked
+cards show the canonical S/A/B/C/D WEBM animation from
+`assets/character-ranks/telegram`; reduced-motion clients and media failures
+fall back to the static tier badge. Empty or failed portrait loads show the
+explicit portrait-unavailable state instead of a broken image. Selecting a
+character creates a new session instead of changing existing conversation
+history; send `/start` in Telegram for its opening. Active/default/referenced
+characters cannot be deleted. Restore and deletion both validate the reviewed
+revision, and restore refuses a no-op when the installed card already matches
+the selected backup.
 
 Optimizer uses the configured Utility model and supports an optional Manual suggestion. It returns an original/proposed preview. Apply consumes the actor/session-bound proposal once and verifies the original digest; Discard leaves the card untouched. Existing-filename uploads similarly require an explicit replacement preview. Simple upload filenames must not contain path or wildcard characters.
 
@@ -42,11 +52,30 @@ Sessions can be searched, created, renamed, selected and deleted. Deletion is a 
 
 Worlds offers a JSON editor/file import limited to 1 MB and 2000 entries, multi-file session selection, revision-checked save and backed-up deletion. Files active in any session cannot be deleted. Native personas and World Info are shared administrator-managed resources, not tenant-private files.
 
-## Memory and Data Bank
+## Memory, NPC Bank and Data Bank
 
-Memory is session-scoped. Continuity summaries and curated facts can be reviewed and edited locally with revision checks. Save local list does not silently alter Hindsight: Sync reviewed list explicitly publishes the saved list, and Clear session Hindsight memory performs a confirmed external purge. Curate new messages and summary regeneration use the configured Utility model. Provider/connection failures are not treated as successful synchronization.
+Memory is session-scoped. Continuity summaries and curated facts can be reviewed
+and edited locally with revision checks. Save local list does not silently alter
+Hindsight: Sync reviewed list explicitly publishes the saved list, and Clear
+session Hindsight memory performs a confirmed external purge. Curate new messages
+and summary regeneration use the configured Utility model. Provider/connection
+failures are not treated as successful synchronization.
 
-Data Bank documents are private to the authenticated bot chat. Uploading the same filename creates a version; users can search, activate an older version, remove all copies of a filename, or reindex. Upload and provider work run as durable-status operations outside database transactions. Supported file types match the bridge document parser, with a 10 MB input limit. The app reports indexed/total counts without claiming an unavailable embedding backend is healthy.
+The **NPC Bank** page is also session-scoped. It provides searchable supporting-
+character dossiers, aliases, structured visible fields, field history and a
+background **Refresh** operation. Undo is offered only for the latest visible
+revision of each field and sends the reviewed change ID back to the server; a
+concurrent extraction makes that confirmation stale instead of reverting newer
+state. Restricted fields stay hidden unless the active story character is in
+their `known_by` audience.
+
+Data Bank documents are private to the authenticated bot chat. Uploading the same
+filename creates a version; users can search, activate an older version, remove
+all copies of a filename, or reindex. Upload and provider work run as
+durable-status operations outside database transactions. Supported file types
+match the bridge document parser, with a 10 MB input limit. The app reports
+indexed/total counts without claiming an unavailable embedding backend is
+healthy.
 
 ## System and verified updates
 
@@ -65,7 +94,9 @@ Follow the canonical [Installation](installation.md) guide through the generated
 The installer prepares user-local uv/Python, locked runtime packages, a starter
 PNG/avatar, native directories and a user systemd unit. It does not install
 Tailscale, a separate SillyTavern frontend or a Hindsight server. `--system-deps`
-installs only Debian/Ubuntu base prerequisites. Tailscale needs external setup:
+uses the same distro/package-manager detection as the guided installer and
+supports `apt-get`, `dnf`/`yum`, `pacman`, and `zypper` for the bridge's
+base prerequisites. Tailscale needs external setup:
 
 - Follow [official Linux installation](https://tailscale.com/download/linux), then
   use `sudo tailscale up` if the device has not been authenticated.
@@ -143,7 +174,7 @@ Do not use `funnel reset` or `serve reset`; they can disrupt unrelated services.
 
 Use `journalctl --user -u sillytavern-telegram.service -n 80 --no-pager` for operational errors. A 401 means the signed launch expired or is not authorized; reopen from Telegram. A 409 indicates a stale session/revision or missing confirmation; refresh before retrying. A 429 means one of your operations is still pending; inspect System → Operations rather than resubmitting. “Interrupted” means the process restarted, not that side effects were automatically rolled back.
 
-The UI smoke harness is a development-only DOM test. Run `npm ci --prefix tests/miniapp-ui --ignore-scripts`, set `MINIAPP_JSDOM_ROOT=tests/miniapp-ui` and `PYTHON` to the project test interpreter, then run `node --experimental-vm-modules tools/miniapp_ui_smoke.mjs` with Node 24 or newer. CI runs this locked, development-only test harness automatically. It starts a temporary authenticated loopback fixture, renders all ten pages and verifies model/session mutations plus saved optimizer-preview resumption and application, token/empty states, exact large counts and out-of-order navigation. No Node runtime is needed for production. It does not replace testing the deployment on actual Telegram mobile/desktop clients.
+The UI smoke harness is a development-only DOM test. Run `npm ci --prefix tests/miniapp-ui --ignore-scripts`, set `MINIAPP_JSDOM_ROOT=tests/miniapp-ui` and `PYTHON` to the project test interpreter, then run `node --experimental-vm-modules tools/miniapp_ui_smoke.mjs` with Node 24 or newer. CI runs this locked, development-only test harness automatically. It starts a temporary authenticated loopback fixture, renders all 13 pages and verifies model/session mutations plus saved optimizer-preview resumption and application, token/empty states, exact large counts and out-of-order navigation. No Node runtime is needed for production. It does not replace testing the deployment on actual Telegram mobile/desktop clients.
 
 Completed optimizer previews can be reopened from System → Operations without making another model call. Apply still enforces the originating actor/session and card revision; a switched or expired session fails closed. Update notifications preserve the existing bot's forum-topic scope even though the Mini App itself only manages private chats.
 

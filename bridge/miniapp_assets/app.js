@@ -39,13 +39,14 @@ const pageInfo = {
   personas:{label:'Personas',module:'management',hint:'YOUR IDENTITY',description:'Choose who you are in each story.'},
   worlds:{label:'Worlds',module:'management',hint:'LORE & CONTEXT',description:'Give your conversation a setting.'},
   memory:{label:'Memory',module:'memory',hint:'CONTINUITY',description:'Keep the details that matter.'},
+  npcs:{label:'NPC Bank',module:'npcs',hint:'SUPPORTING CAST',description:'Review persistent supporting-character state.'},
   databank:{label:'Data Bank',module:'memory',hint:'REFERENCE LIBRARY',description:'Ground replies in your documents.'},
   advanced:{label:'Advanced settings',module:'manage',hint:'FINE TUNE',description:'Usage and workspace diagnostics.'},
   usage:{label:'Usage',module:'usage',hint:'TOKEN INSIGHTS',description:'Know where your tokens go.'},
 };
 const pages = {};
 const primaryPages = [['dashboard','Home'],['characters','Characters'],['sessions','Sessions'],['manage','Manage'],['system','System']];
-const managedPages = new Set(['manage','models','personas','worlds','memory','databank','advanced','usage']);
+const managedPages = new Set(['manage','models','personas','worlds','memory','npcs','databank','advanced','usage']);
 const loadedModules = new Map();
 async function loadPage(key) {
   const name=pageInfo[key].module;

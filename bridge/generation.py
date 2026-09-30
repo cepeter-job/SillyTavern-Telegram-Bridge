@@ -11,6 +11,7 @@ from bridge.config import GENERATION_DEFAULTS
 from bridge.context_compaction import compact_chat_messages, context_input_budget_tokens
 from bridge.delivery_port import DeliveryPort
 from bridge.generation_settings import get_generation_settings
+from bridge.grounded_user_settings import grounded_user_policy
 from bridge.humanize import render_humanized_response
 from bridge.humanizer_settings import humanizer_enabled
 from bridge.language import normalize_response_language, response_language_instruction, response_language_label
@@ -189,6 +190,9 @@ def build_chat_messages(
     post_history = replace_macros(fields["post_history_instructions"], fields, user_name, app_settings=app_settings)
     if post_history:
         system += f"\n\n## Final instruction\n{post_history}"
+    grounded_policy = grounded_user_policy(session.get("grounded_user"))
+    if grounded_policy:
+        system += "\n\n## Grounded User Policy\n" + grounded_policy
     system += "\n\n## Mandatory response language\n" + language_instruction
     messages = [{"role": "system", "content": system}]
     if not history and fields["first_mes"]:

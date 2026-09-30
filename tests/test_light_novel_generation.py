@@ -422,3 +422,38 @@ def test_reset_during_provider_call_cannot_publish_old_choices(novel_db):
     result = ensure_choices(db, record.nonce, session, {}, provider_port=ProviderPort(generate), app_settings=settings)
     assert result.state == "invalidated"
     assert not result.choices
+
+
+def test_grounded_user_choice_generation_avoids_assumed_success(novel_db):
+    from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
+    from bridge.light_novel_service import attach_turn, ensure_choices, prepare_turn
+    from bridge.model_selection import set_task_model
+
+    db, session, settings = novel_db
+    configure_conversation(db, "chat", "story", "lightnovel", "b")
+    mark_started(db, "chat", "story", conversation_state(db, "chat", "story").epoch)
+    set_task_model(db, "chat", "story", "utility::test")
+    session["grounded_user"] = "on"
+    record = prepare_turn(db, "chat", session, "grounded-turn", "owner", rng=lambda _: 2)
+    story = "The guard blocks the gate."
+    attach_turn(db, record, story_row(db, story), story)
+    calls = []
+
+    def generate(*args, **kwargs):
+        calls.append(args[2])
+        return '{"choices":["Ask the guard to reconsider","Look for another entrance"]}'
+
+    result = ensure_choices(
+        db,
+        record.nonce,
+        session,
+        {"name": "Alice"},
+        provider_port=ProviderPort(generate),
+        app_settings=settings,
+    )
+
+    assert result.generation_status == "ready"
+    prompt = "\n".join(str(message["content"]) for message in calls[0])
+    assert "Offer only plausible actions grounded in the established user persona and situation." in prompt
+    assert "Do not assume an action succeeds" in prompt
+    assert "wins admiration" in prompt

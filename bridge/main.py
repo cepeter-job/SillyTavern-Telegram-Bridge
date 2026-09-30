@@ -81,7 +81,9 @@ from bridge.persona_sync import (
     upsert_native_persona,
 )
 from bridge.provider_catalog import load_routing_catalog
+from bridge.provider_execution_policy import ProviderExecutionPolicy
 from bridge.provider_port import ProviderPort as _ProviderPort
+from bridge.provider_runtime_health import ProviderRuntimeHealth
 from bridge.provider_transport import generate_provider_text
 from bridge.rag_composition import build_rag_service
 from bridge.reference_repository import count_persona_references as _count_persona_references
@@ -164,6 +166,7 @@ def _build_startup_services(
     durable_worker_guard = _DurableWorkerGuard(_sqlite_store._lightweight_db_connect)
     provider = _ProviderPort(
         generate_backend=_partial(generate_provider_text, model_router, app_settings=config),
+        policy=ProviderExecutionPolicy(model_router, ProviderRuntimeHealth()),
         usage_recorder=_partial(
             record_usage, db_factory=_partial(_sqlite_store._lightweight_db_connect, config.db_file, timeout=2.0)
         ),

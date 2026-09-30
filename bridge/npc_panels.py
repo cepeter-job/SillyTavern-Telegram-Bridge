@@ -167,9 +167,7 @@ def send_npc_history(
     for change in reversed(history[-12:]):
         before = "∅" if change.before is None else _render_value(change.before.value)
         after = "∅" if change.after is None else _render_value(change.after.value)
-        lines.append(
-            f"row {change.source_rowid} · {change.field_key}: {before} → {after}"
-        )
+        lines.append(f"row {change.source_rowid} · {change.field_key}: {before} → {after}")
     if not history:
         lines.append("No visible field history.")
     latest_fields: list[str] = []

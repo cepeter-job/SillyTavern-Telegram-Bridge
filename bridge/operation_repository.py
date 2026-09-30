@@ -92,3 +92,14 @@ def delivery_operation_valid(
         (assistant_rowid, payload, payload, str(operation_id), str(operation_id)),
     ).fetchone()
     return bool(row[0]) if row else None
+
+
+def committed_callback_operation(db: sqlite3.Connection, job_id: int | None) -> tuple[str, str, str] | None:
+    """The enqueued scope and committed kind, independent of the current panel/view."""
+    row = db.execute(
+        "SELECT j.chat_id,j.session_id,o.kind FROM jobs j JOIN operations o "
+        "ON o.operation_id=CAST(j.job_id AS TEXT) "
+        "WHERE j.job_id=? AND j.kind='callback' AND o.state='local_committed'",
+        (job_id,),
+    ).fetchone()
+    return (str(row[0]), str(row[1]), str(row[2])) if row else None

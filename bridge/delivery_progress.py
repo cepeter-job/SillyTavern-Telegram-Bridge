@@ -6,6 +6,7 @@ from bridge.delivery_repository import (
     assistant_source,
     begin_progress,
     checkpoint_progress,
+    has_delivery_owner,
     has_progress,
     is_complete,
     matching_progress,
@@ -30,6 +31,10 @@ class DeliveryTargetExpired(DeliveryFailure):
 
 def delivery_complete(db: sqlite3.Connection, rowid: int) -> bool:
     return is_complete(db, rowid)
+
+
+def delivery_has_owner(db: sqlite3.Connection, rowid: int) -> bool:
+    return has_delivery_owner(db, rowid)
 
 
 def prepare_progress(

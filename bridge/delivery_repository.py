@@ -91,3 +91,16 @@ def has_progress(db: sqlite3.Connection, rowid: int) -> bool:
     return (
         db.execute("SELECT 1 FROM assistant_delivery_progress WHERE assistant_rowid=?", (rowid,)).fetchone() is not None
     )
+
+
+def has_delivery_owner(db: sqlite3.Connection, rowid: int) -> bool:
+    """Retain known original ownership even when its target/checkpoint has changed."""
+    return (
+        db.execute(
+            "SELECT 1 FROM job_delivery_intents WHERE assistant_rowid=? "
+            "UNION ALL SELECT 1 FROM meta WHERE key LIKE 'operation_payload:%' "
+            "AND json_valid(value) AND json_extract(value,'$.assistant_rowid')=? LIMIT 1",
+            (rowid, rowid),
+        ).fetchone()
+        is not None
+    )

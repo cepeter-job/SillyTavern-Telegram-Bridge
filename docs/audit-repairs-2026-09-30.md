@@ -36,6 +36,9 @@ commit. That binding survives transcript deletion. Recovery checks it before
 generation, media processing or turn-state changes; a removed reply cannot be
 recreated by automatic recovery or by a fallback from `/retry`. Greeting recovery
 preserves its original expression and TTS behavior, including manual retries.
+Saved greetings retain their original delivery job when their panel expires or
+the active session changes. Creating Light Novel choices leaves pending delivery
+with that original job and does not reset its retry budget.
 
 Bound recovery checks the original input, answer and rendered payload again in
 the short transactions that prepare and acknowledge delivery. A superseded source

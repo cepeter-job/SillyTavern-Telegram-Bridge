@@ -11,7 +11,7 @@ from bridge.card_content import card_fields_from_file
 from bridge.composition import BridgeServices
 from bridge.conversation_jobs import narrative_job_is_current
 from bridge.delivery_progress import DeliveryFailure, delivery_complete
-from bridge.delivery_recovery import handle_delivery_failure, resume_committed_turn
+from bridge.delivery_recovery import handle_delivery_failure, resume_committed_callback, resume_committed_turn
 from bridge.document_jobs import process_document_job
 from bridge.edit_messages import edit_telegram_user_message
 from bridge.failed_turns import clear_failed_turn, record_failed_turn
@@ -282,6 +282,8 @@ def process_callback_job(
             actor_id = jobs.actor_id(db, job_id) if job_id is not None else ""
             if job_id is not None and operation_was_applied(db, job_id):
                 jobs.complete(db, job_id)
+                return
+            if resume_committed_callback(services, db, chat_id, job_id):
                 return
             process_callback(
                 db,

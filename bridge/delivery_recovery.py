@@ -16,6 +16,7 @@ from bridge.delivery_progress import DeliveryIntentAmbiguous, DeliveryTargetExpi
 from bridge.delivery_retry_repository import failed_delivery_target
 from bridge.generation_recovery import _generation_operation_recovery
 from bridge.job_store import finish_job
+from bridge.operation_repository import committed_callback_operation
 from bridge.response_delivery import send_reply
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
@@ -133,3 +134,35 @@ def _cancelled_feedback(exc: BaseException) -> str:
             "Send a fresh request to continue."
         )
     return "The saved reply was deleted or replaced; delivery recovery was cancelled."
+
+
+def resume_committed_callback(
+    services: BridgeServices, db: sqlite3.Connection, chat_id: str, job_id: int | None
+) -> bool:
+    original = committed_callback_operation(db, job_id)
+    if original is None:
+        return False
+    original_chat, session_id, kind = original
+    if original_chat != chat_id:
+        raise DeliveryTargetExpired("Saved callback scope was replaced")
+    recovery = _generation_operation_recovery(services.delivery)
+    target = recovery.target_assistant_row(db, chat_id, session_id, job_id)
+    if target is None:
+        raise DeliveryTargetExpired("Saved callback target was deleted or replaced")
+    rowid, content = target
+    payload = recovery.get_payload(db, job_id).get("delivery_payload", content)
+    send_reply(
+        services.config.bot_token,
+        chat_id,
+        payload,
+        db,
+        None if kind in {"greeting", "start_greeting"} else session_id,
+        rowid,
+        expected_job_id=job_id,
+        app_settings=services.config,
+    )
+    with write_transaction(db):
+        recovery.finish(db, job_id, kind)
+        if job_id is not None:
+            services.jobs.complete(db, job_id)
+    return True

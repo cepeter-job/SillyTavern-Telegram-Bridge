@@ -6,7 +6,7 @@ import logging
 
 from bridge.background import chat_job_lock
 from bridge.card_content import card_fields_from_file
-from bridge.delivery_progress import delivery_complete
+from bridge.delivery_progress import delivery_complete, delivery_has_owner
 from bridge.light_novel_contracts import LightNovelRuntime
 from bridge.light_novel_panels import render_choices
 from bridge.light_novel_repository import load_choice_set
@@ -38,7 +38,14 @@ def process_light_novel_choices_job(
                 "SELECT content,telegram_message_ids FROM messages WHERE rowid=? AND chat_id=? AND session_id=?",
                 (record.assistant_rowid, chat_id, record.session_id),
             ).fetchone()
-            if row and record.assistant_rowid is not None and not delivery_complete(db, record.assistant_rowid):
+            # A durable narrative/opening owner retains its own target validation,
+            # attempt budget and delivery context. Choice work cannot send on its behalf.
+            if (
+                row
+                and record.assistant_rowid is not None
+                and not delivery_complete(db, record.assistant_rowid)
+                and not delivery_has_owner(db, record.assistant_rowid)
+            ):
                 services.delivery.send_reply(
                     services.config.bot_token, chat_id, str(row[0]), db, record.session_id, record.assistant_rowid
                 )

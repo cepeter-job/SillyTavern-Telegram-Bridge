@@ -479,6 +479,10 @@ whose Telegram acknowledgements were recorded; it does not generate another
 answer. If automatic attempts are exhausted, the original actor can use `/retry`
 in the original session. A deleted or replaced answer cannot be recovered.
 
+A saved greeting can resume delivery even after its selection panel expires or
+you switch the active session. Light Novel choices leave pending greeting
+delivery with its original job and retry limit.
+
 Telegram delivery and the local database are separate systems. A crash after
 Telegram accepts a chunk but before its acknowledgement is saved can still
 leave delivery uncertain. Recorded acknowledgements prevent those known chunks

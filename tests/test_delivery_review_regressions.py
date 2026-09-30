@@ -783,3 +783,223 @@ def test_acknowledgment_cas_cannot_complete_a_rebound_target(case, monkeypatch, 
     assert c.db.execute("SELECT * FROM assistant_delivery_progress").fetchall() == preserved[0]
     assert c.db.execute("SELECT state FROM jobs").fetchone() == ("failed",)
     assert "cancelled" in c.notices[-1]
+
+
+def _actual_callback_opening(c, monkeypatch, *, partial=False, lightnovel=False, actor="100"):
+    from functools import partial as bind
+
+    from application_test_setup import make_test_input_flow_service, make_test_sync_service
+
+    from bridge import callback_dispatch, callbacks, conversation_callbacks
+    from bridge.conversation_lifecycle import configure_conversation, conversation_state, lifecycle_key
+    from bridge.panel_bindings import bind_panel_session
+
+    set_meta(c.db, lifecycle_key("started", "chat", "s1"), "0")
+    set_meta(c.db, "active_session:chat", "s1")
+    set_meta(c.db, "voice_mode:chat", "tts")
+    if lightnovel:
+        configure_conversation(c.db, "chat", "s1", "lightnovel", "b")
+    fields = dict(_fields(), first_mes='"opening"' + "A" * 8100)
+    monkeypatch.setattr(conversation_callbacks, "card_fields_from_file", lambda *a, **k: fields)
+    monkeypatch.setattr(callback_dispatch, "send_text", lambda *a: c.notices.append(a[-1]))
+    c.services.delivery = make_test_delivery_port(
+        send_text=lambda *a: c.notices.append(a[-1]),
+        send_reply=bind(response_delivery.send_reply, app_settings=c.config),
+    )
+    c.services.sync = make_test_sync_service()
+    c.services.input_flow = make_test_input_flow_service(app_settings=c.config)
+    bind_panel_session(c.db, "chat", 88, "s1", "100")
+    extras, sends = [], []
+    monkeypatch.setattr(response_delivery, "deliver_expression", lambda *a, **k: extras.append("expression"))
+    monkeypatch.setattr(response_delivery, "submit_background", lambda *a, **k: extras.append("tts") or True)
+
+    def request(_t, method, payload):
+        assert not c.db.in_transaction
+        if method == "sendMessage":
+            if c.offline[0] and (not partial or sends):
+                raise TimeoutError("synthetic opening timeout")
+            sends.append(dict(payload))
+            return {"message_id": 800 + len(sends)}
+        return {}
+
+    monkeypatch.setattr(telegram, "telegram_request", request)
+    monkeypatch.setattr(callbacks, "telegram_request", request)
+    epoch = conversation_state(c.db, "chat", "s1").epoch
+    callback = {
+        "id": "opening-callback",
+        "from": {"id": actor},
+        "message": {"chat": {"id": "chat"}, "message_id": 88},
+        "data": f"greeting:use:0:{epoch}",
+        "_queued": True,
+    }
+    jid = job_store.enqueue_job(c.db, 1, "chat", "s1", 88, "callback", {"actor_id": actor})
+    worker_orchestration.process_callback_job(c.services, "chat", callback, jid)
+    return jid, callback, sends, extras
+
+
+@pytest.mark.parametrize("view_change", ["expired_panel", "active_session"])
+@pytest.mark.parametrize("partial", [False, True])
+@pytest.mark.parametrize("target", ["valid", "deleted", "source_changed", "payload_changed"])
+def test_callback_worker_recovers_original_delivery_before_view_checks(case, monkeypatch, view_change, partial, target):
+    import json
+
+    c = case
+    jid, callback, sends, extras = _actual_callback_opening(c, monkeypatch, partial=partial)
+    assert c.db.execute("SELECT state,attempts FROM jobs WHERE job_id=?", (jid,)).fetchone() == ("queued", 1)
+    assert c.db.execute("SELECT state,kind FROM operations").fetchone() == ("local_committed", "start_greeting")
+    rowid, original_payload, ids, complete = c.db.execute(
+        "SELECT assistant_rowid,payload,message_ids,complete FROM assistant_delivery_progress"
+    ).fetchone()
+    assert complete == 0 and len(json.loads(ids)) == int(partial)
+    snapshot = c.db.execute("SELECT payload_json FROM jobs WHERE job_id=?", (jid,)).fetchone()
+    if view_change == "expired_panel":
+        c.db.execute("UPDATE panel_sessions SET expires_at=0")
+        c.db.commit()
+    else:
+        create_session(c.db, "chat", "model", session_id="other", app_settings=c.config)
+        set_meta(c.db, "active_session:chat", "other")
+    if target == "deleted":
+        c.db.execute("DELETE FROM messages WHERE rowid=?", (rowid,))
+    elif target == "source_changed":
+        c.db.execute("UPDATE messages SET content='replacement' WHERE rowid=?", (rowid,))
+    elif target == "payload_changed":
+        c.db.execute("UPDATE assistant_delivery_progress SET payload='replacement'")
+    c.db.commit()
+    before_sends = list(sends)
+    before_progress = c.db.execute("SELECT * FROM assistant_delivery_progress").fetchall()
+    c.offline[0] = False
+    worker_orchestration.process_callback_job(c.services, "chat", callback, jid)
+    assert c.db.execute("SELECT payload_json FROM jobs WHERE job_id=?", (jid,)).fetchone() == snapshot
+    assert extras == [] and c.effects == []
+    if target == "valid":
+        assert c.db.execute("SELECT state,attempts FROM jobs WHERE job_id=?", (jid,)).fetchone() == ("done", 2)
+        assert c.db.execute("SELECT state,kind FROM operations").fetchone() == ("applied", "start_greeting")
+        assert c.db.execute("SELECT payload,complete FROM assistant_delivery_progress").fetchone() == (
+            original_payload,
+            1,
+        )
+        assert len(sends) == 3
+        assert "".join(item["text"] for item in sends) == original_payload
+        assert c.db.execute("SELECT session_id FROM messages WHERE rowid=?", (rowid,)).fetchone() == ("s1",)
+    else:
+        assert sends == before_sends
+        assert c.db.execute("SELECT * FROM assistant_delivery_progress").fetchall() == before_progress
+        assert c.db.execute("SELECT state FROM operations").fetchone() == ("local_committed",)
+        assert c.db.execute("SELECT state FROM jobs WHERE job_id=?", (jid,)).fetchone() == ("failed",)
+        assert "cancelled" in c.notices[-1]
+
+
+def test_callback_worker_first_attempt_keeps_panel_actor_authorization(case, monkeypatch):
+    c = case
+    c.offline[0] = False
+    jid, _, sends, extras = _actual_callback_opening(c, monkeypatch, actor="intruder")
+    assert sends == extras == []
+    assert c.db.execute("SELECT COUNT(*) FROM messages").fetchone() == (0,)
+    assert "another user" in c.notices[-1]
+    assert c.db.execute("SELECT state FROM jobs WHERE job_id=?", (jid,)).fetchone() == ("done",)
+
+
+@pytest.mark.parametrize("owner", ["queued", "exhausted", "legacy_unowned"])
+@pytest.mark.parametrize("target", ["valid", "deleted", "source_changed", "payload_changed"])
+@pytest.mark.parametrize("partial", [False, True])
+def test_choice_worker_leaves_pending_delivery_to_original_owner(case, monkeypatch, owner, target, partial):
+    from bridge import light_novel_jobs
+
+    c = case
+    jid, callback, sends, extras = _actual_callback_opening(c, monkeypatch, partial=partial, lightnovel=True)
+    if owner == "exhausted":
+        worker_orchestration.process_callback_job(c.services, "chat", callback, jid)
+        worker_orchestration.process_callback_job(c.services, "chat", callback, jid)
+    rowid = c.db.execute("SELECT assistant_rowid FROM assistant_delivery_progress").fetchone()[0]
+    nonce = c.db.execute("SELECT nonce FROM light_novel_choice_sets").fetchone()[0]
+    choice_jid = c.db.execute("SELECT job_id FROM jobs WHERE kind='novel_choices'").fetchone()[0]
+    if owner == "legacy_unowned":
+        c.db.execute("DELETE FROM meta WHERE key=?", (f"operation_payload:{jid}",))
+        c.db.execute("DELETE FROM operations WHERE operation_id=?", (str(jid),))
+    if target == "deleted":
+        c.db.execute("DELETE FROM messages WHERE rowid=?", (rowid,))
+    elif target == "source_changed":
+        c.db.execute("UPDATE messages SET content='replacement' WHERE rowid=?", (rowid,))
+    elif target == "payload_changed":
+        c.db.execute("UPDATE assistant_delivery_progress SET payload='replacement'")
+    c.db.commit()
+    before_job = c.db.execute("SELECT state,attempts FROM jobs WHERE job_id=?", (jid,)).fetchone()
+    before_sends = list(sends)
+    before_progress = c.db.execute("SELECT * FROM assistant_delivery_progress").fetchall()
+    monkeypatch.setattr(light_novel_jobs, "card_fields_from_file", lambda *a, **k: _fields())
+    monkeypatch.setattr(
+        light_novel_jobs, "ensure_choices", lambda db, nonce, *a, **k: light_novel_jobs.load_choice_set(db, nonce)
+    )
+    monkeypatch.setattr(light_novel_jobs, "render_choices", lambda *a, **k: None)
+    c.offline[0] = False
+    light_novel_jobs.process_light_novel_choices_job(c.services, "chat", nonce, job_id=choice_jid)
+    assert c.db.execute("SELECT state,attempts FROM jobs WHERE job_id=?", (jid,)).fetchone() == before_job
+    if owner == "legacy_unowned" and target == "valid":
+        assert len(sends) == 3
+        assert c.db.execute("SELECT complete FROM assistant_delivery_progress").fetchone() == (1,)
+    elif owner == "legacy_unowned" and target == "payload_changed":
+        # Legacy unowned delivery uses its existing explicit checkpoint; no guessed owner identity.
+        assert c.db.execute("SELECT payload,complete FROM assistant_delivery_progress").fetchone() == ("replacement", 1)
+    else:
+        assert sends == before_sends and extras == []
+        assert c.db.execute("SELECT * FROM assistant_delivery_progress").fetchall() == before_progress
+    assert c.db.execute("SELECT state FROM jobs WHERE job_id=?", (choice_jid,)).fetchone() == ("done",)
+
+
+@pytest.mark.parametrize("partial", [False, True])
+def test_callback_view_expiry_preserves_attempt_cap_and_manual_recovery(case, monkeypatch, partial):
+    from bridge.delivery_recovery import retry_failed_delivery
+
+    c = case
+    jid, callback, sends, extras = _actual_callback_opening(c, monkeypatch, partial=partial)
+    c.db.execute("UPDATE panel_sessions SET expires_at=0")
+    c.db.commit()
+    worker_orchestration.process_callback_job(c.services, "chat", callback, jid)
+    worker_orchestration.process_callback_job(c.services, "chat", callback, jid)
+    worker_orchestration.process_callback_job(c.services, "chat", callback, jid)
+    assert c.db.execute("SELECT state,attempts FROM jobs WHERE job_id=?", (jid,)).fetchone() == ("failed", 3)
+    assert c.db.execute("SELECT state FROM operations").fetchone() == ("local_committed",)
+    assert c.db.execute("SELECT complete FROM assistant_delivery_progress").fetchone() == (0,)
+    c.offline[0] = False
+    assert retry_failed_delivery(c.db, "t", "chat", "s1", "100", c.services.delivery, app_settings=c.config)
+    assert c.db.execute("SELECT state,attempts FROM jobs WHERE job_id=?", (jid,)).fetchone() == ("done", 3)
+    assert c.db.execute("SELECT state,kind FROM operations").fetchone() == ("applied", "start_greeting")
+    assert c.db.execute("SELECT complete FROM assistant_delivery_progress").fetchone() == (1,)
+    assert len(sends) == 3 and extras == []
+
+
+@pytest.mark.parametrize("mutation", ["valid", "user", "payload"])
+def test_choice_worker_does_not_bypass_original_narrative_intent(case, monkeypatch, mutation):
+    from bridge import light_novel_jobs
+    from bridge.conversation_lifecycle import configure_conversation, conversation_state, lifecycle_key
+
+    c = case
+    set_meta(c.db, lifecycle_key("started", "chat", "s1"), "0")
+    configure_conversation(c.db, "chat", "s1", "lightnovel", "b")
+    mark_started(c.db, "chat", "s1", conversation_state(c.db, "chat", "s1").epoch)
+    jid = job_store.enqueue_job(c.db, 1, "chat", "s1", 77, "generation", {"actor_id": "100"})
+    invoke(c, "generation", jid)
+    assert c.db.execute("SELECT complete FROM assistant_delivery_progress").fetchone() == (0,)
+    nonce = c.db.execute("SELECT nonce FROM light_novel_choice_sets").fetchone()[0]
+    choice_jid = c.db.execute("SELECT job_id FROM jobs WHERE kind='novel_choices'").fetchone()[0]
+    if mutation == "user":
+        c.db.execute("UPDATE messages SET content='replacement input' WHERE role='user'")
+    elif mutation == "payload":
+        c.db.execute("UPDATE assistant_delivery_progress SET payload='replacement payload'")
+    c.db.commit()
+    before = c.db.execute("SELECT * FROM assistant_delivery_progress").fetchall()
+    effects = list(c.effects)
+    from functools import partial as bind
+
+    c.services.delivery = make_test_delivery_port(send_reply=bind(response_delivery.send_reply, app_settings=c.config))
+    monkeypatch.setattr(light_novel_jobs, "card_fields_from_file", lambda *a, **k: _fields())
+    monkeypatch.setattr(
+        light_novel_jobs, "ensure_choices", lambda db, nonce, *a, **k: light_novel_jobs.load_choice_set(db, nonce)
+    )
+    monkeypatch.setattr(light_novel_jobs, "render_choices", lambda *a, **k: None)
+    c.offline[0] = False
+    light_novel_jobs.process_light_novel_choices_job(c.services, "chat", nonce, job_id=choice_jid)
+    assert c.effects == effects
+    assert c.db.execute("SELECT * FROM assistant_delivery_progress").fetchall() == before
+    assert c.db.execute("SELECT state,attempts FROM jobs WHERE job_id=?", (jid,)).fetchone() == ("queued", 1)
+    assert c.db.execute("SELECT state FROM jobs WHERE job_id=?", (choice_jid,)).fetchone() == ("done",)

@@ -10,7 +10,9 @@ import unittest
 
 import bridge.help_details as _m_help_details
 import bridge.message_commands as _m_message_commands
+from bridge.delivery_repository import clear_progress
 from bridge.schema import initialize_database_schema
+from bridge.sqlite_store import write_transaction
 
 
 class QuotedVoiceTests(SettingsTestCase):
@@ -104,8 +106,9 @@ class QuotedVoiceTests(SettingsTestCase):
             _m_message_commands.send_reply(
                 "token", "chat", '"Hello there."', db, "session", 7, app_settings=self.app_settings_builder.build()
             )
-            db.execute("UPDATE messages SET content=? WHERE rowid=7", ('"Changed reply."',))
-            db.commit()
+            with write_transaction(db):
+                clear_progress(db, 7)
+                db.execute("UPDATE messages SET content=? WHERE rowid=7", ('"Changed reply."',))
             _m_message_commands.send_reply(
                 "token", "chat", '"Changed reply."', db, "session", 7, app_settings=self.app_settings_builder.build()
             )

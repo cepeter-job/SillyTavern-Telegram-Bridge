@@ -90,7 +90,7 @@ def _payload(
 def test_parser_accepts_valid_groups_and_rejects_invalid_identity_and_secret_scope():
     raw = """
     {"npcs":[
-      {"name":"Maya Torres","aliases":["Maya"],"operations":[
+      {"name":"Maya Torres","aliases":["Maya","Alice","User"],"operations":[
         {"field":"role","op":"set","value":"Archivist","mode":"mutable","visibility":"shared","known_by":[]},
         {"field":"secrets","op":"append","value":"Vault code","mode":"mutable"}
       ]},
@@ -105,6 +105,7 @@ def test_parser_accepts_valid_groups_and_rejects_invalid_identity_and_secret_sco
     groups = parse_npc_extraction(raw, primary_name="Alice", user_name="User")
     assert len(groups) == 1
     assert groups[0].name == "Maya Torres"
+    assert groups[0].aliases == ("Maya",)
     assert [op.field_key for op in groups[0].operations] == ["role"]
 
 
@@ -225,6 +226,83 @@ def test_deleted_session_during_generation_prevents_write():
         )
         assert applied == 0
         assert db.execute("SELECT COUNT(*) FROM npc_entities").fetchone()[0] == 0
+    finally:
+        db.close()
+
+
+def test_stale_worker_rejects_reused_rowid_after_branch_rewrite():
+    db = _db()
+    ids = _messages(db, ("old user", "old assistant"))
+    target = ids[-1]
+
+    def generate(*_args, **_kwargs):
+        db.execute("DELETE FROM messages WHERE rowid=?", (target,))
+        replacement = db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+            ("chat", "s1", "assistant", "replacement assistant", time.time()),
+        )
+        db.commit()
+        assert int(replacement.lastrowid) == target
+        return _payload(name="Maya")
+
+    try:
+        applied = refresh_npc_state_now(
+            db,
+            "chat",
+            _session(),
+            _fields(),
+            provider_port=make_test_provider_port(generate_backend=generate),
+            app_settings=SettingsBuilder().build(),
+        )
+        assert applied == 0
+        assert find_npc_exact(db, "chat", "s1", "maya") is None
+        assert get_npc_extraction_coverage(db, "chat", "s1") == 0
+    finally:
+        db.close()
+
+
+def test_existing_state_preserves_restricted_visibility_metadata_in_extractor_prompt():
+    db = _db()
+    _messages(db)
+    prompts = []
+    outputs = [
+        _payload(
+            name="Maya Torres",
+            field="secrets",
+            value="Vault code",
+            mode="mutable",
+            visibility="restricted",
+            known_by=("Maya Torres",),
+        ),
+        '{"npcs":[]}',
+    ]
+
+    def generate(_key, _model, messages, **_kwargs):
+        prompts.append(messages)
+        return outputs.pop(0)
+
+    try:
+        provider = make_test_provider_port(generate_backend=generate)
+        assert refresh_npc_state_now(
+            db,
+            "chat",
+            _session(),
+            _fields(),
+            provider_port=provider,
+            app_settings=SettingsBuilder().build(),
+        ) == 1
+        _messages(db, ("next user", "next assistant"))
+        refresh_npc_state_now(
+            db,
+            "chat",
+            _session(),
+            _fields(),
+            provider_port=provider,
+            app_settings=SettingsBuilder().build(),
+        )
+        second_prompt = prompts[1][1]["content"]
+        assert '"visibility":"restricted"' in second_prompt
+        assert '"known_by":["Maya Torres"]' in second_prompt
     finally:
         db.close()
 

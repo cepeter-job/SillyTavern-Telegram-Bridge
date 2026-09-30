@@ -183,7 +183,8 @@ class NpcService:
         user_name: str,
     ) -> NpcApplyResult:
         canonical = normalize_npc_name(group.name)
-        if not canonical or canonical in {normalize_npc_name(primary_name), normalize_npc_name(user_name)}:
+        blocked_names = {normalize_npc_name(primary_name), normalize_npc_name(user_name)}
+        if not canonical or canonical in blocked_names:
             return NpcApplyResult(0, max(1, len(group.operations)))
 
         validated: list[NpcOperation] = []
@@ -207,7 +208,9 @@ class NpcService:
             aliases = tuple(
                 _clean_text(alias)
                 for alias in group.aliases
-                if _clean_text(alias) and normalize_npc_name(alias) != canonical
+                if _clean_text(alias)
+                and normalize_npc_name(alias) != canonical
+                and normalize_npc_name(alias) not in blocked_names
             )
         else:
             aliases = ()

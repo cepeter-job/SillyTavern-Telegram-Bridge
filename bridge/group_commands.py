@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 
 from bridge.group_service import GroupService
-from bridge.memory import generate_session_summary
+from bridge.memory import generate_session_summary_result
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.telegram import send_text, send_typing
@@ -170,10 +170,17 @@ def handle_summary_command(
     app_settings: AppSettings,
 ) -> None:
     send_typing(token, chat_id)
-    summary = generate_session_summary(
+    result = generate_session_summary_result(
         db, chat_id, session, force=True, provider_port=provider_port, app_settings=app_settings
     )
-    if summary:
-        send_text(token, chat_id, "Session summary updated:\n\n" + summary)
+    if not result.complete:
+        send_text(
+            token,
+            chat_id,
+            "Session summary regeneration is incomplete. The transcript was preserved."
+            + ("\n\nCurrent saved summary:\n" + result.summary if result.summary else " No summary was produced."),
+        )
+    elif result.summary:
+        send_text(token, chat_id, "Session summary updated:\n\n" + result.summary)
     else:
         send_text(token, chat_id, "No chat messages are available to summarize.")

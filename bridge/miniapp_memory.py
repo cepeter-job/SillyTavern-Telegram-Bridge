@@ -14,9 +14,16 @@ from typing import Any
 
 from bridge.card_content import card_fields_from_file
 from bridge.limits import RAG_MAX_FILE_BYTES, RAG_SUPPORTED_SUFFIXES, SUMMARY_MAX_CHARS
-from bridge.memory import generate_session_summary, get_session_summary
-from bridge.memory_backend import _retain_with_client, memory_mode, memory_scope, recall_memory_results
+from bridge.memory import generate_session_summary_result, get_session_summary
+from bridge.memory_backend import (
+    _retain_with_client,
+    hindsight_session_lock,
+    memory_mode,
+    memory_scope,
+    recall_memory_results,
+)
 from bridge.memory_curator import (
+    clear_curated_memory_state,
     curate_memory_now,
     curated_memory_document_id,
     get_curated_memory_state,
@@ -110,10 +117,15 @@ def _curated_items(values: dict) -> list[dict]:
 def save_curated(services: Any, who: MiniAppIdentity, values: dict) -> dict:
     items = _curated_items(values)
     expected = digest(values)
-    with session_scope(services, who, values, write=True) as scope, write_transaction(scope.db):
+    with (
+        session_scope(services, who, values, write=True) as scope,
+        hindsight_session_lock(scope.chat_id, scope.session["session_id"]),
+        write_transaction(scope.db),
+    ):
         previous = get_curated_memory_state(scope.db, scope.chat_id, scope.session["session_id"])
         if _revision(list(previous)) != expected:
             raise MiniAppError("Curated memory changed. Refresh before saving.", status=409)
+        clear_curated_memory_state(scope.db, scope.chat_id, scope.session["session_id"])
         set_meta(
             scope.db,
             memory_curator_key(scope.chat_id, scope.session["session_id"]),
@@ -137,7 +149,7 @@ def _character(services: Any, scope: Any) -> str:
 
 def regenerate_summary(services: Any, who: MiniAppIdentity, values: dict) -> dict:
     with session_scope(services, who, values, write=True) as scope:
-        summary = generate_session_summary(
+        result = generate_session_summary_result(
             scope.db,
             scope.chat_id,
             scope.session,
@@ -145,9 +157,13 @@ def regenerate_summary(services: Any, who: MiniAppIdentity, values: dict) -> dic
             provider_port=services.provider,
             app_settings=services.config,
         )
-        if not summary:
+        if not result.summary:
             raise MiniAppError("No summary was produced. Check the transcript and Utility model.")
-        return {"summary": summary}
+        return {
+            "summary": result.summary,
+            "summary_through": result.covered_until_rowid,
+            "complete": result.complete,
+        }
 
 
 def regenerate_curated(services: Any, who: MiniAppIdentity, values: dict) -> dict:

@@ -42,6 +42,42 @@ def _op(field, value, *, operation="set", mode="mutable", visibility="shared", k
     )
 
 
+@pytest.mark.parametrize("operation,value", [("append", "Bob secret"), ("remove", "Alice secret")])
+def test_npc_append_preserves_restricted_audience(operation, value):
+    db = _db()
+    service = NpcService()
+    try:
+
+        def apply(op, content, names, rowid):
+            return service.apply_group(
+                db,
+                "chat",
+                "s1",
+                _group(operations=[_op("secrets", content, operation=op, visibility="restricted", known_by=names)]),
+                source_rowid=rowid,
+                primary_name="Alice",
+                user_name="User",
+            )
+
+        assert apply("set", ["Alice secret"], ("Alice",), 1).applied == 1
+        npc = find_npc_exact(db, "chat", "s1", "maya torres")
+        before = load_npc_fields(db, npc.npc_id)["secrets"]
+        history = list_npc_field_history(db, npc.npc_id)
+        result = apply(operation, value, ("Bob",), 2)
+        assert result.applied == 0
+        assert result.rejected == 1
+        assert load_npc_fields(db, npc.npc_id)["secrets"] == before
+        assert list_npc_field_history(db, npc.npc_id) == history
+        assert apply("append", "Second Alice secret", (" alice ",), 3).applied == 1
+        assert load_npc_fields(db, npc.npc_id)["secrets"].known_by == ("Alice",)
+        assert apply("set", ["Bob secret"], ("Bob",), 4).applied == 1
+        assert load_npc_fields(db, npc.npc_id)["secrets"].known_by == ("Bob",)
+        assert apply("set", ["Bob secret"], ("Alice",), 5).applied == 1
+        assert load_npc_fields(db, npc.npc_id)["secrets"].known_by == ("Alice",)
+    finally:
+        db.close()
+
+
 def test_fixed_field_is_write_once_and_rejected_overwrite_creates_no_history():
     db = _db()
     service = NpcService()

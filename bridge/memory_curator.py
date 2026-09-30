@@ -23,8 +23,15 @@ from bridge.extension_registry import extension_registry_snapshot as _extension_
 from bridge.extension_registry import register_command_route as _register_command_route
 from bridge.extension_registry import register_post_retain_hook as _register_post_retain_hook
 from bridge.generation_settings import get_generation_settings
-from bridge.memory_backend import _retain_with_client, hindsight_session_prefix, memory_mode
-from bridge.meta_repository import delete_meta_value as _repo_delete_meta_value
+from bridge.memory_backend import (
+    _memory_hindsight_epoch,
+    _memory_hindsight_session_exists,
+    _retain_with_client,
+    hindsight_session_lock,
+    hindsight_session_prefix,
+    memory_mode,
+)
+from bridge.memory_backend import clear_curated_memory_state as clear_curated_memory_state
 from bridge.meta_repository import load_meta_value as _repo_load_meta_value
 from bridge.meta_repository import store_meta_value as _repo_store_meta_value
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
@@ -44,15 +51,6 @@ def memory_curator_key(chat_id: str, session_id: str) -> str:
 
 def curated_memory_document_id(session_id: str) -> str:
     return hindsight_session_prefix(session_id) + "-curated"
-
-
-def clear_curated_memory_state(
-    db: sqlite3.Connection,
-    chat_id: str,
-    session_id: str,
-) -> None:
-    with write_transaction(db):
-        _repo_delete_meta_value(db, memory_curator_key(chat_id, session_id))
 
 
 def _clean_curated_text(value: object, maximum: int) -> str:
@@ -171,11 +169,20 @@ def curate_memory_now(
     app_settings: AppSettings,
 ) -> list[dict[str, object]] | None:
     session_id = str(session["session_id"])
-    rows = _curator_source_rows(db, chat_id, session_id, through_rowid)
+    if db.in_transaction:
+        raise RuntimeError("Memory curation cannot run inside a write transaction")
+    with hindsight_session_lock(chat_id, session_id), write_transaction(db):
+        if not _memory_hindsight_session_exists(db, chat_id, session_id):
+            return None
+        revision_key = f"memory_curator_revision:{chat_id}:{session_id}"
+        revision = _repo_load_meta_value(db, revision_key, "0")
+        epoch = _memory_hindsight_epoch(db, chat_id, session_id)
+        initial_state = _repo_load_meta_value(db, memory_curator_key(chat_id, session_id), "")
+        rows = _curator_source_rows(db, chat_id, session_id, through_rowid)
+        existing, covered = get_curated_memory_state(db, chat_id, session_id)
     if not rows:
         return None
     target_rowid = int(rows[-1][0])
-    existing, covered = get_curated_memory_state(db, chat_id, session_id)
     if target_rowid <= covered:
         return existing
 
@@ -237,35 +244,39 @@ def curate_memory_now(
         "through_rowid": target_rowid,
         "updated_at": time.time(),
     }
-    with write_transaction(db):
-        _current_items, current_covered = get_curated_memory_state(
-            db,
-            chat_id,
-            session_id,
-        )
-        if current_covered > target_rowid:
-            return _current_items
-        _repo_store_meta_value(
-            db,
-            memory_curator_key(chat_id, session_id),
-            json.dumps(payload, ensure_ascii=False, sort_keys=True),
-        )
+    with hindsight_session_lock(chat_id, session_id):
+        with write_transaction(db):
+            current_items, current_covered = get_curated_memory_state(db, chat_id, session_id)
+            if (
+                not _memory_hindsight_session_exists(db, chat_id, session_id)
+                or _repo_load_meta_value(db, revision_key, "0") != revision
+                or _memory_hindsight_epoch(db, chat_id, session_id) != epoch
+                or _repo_load_meta_value(db, memory_curator_key(chat_id, session_id), "") != initial_state
+                or _curator_source_rows(db, chat_id, session_id, through_rowid) != rows
+                or current_covered > target_rowid
+            ):
+                return current_items or None
+            _repo_store_meta_value(
+                db,
+                memory_curator_key(chat_id, session_id),
+                json.dumps(payload, ensure_ascii=False, sort_keys=True),
+            )
 
-    if memory_mode(db, chat_id) == "on":
-        content = "Curated durable memories:\n" + (
-            "\n".join(f"- [{item['kind']}:{item['key']}] {item['text']}" for item in items) if items else "(none)"
-        )
-        _retain_with_client(
-            chat_id,
-            session_id,
-            curated_memory_document_id(session_id),
-            character_name,
-            content,
-            f"Curated durable memory for roleplay session with character {character_name}",
-            "curated",
-            "Hindsight curated-memory retain unavailable for chat %s",
-            app_settings=app_settings,
-        )
+        if memory_mode(db, chat_id) == "on":
+            content = "Curated durable memories:\n" + (
+                "\n".join(f"- [{item['kind']}:{item['key']}] {item['text']}" for item in items) if items else "(none)"
+            )
+            _retain_with_client(
+                chat_id,
+                session_id,
+                curated_memory_document_id(session_id),
+                character_name,
+                content,
+                f"Curated durable memory for roleplay session with character {character_name}",
+                "curated",
+                "Hindsight curated-memory retain unavailable for chat %s",
+                app_settings=app_settings,
+            )
     return items
 
 

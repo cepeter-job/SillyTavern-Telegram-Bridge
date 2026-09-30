@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, cast
 
-from bridge.grounded_user_settings import grounded_director_policy
 from bridge.port_contracts import ProviderGenerate
 
 
@@ -26,6 +25,13 @@ DirectorPolicy = Callable[
     [sqlite3.Connection, str, dict[str, str]],
     DirectorCustomization | None,
 ]
+
+_GROUNDED_DIRECTOR_POLICY = (
+    "Do not select a speaker merely to make the user the center of attention. "
+    "Choose whoever would naturally act or respond from the established scene, motives, relationships, "
+    "and recent events."
+)
+
 
 
 @dataclass(frozen=True)
@@ -160,7 +166,9 @@ class GroupDirectorService:
                     )
 
         policy_block = "\nHidden Director policy:\n" + hidden_instructions if hidden_instructions else ""
-        grounded_policy = grounded_director_policy(session.get("grounded_user"))
+        grounded_policy = (
+            _GROUNDED_DIRECTOR_POLICY if str(session.get("grounded_user") or "").casefold() == "on" else ""
+        )
         director_messages = [
             {
                 "role": "system",

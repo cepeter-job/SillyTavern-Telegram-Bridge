@@ -66,6 +66,7 @@ def is_session_scoped_panel_callback(data: str) -> bool:
             "systemprompt",
             "language",
             "note",
+            "npc:",
             "reset",
             "sync",
             "greeting:",

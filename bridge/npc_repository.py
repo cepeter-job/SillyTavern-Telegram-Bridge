@@ -105,8 +105,6 @@ def insert_npc_entity(
     )
     if cursor.lastrowid is None:
         raise RuntimeError("NPC entity insert did not return a row id")
-    if cursor.lastrowid is None:
-        raise RuntimeError("NPC field history insert did not return a row id")
     return int(cursor.lastrowid)
 
 

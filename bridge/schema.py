@@ -429,8 +429,7 @@ def migrate_npc_bank_core(db: sqlite3.Connection) -> None:
         FOREIGN KEY(chat_id, session_id) REFERENCES sessions(chat_id, session_id) ON DELETE CASCADE
     )""")
     db.execute(
-        "CREATE INDEX IF NOT EXISTS npc_entities_session_seen_idx "
-        "ON npc_entities(chat_id, session_id, last_seen_rowid)"
+        "CREATE INDEX IF NOT EXISTS npc_entities_session_seen_idx ON npc_entities(chat_id, session_id, last_seen_rowid)"
     )
     db.execute("""CREATE TABLE IF NOT EXISTS npc_fields (
         npc_id INTEGER NOT NULL,
@@ -462,8 +461,7 @@ def migrate_npc_bank_core(db: sqlite3.Connection) -> None:
         FOREIGN KEY(npc_id) REFERENCES npc_entities(npc_id) ON DELETE CASCADE
     )""")
     db.execute(
-        "CREATE INDEX IF NOT EXISTS npc_field_history_row_idx "
-        "ON npc_field_history(npc_id, source_rowid, change_id)"
+        "CREATE INDEX IF NOT EXISTS npc_field_history_row_idx ON npc_field_history(npc_id, source_rowid, change_id)"
     )
     db.execute("""CREATE TABLE IF NOT EXISTS npc_extraction_state (
         chat_id TEXT NOT NULL,

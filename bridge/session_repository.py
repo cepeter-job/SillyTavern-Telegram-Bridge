@@ -33,6 +33,8 @@ _SESSION_OWNED_TABLES = (
     "hindsight_documents",
     "episodic_memory_visibility",
     "episodic_memories",
+    "npc_extraction_state",
+    "npc_entities",
     "sessions",
 )
 

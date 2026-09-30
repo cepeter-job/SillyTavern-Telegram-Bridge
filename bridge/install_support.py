@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import getpass
 import hashlib
 import json
 import os
@@ -12,7 +13,7 @@ import struct
 import tempfile
 import time
 import zlib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -265,6 +266,145 @@ def configure_environment(env_path: Path, updates: Mapping[str, str]) -> None:
     env_path.chmod(0o600)
 
 
+
+
+def _prompt_choice(
+    prompt: str,
+    choices: set[str],
+    *,
+    input_fn: Callable[[str], str],
+) -> str:
+    while True:
+        selected = input_fn(prompt).strip()
+        if selected in choices:
+            return selected
+
+
+def interactive_configure(
+    *,
+    home: Path,
+    env_path: Path,
+    input_fn: Callable[[str], str] = input,
+    secret_fn: Callable[[str], str] = getpass.getpass,
+    output_fn: Callable[[str], None] = print,
+) -> bool:
+    """Collect only missing first-run values; return False when configuration is deferred."""
+    home = Path(home).absolute()
+    env_path = Path(env_path).absolute()
+    current: dict[str, str] = {}
+    load_environment_file(env_path, current)
+
+    installations = discover_sillytavern(home=home, environ=current)
+    if installations:
+        if len(installations) == 1:
+            selected = installations[0]
+        else:
+            output_fn("Detected SillyTavern installations:")
+            for index, item in enumerate(installations, start=1):
+                output_fn(f"  {index}) {item['root']}  [data: {item['data_root']}]")
+            choice = _prompt_choice(
+                "Select SillyTavern installation: ",
+                {str(index) for index in range(1, len(installations) + 1)},
+                input_fn=input_fn,
+            )
+            selected = installations[int(choice) - 1]
+        users = [str(value) for value in selected.get("users", [])]
+        if len(users) == 1:
+            user = users[0]
+        elif users:
+            output_fn("Detected SillyTavern users:")
+            for index, name in enumerate(users, start=1):
+                output_fn(f"  {index}) {name}")
+            choice = _prompt_choice(
+                "Select SillyTavern user: ",
+                {str(index) for index in range(1, len(users) + 1)},
+                input_fn=input_fn,
+            )
+            user = users[int(choice) - 1]
+        else:
+            user = "default-user"
+        configure_environment(env_path, sillytavern_environment_updates(selected, user))
+        output_fn(f"SillyTavern: {selected['root']}")
+        output_fn(f"Data root: {selected['data_root']} ({user})")
+    else:
+        output_fn("SillyTavern: no existing installation detected; bridge starter data will be used.")
+
+    current = {}
+    load_environment_file(env_path, current)
+    model = current.get("SILLYTAVERN_MODEL", "").strip()
+    required_complete = bool(
+        current.get("SILLYTAVERN_TELEGRAM_BOT_TOKEN", "").strip()
+        and current.get("SILLYTAVERN_TELEGRAM_ALLOWED_USERS", "").strip()
+        and model
+        and "replace-model" not in model
+    )
+    if required_complete:
+        output_fn("Required Telegram/model values are already configured; existing secrets were preserved.")
+        return True
+
+    output_fn("")
+    output_fn("Required configuration is incomplete:")
+    output_fn("  1) Configure now")
+    output_fn("  2) Configure later")
+    if _prompt_choice("Select: ", {"1", "2"}, input_fn=input_fn) == "2":
+        return False
+
+    bot_token = current.get("SILLYTAVERN_TELEGRAM_BOT_TOKEN", "").strip()
+    while not bot_token:
+        bot_token = secret_fn("Telegram bot token: ").strip()
+    allowed_user = current.get("SILLYTAVERN_TELEGRAM_ALLOWED_USERS", "").strip()
+    while True:
+        if not allowed_user:
+            allowed_user = input_fn("Allowed Telegram user ID(s), comma-separated: ").strip()
+        user_ids = [value.strip() for value in allowed_user.split(",") if value.strip()]
+        if user_ids and all(value.isdigit() for value in user_ids):
+            break
+        output_fn("Telegram user IDs must be numeric.")
+        allowed_user = ""
+
+    model = current.get("SILLYTAVERN_MODEL", "").strip()
+    model_missing = not model or "replace-model" in model
+    provider_config = home / ".local/share/sillytavern-telegram/sillytavern_telegram_providers.yaml"
+    endpoint = current.get("SILLYTAVERN_PROVIDER_ENDPOINT", "").strip()
+    api_key = current.get("LLM_API_KEY", "")
+    if model_missing:
+        output_fn("")
+        output_fn("Provider setup:")
+        output_fn("  1) OpenAI-compatible endpoint")
+        output_fn("  2) Configure provider/model later")
+        if _prompt_choice("Select: ", {"1", "2"}, input_fn=input_fn) == "2":
+            configure_environment(
+                env_path,
+                {
+                    "SILLYTAVERN_TELEGRAM_BOT_TOKEN": bot_token,
+                    "SILLYTAVERN_TELEGRAM_ALLOWED_USERS": ",".join(user_ids),
+                },
+            )
+            return False
+        while True:
+            model = input_fn("Default model (provider::model): ").strip()
+            parts = model.split("::", 1)
+            if len(parts) == 2 and all(part.strip() for part in parts):
+                break
+            output_fn("Use provider::model format.")
+        while not endpoint:
+            endpoint = input_fn("OpenAI-compatible API endpoint: ").strip()
+        while not api_key:
+            api_key = secret_fn("Provider API key: ")
+    elif not endpoint and not provider_config.exists():
+        output_fn("Existing model selection found; provider details were preserved for manual configuration.")
+
+    updates = build_minimal_configuration(
+        bot_token=bot_token,
+        allowed_user=",".join(user_ids),
+        model=model,
+        endpoint=endpoint,
+        api_key=api_key,
+    )
+    configure_environment(env_path, updates)
+    return True
+
+
 def installation_settings(source: Path, home: Path, env_path: Path) -> AppSettings:
     values = {"SILLYTAVERN_ENV_FILE": str(env_path), "SILLYTAVERN_BRIDGE_SOURCE_DIR": str(source)}
     load_environment_file(env_path, values)
@@ -493,7 +633,7 @@ def validate_install(source: Path, home: Path, env_path: Path) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("prepare", "check", "unit-managed"))
+    parser.add_argument("action", choices=("prepare", "check", "unit-managed", "configure"))
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--home", type=Path, default=Path.home())
     parser.add_argument("--env", type=Path, required=True)
@@ -518,6 +658,8 @@ def main() -> int:
                 print("Fill or correct these .env settings: " + ", ".join(missing))
                 return 2
             print("Configuration checks passed.")
+        elif args.action == "configure":
+            return 0 if interactive_configure(home=args.home, env_path=args.env) else 2
         else:
             state = json.loads((args.env.parent / "installer-state.json").read_text())
             return 0 if state["unit_managed"] else 2

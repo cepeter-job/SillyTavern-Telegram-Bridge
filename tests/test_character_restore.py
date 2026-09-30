@@ -103,11 +103,7 @@ def test_character_menu_exposes_restore_action(card_context, monkeypatch):
         request_context=ctx,
     )
 
-    callbacks = {
-        button["callback_data"]
-        for row in delivered[-1][1]["inline_keyboard"]
-        for button in row
-    }
+    callbacks = {button["callback_data"] for row in delivered[-1][1]["inline_keyboard"] for button in row}
     assert "character:restore" in callbacks
 
 

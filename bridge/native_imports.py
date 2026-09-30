@@ -6,7 +6,6 @@ import hashlib
 import json
 import logging
 import os
-import re
 import sqlite3
 import stat
 import tempfile
@@ -16,6 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from bridge.card_content import card_fields, card_fields_from_file, parse_png_chara_bytes
+from bridge.character_backups import character_restore_targets
 from bridge.character_proposals import (
     discard_character_proposal,
     load_character_proposal,
@@ -49,25 +49,6 @@ def verify_character_card_backup(target: Path, raw: bytes, *, app_settings: AppS
             raise OSError("character-card backup checksum verification failed")
         temporary.replace(destination)
     return backup
-
-
-_VERSIONED_CHARACTER_BACKUP = re.compile(r"^.+\.\d{15,}\.png$", re.IGNORECASE)
-
-
-def character_restore_targets(*, app_settings: AppSettings) -> list[str]:
-    backup_dir = app_settings.character_backup_dir
-    if not backup_dir.exists():
-        return []
-    targets = []
-    for path in backup_dir.glob("*.png"):
-        if path.is_symlink() or not path.is_file():
-            continue
-        if _VERSIONED_CHARACTER_BACKUP.match(path.name):
-            continue
-        if path.stat().st_size > RAG_MAX_FILE_BYTES:
-            continue
-        targets.append(path.name)
-    return sorted(set(targets), key=str.casefold)
 
 
 def character_card_digest(filename: str, *, app_settings: AppSettings) -> str:

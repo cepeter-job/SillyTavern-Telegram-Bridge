@@ -96,9 +96,7 @@ def test_npc_menu_lists_session_entities(monkeypatch):
             db,
             _session(),
             npc_service=service,
-            request_context=make_test_request_context(
-                db, "s1", "actor", app_settings=SettingsBuilder().build()
-            ),
+            request_context=make_test_request_context(db, "s1", "actor", app_settings=SettingsBuilder().build()),
         )
 
         text, markup = delivered[-1]
@@ -149,9 +147,7 @@ def test_npc_detail_hides_restricted_fields_from_wrong_active_character(monkeypa
         assert "Maya Torres" in text
         assert "Archivist" in text
         assert "Vault code 7741" not in text
-        callbacks_seen = {
-            button["callback_data"] for row in markup["inline_keyboard"] for button in row
-        }
+        callbacks_seen = {button["callback_data"] for row in markup["inline_keyboard"] for button in row}
         assert f"npc:history:{npc_id}" in callbacks_seen
     finally:
         db.close()

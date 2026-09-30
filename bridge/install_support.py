@@ -12,6 +12,7 @@ import struct
 import tempfile
 import time
 import zlib
+from collections.abc import Mapping
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -77,6 +78,191 @@ def _starter_png() -> bytes:
         + chunk(b"IDAT", zlib.compress(scan))
         + chunk(b"IEND", b"")
     )
+
+
+
+_ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+
+
+def _expand_install_path(value: str, *, home: Path, base: Path | None = None) -> Path:
+    raw = value.strip()
+    if raw == "~":
+        path = home
+    elif raw.startswith("~/"):
+        path = home / raw[2:]
+    else:
+        path = Path(raw)
+        if not path.is_absolute():
+            path = (base or home) / path
+    return path.absolute()
+
+
+def _inspect_sillytavern(root: Path, *, home: Path) -> dict[str, object] | None:
+    root = Path(root).absolute()
+    if not root.is_dir():
+        return None
+    if not all((root / name).is_file() for name in ("server.js", "package.json", "config.yaml")):
+        return None
+    try:
+        config = yaml.safe_load((root / "config.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, UnicodeError, yaml.YAMLError):
+        return None
+    if not isinstance(config, dict):
+        return None
+    data_value = config.get("dataRoot", "./data")
+    if not isinstance(data_value, str) or not data_value.strip():
+        return None
+    data_root = _expand_install_path(data_value, home=home, base=root)
+    if not data_root.is_dir():
+        return None
+    try:
+        users = sorted(
+            child.name
+            for child in data_root.iterdir()
+            if child.is_dir() and (child / "characters").is_dir()
+        )
+    except OSError:
+        return None
+    return {"root": str(root), "data_root": str(data_root), "users": users}
+
+
+def discover_sillytavern(
+    *,
+    home: Path,
+    environ: Mapping[str, str] | None = None,
+) -> list[dict[str, object]]:
+    """Find plausible local SillyTavern installations without an unbounded filesystem scan."""
+    home = Path(home).absolute()
+    source = os.environ if environ is None else environ
+    candidates: list[Path] = []
+    explicit = source.get("SILLYTAVERN_DIR", "").strip()
+    if explicit:
+        candidates.append(_expand_install_path(explicit, home=home))
+    candidates.extend(
+        [
+            home / "SillyTavern",
+            home / "sillytavern",
+            home / ".local/share/SillyTavern",
+            home / "apps/SillyTavern",
+            home / "Applications/SillyTavern",
+        ]
+    )
+    for container_name in ("apps", "Applications", "src", "git", "repos", "projects", "opt"):
+        container = home / container_name
+        if not container.is_dir():
+            continue
+        try:
+            candidates.extend(child for child in container.iterdir() if child.is_dir())
+        except OSError:
+            continue
+
+    found: list[dict[str, object]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = os.path.normcase(str(candidate.absolute()))
+        if key in seen:
+            continue
+        seen.add(key)
+        inspected = _inspect_sillytavern(candidate, home=home)
+        if inspected is not None:
+            found.append(inspected)
+    return found
+
+
+def sillytavern_environment_updates(installation: Mapping[str, object], user: str) -> dict[str, str]:
+    root = Path(str(installation.get("root", ""))).absolute()
+    data_root = Path(str(installation.get("data_root", ""))).absolute()
+    users = installation.get("users", [])
+    known_users = [str(value) for value in users] if isinstance(users, list) else []
+    if not user or "/" in user or "\0" in user:
+        raise ValueError("Invalid SillyTavern user")
+    if known_users and user not in known_users:
+        raise ValueError("Unknown SillyTavern user")
+    native = data_root / user
+    return {
+        "SILLYTAVERN_DIR": str(root),
+        "SILLYTAVERN_CHARACTER_DIR": str(native / "characters"),
+        "SILLYTAVERN_WORLD_DIR": str(native / "worlds"),
+        "SILLYTAVERN_SYSTEM_PROMPTS_DIR": str(native / "sysprompt"),
+        "SILLYTAVERN_NATIVE_SETTINGS_FILE": str(native / "settings.json"),
+        "SILLYTAVERN_NATIVE_AVATAR_DIR": str(native / "User Avatars"),
+    }
+
+
+def build_minimal_configuration(
+    *,
+    bot_token: str,
+    allowed_user: str,
+    model: str,
+    endpoint: str = "",
+    api_key: str = "",
+) -> dict[str, str]:
+    bot_token = bot_token.strip()
+    allowed_user = allowed_user.strip()
+    model = model.strip()
+    endpoint = endpoint.strip()
+    if not bot_token:
+        raise ValueError("Telegram bot token is required")
+    user_ids = [value.strip() for value in allowed_user.split(",") if value.strip()]
+    if not user_ids or any(not value.isdigit() for value in user_ids):
+        raise ValueError("Telegram allowed users must contain numeric IDs")
+    model_parts = model.split("::", 1)
+    if len(model_parts) != 2 or not all(part.strip() for part in model_parts):
+        raise ValueError("Model must use provider::model format")
+    updates = {
+        "SILLYTAVERN_TELEGRAM_BOT_TOKEN": bot_token,
+        "SILLYTAVERN_TELEGRAM_ALLOWED_USERS": ",".join(user_ids),
+        "SILLYTAVERN_MODEL": model,
+    }
+    if endpoint:
+        parsed = urlsplit(endpoint)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError("Provider endpoint must be a credential-free HTTP(S) URL")
+        updates["SILLYTAVERN_PROVIDER_ENDPOINT"] = endpoint
+        updates["SILLYTAVERN_PROVIDER_ALLOWED_HOSTS"] = parsed.hostname
+        if api_key:
+            updates["LLM_API_KEY"] = api_key
+    elif api_key:
+        raise ValueError("Provider API key requires an endpoint")
+    return updates
+
+
+def configure_environment(env_path: Path, updates: Mapping[str, str]) -> None:
+    """Atomically replace selected .env assignments without evaluating shell syntax."""
+    env_path = Path(env_path).absolute()
+    if env_path.is_symlink():
+        raise ValueError("Environment file must not be a symbolic link")
+    if env_path.exists() and not env_path.is_file():
+        raise ValueError("Environment path must be a regular file")
+    normalized: dict[str, str] = {}
+    for key, value in updates.items():
+        if not _ENVIRONMENT_NAME.fullmatch(str(key)):
+            raise ValueError("Invalid environment name")
+        text = str(value)
+        if "\n" in text or "\r" in text or "\0" in text:
+            raise ValueError("Environment values must be single-line text")
+        normalized[str(key)] = text
+
+    original = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+    rendered: list[str] = []
+    replaced: set[str] = set()
+    assignment = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=")
+    for line in original.splitlines():
+        match = assignment.match(line)
+        key = match.group(1) if match else ""
+        if key in normalized:
+            if key in replaced:
+                raise ValueError(f"Duplicate environment assignment for {key}")
+            rendered.append(f"{key}={normalized[key]}")
+            replaced.add(key)
+        else:
+            rendered.append(line)
+    for key, value in normalized.items():
+        if key not in replaced:
+            rendered.append(f"{key}={value}")
+    payload = ("\n".join(rendered).rstrip("\n") + "\n").encode("utf-8")
+    _atomic_file(env_path, payload)
+    env_path.chmod(0o600)
 
 
 def installation_settings(source: Path, home: Path, env_path: Path) -> AppSettings:

@@ -89,6 +89,8 @@ def is_session_scoped_panel_callback(data: str) -> bool:
             "groupmode",
             "enum:settings",
             "enum:humanizer",
+            "enum:memory:",
+            "enum:memoryscope:",
             "setup:",
             "novelmode:",
             "enum:preset",

@@ -19,6 +19,7 @@ from bridge.topic_scope import parse_topic_scope
 IMAGE_PROMPT_MAX_CHARS = 4000
 IMAGE_DEFAULT_SIZE = "1024x1024"
 IMAGE_RESPONSE_FORMAT = "b64_json"
+IMAGE_JSON_MAX_BYTES = 4 * ((IMAGE_MAX_BYTES + 2) // 3) + 65536
 IMAGE_CONTENT_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
 
 
@@ -66,7 +67,7 @@ def _image_endpoint(spec: dict, *, app_settings: AppSettings) -> str:
 
 def _image_headers(spec: dict, *, app_settings: AppSettings) -> dict[str, str]:
     key_env = str(spec.get("api_key_env") or "LLM_API_KEY")
-    key = app_settings.environ.get(key_env, "") or app_settings.environ.get("LLM_API_KEY", "")
+    key = app_settings.environ.get(key_env, "")
     if spec.get("api_key_env") and not key:
         raise ValueError(f"Image provider credential is missing ({key_env})")
     headers = {
@@ -120,7 +121,10 @@ def generate_image(
         endpoint, data=json.dumps(body).encode(), headers=_image_headers(spec, app_settings=app_settings), method="POST"
     )
     with strict_urlopen(request, timeout=180, environ=app_settings.environ) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+        raw_response = response.read(IMAGE_JSON_MAX_BYTES + 1)
+    if len(raw_response) > IMAGE_JSON_MAX_BYTES:
+        raise ValueError("Image provider response exceeds the JSON size limit")
+    payload = json.loads(raw_response.decode("utf-8"))
     raw, revised = _image_bytes_from_response(payload, spec, app_settings=app_settings)
     if not raw or len(raw) > IMAGE_MAX_BYTES:
         raise ValueError("Generated image is empty or exceeds the Telegram image limit")

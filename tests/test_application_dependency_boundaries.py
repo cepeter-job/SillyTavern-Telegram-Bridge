@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from types import SimpleNamespace
 
 from application_test_setup import (
     make_native_test_persona_service,
@@ -323,7 +324,7 @@ def _run_document_import(monkeypatch, document, *, parse_card, add_document=None
 
     from bridge.request_types import RequestContext
 
-    db = object()
+    db = SimpleNamespace(in_transaction=False)
     _owner_native_imports.import_telegram_document(
         db,
         "token",

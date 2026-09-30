@@ -327,6 +327,66 @@ def test_generation_attaches_choices_without_leaking_protocol(novel_db, monkeypa
     assert db.execute("SELECT count(*) FROM jobs WHERE kind='novel_choices'").fetchone()[0] == 1
 
 
+def test_generation_strips_envelope_reintroduced_by_language_renderer(novel_db, monkeypatch):
+    from bridge import message_commands
+
+    db, session, settings = make_started(novel_db, "a")
+    session["_actor_id"] = "owner"
+    session["response_language"] = "en"
+    session["humanizer"] = "off"
+    original_choices = ["Open the door", "Wait outside"]
+    rendered_choices = ["Open it", "Keep waiting"]
+
+    def generate(*_args, **kwargs):
+        if str(kwargs.get("session_id") or "").endswith(":language-render"):
+            return (
+                "Rendered draft that must not leak.\n\n```json\n"
+                + json.dumps({"story": "Canonical rendered scene.", "choices": rendered_choices})
+                + "\n```"
+            )
+        return json.dumps({"story": "Original scene.", "choices": original_choices})
+
+    port = ProviderPort(generate)
+    services = make_test_application_services(app_settings=settings, provider=port)
+    monkeypatch.setattr(
+        message_commands,
+        "prepare_turn",
+        lambda db, chat, sess, key, actor: prepare_turn(db, chat, sess, key, actor, rng=lambda _: 2),
+    )
+    monkeypatch.setattr(message_commands, "build_chat_messages", lambda *a, **k: [{"role": "user", "content": "Go"}])
+    monkeypatch.setattr(message_commands, "send_typing", lambda *a: None)
+    monkeypatch.setattr(message_commands, "queue_user_quote_tts", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "send_reply", lambda *a, **k: None)
+
+    message_commands.generate_and_store_reply(
+        db,
+        "token",
+        "key",
+        {"name": "Alice"},
+        "chat",
+        "Go",
+        session,
+        "story",
+        "story::test",
+        None,
+        "",
+        21,
+        None,
+        group_service=services.group,
+        provider_port=port,
+        memory_service=services.memory,
+        npc_service=services.npc,
+        persona_service=services.persona,
+        app_settings=settings,
+        rag_service=services.rag,
+    )
+
+    stored = db.execute("SELECT content FROM messages WHERE role='assistant'").fetchone()[0]
+    assert stored == "Canonical rendered scene."
+    record = db.execute("SELECT choices_json FROM light_novel_choice_sets").fetchone()
+    assert json.loads(record[0]) == original_choices
+
+
 def test_turn_wrapper_attaches_combined_continuation_and_fences_old_panel(novel_db):
     from bridge.light_novel_turn import begin_novel_turn
 

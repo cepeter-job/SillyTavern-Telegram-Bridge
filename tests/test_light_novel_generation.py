@@ -170,6 +170,47 @@ def test_mode_a_inline_rejection_logs_reason_and_counts_without_content(novel_db
     assert private_choice not in caplog.text
 
 
+def test_mode_a_finalizes_post_render_envelope_without_replacing_original_choices(novel_db):
+    from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
+    from bridge.light_novel_turn import begin_novel_turn
+
+    db, session, _settings = novel_db
+    configure_conversation(db, "chat", "story", "lightnovel", "a")
+    mark_started(db, "chat", "story", conversation_state(db, "chat", "story").epoch)
+    turn = begin_novel_turn(db, "chat", session, "message", 25)
+    assert turn is not None
+    original_choices = [f"Original choice {index}" for index in range(turn.record.requested_count)]
+    assert turn.extract(json.dumps({"story": "Original story.", "choices": original_choices})) == "Original story."
+
+    rendered_choices = [f"Rendered choice {index}" for index in range(turn.record.requested_count)]
+    rendered = (
+        "Rendered draft that must not leak.\n\n```json\n"
+        + json.dumps({"story": "Canonical rendered story.", "choices": rendered_choices})
+        + "\n```"
+    )
+
+    assert turn.finalize(rendered) == "Canonical rendered story."
+    assert turn.choices == original_choices
+
+
+def test_mode_a_finalizer_recovers_choices_missing_from_initial_response(novel_db):
+    from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
+    from bridge.light_novel_turn import begin_novel_turn
+
+    db, session, _settings = novel_db
+    configure_conversation(db, "chat", "story", "lightnovel", "a")
+    mark_started(db, "chat", "story", conversation_state(db, "chat", "story").epoch)
+    turn = begin_novel_turn(db, "chat", session, "message", 26)
+    assert turn is not None
+    assert turn.extract("Original prose without choices.") == "Original prose without choices."
+    assert turn.choices is None
+    recovered_choices = [f"Recovered choice {index}" for index in range(turn.record.requested_count)]
+    rendered = "Rendered story.\n\n```json\n" + json.dumps({"choices": recovered_choices}) + "\n```"
+
+    assert turn.finalize(rendered) == "Rendered story."
+    assert turn.choices == recovered_choices
+
+
 @pytest.mark.parametrize("strategy,expected", [("a", "story::test"), ("b", "utility::test"), ("c", "story::test")])
 def test_choice_only_strategy_routes_correct_model_outside_transaction(novel_db, strategy, expected):
     from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started

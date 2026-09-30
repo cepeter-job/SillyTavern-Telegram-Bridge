@@ -265,8 +265,6 @@ def configure_environment(env_path: Path, updates: Mapping[str, str]) -> None:
     env_path.chmod(0o600)
 
 
-
-
 def _prompt_choice(
     prompt: str,
     choices: set[str],

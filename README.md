@@ -77,6 +77,9 @@ instead.
   Data Bank retrieval, Hindsight memory, and Live Sync.
 - Run forum-topic group scenes, Director goals, structured scene state, and Light
   Novel choice mode.
+- Enable session-scoped Grounded User mode to keep user abilities, success and
+  NPC/world reactions tied to established story facts without removing explicit
+  Persona advantages.
 - Manage Characters, Optimizer proposals, models, sessions, Personas, Worlds,
   memory, Data Bank, status, and verified updates from the optional Mini App.
 - Use a private provider catalog for OpenAI-compatible, native OpenAI Codex OAuth,

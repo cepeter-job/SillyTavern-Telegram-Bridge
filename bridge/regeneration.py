@@ -106,6 +106,7 @@ def regenerate_last(
         return
 
     user_text = rows[last_user_index][2]
+    last_user_rowid = int(rows[last_user_index][0])
     history_rows = [(row[1], row[2]) for row in rows[:last_user_index]]
     rag_bundle = rag_service.bundle(db, chat_id, user_text)
     memory_prompt = memory_service.prompt_context(
@@ -122,6 +123,7 @@ def regenerate_last(
         fields,
         user_text,
         history_rows,
+        through_rowid=last_user_rowid,
     )
     messages = build_chat_messages(
         session,
@@ -152,7 +154,6 @@ def regenerate_last(
         rag_service=rag_service,
         novel_turn=novel_turn,
     )
-    last_user_rowid = int(rows[last_user_index][0])
     old_message_ids = recovery.outgoing_ids_after(
         db,
         chat_id,
@@ -180,6 +181,7 @@ def regenerate_last(
     )
 
     def persist_regeneration():
+        npc_service.rollback_from_row(db, chat_id, session_id, last_user_rowid + 1)
         db.execute(
             "DELETE FROM messages WHERE chat_id=? AND session_id=? AND rowid>?",
             (chat_id, session_id, last_user_rowid),

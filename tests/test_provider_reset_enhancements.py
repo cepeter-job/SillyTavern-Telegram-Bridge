@@ -1,7 +1,7 @@
 import json
 import time
 
-from application_test_setup import make_test_memory_service, make_test_request_context
+from application_test_setup import make_test_memory_service, make_test_npc_service, make_test_request_context
 from settings_test_support import make_test_settings
 
 from bridge import (
@@ -363,7 +363,14 @@ def test_reset_deletes_tracked_user_messages_but_not_other_sessions(tmp_path, mo
             "telegram_request",
             lambda _token, method, payload=None: calls.append((method, payload)) or {},
         )
-        reset_session(db, "token", "chat", session, memory_service=make_test_memory_service())
+        reset_session(
+            db,
+            "token",
+            "chat",
+            session,
+            memory_service=make_test_memory_service(),
+            npc_service=make_test_npc_service(),
+        )
         deleted_ids = [int(payload["message_id"]) for method, payload in calls if method == "deleteMessage"]
         assert 41 in deleted_ids
         assert 99 not in deleted_ids

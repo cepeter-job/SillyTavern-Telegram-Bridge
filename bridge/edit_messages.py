@@ -161,6 +161,7 @@ def regenerate_edited_turn(
         fields,
         new_text,
         history_rows,
+        through_rowid=max(0, int(user_rowid) - 1),
     )
     messages = build_chat_messages(
         session,
@@ -230,6 +231,7 @@ def regenerate_edited_turn(
 
     def persist_edit():
         invalidate_episodic_memories_from_row(db, chat_id, session_id, int(user_rowid))
+        npc_service.rollback_from_row(db, chat_id, session_id, int(user_rowid))
         db.execute(
             "DELETE FROM session_summaries WHERE chat_id=? AND session_id=?",
             (chat_id, session_id),

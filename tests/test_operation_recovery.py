@@ -811,6 +811,7 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
             self.session,
             operation_id=operation_id,
             memory_service=memory,
+            npc_service=make_test_npc_service(),
         )
 
         count = self.db.execute(
@@ -833,6 +834,7 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
             self.session,
             operation_id=operation_id,
             memory_service=memory,
+            npc_service=make_test_npc_service(),
         )
 
         count = self.db.execute(

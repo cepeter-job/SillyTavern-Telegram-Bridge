@@ -19,7 +19,19 @@ from bridge.telegram import send_text, telegram_request
 
 
 def handle_reset_callback(
-    db, token, callback, answer_callback, data, chat_id, message, session, session_id, operation_id, *, memory_service
+    db,
+    token,
+    callback,
+    answer_callback,
+    data,
+    chat_id,
+    message,
+    session,
+    session_id,
+    operation_id,
+    *,
+    memory_service,
+    npc_service,
 ):
     """Handle reset confirmation and cancellation callbacks."""
     if data.startswith("reset:"):
@@ -32,7 +44,15 @@ def handle_reset_callback(
             answer_callback(token, str(callback.get("id", "")), "Unknown reset action")
             return True
         try:
-            reset_session(db, token, chat_id, session, operation_id=operation_id, memory_service=memory_service)
+            reset_session(
+                db,
+                token,
+                chat_id,
+                session,
+                operation_id=operation_id,
+                memory_service=memory_service,
+                npc_service=npc_service,
+            )
         except Exception:
             logging.error("Reset failed for chat %s/session %s", chat_id, session_id, exc_info=True)
             answer_callback(token, str(callback.get("id", "")), "Reset failed; memory and session were preserved")
@@ -60,6 +80,8 @@ def handle_swipe_callback(
     operation_id,
     *,
     delivery_port: DeliveryPort,
+    memory_service,
+    npc_service,
     request_context,
 ):
     """Handle response variant browsing and keep/cancel callbacks."""
@@ -94,10 +116,21 @@ def handle_swipe_callback(
         if action == "keep":
             if user_row:
                 delete_outgoing_messages(db, token, chat_id, session_id, int(user_row[0]))
-            selected = keep_swipe_variant(db, chat_id, session_id, current)
+            selected = keep_swipe_variant(
+                db,
+                chat_id,
+                session_id,
+                current,
+                npc_service=npc_service,
+            )
             if selected is None:
                 answer_callback(token, str(callback.get("id", "")), "Variant not found")
                 return True
+            fields = card_fields_from_file(
+                session["character_file"],
+                app_settings=request_context.app_settings,
+            )
+            memory_service.retain(db, chat_id, session, fields)
             answer_callback(token, str(callback.get("id", "")), "Kept")
             telegram_request(
                 token,

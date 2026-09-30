@@ -899,6 +899,7 @@ class MemoryServiceBoundaryTests(SettingsTestCase):
                     "chat",
                     session,
                     memory_service=FakeMemory(),
+                    npc_service=make_test_npc_service(),
                 )
 
             self.assertEqual(calls, [(db, "chat", "reset-memory")])

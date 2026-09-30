@@ -75,6 +75,7 @@ def reset_session(
     operation_id: int | str | None = None,
     *,
     memory_service: MemoryService,
+    npc_service: NpcService,
 ) -> None:
     if operation_id is not None:
         if operation_was_applied(db, operation_id) or not begin_operation(db, operation_id, "reset"):
@@ -90,6 +91,7 @@ def reset_session(
         if operation_id is not None:
             set_operation_phase(db, operation_id, "reset", "memory_purged")
         db.commit()
+    npc_service.purge_session(db, chat_id, session["session_id"])
     delete_outgoing_messages(db, token, chat_id, session["session_id"])
     delete_incoming_messages(db, token, chat_id, session["session_id"])
     db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))

@@ -76,6 +76,7 @@ def process_callback(
     session_id = session["session_id"]
     request_context = RequestContext(db, session_id, sender, app_settings=services.config)
     memory_service = services.memory
+    npc_service = services.npc
     persona_service = services.persona
     sync_service = services.sync
 
@@ -113,6 +114,7 @@ def process_callback(
         provider_port=services.provider,
         delivery_port=services.delivery,
         memory_service=memory_service,
+        npc_service=npc_service,
         persona_service=persona_service,
         sync_service=sync_service,
         request_context=request_context,

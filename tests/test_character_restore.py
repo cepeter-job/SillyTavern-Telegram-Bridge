@@ -6,8 +6,8 @@ from test_character_mutation_safety import card_context as card_context
 
 import bridge.cards as cards
 import bridge.character_callbacks as character_callbacks
+from bridge.character_backups import character_restore_targets
 from bridge.native_imports import (
-    character_restore_targets,
     restore_character_card_backup,
     verify_character_card_backup,
 )

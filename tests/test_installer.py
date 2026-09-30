@@ -183,7 +183,7 @@ def _bootstrap_installer_fixture(tmp_path):
     executable(
         "ssh-keygen",
         'if [ "${1:-}" = -lf ]; then '
-        'cat >/dev/null; '
+        "cat >/dev/null; "
         'echo "256 SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI cepeter-release-signing (ED25519)"; '
         "fi\nexit 0\n",
     )

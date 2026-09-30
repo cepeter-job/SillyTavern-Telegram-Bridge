@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest
@@ -13,7 +12,12 @@ from bridge.install_support import (
 )
 
 
-def _make_sillytavern(root: Path, *, data_root: Path | None = None, users: tuple[str, ...] = ("default-user",)) -> Path:
+def _make_sillytavern(
+    root: Path,
+    *,
+    data_root: Path | None = None,
+    users: tuple[str, ...] = ("default-user",),
+) -> Path:
     root.mkdir(parents=True)
     (root / "server.js").write_text("// fixture\n", encoding="utf-8")
     (root / "package.json").write_text('{"name":"sillytavern","scripts":{"start":"node server.js"}}\n', encoding="utf-8")

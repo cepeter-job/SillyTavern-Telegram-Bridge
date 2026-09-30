@@ -17,6 +17,10 @@
   limits.
 - **💾 Persistence before acknowledgment.** Updates are saved before the bot
   acknowledges Telegram, and update IDs are deduplicated.
+- **📨 Saved-output delivery recovery.** Once a reply/greeting is committed,
+  recovery stays bound to its original actor, session, job and rendered payload.
+  Acknowledged Telegram chunks are checkpointed, and retry does not make another
+  model call when the saved output is still valid.
 - **📋 FIFO ordering per chat and topic.** Failed turns are stored before
   offset advancement so `/retry` can replay them.
 - **🧹 Panels clean up after themselves.** Keyboards close and bindings are
@@ -181,7 +185,23 @@ ZIP onto an old source tree.
 
 ### Database migrations, backup and restore
 
-The operational SQLite database uses an ordered transactional migration ledger (`schema_migrations`). New releases append forward migrations; unknown or inconsistent migration history fails closed instead of being rewritten silently.
+The operational SQLite database uses an ordered transactional migration ledger
+(`schema_migrations`). New releases append forward migrations; unknown or
+inconsistent migration history fails closed instead of being rewritten silently.
+
+The current schema contains migrations **1–9**. In addition to the earlier
+conversation, token-usage, episodic-memory and NPC Bank migrations, the current
+delivery/recovery boundary adds:
+
+- **7 — `message_identity`**: non-reusable explicit message identity while
+  preserving existing row IDs and indexes.
+- **8 — `assistant_delivery_progress`**: committed rendered payload,
+  acknowledged Telegram chunk IDs and completion state.
+- **9 — `job_delivery_intents`**: immutable job-bound delivery intent used to
+  reject stale or mismatched recovery.
+
+These are forward migrations. Restoring a binary that predates them requires the
+matching pre-upgrade database snapshot rather than deleting migration rows.
 
 Verified self-update takes an online SQLite snapshot **after** the signed release has been verified and compiled but **before** the source checkout or live mirror is changed. Snapshots use SQLite's online backup API, are integrity-checked, stored mode 0600 under `$SILLYTAVERN_BRIDGE_HOME/backups/database`, and retain the newest ten matching snapshots.
 

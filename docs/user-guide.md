@@ -48,9 +48,9 @@ provider — all from the same panel. `/providers` starts with a block-quoted
 snapshot of the active session's Story and Utility models and their reasoning
 budgets. Both Story and Utility reasoning are configured from `/providers` and
 remain independent per session. Story reasoning applies to Story-model replies;
-Utility reasoning applies to Utility-model tasks such as summaries, curated
-memory, scene state, Light Novel strategy B choices, and character
-ranking/optimization.
+Utility reasoning applies to Utility-model tasks such as summaries, curated and
+episodic memory, NPC-state extraction, scene state, Light Novel strategy B
+choices, and character ranking/optimization.
 
 Beyond basic generation, the bridge handles:
 
@@ -70,15 +70,25 @@ and local paths are never shown in those user-facing errors.
 
 ### 🧠 Memory and retrieval
 
-Hindsight gives each session its own memory. Recall is locked to the active
-session — the bridge never pulls in broad user or character memory during
-generation. You can also store explicit facts with `/remember` or rebuild
-summaries with `/summarize`.
+Memory is layered and session-scoped. Hindsight provides external recall for the
+active session only; `/remember` stores an explicit fact there. A rolling
+continuity summary answers “what is happening now”, while curated memory keeps a
+small editable set of durable facts.
+
+The bridge also keeps local episodic memories extracted from completed summary
+segments. These records preserve durable events, facts, goals, relationship/world
+changes and secrets with source-row tracking, importance filtering and
+deduplication. Restricted records carry explicit `known_by` character names and
+fail closed when that boundary is missing.
+
+The NPC Bank separately maintains structured supporting-character state and field
+history. Its prompt context is selected from the current query/history/scene and
+respects restricted `known_by` fields for the active story character.
 
 The Data Bank adds local full-text search and optional embeddings for PDF,
 DOCX, TXT, Markdown, JSON, YAML, CSV, HTML, and XML files. Everything is
-bounded — file sizes, page counts, extraction limits — so a large upload
-can't run away with resources.
+bounded — file sizes, page counts, extraction limits and prompt context — so a
+large upload can't run away with resources.
 
 ### 🎨 Media and groups
 
@@ -88,7 +98,7 @@ transcription. Automatic TTS can speak quoted dialogue from both your messages
 and character replies. Expression sprites can be sent automatically.
 
 And Telegram Forum Topics can host multi-character group sessions with
-round-robin, contextual, manual, or autonomous turn modes.
+round-robin, contextual, Director, manual, or autonomous turn modes.
 
 ---
 
@@ -144,9 +154,10 @@ prevents accidental changes.
 | `/voice` | Open automatic quote-driven TTS controls |
 | `/voice_input` | Configure transcription, STT model, and language |
 | `/imagine` | Generate an image through an enabled image provider |
-| `/memory` | Open active-session Hindsight memory controls |
+| `/memory` | Open active-session Hindsight/curated-memory controls |
 | `/remember` | Store one explicit long-term fact |
 | `/summarize` | Confirm active-session summary regeneration |
+| `/npc` | Open the active session's persistent NPC Bank |
 | `/databank` | Open Data Bank RAG controls |
 | `/sync` | Open Live API Sync controls |
 | `/group` | Open Forum Topic group controls |
@@ -238,7 +249,8 @@ Response language
 Persona and World Info
 Author's Note and System Prompt
 Response variants and branch state
-Summary and failed-turn state
+Continuity summary, curated/episodic memory and NPC Bank state
+Failed-turn and durable delivery-recovery state
 Forum Topic group state, when applicable
 ```
 
@@ -250,7 +262,8 @@ Forum Topic group state, when applicable
 2. On confirm, purges Hindsight documents for that session only.
 3. Best-effort deletes the current session's tracked Telegram user inputs,
    assistant replies, and Light Novel choice/selection messages.
-4. Clears the local conversation, variants, failed turns, summary, and data.
+4. Clears the local conversation, variants, failed turns, continuity summary,
+   curated-memory state, episodic memories, and NPC Bank state.
 5. The session stays available, now empty.
 6. Preserves Character, Normal/Light Novel mode, A/B/C strategy, Persona, World
    and System Prompt, but invalidates old choices and returns the standard session
@@ -334,7 +347,10 @@ uses that context differently:
 Every strategy asks the model to propose actions for the **user**, not actions
 for the assistant Character. The dedicated B/C choice prompt additionally treats
 the supplied snapshot as story data that cannot override the bounded output
-contract.
+contract. When Grounded User is enabled, the main narrative uses its normal
+grounding policy and separate choice generation avoids actions that presume
+success, unearned authority, automatic admiration, bypassed obstacles, or
+unestablished abilities.
 
 Each new story turn requests a uniformly random **2, 3 or 4** distinct actions.
 The count is reserved before generation; retries/restarts do not reroll it, and
@@ -369,11 +385,36 @@ Light Novel mode currently applies only to standard sessions; group orchestratio
 
 All automatic Hindsight recall and `/memory search` are scoped to the active
 `session:<session_id>` tag. `/remember` stores one fact at a time through a
-scoped prompt. `/summarize` rebuilds the active session's summary from its
+scoped prompt. `/memory curated` shows the small durable-fact list and
+`/memory curated refresh` rebuilds it with the configured Utility model.
+`/summarize` rebuilds the active session's rolling continuity summary from the
 stored transcript.
 
-Memory and retrieved documents are treated as untrusted context — bounded and
-sanitized before they reach the model.
+Episodic memory is local SQLite state, separate from Hindsight and the rolling
+summary. Successful summary segments can yield up to a bounded set of durable
+events; low-importance, malformed or duplicate candidates are ignored. Relevant
+records are recalled by query, and restricted records are shown only when the
+active story character appears in their explicit `known_by` list.
+
+When an edit rewrites history, derived episodic memories from the rewritten
+range are invalidated and NPC state is read/rolled back to the applicable story
+revision before regeneration. Reset and session deletion purge their session's
+derived memory state. Memory, NPC state and retrieved documents enter generation
+as bounded untrusted context, never as executable instructions.
+
+### NPC Bank
+
+`/npc` opens the active session's persistent supporting-character catalog.
+Each dossier can hold fixed descriptive fields such as appearance, voice,
+background and canon, plus mutable role/location/agenda/relationship/mood,
+secrets and status. Refresh runs the bounded Utility-model extractor without
+replacing the transcript.
+
+Dossiers expose only fields visible to the active character. Visible field
+history can be reviewed, and only the latest visible revision of a field offers
+Undo. The confirmation is bound to the exact change revision you reviewed; if a
+background refresh changes that field first, the stale undo is refused instead
+of reverting newer state.
 
 ---
 
@@ -389,16 +430,20 @@ Native Persona description
 Active World Info entries
 Selected System Prompt
 Session Author's Note
-Conversation history and summary
+Conversation history and continuity summary
 Active-session Hindsight recall
+Relevant episodic memories
+Relevant NPC Bank state
 Data Bank references
+Grounded User policy, when enabled
 Response-language instruction
 Provider-specific generation settings
 ```
 
 Your original user text is stored as entered. Single-star action formatting
 is added only to its prompt representation. Assistant replies are stored after
-any selected response-language rendering and optional Humanizer pass.
+any selected response-language rendering, optional Humanizer pass, and final
+Telegram-safe output normalization.
 
 ### Streaming and long responses
 
@@ -718,6 +763,7 @@ session, pick characters and World Info, and choose a turn mode:
 |---|---|
 | **Round-robin** | Characters speak in a set order |
 | **Contextual** | The bridge picks the next speaker based on context |
+| **Director** | A hidden bounded model call chooses a known next speaker plus a short scene direction; failures fall back safely |
 | **Manual** | An owner claims or passes the turn; ownership is verified server-side |
 | **Autonomous** | Characters continue on their own within configured bounds |
 

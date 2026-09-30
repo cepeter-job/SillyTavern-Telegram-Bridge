@@ -4,6 +4,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.2.048] - 2026-09-30
+
 ### Added
 
 - Add the session-scoped persistent NPC Bank with structured durable fields, reversible field history, Utility-model background extraction, knowledge boundaries, and branch-safe edit/regeneration rollback.
@@ -14,6 +16,11 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 ### Fixed
 
 - Rerank character cards after Mini App optimizer proposals are applied, matching the Telegram flow, and hide empty rank overlays when no valid tier is available.
+
+### Compatibility
+
+- Runtime and development dependency files are unchanged from v0.2.047.
+- Schema migration 6 adds NPC Bank tables. Back up the operational database before upgrading; restoring an older bridge binary requires the matching pre-upgrade database backup.
 
 ## [0.2.047] - 2026-09-30
 

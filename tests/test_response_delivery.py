@@ -1,18 +1,40 @@
+import json
+import sqlite3
 import unittest
 from unittest.mock import patch
 
 from settings_test_support import SettingsTestCase
 
 import bridge.response_delivery as response_delivery
+from bridge.schema import initialize_database_schema
 
 
 class ResponseDeliveryTests(SettingsTestCase):
+    def setUp(self):
+        self.db = sqlite3.connect(":memory:")
+        initialize_database_schema(self.db)
+        self.db.execute(
+            "INSERT INTO messages(rowid,chat_id,session_id,role,content,created_at) "
+            "VALUES(42,'chat','s','assistant','stored',1)"
+        )
+        self.db.commit()
+
+    def tearDown(self):
+        self.db.close()
+
+    def _send(self, _token, _chat, text, *, acknowledged_chunk=None):
+        self.sent.append(text)
+        if acknowledged_chunk:
+            acknowledged_chunk(72)
+        return [72]
+
     def test_send_reply_sanitizes_stored_html_at_delivery_boundary(self):
         sent = []
+        self.sent = sent
         with patch.object(
             response_delivery,
             "send_text",
-            side_effect=lambda _token, _chat, text: sent.append(text) or [72],
+            side_effect=self._send,
         ):
             response_delivery.send_reply(
                 "token",
@@ -26,7 +48,7 @@ class ResponseDeliveryTests(SettingsTestCase):
     def test_send_reply_reuses_streaming_preview_as_final_message(self):
         requests = []
         sent = []
-        persisted = []
+        self.sent = sent
 
         def edit_existing(_token, method, payload):
             requests.append((method, payload))
@@ -41,19 +63,14 @@ class ResponseDeliveryTests(SettingsTestCase):
             patch.object(
                 response_delivery,
                 "send_text",
-                side_effect=lambda _token, _chat, text: sent.append(text) or [72],
-            ),
-            patch.object(
-                response_delivery,
-                "persist_assistant_delivery_ids",
-                side_effect=lambda _db, rowid, ids: persisted.append((rowid, ids)) or True,
+                side_effect=self._send,
             ),
         ):
             response_delivery.send_reply(
                 "token",
                 "chat",
                 "Final response",
-                object(),
+                self.db,
                 None,
                 42,
                 replace_message_id=71,
@@ -75,11 +92,13 @@ class ResponseDeliveryTests(SettingsTestCase):
             ],
         )
         self.assertEqual(sent, [])
-        self.assertEqual(persisted, [(42, [71])])
+        self.assertEqual(
+            json.loads(self.db.execute("SELECT telegram_message_ids FROM messages WHERE rowid=42").fetchone()[0]), [71]
+        )
 
     def test_send_reply_falls_back_when_streaming_preview_is_gone(self):
         sent = []
-        persisted = []
+        self.sent = sent
         with (
             patch.object(
                 response_delivery,
@@ -89,19 +108,14 @@ class ResponseDeliveryTests(SettingsTestCase):
             patch.object(
                 response_delivery,
                 "send_text",
-                side_effect=lambda _token, _chat, text: sent.append(text) or [72],
-            ),
-            patch.object(
-                response_delivery,
-                "persist_assistant_delivery_ids",
-                side_effect=lambda _db, rowid, ids: persisted.append((rowid, ids)) or True,
+                side_effect=self._send,
             ),
         ):
             response_delivery.send_reply(
                 "token",
                 "chat",
                 "Final response",
-                object(),
+                self.db,
                 None,
                 42,
                 replace_message_id=71,
@@ -109,12 +123,14 @@ class ResponseDeliveryTests(SettingsTestCase):
             )
 
         self.assertEqual(sent, ["Final response"])
-        self.assertEqual(persisted, [(42, [72])])
+        self.assertEqual(
+            json.loads(self.db.execute("SELECT telegram_message_ids FROM messages WHERE rowid=42").fetchone()[0]), [72]
+        )
 
     def test_send_reply_reuses_preview_then_sends_only_remaining_chunks(self):
         requests = []
         sent = []
-        persisted = []
+        self.sent = sent
         reply = "A" * 4100
 
         with (
@@ -126,19 +142,14 @@ class ResponseDeliveryTests(SettingsTestCase):
             patch.object(
                 response_delivery,
                 "send_text",
-                side_effect=lambda _token, _chat, text: sent.append(text) or [72],
-            ),
-            patch.object(
-                response_delivery,
-                "persist_assistant_delivery_ids",
-                side_effect=lambda _db, rowid, ids: persisted.append((rowid, ids)) or True,
+                side_effect=self._send,
             ),
         ):
             response_delivery.send_reply(
                 "token",
                 "chat",
                 reply,
-                object(),
+                self.db,
                 None,
                 42,
                 replace_message_id=71,
@@ -147,7 +158,10 @@ class ResponseDeliveryTests(SettingsTestCase):
 
         self.assertEqual(len(requests[0][1]["text"]), 4000)
         self.assertEqual(sent, ["A" * 100])
-        self.assertEqual(persisted, [(42, [71, 72])])
+        self.assertEqual(
+            json.loads(self.db.execute("SELECT telegram_message_ids FROM messages WHERE rowid=42").fetchone()[0]),
+            [71, 72],
+        )
 
 
 if __name__ == "__main__":

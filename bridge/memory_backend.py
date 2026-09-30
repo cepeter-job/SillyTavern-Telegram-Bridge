@@ -21,6 +21,7 @@ from bridge.limits import (
     HINDSIGHT_RECALL_MAX_TOKENS,
     HINDSIGHT_RETAIN_MAX_MESSAGES,
 )
+from bridge.meta_repository import delete_meta_value, load_meta_value, store_meta_value
 from bridge.metadata import get_meta
 from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect, write_transaction
@@ -380,6 +381,18 @@ def _memory_hindsight_epoch(
         )
     except (TypeError, ValueError):
         return 0
+
+
+def clear_curated_memory_state(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
+    """Invalidate in-flight curator work and remove local derived state.
+
+    Lifecycle callers joining a transaction must already own the Hindsight lock.
+    """
+    with hindsight_session_lock(chat_id, session_id), write_transaction(db):
+        revision_key = f"memory_curator_revision:{chat_id}:{session_id}"
+        revision = int(load_meta_value(db, revision_key, "0") or 0)
+        store_meta_value(db, revision_key, str(revision + 1))
+        delete_meta_value(db, f"memory_curator:{chat_id}:{session_id}")
 
 
 def _memory_hindsight_session_exists(

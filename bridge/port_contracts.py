@@ -47,6 +47,8 @@ class SendReply(Protocol):
         db: sqlite3.Connection | None = None,
         session_id: str | None = None,
         assistant_rowid: int | None = None,
+        *,
+        expected_job_id: int | str | None = None,
     ) -> None: ...
 
 

@@ -65,19 +65,22 @@ python -m pytest -q -n 2 --dist=loadfile --cov \
 git diff --check
 ```
 
-The configured 68% combined statement/branch coverage floor covers all `bridge/`
+The configured 76% combined statement/branch coverage floor covers all `bridge/`
 modules and subprocess workers. It is a measured regression guard, not exhaustive
 security coverage. Do not remove production files from coverage or lower the
 floor to hide regressions. Inspect worker-thread failures and test warnings.
 CI uploads JSON/XML coverage reports for 14 days.
 
 Before merging, require `test`, `dependency-audit`, `static-analysis`,
-`Analyze (actions)`, `Analyze (python)`, and the CodeQL result for the exact reviewed
-head commit. The repository uses GitHub CodeQL Default Setup for Python and GitHub
-Actions; no checked-in CodeQL workflow is required. Do not add a second local
-CodeQL workflow. A passing analysis job alone does not prove that
-its security-result check passed. Do not force a merge if a head changes during
-review or checks.
+`secret-scan`, `Analyze (actions)`, `Analyze (python)`,
+`Analyze (javascript-typescript)`, and the separate `CodeQL` security-result
+check for the exact reviewed head commit. The repository uses GitHub CodeQL
+Default Setup for Python, JavaScript/TypeScript and GitHub Actions; no checked-in
+CodeQL workflow is required. Do not add a second local CodeQL workflow. A passing
+analysis job alone does not prove that its security-result check passed. Keep
+required check names aligned with the checks that report on pull requests and
+preserve strict up-to-date branch protection. Do not force a merge if a head
+changes during review or checks.
 
 ## Dependency maintenance
 

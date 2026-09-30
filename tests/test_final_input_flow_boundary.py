@@ -136,16 +136,16 @@ def test_callback_dispatch_forwards_exact_input_flow_service(monkeypatch, *, app
     monkeypatch.setattr(
         dispatch,
         "panel_session_for_message",
-        lambda *_args, **_kwargs: None,
+        lambda *_args, **_kwargs: "session",
     )
     monkeypatch.setattr(
         dispatch,
         "panel_owner_for_message",
-        lambda *_args, **_kwargs: "",
+        lambda *_args, **_kwargs: "user",
     )
     monkeypatch.setattr(
         SessionService,
-        "ensure",
+        "load",
         lambda *_args, app_settings=None, **_kwargs: {
             "session_id": "session",
             "character_file": "mira.png",

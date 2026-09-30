@@ -17,7 +17,7 @@ from bridge.grounded_user_settings import (
     session_grounded_user,
 )
 from bridge.humanizer_settings import humanizer_key, normalize_humanizer, session_humanizer
-from bridge.memory_backend import hindsight_session_lock
+from bridge.memory_backend import clear_curated_memory_state, hindsight_session_lock
 from bridge.memory_service import MemoryService
 from bridge.meta_repository import store_meta_value
 from bridge.metadata import get_meta
@@ -223,6 +223,7 @@ def delete_session_data(
         with write_transaction(db):
             if not claim_operation(db, operation_id, "session_delete", time.time()):
                 return False, "already processed"
+            clear_curated_memory_state(db, chat_id, target_session_id)
             delete_session_rows(
                 db,
                 chat_id,

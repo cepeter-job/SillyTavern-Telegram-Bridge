@@ -17,6 +17,7 @@ def test_transcript_uses_injected_service_and_preserves_request_identity(monkeyp
 
     services = SimpleNamespace(
         config=make_test_settings(),
+        group=SimpleNamespace(user_turn_allowed=lambda *a: True),
         conversation=ConversationRecorder(),
         session=make_test_session_service(app_settings=make_test_settings()),
     )
@@ -37,11 +38,12 @@ def test_transcript_uses_injected_service_and_preserves_request_identity(monkeyp
         42,
         queued_session_id="queued-session",
         actor_id="actor",
+        operation_id=99,
         services=services,
     )
     assert delivered == [
         (
             (db, "token", "key", "model", fields, "chat", "spoken message", 42),
-            {"queued_session_id": "queued-session", "actor_id": "actor"},
+            {"queued_session_id": "queued-session", "actor_id": "actor", "operation_id": 99},
         )
     ]

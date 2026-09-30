@@ -91,7 +91,11 @@ def handle_world_callback(
             )
             return True
         if value == "upload":
-            pending = {"session_id": session_id, "expires_at": time.time() + PENDING_SETTINGS_TTL_SECONDS}
+            pending = {
+                "session_id": request_context.session_id,
+                "actor_id": request_context.actor_id,
+                "expires_at": time.time() + PENDING_SETTINGS_TTL_SECONDS,
+            }
             set_meta(db, f"world_upload:{chat_id}", json.dumps(pending))
             answer_callback(token, str(callback.get("id", "")), "Send JSON document")
             discard_panel_binding(db, chat_id, message_id)

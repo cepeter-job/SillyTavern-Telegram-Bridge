@@ -30,7 +30,7 @@ patch = ["subprocess"]
 [tool.coverage.report]
 precision = 2
 show_missing = true
-# Measured statement+branch baseline 68.70%; whole-number floor (tools/coverage_baseline.json).
+# Whole-number statement+branch floor from tools/coverage_baseline.json (76.30% baseline).
 fail_under = 76
 
 [tool.pytest.ini_options]

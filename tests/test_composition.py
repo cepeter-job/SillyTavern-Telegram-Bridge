@@ -936,7 +936,7 @@ class RecoveryCompositionTests(SettingsTestCase):
             {"name": "Mira"},
             active,
         )
-        self.assertIsNone(active_submission.args[-2])
+        self.assertEqual(active_submission.args[-2], "stored-session")
 
     def test_recovered_job_resolver_maps_all_worker_kinds(self):
         fields = {"name": "Mira"}

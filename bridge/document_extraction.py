@@ -18,6 +18,25 @@ from bridge.settings import AppSettings
 from bridge.subprocess_security import minimal_subprocess_environment
 
 
+def _strip_markup(text: str) -> str:
+    """Replace nonempty angle-bracket tags without rescanning unmatched suffixes."""
+    pieces = []
+    cursor = 0
+    while cursor < len(text):
+        start = text.find("<", cursor)
+        if start < 0:
+            pieces.append(text[cursor:])
+            break
+        pieces.append(text[cursor:start])
+        end = text.find(">", start + 1)
+        if end < 0:
+            pieces.append(text[start:])
+            break
+        pieces.append("<>" if end == start + 1 else " ")
+        cursor = end + 1
+    return "".join(pieces)
+
+
 def extract_pdf_data_bank_text(raw: bytes, *, app_settings: AppSettings) -> str:
     parser = Path(__file__).with_name("pdf_parser.py")
     try:
@@ -77,7 +96,7 @@ def extract_data_bank_text(filename: str, raw: bytes, *, app_settings: AppSettin
     else:
         text = raw.decode("utf-8", errors="replace")
         if suffix in {".html", ".htm", ".xml"}:
-            text = re.sub(r"<[^>]+>", " ", text)
+            text = _strip_markup(text)
             text = html.unescape(text)
     text = re.sub(r"\r\n?", "\n", text)
     text = re.sub(r"[ \t]+", " ", text)

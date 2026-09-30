@@ -133,6 +133,7 @@ class WorldManagementTests(SettingsTestCase):
             _owner_world_callbacks.discard_panel_binding = original_discard
         state = json.loads(_m_session_naming.get_meta(self.db, "world_upload:chat"))
         self.assertEqual(state["session_id"], self.session["session_id"])
+        self.assertEqual(state["actor_id"], "test-user")
         self.assertGreater(state["expires_at"], time.time())
         self.assertTrue(answers)
         self.assertTrue(sent)

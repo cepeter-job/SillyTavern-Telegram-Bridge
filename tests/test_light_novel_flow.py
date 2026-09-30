@@ -6,6 +6,7 @@ import pytest
 from application_test_setup import make_test_application_services
 from test_light_novel_storage import novel_db as novel_db
 
+import bridge.response_delivery as greeting_delivery
 from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started, reset_conversation
 from bridge.light_novel_repository import load_choice_set
 from bridge.light_novel_service import attach_turn, prepare_turn
@@ -247,7 +248,9 @@ def test_opening_light_novel_commit_creates_first_choice_job(novel_db, monkeypat
 
     db, _session, settings = novel_db
     configure_conversation(db, "chat", "story", "lightnovel", "a")
-    monkeypatch.setattr(greetings, "send_text", lambda *a: [71])
+    monkeypatch.setattr(
+        greeting_delivery, "send_text", lambda *a, acknowledged_chunk=None: acknowledged_chunk(71) or [71]
+    )
     assert greetings.send_character_greeting(
         db,
         "token",

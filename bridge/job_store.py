@@ -14,6 +14,7 @@ from bridge.job_repository import (
     queued_job_rows,
     replace_job_payload,
     reset_running_jobs,
+    retry_delivery_row,
     schedule_job,
     start_job,
 )
@@ -81,3 +82,9 @@ def recover_jobs(db: sqlite3.Connection, recover_running: bool = True) -> list[t
     with write_transaction(db):
         reset_running_jobs(db, time.time())
         return queued_job_rows(db)
+
+
+def retry_delivery_job(db: sqlite3.Connection, job_id: int, error: object, limit: int = 3) -> bool:
+    """Bound retries of already committed replies; generation failures never use this path."""
+    with write_transaction(db):
+        return retry_delivery_row(db, job_id, str(error)[:1000], time.time(), limit)

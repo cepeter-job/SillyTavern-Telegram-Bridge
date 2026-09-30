@@ -19,6 +19,7 @@ from bridge.conversation_lifecycle import (
     require_started,
     reset_conversation,
 )
+from bridge.delivery_progress import bind_committed_turn
 from bridge.edit_messages import edit_last_user
 from bridge.episodic_memory import purge_episodic_memories
 from bridge.failed_turns import clear_failed_turn
@@ -32,6 +33,7 @@ from bridge.language import normalize_response_language
 from bridge.light_novel_service import prepare_turn
 from bridge.light_novel_turn import NovelTurn
 from bridge.memory import clear_session_summary
+from bridge.memory_backend import hindsight_session_lock
 from bridge.memory_curator import clear_curated_memory_state
 from bridge.memory_service import MemoryService
 from bridge.metadata import get_meta, set_meta
@@ -77,53 +79,54 @@ def reset_session(
     memory_service: MemoryService,
     npc_service: NpcService,
 ) -> None:
-    if operation_id is not None:
-        if operation_was_applied(db, operation_id) or not begin_operation(db, operation_id, "reset"):
+    with hindsight_session_lock(chat_id, session["session_id"]):
+        if operation_id is not None:
+            if operation_was_applied(db, operation_id) or not begin_operation(db, operation_id, "reset"):
+                return
+        phase = operation_phase(db, operation_id) if operation_id is not None else ""
+        if phase == "local_committed":
+            if operation_id is not None:
+                record_operation(db, operation_id, "reset")
+                db.commit()
             return
-    phase = operation_phase(db, operation_id) if operation_id is not None else ""
-    if phase == "local_committed":
+        if phase != "memory_purged":
+            memory_service.purge_session(db, chat_id, session["session_id"])
+            if operation_id is not None:
+                set_operation_phase(db, operation_id, "reset", "memory_purged")
+            db.commit()
+        npc_service.purge_session(db, chat_id, session["session_id"])
+        delete_outgoing_messages(db, token, chat_id, session["session_id"])
+        delete_incoming_messages(db, token, chat_id, session["session_id"])
+        db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
+        db.execute("DELETE FROM response_variants WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
+        db.execute("DELETE FROM failed_turns WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
+        clear_session_summary(db, chat_id, session["session_id"])
+        purge_episodic_memories(db, chat_id, session["session_id"])
+        clear_curated_memory_state(db, chat_id, session["session_id"])
+        db.execute(
+            "DELETE FROM meta WHERE key IN (?, ?)",
+            (
+                swipe_state_key(chat_id, session["session_id"]),
+                f"swipe_message:{chat_id}:{session['session_id']}",
+            ),
+        )
+        old_choice_panels = reset_conversation(db, chat_id, session["session_id"])
+        if operation_id is not None:
+            set_operation_phase(db, operation_id, "reset", "local_committed")
+        db.commit()
+        for panel_id in old_choice_panels:
+            try:
+                telegram_request(
+                    token,
+                    "deleteMessage",
+                    {"chat_id": chat_id, "message_id": panel_id},
+                )
+            except Exception:
+                logging.info("Could not delete reset choice panel")
         if operation_id is not None:
             record_operation(db, operation_id, "reset")
             db.commit()
-        return
-    if phase != "memory_purged":
-        memory_service.purge_session(db, chat_id, session["session_id"])
-        if operation_id is not None:
-            set_operation_phase(db, operation_id, "reset", "memory_purged")
-        db.commit()
-    npc_service.purge_session(db, chat_id, session["session_id"])
-    delete_outgoing_messages(db, token, chat_id, session["session_id"])
-    delete_incoming_messages(db, token, chat_id, session["session_id"])
-    db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
-    db.execute("DELETE FROM response_variants WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
-    db.execute("DELETE FROM failed_turns WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
-    clear_session_summary(db, chat_id, session["session_id"])
-    purge_episodic_memories(db, chat_id, session["session_id"])
-    clear_curated_memory_state(db, chat_id, session["session_id"])
-    db.execute(
-        "DELETE FROM meta WHERE key IN (?, ?)",
-        (
-            swipe_state_key(chat_id, session["session_id"]),
-            f"swipe_message:{chat_id}:{session['session_id']}",
-        ),
-    )
-    old_choice_panels = reset_conversation(db, chat_id, session["session_id"])
-    if operation_id is not None:
-        set_operation_phase(db, operation_id, "reset", "local_committed")
-    db.commit()
-    for panel_id in old_choice_panels:
-        try:
-            telegram_request(
-                token,
-                "deleteMessage",
-                {"chat_id": chat_id, "message_id": panel_id},
-            )
-        except Exception:
-            logging.info("Could not delete reset choice panel")
-    if operation_id is not None:
-        record_operation(db, operation_id, "reset")
-        db.commit()
-    optimize_database(db)
+        optimize_database(db)
 
 
 def send_pending_input_message(
@@ -298,7 +301,7 @@ def generate_and_store_reply(
     def persist_turn():
         with write_transaction(db):
             now = time.time()
-            db.execute(
+            user_cursor = db.execute(
                 (
                     "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_id"
                     ",created_at) VALUES(?,?,?,?,?,?)"
@@ -317,6 +320,7 @@ def generate_and_store_reply(
                 (chat_id, session_id, "assistant", stored_reply, now + 0.001),
             )
             assistant_rowid = assistant_cursor.lastrowid
+            bind_committed_turn(db, operation_id, int(user_cursor.lastrowid), int(assistant_rowid), stored_reply)
             if novel_turn:
                 novel_turn.commit(db, int(assistant_rowid), stored_reply)
             save_response_variant(db, chat_id, session_id, text, stored_reply)
@@ -343,6 +347,7 @@ def generate_and_store_reply(
         session_id,
         assistant_rowid,
         replace_message_id=stream_message_id,
+        expected_job_id=operation_id,
         app_settings=app_settings,
     )
 

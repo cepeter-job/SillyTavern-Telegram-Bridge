@@ -19,6 +19,7 @@ import bridge.callbacks as _m_callbacks
 import bridge.greetings as _m_greetings
 import bridge.main as _m_main
 import bridge.memory_curator as _m_memory_curator
+import bridge.response_delivery as greeting_delivery
 
 
 class AlternateGreetingTests(SettingsTestCase):
@@ -49,9 +50,11 @@ class AlternateGreetingTests(SettingsTestCase):
 
     def test_first_greeting_can_choose_a_random_alternate(self):
         sent = []
-        original_send = _m_greetings.send_text
+        original_send = greeting_delivery.send_text
         original_randrange = _m_greetings.random.randrange
-        _m_greetings.send_text = lambda _token, _chat_id, text: sent.append(text) or [88]
+        greeting_delivery.send_text = lambda _token, _chat_id, text, acknowledged_chunk=None: (
+            sent.append(text) or acknowledged_chunk(88) or [88]
+        )
         _m_greetings.random.randrange = lambda _length: 1
         try:
             fields = {"name": "Character", "first_mes": "Primary", "alternate_greetings": json.dumps(["Alt {{user}}"])}
@@ -68,7 +71,7 @@ class AlternateGreetingTests(SettingsTestCase):
                 )
             )
         finally:
-            _m_greetings.send_text = original_send
+            greeting_delivery.send_text = original_send
             _m_greetings.random.randrange = original_randrange
         self.assertEqual(sent, ["Alt User"])
         row = self.db.execute("SELECT role, content FROM messages").fetchone()
@@ -150,10 +153,12 @@ class AlternateGreetingTests(SettingsTestCase):
         sent = []
         answers = []
         original_fields = _owner_conversation_callbacks.card_fields_from_file
-        original_send = _m_greetings.send_text
+        original_send = greeting_delivery.send_text
         original_close = _owner_conversation_callbacks.close_panel_message
         _owner_conversation_callbacks.card_fields_from_file = lambda _filename, *, app_settings=None: fields
-        _m_greetings.send_text = lambda _token, _chat_id, text: sent.append(text) or [99]
+        greeting_delivery.send_text = lambda _token, _chat_id, text, acknowledged_chunk=None: (
+            sent.append(text) or acknowledged_chunk(99) or [99]
+        )
         _owner_conversation_callbacks.close_panel_message = lambda *_args, **_kwargs: None
         callback = {
             "id": "cb",
@@ -180,7 +185,7 @@ class AlternateGreetingTests(SettingsTestCase):
             )
         finally:
             _owner_conversation_callbacks.card_fields_from_file = original_fields
-            _m_greetings.send_text = original_send
+            greeting_delivery.send_text = original_send
             _owner_conversation_callbacks.close_panel_message = original_close
         self.assertTrue(handled)
         self.assertEqual(sent, ["Alt"])

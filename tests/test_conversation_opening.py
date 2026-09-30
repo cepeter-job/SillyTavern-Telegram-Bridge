@@ -5,6 +5,7 @@ import pytest
 from application_test_setup import make_test_application_services
 from test_light_novel_storage import novel_db as novel_db
 
+import bridge.response_delivery as greeting_delivery
 from bridge import command_routes, greetings, update_message_routing
 from bridge.conversation_lifecycle import conversation_state, reset_conversation
 from bridge.request_types import RequestContext
@@ -76,7 +77,9 @@ def test_start_opens_only_chooser_without_readiness_call(novel_db, monkeypatch):
 
 def test_greeting_commit_marks_started_and_blocks_second_start(novel_db, monkeypatch):
     db, session, settings = novel_db
-    monkeypatch.setattr(greetings, "send_text", lambda *a: [71])
+    monkeypatch.setattr(
+        greeting_delivery, "send_text", lambda *a, acknowledged_chunk=None: acknowledged_chunk(71) or [71]
+    )
     assert greetings.send_character_greeting(
         db,
         "token",
@@ -112,7 +115,7 @@ def test_greeting_choice_carries_reset_epoch(novel_db, monkeypatch):
     buttons = [b for row in sent[-1]["reply_markup"]["inline_keyboard"] for b in row]
     assert next(b["callback_data"] for b in buttons if "Start with" in b["text"]) == "greeting:use:0:0"
     reset_conversation(db, "chat", "story")
-    monkeypatch.setattr(greetings, "send_text", lambda *a: pytest.fail("stale greeting sent"))
+    monkeypatch.setattr(greeting_delivery, "send_text", lambda *a, **k: pytest.fail("stale greeting sent"))
     assert not greetings.send_character_greeting(
         db,
         "token",
@@ -127,7 +130,7 @@ def test_greeting_choice_carries_reset_epoch(novel_db, monkeypatch):
 
 def test_failed_greeting_delivery_reuses_committed_row(novel_db, monkeypatch):
     db, _session, settings = novel_db
-    monkeypatch.setattr(greetings, "send_text", lambda *a: (_ for _ in ()).throw(RuntimeError("network")))
+    monkeypatch.setattr(greeting_delivery, "send_text", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("network")))
     with pytest.raises(RuntimeError):
         greetings.send_character_greeting(
             db,
@@ -141,7 +144,11 @@ def test_failed_greeting_delivery_reuses_committed_row(novel_db, monkeypatch):
         )
     assert conversation_state(db, "chat", "story").started
     sent = []
-    monkeypatch.setattr(greetings, "send_text", lambda *a: sent.append(a[2]) or [73])
+    monkeypatch.setattr(
+        greeting_delivery,
+        "send_text",
+        lambda *a, acknowledged_chunk=None: sent.append(a[2]) or acknowledged_chunk(73) or [73],
+    )
     assert greetings.send_character_greeting(
         db,
         "token",

@@ -4,6 +4,7 @@ import logging
 import sqlite3
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from functools import partial as _partial
 
 from bridge.background import submit_background
@@ -47,7 +48,7 @@ from bridge.metadata import set_meta
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
-from bridge.sqlite_store import db_connect
+from bridge.sqlite_store import db_connect, write_transaction
 
 
 def _make_hindsight_stale_guard(*, app_settings: AppSettings):
@@ -181,6 +182,13 @@ def transcript_for_summary(rows: list[tuple[int, str, str, float]]) -> str:
     )
 
 
+@dataclass(frozen=True)
+class SessionSummaryResult:
+    summary: str
+    covered_until_rowid: int
+    complete: bool
+
+
 def generate_session_summary(
     db: sqlite3.Connection,
     chat_id: str,
@@ -190,46 +198,38 @@ def generate_session_summary(
     provider_port: ProviderPort,
     app_settings: AppSettings,
 ) -> str:
+    return generate_session_summary_result(
+        db, chat_id, session, force=force, provider_port=provider_port, app_settings=app_settings
+    ).summary
+
+
+def generate_session_summary_result(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session: dict[str, str],
+    force: bool = False,
+    *,
+    provider_port: ProviderPort,
+    app_settings: AppSettings,
+) -> SessionSummaryResult:
     rows = db.execute(
         "SELECT rowid,role,content,created_at FROM messages WHERE chat_id=? AND session_id=? ORDER BY created_at,rowid",
         (chat_id, session["session_id"]),
     ).fetchall()
     if not rows:
-        return ""
+        return SessionSummaryResult("", 0, True)
     existing, covered_until = get_session_summary(db, chat_id, session["session_id"])
     stable_rows = rows if force else rows[:-SUMMARY_RECENT_MESSAGES]
     if not stable_rows:
-        return existing
+        return SessionSummaryResult(existing, covered_until, True)
+    if db.in_transaction:
+        raise RuntimeError("Summary generation cannot run inside a write transaction")
     target_rowid = int(stable_rows[-1][0])
     if not force and existing and target_rowid <= covered_until:
-        return existing
-    new_rows: list[tuple[int, str, str, float]] = []
-    if force:
-        source = transcript_for_summary(rows)
-        prompt_prefix = "Create a fresh summary from the complete transcript below."
-    else:
-        new_rows = [row for row in stable_rows if int(row[0]) > covered_until]
-        if not new_rows or (existing and len(new_rows) < SUMMARY_UPDATE_INTERVAL):
-            return existing
-        source = (
-            (("Previous summary:\n" + existing + "\n\n") if existing else "")
-            + "New transcript segment:\n"
-            + transcript_for_summary(new_rows)
-        )
-        prompt_prefix = "Update the previous summary using the new transcript segment."
-    summary_messages = [
-        {
-            "role": "system",
-            "content": (
-                "You compress a fictional roleplay chat for future continuity. Preserve "
-                "current location, characters, relationships, established facts, goals, "
-                "unresolved hooks, tone, and the latest scene state. Do not invent facts, "
-                "do not give advice, and do not include meta commentary. Output only a "
-                "concise continuity summary."
-            ),
-        },
-        {"role": "user", "content": f"{prompt_prefix}\n\n{source[:50000]}"},
-    ]
+        return SessionSummaryResult(existing, covered_until, True)
+    pending = stable_rows if force else [row for row in stable_rows if int(row[0]) > covered_until]
+    if not pending or (not force and existing and len(pending) < SUMMARY_UPDATE_INTERVAL):
+        return SessionSummaryResult(existing, covered_until, False)
     settings = get_generation_settings(db, chat_id, session["session_id"])
     settings.update(
         {
@@ -238,52 +238,93 @@ def generate_session_summary(
             "reasoning_budget": utility_reasoning_for_session(db, chat_id, session["session_id"]),
         }
     )
-    try:
-        summary_model = task_model_for_session(db, chat_id, session, "summary", app_settings=app_settings)
-        summary = (
-            provider_port.for_usage(chat_id, session["session_id"], "summary")
-            .generate(
-                "",
-                summary_model,
-                summary_messages,
-                session_id=f"summary:{chat_id}:{session['session_id']}",
-                settings=settings,
+    summary = existing
+    completed_covered = covered_until
+    previous = "" if force else existing
+    while pending:
+        header = (("Previous summary:\n" + previous + "\n\n") if previous else "") + "New transcript segment:\n"
+        segment = []
+        rendered = []
+        length = len(header)
+        for row in pending:
+            text = transcript_for_summary([row])
+            needed = len(text) + bool(rendered)
+            if length + needed > 50000:
+                break
+            segment.append(row)
+            rendered.append(text)
+            length += needed
+        if not segment:
+            logging.warning(
+                "Summary source row %s exceeds input budget for %s/%s", pending[0][0], chat_id, session["session_id"]
             )
-            .strip()[:SUMMARY_MAX_CHARS]
+            return SessionSummaryResult(summary, completed_covered, False)
+        source = header + "\n".join(rendered)
+        prompt_prefix = (
+            "Create a fresh summary from the transcript segment below."
+            if force and not previous
+            else "Update the previous summary using the new transcript segment."
         )
-    except Exception:
-        logging.warning("Session summary generation failed for %s/%s", chat_id, session["session_id"], exc_info=True)
-        return existing
-    if not summary:
-        return existing
-    db.execute(
-        (
-            "INSERT OR REPLACE INTO session_summaries(chat_id,session_id,summary,cove"
-            "red_until_rowid,updated_at) VALUES(?,?,?,?,?)"
-        ),
-        (chat_id, session["session_id"], summary, target_rowid, time.time()),
-    )
-    db.commit()
-    if not force and new_rows:
+        summary_messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You compress a fictional roleplay chat for future continuity. Preserve "
+                    "current location, characters, relationships, established facts, goals, "
+                    "unresolved hooks, tone, and the latest scene state. Do not invent facts, "
+                    "do not give advice, and do not include meta commentary. Output only a "
+                    "concise continuity summary."
+                ),
+            },
+            {"role": "user", "content": f"{prompt_prefix}\n\n{source}"},
+        ]
         try:
-            extract_episodic_memories(
-                db,
-                chat_id,
-                session,
-                source_text=transcript_for_summary(new_rows),
-                source_start_rowid=int(new_rows[0][0]),
-                source_end_rowid=target_rowid,
-                provider_port=provider_port,
-                app_settings=app_settings,
+            summary_model = task_model_for_session(db, chat_id, session, "summary", app_settings=app_settings)
+            produced = (
+                provider_port.for_usage(chat_id, session["session_id"], "summary")
+                .generate(
+                    "",
+                    summary_model,
+                    summary_messages,
+                    session_id=f"summary:{chat_id}:{session['session_id']}",
+                    settings=settings,
+                )
+                .strip()[:SUMMARY_MAX_CHARS]
             )
         except Exception:
             logging.warning(
-                "Episodic memory extraction failed for %s/%s",
-                chat_id,
-                session["session_id"],
-                exc_info=True,
+                "Session summary generation failed for %s/%s", chat_id, session["session_id"], exc_info=True
             )
-    return summary
+            return SessionSummaryResult(summary, completed_covered, False)
+        if not produced:
+            return SessionSummaryResult(summary, completed_covered, False)
+        completed_rowid = int(segment[-1][0])
+        with write_transaction(db):
+            db.execute(
+                "INSERT OR REPLACE INTO session_summaries"
+                "(chat_id,session_id,summary,covered_until_rowid,updated_at) VALUES(?,?,?,?,?)",
+                (chat_id, session["session_id"], produced, completed_rowid, time.time()),
+            )
+        summary = previous = produced
+        completed_covered = completed_rowid
+        if not force:
+            try:
+                extract_episodic_memories(
+                    db,
+                    chat_id,
+                    session,
+                    source_text="\n".join(rendered),
+                    source_start_rowid=int(segment[0][0]),
+                    source_end_rowid=completed_rowid,
+                    provider_port=provider_port,
+                    app_settings=app_settings,
+                )
+            except Exception:
+                logging.warning(
+                    "Episodic memory extraction failed for %s/%s", chat_id, session["session_id"], exc_info=True
+                )
+        pending = pending[len(segment) :]
+    return SessionSummaryResult(summary, completed_covered, True)
 
 
 def session_summary_for_prompt(

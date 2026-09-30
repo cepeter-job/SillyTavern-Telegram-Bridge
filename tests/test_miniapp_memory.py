@@ -1,4 +1,5 @@
 import base64
+import threading
 
 import pytest
 from miniapp_test_support import identity, make_services
@@ -50,6 +51,121 @@ def test_curated_memory_editor_has_explicit_bounds_and_no_foreign_leak(tmp_path)
         save_curated(s, w, {**p, "items": [item] * 25, "digest": current["curated_digest"]})
     save_curated(s, w, {**p, "items": [], "digest": current["curated_digest"]})
     assert memory_status(s, w, {})["curated"] == []
+
+
+def test_manual_curated_save_invalidates_inflight_extraction(tmp_path, monkeypatch):
+    from application_test_setup import make_test_provider_port
+
+    from bridge import memory_curator
+    from bridge.miniapp_memory import memory_status, save_curated
+
+    s, w, p = setup(tmp_path)
+    db = s.db_factory()
+    db.execute(
+        "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+        (w.chat_id, p["session_id"], "user", "Obsolete source", 1.0),
+    )
+    db.commit()
+    db.close()
+    started = threading.Event()
+    release = threading.Event()
+    errors = []
+    retained = []
+
+    def generate(*_args, **_kwargs):
+        started.set()
+        assert release.wait(5)
+        return '{"memories":[{"key":"obsolete","text":"Obsolete","kind":"fact"}]}'
+
+    def worker():
+        db = s.db_factory()
+        try:
+            session = memory_status(s, w, {})["session"]
+            memory_curator.curate_memory_now(
+                db,
+                "",
+                w.chat_id,
+                session,
+                "Alice",
+                provider_port=make_test_provider_port(generate_backend=generate),
+                app_settings=s.config,
+            )
+        except BaseException as error:
+            errors.append(error)
+        finally:
+            db.close()
+
+    monkeypatch.setattr(memory_curator, "_retain_with_client", lambda *a, **k: retained.append(a))
+    before = memory_status(s, w, {})
+    thread = threading.Thread(target=worker)
+    thread.start()
+    try:
+        assert started.wait(5)
+        item = {"key": "reviewed", "text": "Reviewed", "kind": "fact", "confidence": 1.0}
+        save_curated(s, w, {**p, "items": [item], "digest": before["curated_digest"]})
+    finally:
+        release.set()
+        thread.join(5)
+    assert not thread.is_alive()
+    assert errors == []
+    assert memory_status(s, w, {})["curated"] == [item]
+    assert retained == []
+
+
+def test_summary_regeneration_reports_partial_completion(tmp_path):
+    from application_test_setup import make_test_provider_port
+
+    from bridge.miniapp_memory import memory_status, regenerate_summary
+
+    s, w, p = setup(tmp_path)
+    db = s.db_factory()
+    for row in range(40):
+        db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+            (w.chat_id, p["session_id"], "user", "x" * 2000, float(row)),
+        )
+    db.commit()
+    db.close()
+    calls = []
+
+    def generate(*_args, **_kwargs):
+        calls.append(True)
+        if len(calls) == 2:
+            raise RuntimeError("synthetic second segment failure")
+        return "Processed prefix"
+
+    s.provider = make_test_provider_port(generate_backend=generate)
+    result = regenerate_summary(s, w, p)
+    assert result["complete"] is False
+    assert 0 < result["summary_through"] < 40
+    assert result["summary_through"] == memory_status(s, w, {})["summary_through"]
+
+
+def test_summary_regeneration_failure_does_not_claim_old_full_summary_was_refreshed(tmp_path):
+    from application_test_setup import make_test_provider_port
+
+    from bridge.miniapp_memory import regenerate_summary
+
+    s, w, p = setup(tmp_path)
+    db = s.db_factory()
+    rowid = db.execute(
+        "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+        (w.chat_id, p["session_id"], "user", "Source", 1.0),
+    ).lastrowid
+    db.execute(
+        "INSERT INTO session_summaries VALUES(?,?,?,?,?)", (w.chat_id, p["session_id"], "Prior summary", rowid, 1.0)
+    )
+    db.commit()
+    db.close()
+
+    def generate(*_args, **_kwargs):
+        raise RuntimeError("synthetic provider failure")
+
+    s.provider = make_test_provider_port(generate_backend=generate)
+    result = regenerate_summary(s, w, p)
+    assert result["complete"] is False
+    assert result["summary"] == "Prior summary"
+    assert result["summary_through"] == rowid
 
 
 def test_databank_upload_versions_search_and_removal_use_real_rag(tmp_path):

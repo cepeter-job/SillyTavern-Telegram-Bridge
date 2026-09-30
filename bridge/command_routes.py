@@ -9,6 +9,7 @@ import bridge.command_panels as _command_panels
 from bridge.cards import send_character_menu, send_persona_menu, send_session_menu
 from bridge.continuation import continue_last
 from bridge.conversation_lifecycle import ALREADY_STARTED, conversation_state, is_group_conversation
+from bridge.delivery_recovery import retry_failed_delivery
 from bridge.extension_registry import dispatch_command_routes as _dispatch_extension_command_routes
 from bridge.failed_turns import clear_failed_turn, latest_failed_turn, record_failed_turn
 from bridge.greetings import send_greeting_menu
@@ -116,6 +117,16 @@ def _handle_basic(
         )
         return True
     if command == "/retry":
+        if retry_failed_delivery(
+            db,
+            token,
+            chat_id,
+            session_id,
+            request_context.actor_id,
+            delivery_port,
+            app_settings=request_context.app_settings,
+        ):
+            return True
         failed = latest_failed_turn(db, chat_id)
         if not failed:
             send_text(token, chat_id, "No failed turn is waiting for retry.")
@@ -129,7 +140,7 @@ def _handle_basic(
                     chat_id,
                     str(existing[1]),
                     db,
-                    session_id,
+                    str(failed[5] or "") or session_id,
                     int(existing[0]),
                     app_settings=request_context.app_settings,
                 )

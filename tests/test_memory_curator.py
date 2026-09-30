@@ -152,7 +152,6 @@ class MemoryCuratorTests(SettingsTestCase):
     def test_stale_race_rechecks_inside_transaction_and_skips_retain(self):
         self._add_turn()
         target_rowid = 2
-        initial_raw = json.dumps({"items": [], "through_rowid": 0})
         newer_items = [
             {
                 "kind": "fact",
@@ -170,24 +169,18 @@ class MemoryCuratorTests(SettingsTestCase):
 
         def fake_generate(_key, _model, _messages, **_kwargs):
             self.assertFalse(self.db.in_transaction)
+            other = _m_memory_curator.db_connect(app_settings=self.app_settings_builder.build())
+            try:
+                _m_session_naming.set_meta(
+                    other, _m_memory_curator.memory_curator_key("chat", self.session["session_id"]), newer_raw
+                )
+            finally:
+                other.close()
             return '{"memories":[{"kind":"fact","key":"older","text":"Older fact","confidence":1.0}]}'
 
+        retained = []
         provider = make_test_provider_port(generate_backend=fake_generate)
-        with (
-            patch.object(
-                _m_memory_curator,
-                "_repo_load_meta_value",
-                side_effect=[initial_raw, newer_raw],
-            ),
-            patch.object(
-                _m_memory_curator,
-                "_repo_store_meta_value",
-            ) as store_meta,
-            patch.object(
-                _m_memory_curator,
-                "_retain_with_client",
-            ) as retain,
-        ):
+        with patch.object(_m_memory_curator, "_retain_with_client", side_effect=lambda *a, **k: retained.append(a)):
             items = _m_memory_curator.curate_memory_now(
                 self.db,
                 "",
@@ -197,10 +190,12 @@ class MemoryCuratorTests(SettingsTestCase):
                 provider_port=provider,
                 app_settings=self.app_settings_builder.build(),
             )
-
         self.assertEqual(items, newer_items)
-        store_meta.assert_not_called()
-        retain.assert_not_called()
+        self.assertEqual(
+            _m_memory_curator.get_curated_memory_state(self.db, "chat", self.session["session_id"]),
+            (newer_items, target_rowid + 1),
+        )
+        self.assertEqual(retained, [])
 
     def test_stale_target_does_not_regenerate_or_replace_newer_curated_state(self):
         self._add_turn()

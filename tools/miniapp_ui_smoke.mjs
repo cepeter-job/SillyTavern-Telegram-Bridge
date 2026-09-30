@@ -22,6 +22,7 @@ assert.ok(initialDocument.querySelector('#content .skeleton-shell'),'Initial con
 assert.equal(initialDocument.querySelector('#more-menu'),null,'Management is a full page, not a navigation sheet');
 const context=dom.getInternalVMContext(),errors=[],expectedFailures=new Set(),observedFailures=[];
 let portraitMode='success',forcedFailure='',scrollResets=0;
+let summaryScenario=null;
 dom.window.scrollTo=()=>{scrollResets++;};
 process.on('unhandledRejection',error=>errors.push(error));
 dom.window.Telegram={WebApp:{initData:ready.initData,initDataUnsafe:{start_param:'dashboard'},ready(){},expand(){},BackButton:{onClick(){},hide(){},show(){}}}};
@@ -34,7 +35,24 @@ dom.window.fetch=async (path,options)=>{
   if(/^\/api\/v1\/characters\/[^/]+\/portrait$/.test(String(path))) {
     return new Response(new Blob([portraitMode==='success'?'portrait':''],{type:'image/png'}),{status:200,headers:{'Content-Type':'image/png'}});
   }
+  if(summaryScenario&&String(path)==='/api/v1/memory/summary/generate') {
+    assert.equal(options.method,'POST');
+    const body=JSON.parse(options.body);
+    assert.equal(body.session_id,summaryScenario.sessionId,'Summary regeneration keeps the rendered session scope');
+    assert.ok(body.operation_id,'Summary regeneration keeps its durable operation identity');
+    summaryScenario.generated=true;
+    return new Response(JSON.stringify({id:'summary-'+summaryScenario.name,state:'succeeded',result:{
+      summary:summaryScenario.saved,summary_through:summaryScenario.covered,complete:summaryScenario.complete,
+    }}),{status:200,headers:{'Content-Type':'application/json'}});
+  }
   const response=await fetch(ready.url+path,options);
+  if(summaryScenario&&String(path)==='/api/v1/memory'&&response.ok) {
+    const data=await response.json();summaryScenario.reads++;
+    summaryScenario.sessionId ||= data.session.session_id;
+    data.summary=summaryScenario.generated?summaryScenario.saved:summaryScenario.before;
+    data.summary_through=summaryScenario.generated?summaryScenario.covered:40;
+    return new Response(JSON.stringify(data),{status:200,headers:{'Content-Type':'application/json'}});
+  }
   if(!response.ok&&expectedFailures.has(response.status+' '+path))observedFailures.push(response.status+' '+path);
   if(!response.ok&&!expectedFailures.has(response.status+' '+path))errors.push(new Error('API '+response.status+' '+path));
   return response;
@@ -145,6 +163,39 @@ try {
   assert.ok(shellDocument.querySelector('.story-card'),'An optional status failure cannot blank Home');
   assert.ok([...shellDocument.querySelectorAll('.story-status-item')].some(node=>node.textContent.includes('Unavailable')),'Unavailable optional status is labeled');
   forcedFailure='';
+  const summaryResults=[];
+  for(const scenario of [
+    {name:'later-segment-failure',before:'Old complete continuity.',saved:'Completed prefix continuity.',covered:24,complete:false},
+    {name:'old-summary-fallback',before:'Preserved old continuity.',saved:'Preserved old continuity.',covered:40,complete:false},
+    {name:'complete',before:'Earlier continuity.',saved:'Fully regenerated continuity.',covered:40,complete:true},
+  ]) {
+    summaryScenario={...scenario,generated:false,reads:0,sessionId:''};
+    await app.namespace.navigate('memory');
+    const memoryDocument=dom.window.document;
+    const summaryLabel=[...memoryDocument.querySelectorAll('label')].find(n=>n.textContent==='Summary');
+    assert.equal(memoryDocument.getElementById(summaryLabel.htmlFor).value,scenario.before);
+    memoryDocument.getElementById('notice').textContent='';memoryDocument.getElementById('notice').hidden=true;
+    // A different view's state cannot retarget the already-rendered summary action.
+    app.namespace.state.session={...app.namespace.state.session,session_id:'different-view-session'};
+    const regenerate=[...memoryDocument.querySelectorAll('main button')].find(n=>n.textContent==='Regenerate with Utility');
+    regenerate.click();await until(()=>memoryDocument.querySelector('dialog[open]'),'summary '+scenario.name+' confirmation');
+    [...memoryDocument.querySelectorAll('dialog button')].find(n=>n.textContent==='Confirm').click();
+    await until(()=>!regenerate.disabled,'summary '+scenario.name+' regeneration finished');
+    assert.equal(summaryScenario.generated,true,'Summary '+scenario.name+' submits the requested job');
+    assert.ok(summaryScenario.reads>=2,'Summary '+scenario.name+' reloads saved content after regeneration');
+    const reloadedLabel=[...memoryDocument.querySelectorAll('label')].find(n=>n.textContent==='Summary');
+    assert.equal(memoryDocument.getElementById(reloadedLabel.htmlFor).value,scenario.saved,'Summary '+scenario.name+' displays the saved content');
+    const notice=memoryDocument.getElementById('notice');
+    summaryResults.push({name:scenario.name,incomplete:!notice.hidden&&/incomplete/i.test(notice.textContent),
+      explainsSaved:!notice.hidden&&/preserved|completed work/i.test(notice.textContent)});
+  }
+  summaryScenario=null;
+  assert.deepEqual(summaryResults,[
+    {name:'later-segment-failure',incomplete:true,explainsSaved:true},
+    {name:'old-summary-fallback',incomplete:true,explainsSaved:true},
+    {name:'complete',incomplete:false,explainsSaved:false},
+  ],'Incomplete summary regeneration must be reported for partial work and old-summary fallback; complete regeneration retains its normal flow');
+  console.log('summary-regeneration=partial-notice,old-fallback-notice,complete-normal; summary-session-scope=preserved');
   await app.namespace.navigate('models');
   const document=dom.window.document;
   const reasoningLabel=[...document.querySelectorAll('label')].find(n=>n.textContent==='Reasoning level');

@@ -8,6 +8,12 @@ from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 
+from bridge.delivery_progress import DeliveryTargetExpired, prepare_progress
+from bridge.delivery_repository import matching_progress
+from bridge.operation_repository import delivery_user_source
+from bridge.telegram_output import telegram_safe_output
+from bridge.transcript_repository import assistant_by_row
+
 
 @dataclass(frozen=True)
 class OperationRecovery:
@@ -87,6 +93,54 @@ class OperationRecovery:
             return False
         return bool(self.begin_operation(db, operation_id, kind))
 
+    def record_delivery_target(
+        self,
+        db: sqlite3.Connection,
+        operation_id: int | str | None,
+        assistant_rowid: int,
+        source_content: str,
+        payload: str,
+    ) -> None:
+        with self.write_transaction(db):
+            payload = telegram_safe_output(payload)
+            original = self.get_payload(db, operation_id)
+            user_source = (
+                delivery_user_source(db, assistant_rowid, int(original["user_rowid"]))
+                if "user_rowid" in original
+                else None
+            )
+            if user_source is not None:
+                original.update(user_source_content=user_source[0], user_message_id=user_source[1])
+            self.set_payload(
+                db,
+                operation_id,
+                dict(
+                    original,
+                    assistant_rowid=assistant_rowid,
+                    source_content=source_content,
+                    delivery_payload=payload,
+                ),
+            )
+            prepare_progress(db, assistant_rowid, payload, expected_job_id=operation_id)
+
+    def target_assistant_row(
+        self, db: sqlite3.Connection, chat_id: str, session_id: str, operation_id: int | str | None
+    ) -> tuple[int, str] | None:
+        payload = self.get_payload(db, operation_id)
+        if "assistant_rowid" not in payload:
+            if "user_rowid" in payload:
+                user = self.latest_user_row(db, chat_id, session_id)
+                if user is None or int(user[0]) != int(payload["user_rowid"]):
+                    raise DeliveryTargetExpired("Legacy saved delivery source was deleted or superseded")
+            return self.latest_assistant_row(db, chat_id, session_id)
+        row = assistant_by_row(db, int(payload["assistant_rowid"]), chat_id, session_id)
+        if row is None or ("source_content" in payload and row[1] != payload["source_content"]):
+            raise DeliveryTargetExpired("Saved delivery target was deleted or superseded")
+        progress = matching_progress(db, int(row[0]))
+        if progress is not None and "delivery_payload" in payload and progress[0] != payload["delivery_payload"]:
+            raise DeliveryTargetExpired("Saved delivery payload was superseded")
+        return row
+
     @staticmethod
     def message_ids_from_rows(rows) -> list[str]:
         result = []
@@ -148,12 +202,13 @@ class OperationRecovery:
         operation_id,
     ) -> None:
         try:
-            self.delete_outgoing_message_row(
-                db,
-                token,
-                chat_id,
-                int(assistant_rowid),
-            )
+            if matching_progress(db, int(assistant_rowid)) is None:
+                self.delete_outgoing_message_row(
+                    db,
+                    token,
+                    chat_id,
+                    int(assistant_rowid),
+                )
         except Exception:
             self.log_info(
                 "Recovery could not clear the current assistant delivery",

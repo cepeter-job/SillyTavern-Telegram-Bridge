@@ -1,3 +1,5 @@
+import bridge.response_delivery as greeting_delivery
+
 """Acceptance regressions from the final feature review."""
 
 import json
@@ -17,15 +19,19 @@ from bridge.request_types import RequestContext
 def test_failed_opening_can_be_delivered_by_a_new_callback_without_reinserting(novel_db, monkeypatch):
     db, session, settings = novel_db
     fields = {"name": "Alice", "first_mes": "Original opening"}
-    monkeypatch.setattr(greetings, "send_text", lambda *a: (_ for _ in ()).throw(RuntimeError("network")))
-    with pytest.raises(RuntimeError, match="network"):
+    monkeypatch.setattr(greeting_delivery, "send_text", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("network")))
+    with pytest.raises(greeting_delivery.DeliveryFailure):
         greetings.send_character_greeting(
             db, "token", "chat", fields, "story", "User", operation_id=41, app_settings=settings
         )
     assert conversation_state(db, "chat", "story").started
     services = make_test_application_services(app_settings=settings)
     sent = []
-    monkeypatch.setattr(greetings, "send_text", lambda *a: sent.append(a[2]) or [71])
+    monkeypatch.setattr(
+        greeting_delivery,
+        "send_text",
+        lambda *a, acknowledged_chunk=None: sent.append(a[2]) or acknowledged_chunk(71) or [71],
+    )
     monkeypatch.setattr(conversation_callbacks, "send_text", lambda *a: sent.append(a[2]) or [])
     monkeypatch.setattr(conversation_callbacks, "card_fields_from_file", lambda *a, **k: fields)
     monkeypatch.setattr(conversation_callbacks, "close_panel_message", lambda *a, **k: None)

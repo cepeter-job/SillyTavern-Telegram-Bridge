@@ -249,6 +249,16 @@ class NpcService:
                         rejected += 1
                     continue
 
+                if before is not None and operation.operation in {"append", "remove"}:
+                    if before.visibility != operation.visibility or (
+                        before.visibility == "restricted"
+                        and {normalize_npc_name(name) for name in before.known_by}
+                        != {normalize_npc_name(name) for name in operation.known_by}
+                    ):
+                        rejected += 1
+                        continue
+                    operation = replace(operation, visibility=before.visibility, known_by=before.known_by)
+
                 after_value = self._next_value(before, operation)
                 if after_value is _NO_CHANGE:
                     continue
@@ -292,7 +302,14 @@ class NpcService:
     @staticmethod
     def _next_value(before: NpcFieldState | None, operation: NpcOperation) -> Any:
         if operation.operation == "set":
-            return operation.value if before is None or before.value != operation.value else _NO_CHANGE
+            return (
+                operation.value
+                if before is None
+                or before.value != operation.value
+                or before.visibility != operation.visibility
+                or before.known_by != operation.known_by
+                else _NO_CHANGE
+            )
 
         current = list(before.value) if before is not None and isinstance(before.value, list) else []
         item = _clean_text(operation.value)

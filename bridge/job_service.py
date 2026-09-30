@@ -38,6 +38,7 @@ class JobService:
     recover_backend: Callable[..., list[tuple]]
     submit_chat: ChatSubmit
     prepare_worker: Callable[..., Callable[..., None]] | None = None
+    delivery_retry_backend: Callable[..., bool] | None = None
 
     def enqueue(
         self,
@@ -117,6 +118,9 @@ class JobService:
                 str(error),
             )
         )
+
+    def retry_delivery(self, db: sqlite3.Connection, job_id: int, error: object) -> bool:
+        return bool(self.delivery_retry_backend(db, int(job_id), error)) if self.delivery_retry_backend else False
 
     def actor_id(
         self,

@@ -42,6 +42,9 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
     "bridge/session_repository.py",
     "bridge/sync_repository.py",
     "bridge/transcript_repository.py",
+    "bridge/delivery_repository.py",
+    "bridge/delivery_retry_repository.py",
+    "bridge/turn_delivery_repository.py",
 )
 
 # Type coverage grows independently of the deliberately isolated service layer.
@@ -212,6 +215,7 @@ LOW_LEVEL_IMPORTS = {
     "bridge.light_novel_jobs": frozenset(
         [
             "bridge.light_novel_contracts",
+            "bridge.delivery_progress",
             "bridge.background",
             "bridge.card_content",
             "bridge.light_novel_panels",

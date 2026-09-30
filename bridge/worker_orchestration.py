@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import sqlite3
 
@@ -11,6 +10,8 @@ from bridge.callback_dispatch import process_callback
 from bridge.card_content import card_fields_from_file
 from bridge.composition import BridgeServices
 from bridge.conversation_jobs import narrative_job_is_current
+from bridge.delivery_progress import DeliveryFailure, delivery_complete
+from bridge.delivery_recovery import handle_delivery_failure, resume_committed_callback, resume_committed_turn
 from bridge.document_jobs import process_document_job
 from bridge.edit_messages import edit_telegram_user_message
 from bridge.failed_turns import clear_failed_turn, record_failed_turn
@@ -23,6 +24,7 @@ from bridge.provider_errors import ProviderRequestError
 from bridge.response_delivery import send_reply
 from bridge.sqlite_store import write_transaction
 from bridge.transcript_repository import committed_assistant_for_message, native_edit_target
+from bridge.turn_delivery_repository import turn_delivery_target
 from bridge.voice_jobs import process_voice_job
 
 
@@ -43,8 +45,13 @@ def process_message_job(
     jobs = services.jobs
     with chat_job_lock(chat_id):
         db = services.db_factory()
+        claimed = False
         try:
             if job_id is not None and not jobs.start(db, job_id):
+                return
+            claimed = True
+            if resume_committed_turn(services, db, job_id):
+                clear_failed_turn(db, chat_id, message_id)
                 return
             if not narrative_job_is_current(db, job_id):
                 if job_id is not None:
@@ -65,7 +72,7 @@ def process_message_job(
                         recovery_session["session_id"],
                         job_id,
                     )
-                if json.loads(existing[2] or "[]"):
+                if delivery_complete(db, int(existing[0])):
                     clear_failed_turn(db, chat_id, message_id)
                     if job_id is not None:
                         jobs.complete(db, job_id)
@@ -84,6 +91,18 @@ def process_message_job(
                 if job_id is not None:
                     jobs.complete(db, job_id)
                 return
+            execution_session = (
+                services.session.load(db, chat_id, queued_session_id, model)
+                if queued_session_id
+                else services.session.ensure(db, chat_id, model)
+            )
+            if not str(text).lstrip().startswith("/") and not services.group.user_turn_allowed(
+                db, chat_id, execution_session["session_id"], actor_id
+            ):
+                if job_id is not None:
+                    jobs.complete(db, job_id)
+                services.telegram.send_text(token, chat_id, "It is not your turn in manual group mode.")
+                return
             services.conversation.process_message(
                 db,
                 token,
@@ -100,18 +119,17 @@ def process_message_job(
             if job_id is not None:
                 jobs.complete(db, job_id)
         except Exception as exc:
+            if not claimed:
+                raise
+            if isinstance(exc, DeliveryFailure) or turn_delivery_target(db, job_id) is not None:
+                handle_delivery_failure(services, db, chat_id, job_id, exc)
+                return
             logging.error("Background message processing failed: %s", exc, exc_info=True)
             record_failed_turn(db, chat_id, message_id, text, model, str(exc), queued_session_id or "")
             if job_id is not None:
                 jobs.fail(db, job_id, exc)
             if str(text).lstrip().startswith("/"):
-                if "Telegram sendMessage failed" in str(exc):
-                    failure_message = (
-                        "Telegram could not deliver this command. The character backend was not "
-                        "called; retry the command."
-                    )
-                else:
-                    failure_message = "The command failed. Use /status for details, then retry the command."
+                failure_message = "The command failed. Use /status for details, then retry the command."
             else:
                 failure_message = (
                     str(exc)
@@ -120,7 +138,7 @@ def process_message_job(
                 )
             services.telegram.send_text(token, chat_id, failure_message)
         finally:
-            for queue_message_id in queue_notice_message_ids or []:
+            for queue_message_id in (queue_notice_message_ids or []) if claimed else []:
                 try:
                     services.telegram.request(
                         token,
@@ -148,8 +166,13 @@ def process_image_job(
     jobs = services.jobs
     with chat_job_lock(chat_id):
         db = services.db_factory()
+        claimed = False
         try:
             if job_id is not None and not jobs.start(db, job_id):
+                return
+            claimed = True
+            if resume_committed_turn(services, db, job_id):
+                clear_failed_turn(db, chat_id, message_id)
                 return
             if not narrative_job_is_current(db, job_id):
                 if job_id is not None:
@@ -157,7 +180,7 @@ def process_image_job(
                 return
             existing = committed_assistant_for_message(db, chat_id, message_id)
             if existing:
-                if json.loads(existing[2] or "[]"):
+                if delivery_complete(db, int(existing[0])):
                     clear_failed_turn(db, chat_id, message_id)
                     if job_id is not None:
                         jobs.complete(db, job_id)
@@ -176,6 +199,17 @@ def process_image_job(
                 if job_id is not None:
                     jobs.complete(db, job_id)
                 return
+            session = (
+                services.session.load(db, chat_id, queued_session_id, model)
+                if queued_session_id
+                else services.session.ensure(db, chat_id, model)
+            )
+            actor_id = jobs.actor_id(db, job_id)
+            if not services.group.user_turn_allowed(db, chat_id, session["session_id"], actor_id):
+                if job_id is not None:
+                    jobs.complete(db, job_id)
+                services.telegram.send_text(token, chat_id, "It is not your turn in manual group mode.")
+                return
             if file_size > IMAGE_MAX_BYTES:
                 services.telegram.send_text(
                     token,
@@ -190,12 +224,7 @@ def process_image_job(
                 file_id,
                 IMAGE_MAX_BYTES,
             )
-            session = (
-                services.session.load(db, chat_id, queued_session_id, model)
-                if queued_session_id
-                else services.session.ensure(db, chat_id, model)
-            )
-            session["_actor_id"] = services.jobs.actor_id(db, job_id)
+            session["_actor_id"] = actor_id
             image_fields = card_fields_from_file(session["character_file"], app_settings=services.config)
             process_image_message(
                 db,
@@ -207,6 +236,7 @@ def process_image_job(
                 caption,
                 image_bytes,
                 telegram_message_id=message_id,
+                operation_id=job_id,
                 group_service=services.group,
                 provider_port=services.provider,
                 memory_service=services.memory,
@@ -219,6 +249,11 @@ def process_image_job(
             if job_id is not None:
                 jobs.complete(db, job_id)
         except Exception as exc:
+            if not claimed:
+                raise
+            if isinstance(exc, DeliveryFailure) or turn_delivery_target(db, job_id) is not None:
+                handle_delivery_failure(services, db, chat_id, job_id, exc)
+                return
             logging.error("Background image processing failed: %s", exc, exc_info=True)
             if job_id is not None:
                 jobs.fail(db, job_id, exc)
@@ -239,12 +274,16 @@ def process_callback_job(
     jobs = services.jobs
     with chat_job_lock(chat_id):
         db = services.db_factory()
+        claimed = False
         try:
             if job_id is not None and not jobs.start(db, job_id):
                 return
+            claimed = True
             actor_id = jobs.actor_id(db, job_id) if job_id is not None else ""
             if job_id is not None and operation_was_applied(db, job_id):
                 jobs.complete(db, job_id)
+                return
+            if resume_committed_callback(services, db, chat_id, job_id):
                 return
             process_callback(
                 db,
@@ -263,6 +302,11 @@ def process_callback_job(
                     write_callback_operation()
                 jobs.complete(db, job_id)
         except Exception as exc:
+            if not claimed:
+                raise
+            if isinstance(exc, DeliveryFailure):
+                handle_delivery_failure(services, db, chat_id, job_id, exc)
+                return
             logging.error("Background callback processing failed: %s", exc, exc_info=True)
             if job_id is not None:
                 jobs.fail(db, job_id, exc)
@@ -272,7 +316,7 @@ def process_callback_job(
 
 
 def native_edit_committed_after_failure(db: sqlite3.Connection, job_id: int | None, exc: BaseException) -> bool:
-    if job_id is None or "Telegram sendMessage failed" in str(exc):
+    if job_id is None:
         return False
     try:
         return operation_phase(db, job_id) == "local_committed"
@@ -295,11 +339,13 @@ def process_edit_job(
     jobs = services.jobs
     with chat_job_lock(chat_id):
         db = services.db_factory()
+        claimed = False
         try:
             if job_id is not None and not jobs.start(db, job_id):
                 return
+            claimed = True
             target = native_edit_target(db, chat_id, message_id)
-            if target is not None and target[2] == "user":
+            if target is not None and target[2] == "user" and operation_phase(db, job_id) != "local_committed":
                 # Ownership can change after enqueue or during a restart.
                 # Read the durable actor again, including recovered edit jobs.
                 actor_id = jobs.actor_id(db, job_id)
@@ -327,11 +373,12 @@ def process_edit_job(
             if job_id is not None:
                 jobs.complete(db, job_id)
         except Exception as exc:
+            if not claimed:
+                raise
             logging.error("Background native edit failed: %s", exc, exc_info=True)
-            if native_edit_committed_after_failure(db, job_id, exc):
+            if isinstance(exc, DeliveryFailure) or native_edit_committed_after_failure(db, job_id, exc):
                 logging.warning("Native edit %s committed locally; suppressing rollback fallback", job_id)
-                if job_id is not None:
-                    jobs.complete(db, job_id)
+                handle_delivery_failure(services, db, chat_id, job_id, exc)
                 return
             if job_id is not None:
                 jobs.fail(db, job_id, exc)
@@ -349,7 +396,7 @@ def resolve_recovered_job_submission(
 ) -> JobSubmission | None:
     payload = job.payload
     model_override = str(payload.get("model") or services.config.default_model)
-    session_for_job = None if payload.get("resolve_active") else job.session_id
+    session_for_job = job.session_id
     raw_queue_notice_ids = payload.get("queue_notice_message_ids")
     queue_notice_message_ids = (
         [int(value) for value in raw_queue_notice_ids if str(value).isdigit()]

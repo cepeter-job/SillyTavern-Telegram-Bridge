@@ -32,6 +32,7 @@ from bridge.rag_service import RagService
 from bridge.request_types import RequestContext
 from bridge.session_core import load_session
 from bridge.settings import AppSettings
+from bridge.sqlite_store import write_transaction
 from bridge.telegram import download_telegram_file, send_panel_request, send_text
 from bridge.world_storage import install_world_info_document
 
@@ -326,18 +327,29 @@ def import_character_card(
     return target
 
 
-def _consume_world_upload(db: sqlite3.Connection, chat_id: str) -> bool:
-    raw_state = get_meta(db, f"world_upload:{chat_id}")
-    if not raw_state:
-        return False
-    set_meta(db, f"world_upload:{chat_id}", "")
-    try:
-        state = json.loads(raw_state)
-    except json.JSONDecodeError:
-        return False
-    if float(state.get("expires_at", 0)) < time.time():
-        return False
-    return True
+def _consume_world_upload(db: sqlite3.Connection, chat_id: str, request_context: RequestContext) -> bool:
+    with write_transaction(db):
+        key = f"world_upload:{chat_id}"
+        raw_state = get_meta(db, key)
+        if not raw_state:
+            return False
+        try:
+            state = json.loads(raw_state)
+            valid = (
+                isinstance(state, dict)
+                and bool(state.get("actor_id"))
+                and bool(state.get("session_id"))
+                and float(state.get("expires_at", 0)) >= time.time()
+            )
+        except (ValueError, TypeError):
+            valid = False
+        if not valid:
+            set_meta(db, key, "")
+            return False
+        if state["actor_id"] != request_context.actor_id or state["session_id"] != request_context.session_id:
+            return False
+        set_meta(db, key, "")
+        return True
 
 
 def import_world_info_document(
@@ -373,10 +385,12 @@ def import_telegram_document(
     provider_port: ProviderPort,
     request_context: RequestContext,
 ) -> None:
+    if db.in_transaction:
+        raise RuntimeError("document import cannot run inside an active transaction")
     filename = str(document.get("file_name") or "document")
     suffix = Path(filename).suffix.casefold()
     file_size = int(document.get("file_size") or 0)
-    if _consume_world_upload(db, chat_id):
+    if _consume_world_upload(db, chat_id, request_context):
         if suffix != ".json":
             send_text(token, chat_id, "World Info upload expects a .json document. Use /world and try again.")
             return

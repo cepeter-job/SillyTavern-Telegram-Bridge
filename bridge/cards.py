@@ -11,7 +11,6 @@ from pathlib import Path
 import bridge.limits as _limits
 from bridge.callback_tokens import dynamic_callback_token
 from bridge.callback_tokens import resolve_dynamic_callback_token as resolve_dynamic_callback_token
-from bridge.character_backups import character_restore_targets
 from bridge.card_content import active_world_files as active_world_files
 from bridge.card_content import build_system_prompt as build_system_prompt
 from bridge.card_content import build_world_info as build_world_info
@@ -28,6 +27,7 @@ from bridge.card_content import system_prompt_callback_token as system_prompt_ca
 from bridge.card_content import system_prompt_choices as system_prompt_choices
 from bridge.card_content import system_prompt_label as system_prompt_label
 from bridge.card_content import world_file_paths as world_file_paths
+from bridge.character_backups import character_restore_targets
 from bridge.character_quality import RANK_TIERS, character_rank
 from bridge.panel_utils import panel_label, panel_message_request, panel_navigation, panel_page
 from bridge.persona_service import PersonaService

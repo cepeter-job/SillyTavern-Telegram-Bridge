@@ -12,6 +12,7 @@ import bridge.limits as _limits
 from bridge.npc_repository import (
     delete_npc_entity,
     delete_npc_field,
+    delete_npc_field_change,
     delete_npc_history_from_row,
     find_npc_by_name_or_alias,
     get_npc_extraction_coverage,
@@ -300,6 +301,101 @@ class NpcService:
             return _NO_CHANGE
         current.pop(matches[0])
         return current if current else _REMOVE_FIELD
+
+    def list_npcs(self, db: Any, chat_id: str, session_id: str):
+        return list_npc_entities(db, chat_id, session_id)
+
+    def get_npc(self, db: Any, chat_id: str, session_id: str, npc_id: int):
+        return next(
+            (entity for entity in list_npc_entities(db, chat_id, session_id) if entity.npc_id == int(npc_id)),
+            None,
+        )
+
+    @staticmethod
+    def _field_visible(state: NpcFieldState, active_character: str) -> bool:
+        if state.visibility != "restricted":
+            return True
+        allowed = {normalize_npc_name(name) for name in state.known_by}
+        return bool(active_character and active_character in allowed)
+
+    def visible_fields(
+        self,
+        db: Any,
+        chat_id: str,
+        session: dict[str, str],
+        fields: dict[str, str],
+        npc_id: int,
+    ) -> tuple[Any, dict[str, NpcFieldState]] | None:
+        session_id = str(session["session_id"])
+        entity = self.get_npc(db, chat_id, session_id, npc_id)
+        if entity is None:
+            return None
+        active_character = normalize_npc_name(fields.get("name") or "")
+        visible = {
+            key: state
+            for key, state in load_npc_fields(db, entity.npc_id).items()
+            if self._field_visible(state, active_character)
+        }
+        return entity, visible
+
+    def visible_history(
+        self,
+        db: Any,
+        chat_id: str,
+        session: dict[str, str],
+        fields: dict[str, str],
+        npc_id: int,
+    ) -> tuple[Any, list[Any]] | None:
+        session_id = str(session["session_id"])
+        entity = self.get_npc(db, chat_id, session_id, npc_id)
+        if entity is None:
+            return None
+        active_character = normalize_npc_name(fields.get("name") or "")
+        visible = []
+        for change in list_npc_field_history(db, entity.npc_id):
+            states = [state for state in (change.before, change.after) if state is not None]
+            if all(self._field_visible(state, active_character) for state in states):
+                visible.append(change)
+        return entity, visible
+
+    def undo_latest_field_change(
+        self,
+        db: Any,
+        chat_id: str,
+        session_id: str,
+        npc_id: int,
+        field_key: str,
+    ) -> bool:
+        entity = self.get_npc(db, chat_id, session_id, npc_id)
+        if entity is None:
+            return False
+        history = [
+            change
+            for change in list_npc_field_history(db, entity.npc_id)
+            if change.field_key == str(field_key)
+        ]
+        if not history:
+            return False
+        latest = history[-1]
+        prior_state = history[-2].after if len(history) > 1 else None
+        now = time.time()
+        with write_transaction(db):
+            if prior_state is None:
+                delete_npc_field(db, entity.npc_id, latest.field_key)
+            else:
+                upsert_npc_field(
+                    db,
+                    replace(
+                        prior_state,
+                        updated_rowid=history[-2].source_rowid,
+                        updated_at=history[-2].created_at,
+                    ),
+                )
+            delete_npc_field_change(db, latest.change_id)
+            remaining = list_npc_field_history(db, entity.npc_id)
+            latest_row = max((change.source_rowid for change in remaining), default=entity.first_seen_rowid)
+            set_npc_entity_last_seen(db, entity.npc_id, latest_row, now)
+        return True
 
     def context_for_prompt(
         self,

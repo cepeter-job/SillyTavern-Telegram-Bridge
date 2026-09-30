@@ -4,6 +4,22 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.2.049] - 2026-09-30
+
+### Fixed
+
+- Bind Telegram NPC undo confirmations to the exact field-history revision the user reviewed, and refuse stale confirmations when background extraction changes that field before confirmation.
+- Show Mini App NPC undo only for the latest visible revision of each field and enforce the same change-revision guard in the NPC service/API.
+
+### Maintenance
+
+- Isolate explicit test settings homes from ambient runtime environment state so CI and release verification cannot accidentally read machine-level bridge paths.
+
+### Compatibility
+
+- Runtime and development dependency files are unchanged from v0.2.048.
+- Database schema is unchanged from v0.2.048; schema migration 6 remains the latest migration.
+
 ## [0.2.048] - 2026-09-30
 
 ### Added

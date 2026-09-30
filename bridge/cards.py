@@ -5,6 +5,7 @@ Content, callback-token state, and pure panel helpers live in focused modules.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import bridge.limits as _limits
@@ -26,6 +27,7 @@ from bridge.card_content import system_prompt_callback_token as system_prompt_ca
 from bridge.card_content import system_prompt_choices as system_prompt_choices
 from bridge.card_content import system_prompt_label as system_prompt_label
 from bridge.card_content import world_file_paths as world_file_paths
+from bridge.character_backups import character_restore_targets
 from bridge.character_quality import RANK_TIERS, character_rank
 from bridge.panel_utils import panel_label, panel_message_request, panel_navigation, panel_page
 from bridge.persona_service import PersonaService
@@ -178,6 +180,7 @@ def send_character_menu(
     rows.extend(
         [
             [{"text": "⚡ Optimizer", "callback_data": "character:optimize"}],
+            [{"text": "♻️ Restore backup", "callback_data": "character:restore"}],
             [{"text": "📤 Upload character card", "callback_data": "character:upload"}],
             [{"text": "❌ Cancel", "callback_data": "character:cancel"}],
         ]
@@ -298,6 +301,91 @@ def send_character_delete_confirm(
     }
     send_panel_message(
         token, chat_id, payload["text"], payload["reply_markup"], message_id, request_context=request_context
+    )
+
+
+def send_character_restore_menu(
+    token: str,
+    chat_id: str,
+    message_id: int | None = None,
+    page: int = 0,
+    *,
+    request_context: RequestContext,
+) -> None:
+    options = [
+        (filename, Path(filename).stem)
+        for filename in character_restore_targets(app_settings=request_context.app_settings)
+    ]
+    page_options, current_page, total_pages = panel_page(options, page)
+    rows = [
+        [
+            {
+                "text": panel_label(label),
+                "callback_data": "characterrestore:"
+                + dynamic_callback_token("character_restore", filename, chat_id, db=request_context.db),
+            }
+        ]
+        for filename, label in page_options
+    ]
+    navigation = panel_navigation("characterrestore", current_page, total_pages)
+    if navigation:
+        rows.append(navigation)
+    rows.append(
+        [
+            {"text": "⬅️ Back", "callback_data": "character:menu"},
+            {"text": "❌ Close", "callback_data": "character:cancel"},
+        ]
+    )
+    if options:
+        text = f"Choose a verified character backup to restore (page {current_page + 1}/{total_pages}):"
+    else:
+        text = "No verified character backups are available yet."
+    send_panel_message(
+        token,
+        chat_id,
+        text,
+        {"inline_keyboard": rows},
+        message_id,
+        request_context=request_context,
+    )
+
+
+def send_character_restore_confirm(
+    token: str,
+    chat_id: str,
+    filename: str,
+    expected_digest: str,
+    message_id: int | None = None,
+    *,
+    request_context: RequestContext,
+) -> None:
+    state = json.dumps(
+        {"filename": filename, "expected_digest": expected_digest},
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    token_value = dynamic_callback_token(
+        "character_restore_confirm",
+        state,
+        chat_id,
+        db=request_context.db,
+    )
+    rows = [
+        [
+            {"text": "✅ Restore backup", "callback_data": "characterrestoreconfirm:" + token_value},
+            {"text": "❌ Cancel", "callback_data": "character:menu"},
+        ]
+    ]
+    send_panel_message(
+        token,
+        chat_id,
+        (
+            f"Restore the latest verified backup for {Path(filename).stem}?\n\n"
+            "If the character is currently installed, its present revision will be backed up before replacement."
+        ),
+        {"inline_keyboard": rows},
+        message_id,
+        request_context=request_context,
     )
 
 

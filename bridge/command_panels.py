@@ -14,6 +14,7 @@ from bridge.macro_commands import send_stscript_menu
 from bridge.memory import handle_memory_command
 from bridge.memory_panels import send_memory_menu
 from bridge.note_panels import send_note_menu
+from bridge.npc_panels import send_npc_menu
 from bridge.preset_panels import send_preset_menu
 from bridge.rag_service import RagService
 from bridge.session_core import update_session
@@ -147,6 +148,16 @@ def _handle_memory_media(
     rag_service: RagService,
 ):
     """Handle memory, RAG, group, and synchronization commands."""
+    if command == "/npc" or command.startswith("/npc "):
+        send_npc_menu(
+            token,
+            chat_id,
+            db,
+            session,
+            npc_service=npc_service,
+            request_context=request_context,
+        )
+        return True
     if command == "/memory" or command in {"/memory on", "/memory off", "/memory status", "/memory scope"}:
         send_memory_menu(token, chat_id, db, request_context=request_context)
         return True

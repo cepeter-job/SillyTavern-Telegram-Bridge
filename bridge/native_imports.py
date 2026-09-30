@@ -50,6 +50,37 @@ def verify_character_card_backup(target: Path, raw: bytes, *, app_settings: AppS
     return backup
 
 
+def character_card_digest(filename: str, *, app_settings: AppSettings) -> str:
+    return _current_digest(_character_target(filename, app_settings=app_settings))
+
+
+def restore_character_card_backup(
+    filename: str,
+    *,
+    expected_digest: str,
+    app_settings: AppSettings,
+) -> Path:
+    target = _character_target(filename, app_settings=app_settings)
+    backup_dir = app_settings.character_backup_dir
+    if Path(filename).name != filename or filename.startswith(".") or Path(filename).suffix.casefold() != ".png":
+        raise ValueError("invalid character filename")
+    backup = backup_dir / filename
+    if (
+        backup.is_symlink()
+        or not backup.is_file()
+        or backup.parent.resolve() != backup_dir.resolve()
+        or backup.stat().st_size > RAG_MAX_FILE_BYTES
+    ):
+        raise ValueError("character backup is unavailable")
+    raw = backup.read_bytes()
+    try:
+        parse_png_chara_bytes(raw)
+    except Exception as exc:
+        raise ValueError("character backup is not a valid SillyTavern card") from exc
+    _install_character_bytes(filename, raw, expected_digest, app_settings=app_settings)
+    return target
+
+
 def character_backup_versions(name: str, *, app_settings: AppSettings) -> list[Path]:
     target = Path(name)
     return sorted(app_settings.character_backup_dir.glob(f"{target.stem}.*{target.suffix}"), reverse=True)

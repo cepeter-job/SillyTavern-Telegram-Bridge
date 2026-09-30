@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import sqlite3
 
@@ -15,7 +16,10 @@ from bridge.cards import (
     send_character_delete_menu,
     send_character_info_menu,
     send_character_menu,
+    send_character_restore_confirm,
+    send_character_restore_menu,
 )
+from bridge.character_backups import character_restore_targets
 from bridge.character_optimizer import prepare_character_optimization
 from bridge.character_optimizer_input import start_character_optimizer_suggestion_input
 from bridge.character_optimizer_panels import (
@@ -32,7 +36,9 @@ from bridge.group_setup import apply_group_setup_character
 from bridge.metadata import get_meta, set_meta
 from bridge.native_imports import (
     apply_character_proposal,
+    character_card_digest,
     character_delete_references,
+    restore_character_card_backup,
     verify_character_card_backup,
 )
 from bridge.operations import begin_operation, record_operation
@@ -126,6 +132,15 @@ def handle_character_callback(
                     ]
                 },
             },
+            request_context=request_context,
+        )
+        return True
+    if data == "character:restore":
+        answer_callback(token, str(callback.get("id", "")), "Restore backup")
+        send_character_restore_menu(
+            token,
+            chat_id,
+            message.get("message_id"),
             request_context=request_context,
         )
         return True
@@ -391,6 +406,77 @@ def handle_character_callback(
             )
             return True
         close_panel_message(db, token, chat_id, callback)
+        return True
+    if data.startswith("characterrestore:"):
+        value = data.split(":", 1)[1]
+        if value.startswith("page:"):
+            send_character_restore_menu(
+                token,
+                chat_id,
+                message.get("message_id"),
+                int(value.split(":", 1)[1]),
+                request_context=request_context,
+            )
+            return True
+        filename = resolve_dynamic_callback_token(value, "character_restore", chat_id, db=db) or ""
+        if filename not in character_restore_targets(app_settings=request_context.app_settings):
+            answer_callback(token, str(callback.get("id", "")), "Backup choice invalid")
+            return True
+        try:
+            expected_digest = character_card_digest(filename, app_settings=request_context.app_settings)
+        except (OSError, ValueError):
+            answer_callback(token, str(callback.get("id", "")), "Character state is unavailable")
+            return True
+        answer_callback(token, str(callback.get("id", "")), "Confirm restore")
+        send_character_restore_confirm(
+            token,
+            chat_id,
+            filename,
+            expected_digest,
+            message.get("message_id"),
+            request_context=request_context,
+        )
+        return True
+    if data.startswith("characterrestoreconfirm:"):
+        raw_state = resolve_dynamic_callback_token(
+            data.split(":", 1)[1],
+            "character_restore_confirm",
+            chat_id,
+            db=db,
+        )
+        try:
+            state = json.loads(raw_state or "")
+            filename = str(state["filename"])
+            expected_digest = str(state["expected_digest"])
+        except (TypeError, ValueError, KeyError, json.JSONDecodeError):
+            answer_callback(token, str(callback.get("id", "")), "Restore confirmation expired")
+            return True
+        if filename not in character_restore_targets(app_settings=request_context.app_settings):
+            answer_callback(token, str(callback.get("id", "")), "Restore backup is unavailable")
+            return True
+        if operation_id is not None and not begin_operation(db, operation_id, "character_restore"):
+            answer_callback(token, str(callback.get("id", "")), "Already processed")
+            return True
+        try:
+            restored = restore_character_card_backup(
+                filename,
+                expected_digest=expected_digest,
+                app_settings=request_context.app_settings,
+            )
+        except (OSError, ValueError) as exc:
+            answer_callback(token, str(callback.get("id", "")), f"Restore refused: {exc}")
+            return True
+        record_operation(db, operation_id, "character_restore")
+        db.commit()
+        answer_callback(token, str(callback.get("id", "")), "Restored")
+        send_character_menu(
+            token,
+            chat_id,
+            session["character_file"],
+            message.get("message_id"),
+            request_context=request_context,
+        )
+        logging.info("Restored character backup %s", restored.name)
         return True
     if data.startswith("characterdelete:"):
         value = data.split(":", 1)[1]

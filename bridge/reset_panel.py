@@ -5,7 +5,8 @@ from __future__ import annotations
 RESET_CONFIRMATION_TEXT = (
     "Reset active session and purge its memory?\n\n"
     "This will:\n"
-    "• Delete this session's stored conversation, response variants, summary, and curated memory.\n"
+    "• Delete this session's stored conversation, response variants, continuity summary, "
+    "curated memory, episodic memory, and NPC Bank state.\n"
     "• Purge Hindsight documents for this active session.\n"
     "• Attempt to delete this session's tracked Telegram user messages, assistant replies, and choice panels.\n"
     "• Keep chat-scoped RAG and this session identity.\n"

@@ -109,6 +109,13 @@ class PanelificationTests(SettingsTestCase):
                 ),
                 app_settings=self.app_settings_builder.build(),
             ).memory,
+            npc_service=make_test_application_services(
+                memory=make_test_memory_service(),
+                delivery=make_test_delivery_port(
+                    send_panel_request=lambda *args, **kwargs: self.calls.append((args, kwargs)) or {},
+                ),
+                app_settings=self.app_settings_builder.build(),
+            ).npc,
             persona_service=make_test_application_services(
                 memory=make_test_memory_service(),
                 delivery=make_test_delivery_port(

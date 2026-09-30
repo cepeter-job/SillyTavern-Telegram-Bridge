@@ -371,6 +371,7 @@ def test_command_routes_memory_search_forwards_delivery_send_text(monkeypatch):
             provider=object(),
             delivery=SimpleNamespace(send_text=send_text_fn),
         ).memory,
+        npc_service=object(),
         persona_service=SimpleNamespace(
             group=object(),
             sync=object(),
@@ -427,6 +428,7 @@ def test_pending_memory_search_forwards_existing_send_text(monkeypatch):
         None,
         provider_port=object(),
         memory_service=object(),
+        npc_service=object(),
         persona_service=object(),
         request_context=make_test_request_context(),
         rag_service=make_test_rag_service(),

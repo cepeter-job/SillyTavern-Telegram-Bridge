@@ -4,6 +4,7 @@ from application_test_setup import (
     make_test_group_service,
     make_test_input_flow_service,
     make_test_memory_service,
+    make_test_npc_service,
     make_test_provider_port,
     make_test_request_context,
 )
@@ -261,6 +262,7 @@ class PersonaEditorTests(SettingsTestCase):
                 group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 request_context=self.request_context,
             )
 
@@ -298,6 +300,7 @@ class PersonaEditorTests(SettingsTestCase):
                 group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 request_context=self.request_context,
             )
 
@@ -326,6 +329,7 @@ class PersonaEditorTests(SettingsTestCase):
                 group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 request_context=self.request_context,
             )
         )
@@ -352,6 +356,7 @@ class PersonaEditorTests(SettingsTestCase):
                 group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 request_context=self.request_context,
             )
         )
@@ -464,6 +469,7 @@ class PersonaEditorTests(SettingsTestCase):
                 group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 request_context=self.request_context,
                 persona_service=self.persona_service,
             )
@@ -497,6 +503,7 @@ class PersonaEditorTests(SettingsTestCase):
             group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
             provider_port=make_test_provider_port(),
             memory_service=make_test_memory_service(),
+            npc_service=make_test_npc_service(),
             request_context=self.request_context,
             persona_service=self.persona_service,
         )
@@ -518,6 +525,7 @@ class PersonaEditorTests(SettingsTestCase):
             group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
             provider_port=make_test_provider_port(),
             memory_service=make_test_memory_service(),
+            npc_service=make_test_npc_service(),
             request_context=self.request_context,
             persona_service=self.persona_service,
         )
@@ -731,6 +739,7 @@ class PersonaEditorTests(SettingsTestCase):
                 group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 request_context=self.request_context,
                 persona_service=self.persona_service,
             )
@@ -752,6 +761,7 @@ class PersonaEditorTests(SettingsTestCase):
                 group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 request_context=self.request_context,
                 persona_service=self.persona_service,
             )
@@ -774,6 +784,7 @@ class PersonaEditorTests(SettingsTestCase):
                 group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 request_context=self.request_context,
                 persona_service=self.persona_service,
             )
@@ -797,6 +808,7 @@ class PersonaEditorTests(SettingsTestCase):
                     group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
                     provider_port=make_test_provider_port(),
                     memory_service=make_test_memory_service(),
+                    npc_service=make_test_npc_service(),
                     request_context=self.request_context,
                     persona_service=self.persona_service,
                 )

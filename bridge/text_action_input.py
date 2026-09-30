@@ -20,6 +20,7 @@ from bridge.memory_panels import send_memory_menu
 from bridge.memory_service import MemoryService
 from bridge.message_commands import send_pending_input_message
 from bridge.metadata import set_meta
+from bridge.npc_service import NpcService
 from bridge.pending_input import _cancel_pending
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
@@ -53,6 +54,7 @@ def handle_inline_text_action(
     *,
     provider_port: ProviderPort,
     memory_service: MemoryService,
+    npc_service: NpcService,
     persona_service: PersonaService,
     request_context,
     rag_service: RagService,
@@ -75,6 +77,7 @@ def handle_inline_text_action(
         operation_id,
         provider_port=provider_port,
         memory_service=memory_service,
+        npc_service=npc_service,
         persona_service=persona_service,
         request_context=request_context,
         rag_service=rag_service,
@@ -94,6 +97,7 @@ def _handle_text_action_input(
     *,
     provider_port: ProviderPort,
     memory_service: MemoryService,
+    npc_service: NpcService,
     persona_service: PersonaService,
     request_context,
     rag_service: RagService,
@@ -123,6 +127,7 @@ def _handle_text_action_input(
                 operation_id=operation_id,
                 provider_port=provider_port,
                 memory_service=memory_service,
+                npc_service=npc_service,
                 persona_service=persona_service,
                 app_settings=request_context.app_settings,
                 rag_service=rag_service,

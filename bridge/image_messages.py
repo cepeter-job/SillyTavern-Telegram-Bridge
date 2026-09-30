@@ -15,6 +15,7 @@ from bridge.group_service import GroupService
 from bridge.light_novel_turn import begin_novel_turn
 from bridge.limits import MAX_HISTORY_MESSAGES
 from bridge.memory_service import MemoryService
+from bridge.npc_service import NpcService
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
 from bridge.rag_service import RagService
@@ -40,6 +41,7 @@ def process_image_message(
     group_service: GroupService,
     provider_port: ProviderPort,
     memory_service: MemoryService,
+    npc_service: NpcService,
     persona_service: PersonaService,
     group_director_service: GroupDirectorService,
     app_settings: AppSettings,
@@ -76,6 +78,14 @@ def process_image_message(
     memory_context = memory_prompt.recall
     episodic_context = memory_prompt.episodic
     session_summary = memory_prompt.summary
+    npc_context = npc_service.context_for_prompt(
+        db,
+        chat_id,
+        session,
+        fields,
+        caption,
+        history_rows,
+    )
     messages = build_chat_messages(
         session,
         fields,
@@ -84,6 +94,7 @@ def process_image_message(
         image_data_uri=image_data_uri,
         memory_context=memory_context,
         episodic_context=episodic_context,
+        npc_context=npc_context,
         session_summary=session_summary,
         rag_context=rag_service.context_for_prompt(db, chat_id, caption, rag_bundle),
         group_context=group_context,

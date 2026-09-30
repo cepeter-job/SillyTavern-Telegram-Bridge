@@ -155,10 +155,11 @@ def test_conversation_forwards_group_service_to_generation():
             group_service=group,
             provider_port=provider,
             memory_service=memory,
+            npc_service=object(),
             persona_service=persona,
         ),
     )
-    services = SimpleNamespace(group=group, provider=provider, memory=memory, persona=persona)
+    services = SimpleNamespace(group=group, provider=provider, memory=memory, npc=object(), persona=persona)
 
     service.process_message(
         object(),

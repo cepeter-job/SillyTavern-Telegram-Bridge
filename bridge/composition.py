@@ -14,6 +14,7 @@ from bridge.input_flow_service import InputFlowService
 from bridge.job_service import JobService
 from bridge.memory_service import MemoryService
 from bridge.model_router import ModelRouter
+from bridge.npc_service import NpcService
 from bridge.persona_service import PersonaService
 from bridge.port_contracts import ChatSubmit, DownloadFile, SendText, TelegramRequest
 from bridge.provider_port import ProviderPort
@@ -55,6 +56,7 @@ class BridgeServices:
     provider: ProviderPort
     rag: RagService
     memory: MemoryService
+    npc: NpcService
     persona: PersonaService
     sync: SyncService
     health: RuntimeHealth | None = None

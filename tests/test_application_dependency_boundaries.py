@@ -108,6 +108,7 @@ def _image_services(download_file, sent):
         group=object(),
         provider=make_test_provider_port(),
         memory=object(),
+        npc=object(),
         persona=object(),
         group_director=object(),
         session=make_test_session_service(
@@ -216,6 +217,7 @@ def test_image_worker_uses_injected_download_and_forwards_identity(monkeypatch):
     )
     assert kwargs["telegram_message_id"] == 55
     assert kwargs["memory_service"] is memory
+    assert kwargs["npc_service"] is services.npc
     assert kwargs["persona_service"] is persona
     assert kwargs["group_director_service"] is director
     assert kwargs["rag_service"] is services.rag
@@ -402,6 +404,7 @@ def test_document_job_passes_configured_api_key_and_canonical_image_collaborator
         telegram=SimpleNamespace(send_text=lambda *_args, **_kwargs: None),
         provider=make_test_provider_port(),
         memory="memory",
+        npc="npc",
         persona="persona",
         group_director="director",
         session=SimpleNamespace(ensure=lambda *_args: {"session_id": "session"}),
@@ -425,6 +428,7 @@ def test_document_job_passes_configured_api_key_and_canonical_image_collaborator
     assert process_image.func is _owner_document_jobs.process_image_message
     assert process_image.keywords["provider_port"] is services.provider
     assert process_image.keywords["group_service"] is services.group
+    assert process_image.keywords["npc_service"] is services.npc
     assert captured["provider_port"] is services.provider
     assert captured["request_context"].actor_id == "actor"
     assert captured["request_context"].session_id == "session"

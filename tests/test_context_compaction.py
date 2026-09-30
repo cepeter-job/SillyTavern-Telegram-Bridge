@@ -64,6 +64,29 @@ class SmartContextCompactionTests(SettingsTestCase):
         self.assertIn("Fixed character rules.", compacted[0]["content"])
         self.assertIn("CURRENT", compacted[-1]["content"])
 
+    def test_trims_npc_context_as_optional_retrieval(self):
+        messages = [
+            {"role": "system", "content": "Fixed character rules."},
+            {"role": "assistant", "content": "recent assistant turn"},
+            {
+                "role": "user",
+                "content": (
+                    "<untrusted_npc_state>\n"
+                    + ("npc-state " * 1800)
+                    + "\n</untrusted_npc_state>\n\n"
+                    + "CURRENT QUESTION MUST SURVIVE"
+                ),
+            },
+        ]
+
+        compacted, stats = compact_chat_messages(
+            messages, budget_tokens=2048, app_settings=self.app_settings_builder.build()
+        )
+
+        self.assertLessEqual(estimate_message_tokens(compacted), 2048)
+        self.assertTrue(stats["npc_trimmed"])
+        self.assertIn("CURRENT QUESTION MUST SURVIVE", str(compacted[-1]["content"]))
+
     def test_fixed_prompt_is_never_silently_truncated(self):
         system = "FIXED-RULE " + ("x" * 12000)
         current = "CURRENT " + ("y" * 1000)

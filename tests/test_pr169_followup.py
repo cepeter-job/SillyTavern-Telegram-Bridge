@@ -79,6 +79,7 @@ def test_two_actors_keep_independent_optimizer_suggestion_state(card_context, mo
             group_service=services.group,
             provider_port=port,
             memory_service=services.memory,
+            npc_service=services.npc,
             persona_service=services.persona,
             request_context=context,
             rag_service=services.rag,

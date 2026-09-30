@@ -57,6 +57,7 @@ def case(tmp_path):
         db_factory=lambda: db_connect(app_settings=config),
         provider=object(),
         memory=object(),
+        npc=object(),
         persona=object(),
         delivery=object(),
         session=make_test_session_service(app_settings=config),

@@ -9,6 +9,7 @@ from unittest.mock import patch
 from application_test_setup import (
     ensure_application_extensions,
     make_test_memory_service,
+    make_test_npc_service,
     make_test_persona_service,
     make_test_provider_port,
     make_test_rag_service,
@@ -105,12 +106,14 @@ class NativeEditedMessageSessionTests(SettingsTestCase):
                     "new_text": new_text,
                     "provider_port": kwargs["provider_port"],
                     "memory_service": kwargs["memory_service"],
+                    "npc_service": kwargs["npc_service"],
                     "persona_service": kwargs["persona_service"],
                 }
             )
 
         provider = make_test_provider_port()
         memory = make_test_memory_service()
+        npc = make_test_npc_service()
         persona = make_test_persona_service()
         with (
             patch.object(
@@ -139,6 +142,7 @@ class NativeEditedMessageSessionTests(SettingsTestCase):
                 self.model,
                 provider_port=provider,
                 memory_service=memory,
+                npc_service=npc,
                 persona_service=persona,
                 app_settings=self.app_settings_builder.build(),
                 rag_service=make_test_rag_service(),
@@ -150,6 +154,7 @@ class NativeEditedMessageSessionTests(SettingsTestCase):
         self.assertEqual(captured["new_text"], "replacement")
         self.assertIs(captured["provider_port"], provider)
         self.assertIs(captured["memory_service"], memory)
+        self.assertIs(captured["npc_service"], npc)
         self.assertIs(captured["persona_service"], persona)
         self.assertEqual(sent, [])
         self.assertEqual(

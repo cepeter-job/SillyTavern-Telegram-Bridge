@@ -3,6 +3,7 @@ from application_test_setup import (
     make_test_application_services,
     make_test_group_service,
     make_test_memory_service,
+    make_test_npc_service,
     make_test_persona_service,
     make_test_provider_port,
     make_test_rag_service,
@@ -557,6 +558,7 @@ class GroupTransactionTests(SettingsTestCase):
                 group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
                 provider_port=make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "Reply"),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 persona_service=make_test_persona_service(),
                 app_settings=self.app_settings_builder.build(),
                 rag_service=make_test_rag_service(),
@@ -597,6 +599,7 @@ class GroupTransactionTests(SettingsTestCase):
                 group_service=make_test_group_service(app_settings=self.app_settings_builder.build()),
                 provider_port=make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "Reply"),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 persona_service=make_test_persona_service(),
                 group_director_service=make_test_application_services(
                     app_settings=self.app_settings_builder.build()

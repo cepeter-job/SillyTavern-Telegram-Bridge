@@ -15,6 +15,7 @@ from bridge.greetings import send_greeting_menu
 from bridge.help_details import send_help_command, send_help_menu
 from bridge.light_novel_panels import send_light_novel_menu
 from bridge.model_selection import task_model_for_session
+from bridge.npc_service import NpcService
 from bridge.prompt_diagnostics import prompt_diagnostics
 from bridge.prompt_panels import send_prompt_menu
 from bridge.provider_panels import send_model_target_menu
@@ -261,6 +262,7 @@ def _handle_chat(
     request_context,
     delivery_port,
     memory_service,
+    npc_service: NpcService,
     persona_service,
     provider_port,
     rag_service: RagService,
@@ -284,6 +286,7 @@ def _handle_chat(
             operation_id,
             provider_port=provider_port,
             memory_service=memory_service,
+            npc_service=npc_service,
             persona_service=persona_service,
             request_context=request_context,
             rag_service=rag_service,
@@ -300,6 +303,7 @@ def _handle_chat(
             provider_port=provider_port,
             delivery_port=delivery_port,
             memory_service=memory_service,
+            npc_service=npc_service,
             persona_service=persona_service,
             app_settings=request_context.app_settings,
             rag_service=rag_service,
@@ -322,6 +326,7 @@ def _handle_chat(
             provider_port=provider_port,
             delivery_port=delivery_port,
             memory_service=memory_service,
+            npc_service=npc_service,
             persona_service=persona_service,
             app_settings=request_context.app_settings,
             rag_service=rag_service,
@@ -351,6 +356,7 @@ def handle_command_route(
     delivery_port,
     group_service,
     memory_service,
+    npc_service: NpcService,
     persona_service,
     provider_port,
     sync_service,
@@ -418,6 +424,7 @@ def handle_command_route(
         delivery_port=delivery_port,
         group_service=group_service,
         memory_service=memory_service,
+        npc_service=npc_service,
         persona_service=persona_service,
         provider_port=provider_port,
         sync_service=sync_service,
@@ -453,6 +460,7 @@ def handle_command_route(
         request_context=request_context,
         delivery_port=delivery_port,
         memory_service=memory_service,
+        npc_service=npc_service,
         persona_service=persona_service,
         provider_port=provider_port,
         rag_service=rag_service,

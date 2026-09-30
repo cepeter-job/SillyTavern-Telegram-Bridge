@@ -11,6 +11,7 @@ from bridge.generation_recovery import _generation_operation_recovery
 from bridge.light_novel_repository import regeneration_choice_panel_message_ids
 from bridge.light_novel_turn import begin_novel_turn
 from bridge.memory_service import MemoryService
+from bridge.npc_service import NpcService
 from bridge.operations import set_operation_phase
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
@@ -32,6 +33,7 @@ def regenerate_last(
     provider_port: ProviderPort,
     delivery_port: DeliveryPort,
     memory_service: MemoryService,
+    npc_service: NpcService,
     persona_service: PersonaService,
     app_settings: AppSettings,
     rag_service: RagService,
@@ -104,6 +106,7 @@ def regenerate_last(
         return
 
     user_text = rows[last_user_index][2]
+    last_user_rowid = int(rows[last_user_index][0])
     history_rows = [(row[1], row[2]) for row in rows[:last_user_index]]
     rag_bundle = rag_service.bundle(db, chat_id, user_text)
     memory_prompt = memory_service.prompt_context(
@@ -113,6 +116,15 @@ def regenerate_last(
         fields,
         user_text,
     )
+    npc_context = npc_service.context_for_prompt(
+        db,
+        chat_id,
+        session,
+        fields,
+        user_text,
+        history_rows,
+        through_rowid=last_user_rowid,
+    )
     messages = build_chat_messages(
         session,
         fields,
@@ -120,6 +132,7 @@ def regenerate_last(
         history_rows,
         memory_context=memory_prompt.recall,
         episodic_context=memory_prompt.episodic,
+        npc_context=npc_context,
         session_summary=memory_prompt.summary,
         persona_service=persona_service,
         rag_context=rag_service.context_for_prompt(db, chat_id, user_text, rag_bundle),
@@ -141,7 +154,6 @@ def regenerate_last(
         rag_service=rag_service,
         novel_turn=novel_turn,
     )
-    last_user_rowid = int(rows[last_user_index][0])
     old_message_ids = recovery.outgoing_ids_after(
         db,
         chat_id,
@@ -169,6 +181,7 @@ def regenerate_last(
     )
 
     def persist_regeneration():
+        npc_service.rollback_from_row(db, chat_id, session_id, last_user_rowid + 1)
         db.execute(
             "DELETE FROM messages WHERE chat_id=? AND session_id=? AND rowid>?",
             (chat_id, session_id, last_user_rowid),

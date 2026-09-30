@@ -108,6 +108,7 @@ def test_prepare_message_forwards_pending_context_through_service(monkeypatch):
         group=group,
         provider=provider,
         memory=memory,
+        npc=object(),
         persona=persona,
         session=make_test_session_service(app_settings=make_test_settings()),
     )
@@ -138,6 +139,7 @@ def test_prepare_message_forwards_pending_context_through_service(monkeypatch):
         group_director_service=services.group_director,
         input_flow_service=services.input_flow,
         memory_service=services.memory,
+        npc_service=services.npc,
         persona_service=services.persona,
         provider_port=services.provider,
         rag_service=make_test_rag_service(),

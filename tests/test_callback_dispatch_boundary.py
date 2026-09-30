@@ -70,6 +70,7 @@ class CallbackDispatchBoundaryTests(SettingsTestCase):
             provider=object(),
             delivery=object(),
             memory=object(),
+            npc=object(),
             persona=object(),
             sync=object(),
             session=make_test_session_service(app_settings=make_test_settings()),

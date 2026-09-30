@@ -7,6 +7,7 @@ from application_test_setup import (
     make_test_group_service,
     make_test_input_flow_service,
     make_test_memory_service,
+    make_test_npc_service,
     make_test_persona_service,
     make_test_request_context,
 )
@@ -366,6 +367,7 @@ class AuditRegressionTests(SettingsTestCase):
                         app_settings=self.app_settings_builder.build()
                     ).provider,
                     memory_service=make_test_memory_service(),
+                    npc_service=make_test_npc_service(),
                     persona_service=make_test_persona_service(),
                     request_context=make_test_request_context(
                         self.db, session["session_id"], app_settings=self.app_settings_builder.build()
@@ -609,7 +611,13 @@ class AuditRegressionTests(SettingsTestCase):
             self.assertEqual(panel[0][1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"], "reset:confirm")
             self.assertEqual(self.db.execute("SELECT COUNT(*) FROM messages").fetchone()[0], 1)
             _owner_message_commands.reset_session(
-                self.db, "token", "chat", session, operation_id=902, memory_service=make_test_memory_service()
+                self.db,
+                "token",
+                "chat",
+                session,
+                operation_id=902,
+                memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
             )
         finally:
             _m_message_commands.card_fields_from_file = original_card
@@ -663,6 +671,7 @@ class AuditRegressionTests(SettingsTestCase):
                 memory_service=make_test_memory_service(
                     purge_session_memory=_m_memory.purge_hindsight_session,
                 ),
+                npc_service=make_test_npc_service(),
             )
         finally:
             _m_memory.purge_hindsight_session = original_purge

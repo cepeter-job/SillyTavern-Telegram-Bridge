@@ -39,6 +39,7 @@ def handle_primary_panel_callback(
     provider_port: ProviderPort,
     delivery_port: DeliveryPort,
     memory_service,
+    npc_service,
     persona_service,
     sync_service: SyncService,
     request_context,
@@ -131,6 +132,7 @@ def handle_primary_panel_callback(
         session_id,
         operation_id,
         memory_service=memory_service,
+        npc_service=npc_service,
     ):
         return True
     if handle_prompt_and_feature_callback(
@@ -192,6 +194,8 @@ def handle_primary_panel_callback(
         session_id,
         operation_id,
         delivery_port=delivery_port,
+        memory_service=memory_service,
+        npc_service=npc_service,
         request_context=request_context,
     )
 

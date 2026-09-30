@@ -2,6 +2,7 @@ from application_test_setup import (
     ensure_application_extensions,
     make_test_conversation_service,
     make_test_memory_service,
+    make_test_npc_service,
 )
 from settings_test_support import SettingsTestCase
 
@@ -102,6 +103,7 @@ class ResetBehaviorTests(SettingsTestCase):
             self.session["session_id"],
             None,
             memory_service=make_test_memory_service(),
+            npc_service=make_test_npc_service(),
         )
         self.assertTrue(handled)
         self.assertEqual(sent, ["Reset complete. The active session was cleared."])
@@ -126,6 +128,7 @@ class ResetBehaviorTests(SettingsTestCase):
             "chat",
             self.session,
             memory_service=make_test_memory_service(),
+            npc_service=make_test_npc_service(),
         )
 
         self.assertEqual(
@@ -153,6 +156,7 @@ class ResetBehaviorTests(SettingsTestCase):
                 "chat",
                 self.session,
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
             )
         finally:
             _m_message_commands.delete_outgoing_messages = original_delete

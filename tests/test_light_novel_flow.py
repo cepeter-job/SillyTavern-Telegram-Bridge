@@ -309,6 +309,7 @@ def test_generation_attaches_choices_without_leaking_protocol(novel_db, monkeypa
         group_service=services.group,
         provider_port=port,
         memory_service=services.memory,
+        npc_service=services.npc,
         persona_service=services.persona,
         app_settings=settings,
         rag_service=services.rag,

@@ -365,3 +365,16 @@ def set_npc_entity_last_seen(db: sqlite3.Connection, npc_id: int, source_rowid: 
         "UPDATE npc_entities SET last_seen_rowid=?,updated_at=? WHERE npc_id=?",
         (int(source_rowid), float(now), int(npc_id)),
     )
+
+
+def load_npc_fields_as_of(db: sqlite3.Connection, npc_id: int, through_rowid: int) -> dict[str, NpcFieldState]:
+    """Reconstruct NPC field state at or before one transcript row."""
+    fields: dict[str, NpcFieldState] = {}
+    for change in list_npc_field_history(db, npc_id):
+        if change.source_rowid > int(through_rowid):
+            break
+        if change.after is None:
+            fields.pop(change.field_key, None)
+        else:
+            fields[change.field_key] = change.after
+    return fields

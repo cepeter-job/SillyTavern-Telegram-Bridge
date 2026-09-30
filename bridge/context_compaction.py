@@ -143,7 +143,7 @@ def compact_chat_messages(
     compacted = copy.deepcopy(messages)
     original_tokens = estimate_message_tokens(compacted)
     dropped_history = 0
-    rag_trimmed = memory_trimmed = summary_trimmed = False
+    rag_trimmed = memory_trimmed = npc_trimmed = summary_trimmed = False
 
     def current_tokens() -> int:
         return estimate_message_tokens([message for message in compacted if not message.get("_drop_for_context")])
@@ -164,7 +164,7 @@ def compact_chat_messages(
 
     def shrink_user_tagged_sections(compute_target: bool, fallback_to_last: bool) -> None:
         """Shrink <untrusted_*> sections in the latest user message."""
-        nonlocal rag_trimmed, memory_trimmed
+        nonlocal rag_trimmed, memory_trimmed, npc_trimmed
         latest = next(
             (message for message in reversed(compacted) if message.get("role") == "user"),
             compacted[-1] if fallback_to_last and compacted else None,
@@ -172,7 +172,12 @@ def compact_chat_messages(
         if latest is None:
             return
         text = _text_content(latest)
-        for tag in ("untrusted_data_bank_references", "untrusted_memory", "untrusted_episodic_memory"):
+        for tag in (
+            "untrusted_data_bank_references",
+            "untrusted_memory",
+            "untrusted_episodic_memory",
+            "untrusted_npc_state",
+        ):
             if current_tokens() <= budget:
                 break
             if compute_target:
@@ -193,6 +198,8 @@ def compact_chat_messages(
                 _replace_text_content(latest, text)
                 if tag == "untrusted_data_bank_references":
                     rag_trimmed = True
+                elif tag == "untrusted_npc_state":
+                    npc_trimmed = True
                 else:
                     memory_trimmed = True
 
@@ -231,6 +238,7 @@ def compact_chat_messages(
             "dropped_history": 0,
             "rag_trimmed": False,
             "memory_trimmed": False,
+            "npc_trimmed": False,
             "summary_trimmed": False,
             "over_budget": False,
         }
@@ -267,6 +275,7 @@ def compact_chat_messages(
         "dropped_history": dropped_history,
         "rag_trimmed": rag_trimmed,
         "memory_trimmed": memory_trimmed,
+        "npc_trimmed": npc_trimmed,
         "summary_trimmed": summary_trimmed,
         "over_budget": final_tokens > budget,
     }

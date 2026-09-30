@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import re
 import time
 from dataclasses import replace
 
+import bridge.limits as _limits
 from bridge.npc_repository import (
     delete_npc_entity,
     delete_npc_field,
@@ -16,6 +19,7 @@ from bridge.npc_repository import (
     list_npc_entities,
     list_npc_field_history,
     load_npc_fields,
+    load_npc_fields_as_of,
     purge_npc_session_rows,
     set_npc_entity_last_seen,
     set_npc_extraction_coverage,
@@ -105,6 +109,64 @@ def validate_npc_operation(operation: NpcOperation) -> NpcOperation | None:
 
 def _all_entity_names(entity) -> set[str]:
     return {normalize_npc_name(entity.canonical_name), *(normalize_npc_name(alias) for alias in entity.aliases)}
+
+
+_FIELD_ORDER = (
+    "role",
+    "appearance",
+    "voice",
+    "background",
+    "canon",
+    "location",
+    "agenda",
+    "relationship",
+    "mood",
+    "status",
+    "secrets",
+)
+
+
+def _mentions_name(text: str, name: str) -> bool:
+    haystack = " ".join(str(text or "").split()).casefold()
+    needle = normalize_npc_name(name)
+    if not haystack or not needle:
+        return False
+    return re.search(rf"(?<!\w){re.escape(needle)}(?!\w)", haystack, flags=re.UNICODE) is not None
+
+
+def _scene_participant_names(db, chat_id: str, session_id: str, *, through_rowid: int | None) -> set[str]:
+    row = db.execute(
+        "SELECT state_json,updated_through_rowid FROM scene_states WHERE chat_id=? AND session_id=?",
+        (chat_id, session_id),
+    ).fetchone()
+    if row is None:
+        return set()
+    if through_rowid is not None and int(row[1]) > int(through_rowid):
+        return set()
+    try:
+        state = json.loads(str(row[0] or "{}"))
+    except (TypeError, json.JSONDecodeError):
+        return set()
+    participants = state.get("participants") if isinstance(state, dict) else None
+    names: list[str] = []
+    if isinstance(participants, dict):
+        names.extend(str(key) for key in participants)
+        for value in participants.values():
+            if isinstance(value, dict) and value.get("name"):
+                names.append(str(value["name"]))
+    elif isinstance(participants, list):
+        for value in participants:
+            if isinstance(value, str):
+                names.append(value)
+            elif isinstance(value, dict) and value.get("name"):
+                names.append(str(value["name"]))
+    return {normalize_npc_name(name) for name in names if normalize_npc_name(name)}
+
+
+def _render_npc_field_value(value) -> str:
+    if isinstance(value, list):
+        return "; ".join(_clean_text(item) for item in value if _clean_text(item))
+    return _clean_text(value)
 
 
 class NpcService:
@@ -234,6 +296,121 @@ class NpcService:
             return _NO_CHANGE
         current.pop(matches[0])
         return current if current else _REMOVE_FIELD
+
+    def context_for_prompt(
+        self,
+        db,
+        chat_id: str,
+        session: dict[str, str],
+        fields: dict[str, str],
+        query: str,
+        history_rows: list[tuple[str, str]],
+        *,
+        through_rowid: int | None = None,
+    ) -> str:
+        session_id = str(session["session_id"])
+        entities = [
+            entity
+            for entity in list_npc_entities(db, chat_id, session_id)
+            if through_rowid is None or entity.first_seen_rowid <= int(through_rowid)
+        ]
+        if not entities:
+            return ""
+
+        owners: dict[str, set[int]] = {}
+        for entity in entities:
+            for name in _all_entity_names(entity):
+                if name:
+                    owners.setdefault(name, set()).add(entity.npc_id)
+
+        unique_query: set[int] = set()
+        ambiguous_query: set[int] = set()
+        for name, npc_ids in owners.items():
+            if not _mentions_name(query, name):
+                continue
+            if len(npc_ids) == 1:
+                unique_query.update(npc_ids)
+            else:
+                ambiguous_query.update(npc_ids)
+
+        history_text = "\n".join(str(content) for _role, content in history_rows[-12:])
+        unique_history: set[int] = set()
+        for name, npc_ids in owners.items():
+            if len(npc_ids) == 1 and _mentions_name(history_text, name):
+                unique_history.update(npc_ids)
+
+        scene_names = _scene_participant_names(
+            db,
+            chat_id,
+            session_id,
+            through_rowid=through_rowid,
+        )
+        scene_ids: set[int] = set()
+        for name in scene_names:
+            npc_ids = owners.get(name, set())
+            if len(npc_ids) == 1:
+                scene_ids.update(npc_ids)
+
+        explicitly_resolved = unique_query | unique_history | scene_ids
+        active_character = normalize_npc_name(fields.get("name") or "")
+        ranked = []
+        for entity in entities:
+            if entity.npc_id in ambiguous_query and entity.npc_id not in explicitly_resolved:
+                continue
+            current_fields = (
+                load_npc_fields(db, entity.npc_id)
+                if through_rowid is None
+                else load_npc_fields_as_of(db, entity.npc_id, int(through_rowid))
+            )
+            visible = {}
+            for key, state in current_fields.items():
+                if state.visibility == "restricted":
+                    allowed = {normalize_npc_name(name) for name in state.known_by}
+                    if not active_character or active_character not in allowed:
+                        continue
+                rendered = _render_npc_field_value(state.value)
+                if rendered:
+                    visible[key] = rendered
+            if not visible:
+                continue
+            last_seen = entity.last_seen_rowid
+            if through_rowid is not None:
+                last_seen = min(last_seen, int(through_rowid))
+            ranked.append(
+                (
+                    entity.npc_id in scene_ids,
+                    entity.npc_id in unique_query,
+                    entity.npc_id in unique_history,
+                    last_seen,
+                    entity.npc_id,
+                    entity,
+                    visible,
+                )
+            )
+
+        ranked.sort(key=lambda item: item[:5], reverse=True)
+        blocks: list[str] = []
+        used = 0
+        for *_score, entity, visible in ranked[: _limits.NPC_CONTEXT_MAX_NPCS]:
+            lines = [f"NPC: {entity.display_name}"]
+            for key in _FIELD_ORDER:
+                value = visible.get(key)
+                if value:
+                    lines.append(f"{key.replace('_', ' ').title()}: {value}")
+            block = "\n".join(lines)
+            separator = 2 if blocks else 0
+            remaining = _limits.NPC_CONTEXT_MAX_CHARS - used - separator
+            if remaining <= 0:
+                break
+            if len(block) > remaining:
+                block = block[:remaining].rstrip()
+            if not block:
+                break
+            blocks.append(block)
+            used += separator + len(block)
+            if used >= _limits.NPC_CONTEXT_MAX_CHARS:
+                break
+        return "\n\n".join(blocks)
 
     def rollback_from_row(self, db, chat_id: str, session_id: str, rowid: int) -> int:
         cutoff = int(rowid)

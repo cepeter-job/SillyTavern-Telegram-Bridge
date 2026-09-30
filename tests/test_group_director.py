@@ -448,7 +448,6 @@ class GroupDirectorTests(SettingsTestCase):
         ):
             self.assertNotIn(forbidden, source)
 
-
     def test_grounded_user_director_does_not_center_user_by_default(self):
         old_safe = _owner_card_content.safe_character_path
         old_fields = _owner_card_content.card_fields_from_file

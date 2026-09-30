@@ -2,160 +2,180 @@
 
 ## Before you start
 
-The maintained installation path targets Linux with user systemd and runs as the
-intended non-root user.
+The maintained installer targets Linux with user systemd and must run as the
+intended non-root user. The guided path detects the distribution and installs
+only missing bridge prerequisites. Supported package managers are:
 
-The trust/bootstrap steps happen **before** `install.sh` can provision system
-packages, so `git` and `ssh-keygen` must already exist. On Debian/Ubuntu:
+- Debian/Ubuntu: `apt-get`
+- Fedora/RHEL-family: `dnf` or `yum`
+- Arch-family: `pacman`
+- openSUSE/SUSE-family: `zypper`
 
-```bash
-sudo apt-get update
-sudo apt-get install -y git openssh-client ca-certificates
-```
-
-Have these application values ready:
+Have these application values ready if this is a new bridge configuration:
 
 - Telegram bot token from BotFather.
-- Numeric Telegram user ID to allow.
-- Story provider/model and its credential.
-- A SillyTavern data location, or use the starter data created by the installer.
+- Numeric Telegram user ID(s) allowed to use the bot.
+- Default Story model in `provider::model` form.
+- For the built-in OpenAI-compatible setup: provider endpoint and API key.
 
-The installer can provision user-local Python 3.11+, locked Python dependencies,
-a starter character/avatar, the private environment file, and a hardened user
-systemd service. Tailscale is optional and is needed only for the public Mini App.
+An existing private `.env` is preserved. The wizard asks only for missing
+required values and does not echo secret prompts.
 
-## Install with the user-scope script
+## Guided install
 
-A fresh install has two trust-preserving bootstrap steps: provision the external
-maintainer key once, then install the newest signed `v*` release without
-executing repository code before its tag verifies.
-
-### 1. One-time trust setup
-
-Create the standard external allowed-signers file:
+Download the installer and run it in a terminal:
 
 ```bash
-mkdir -p "$HOME/.config/sillytavern-telegram"
-chmod 700 "$HOME/.config/sillytavern-telegram"
-cat > "$HOME/.config/sillytavern-telegram/trusted-maintainers" <<'EOF'
-cepeter namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGRaxgobK+D+zdXdUzLb1xTQ2EPs9iYkeQGOOlepl+35 cepeter-release-signing
-EOF
-chmod 600 "$HOME/.config/sillytavern-telegram/trusted-maintainers"
-awk '{print $3, $4, $5}' "$HOME/.config/sillytavern-telegram/trusted-maintainers" | ssh-keygen -lf -
+curl --proto '=https' --tlsv1.2 --fail --location \
+  https://raw.githubusercontent.com/cepeter/SillyTavern-Telegram-Bridge/main/install.sh \
+  -o /tmp/sillytavern-telegram-install.sh
+chmod 700 /tmp/sillytavern-telegram-install.sh
+/tmp/sillytavern-telegram-install.sh
 ```
 
-Independently compare the printed fingerprint through a separate trusted
-maintainer channel before proceeding:
+With no arguments, the installer shows:
 
 ```text
-SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI
+1) Standard install                 [recommended]
+2) Install + Tailscale Mini App
+3) Prepare only, do not start
+4) Repair/reinstall dependencies
+5) Advanced options
+0) Exit
 ```
 
-The repository documentation is not the independent verification channel.
-Rotation and revocation procedures are in
-[Operations](operations.md#automatic-signed-update).
+### Standard install
 
-### 2. Install latest signed release
+The recommended option performs the normal user-scope setup:
 
-```bash
-set -euo pipefail
-repo="https://github.com/cepeter/SillyTavern-Telegram-Bridge.git"
-dest="$HOME/sillytavern-telegram-bridge"
-signers="$HOME/.config/sillytavern-telegram/trusted-maintainers"
+1. Detect the Linux family and package manager.
+2. Detect missing bridge prerequisites and install only those packages.
+3. Create the standard external trust file at
+   `~/.config/sillytavern-telegram/trusted-maintainers` when absent.
+4. Verify the pinned maintainer key fingerprint.
+5. Clone without checkout, discover the newest `v*` release tag, verify the
+   signed tag, then create local branch `main` at that exact release commit.
+6. Provision user-local Python/uv and hash-locked bridge dependencies.
+7. Detect an existing SillyTavern installation and native user data.
+8. Collect any missing minimum bridge configuration.
+9. Prepare and start the user systemd service and enable lingering.
 
-git clone --no-checkout "$repo" "$dest"
-cd "$dest"
-tag="$(git tag --list 'v*' --sort=-version:refname | sed -n '1p')"
-test -n "$tag" || { echo "No release tag found" >&2; exit 1; }
-git -c gpg.format=ssh \
-  -c "gpg.ssh.allowedSignersFile=$signers" \
-  -c gpg.minTrustLevel=fully verify-tag "$tag"
-git checkout -B main "$tag^{commit}"
-./install.sh --system-deps --no-start
+The resulting source tree remains a real Git checkout on branch `main`, so the
+built-in signed `/update` flow continues to use the same external trust anchor.
+
+### SillyTavern autodetection
+
+The installer preserves an already configured `SILLYTAVERN_DIR` first. When
+none is configured, it checks common user-scope locations and a bounded set of
+home-directory application/repository folders.
+
+A candidate must contain SillyTavern markers such as `server.js`,
+`package.json`, and `config.yaml`. The installer reads `config.yaml`
+`dataRoot` instead of assuming `./data`, then discovers native users beneath
+that data root. If multiple valid installations or users exist, the wizard asks
+which one to use.
+
+For the selected user, the bridge records explicit native paths for character
+cards, World Info, System Prompts, Persona settings, and Persona avatars. If
+character PNGs already exist, one is selected as the initial default instead of
+forcing the starter card.
+
+The menu also reports whether Node/npm and `node_modules` are present for the
+detected SillyTavern installation. The bridge installer does **not** run
+`npm install`, upgrade Node, or otherwise manage SillyTavern's own dependencies.
+
+If no installation is detected, the bridge keeps its isolated starter data
+under the normal user-local SillyTavern fallback path.
+
+### Minimal configuration prompts
+
+For a fresh bridge configuration, the wizard asks only for:
+
+```text
+Telegram bot token
+Allowed Telegram user ID(s)
+Default model (provider::model)
+OpenAI-compatible API endpoint
+Provider API key
 ```
 
-This leaves a real Git checkout on local branch `main` whose initial contents
-are exactly the verified release commit. The external signer file remains
-outside the repository and is reused by the built-in signed `/update` flow.
+The endpoint hostname is written automatically to
+`SILLYTAVERN_PROVIDER_ALLOWED_HOSTS`; it is not requested separately.
 
-### 3. Configure the generated private environment
+If a provider catalog/model is already configured, those values are preserved.
+If all required Telegram/model values are already valid, the installer does not
+re-prompt for existing secrets.
 
-The first installer run creates:
+Choose **Configure later** to write the installation files but leave required
+configuration incomplete and keep the service stopped. Rerun `./install.sh`
+later to finish setup.
+
+The generated private environment remains:
 
 ```text
 ~/.local/share/sillytavern-telegram/.env
 ```
 
-Edit that generated file in place. **Do not replace it with `.env.example`.**
-The generated file already contains the installer-selected starter values and
-points `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS` at the standard external trust file.
-At minimum, fill:
+Do not replace it with `.env.example`; existing values, custom provider
+configuration, and custom service units are preserved.
 
-```dotenv
-SILLYTAVERN_TELEGRAM_BOT_TOKEN=your-bot-token
-SILLYTAVERN_TELEGRAM_ALLOWED_USERS=your-numeric-user-id
-SILLYTAVERN_MODEL=default::your-model-id
-SILLYTAVERN_PROVIDER_ENDPOINT=https://your-provider.example/v1
-SILLYTAVERN_PROVIDER_ALLOWED_HOSTS=your-provider.example
-LLM_API_KEY=your-provider-key
-```
+### Install + Tailscale Mini App
 
-For additional providers, Codex OAuth, network allowlists, native paths, memory,
-RAG, voice, and other settings, see [Configuration](configuration.md).
+This option uses the same guided setup and additionally prepares Tailscale
+Funnel. Tailscale itself must already be installed and signed in. The project
+supports the current Serve/Funnel CLI and requires Tailscale 1.52+.
 
-### 4. Start the bridge
-
-For a Telegram-only deployment, rerun the installer without Funnel:
-
-```bash
-cd ~/sillytavern-telegram-bridge
-./install.sh --linger
-```
-
-This validates the private configuration, keeps the installer-managed service
-unit, enables/restarts the user service, and enables lingering so it can continue
-after logout. It does **not** publish the Mini App.
-
-For the optional public Mini App, first install and sign in to Tailscale. This
-project supports the current Serve/Funnel CLI and therefore requires Tailscale
-1.52+. On Linux, an administrator can allow the bridge user to manage the local
-`tailscaled` daemon with:
+An administrator can allow the bridge user to manage the local daemon with:
 
 ```bash
 sudo tailscale set --operator="$USER"
 ```
 
-That operator setting controls the **local daemon only**. Funnel separately
-requires the tailnet prerequisites and authorization, including MagicDNS, HTTPS
-certificates, and permission to use Funnel. Then run:
+Funnel authorization still depends on the tailnet's MagicDNS, HTTPS, and Funnel
+policy. Public Mini App requests remain protected by Telegram `initData`
+validation and `SILLYTAVERN_TELEGRAM_ALLOWED_USERS`.
 
-```bash
-./install.sh --with-tailscale-funnel --linger
+### Prepare and dependency repair choices
+
+**Prepare only** provisions the verified checkout, environment, dependencies,
+and service definition without starting the bridge.
+
+**Repair/reinstall dependencies** re-checks missing system prerequisites and the
+bridge Python environment. The installer never uses that option to modify an
+existing SillyTavern Node/npm installation.
+
+## Trust model
+
+The easy guided path uses trust on first use (TOFU): the downloaded installer
+contains the pinned release-signing public key, verifies its expected fingerprint
+locally, creates the external allowed-signers file, and then verifies the signed
+release tag before checking out repository code.
+
+The expected current fingerprint is:
+
+```text
+SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI
 ```
 
-Funnel is public internet exposure. Telegram `initData` validation and the
-allowed-user list remain the application's authorization boundary. The installer
-uses the supported Funnel HTTPS ports 443, 8443, then 10000 without resetting
-unrelated Serve/Funnel routes. See [Mini App](miniapp.md) for deployment,
-authorization, and troubleshooting details.
+If your deployment requires an **independent first-key trust boundary**, obtain
+and verify the maintainer signer through a separate trusted channel and use the
+[advanced independently trusted bootstrap](#independently-trusted-bootstrap)
+instead of relying on TOFU.
 
-### 5. Verify the service
+## Verify the service
 
 ```bash
 systemctl --user status sillytavern-telegram.service
 journalctl --user -u sillytavern-telegram.service -n 80 --no-pager
+cd ~/sillytavern-telegram-bridge
 ./.venv/bin/python sillytavern_telegram_bridge.py --check
 ```
-
-The installer preserves existing private `.env` values, native files, custom
-provider YAML, and custom service units. Use `--replace-service` only when you
-explicitly want the installer to back up and replace a custom unit.
 
 ## Updates
 
 Use the bridge's signed `/update` flow for normal upgrades. It requires a clean
-Git checkout on branch `main`, verifies the signed release tag against the
-external trust file, and refuses automatic installation when
+Git checkout on branch `main`, verifies the target signed release tag against
+the external trust file, and refuses automatic installation when
 `requirements.lock` changed.
 
 When dependency changes require a reviewed manual update, use the
@@ -167,7 +187,7 @@ that are not a published signed release.
 
 These paths are intentionally outside the primary user installation flow.
 
-### Bootstrap from an independently obtained installer
+### Independently trusted bootstrap
 
 Keep `--release TAG` for cases where a separately authenticated copy of
 `install.sh` must clone the repository itself:

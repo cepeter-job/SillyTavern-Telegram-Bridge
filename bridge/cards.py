@@ -11,6 +11,7 @@ from pathlib import Path
 import bridge.limits as _limits
 from bridge.callback_tokens import dynamic_callback_token
 from bridge.callback_tokens import resolve_dynamic_callback_token as resolve_dynamic_callback_token
+from bridge.character_backups import character_restore_targets
 from bridge.card_content import active_world_files as active_world_files
 from bridge.card_content import build_system_prompt as build_system_prompt
 from bridge.card_content import build_world_info as build_world_info
@@ -311,8 +312,6 @@ def send_character_restore_menu(
     *,
     request_context: RequestContext,
 ) -> None:
-    from bridge.native_imports import character_restore_targets
-
     options = [
         (filename, Path(filename).stem)
         for filename in character_restore_targets(app_settings=request_context.app_settings)

@@ -170,22 +170,24 @@ def send_npc_history(
         lines.append(f"row {change.source_rowid} · {change.field_key}: {before} → {after}")
     if not history:
         lines.append("No visible field history.")
-    latest_fields: list[str] = []
+    latest_changes = []
     seen = set()
     for change in reversed(history):
         if change.field_key not in seen:
             seen.add(change.field_key)
-            latest_fields.append(change.field_key)
-        if len(latest_fields) >= 6:
+            latest_changes.append(change)
+        if len(latest_changes) >= 6:
             break
     rows = [
         [
             {
-                "text": f"↩️ {field.replace('_', ' ').title()}",
-                "callback_data": f"npc:undo:{entity.npc_id}:{field}",
+                "text": f"↩️ {change.field_key.replace('_', ' ').title()}",
+                "callback_data": (
+                    f"npc:undo:{entity.npc_id}:{change.field_key}:{change.change_id}"
+                ),
             }
         ]
-        for field in latest_fields
+        for change in latest_changes
     ]
     rows.append(
         [
@@ -210,6 +212,7 @@ def send_npc_undo_confirm(
     session: dict[str, str],
     npc_id: int,
     field_key: str,
+    expected_change_id: int,
     message_id: int | None = None,
     *,
     npc_service: NpcService,
@@ -232,7 +235,9 @@ def send_npc_undo_confirm(
         [
             {
                 "text": "✅ Confirm undo",
-                "callback_data": f"npc:undo-confirm:{entity.npc_id}:{field_key}",
+                "callback_data": (
+                    f"npc:undo-confirm:{entity.npc_id}:{field_key}:{expected_change_id}"
+                ),
             },
             {"text": "❌ Cancel", "callback_data": f"npc:history:{entity.npc_id}"},
         ]

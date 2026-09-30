@@ -369,11 +369,7 @@ class NpcService:
         entity = self.get_npc(db, chat_id, session_id, npc_id)
         if entity is None:
             return False
-        history = [
-            change
-            for change in list_npc_field_history(db, entity.npc_id)
-            if change.field_key == str(field_key)
-        ]
+        history = [change for change in list_npc_field_history(db, entity.npc_id) if change.field_key == str(field_key)]
         if not history:
             return False
         latest = history[-1]

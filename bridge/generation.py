@@ -90,6 +90,9 @@ def render_session_response(
         settings,
         provider_port=provider_port,
     )
+    if novel_turn:
+        reply = telegram_safe_output(novel_turn.finalize(reply))
+    return reply
     if humanizer_enabled(session.get("humanizer")):
         rendered = render_humanized_response(
             api_key,
@@ -314,7 +317,7 @@ def _generation_generate_rendered_reply(
     if novel_turn:
         reply = novel_turn.extract(reply)
     reply += rag_service.citation_footer(db, chat_id, query, rag_bundle)
-    return render_session_response(
+    reply = render_session_response(
         api_key,
         session,
         reply,

@@ -98,7 +98,7 @@ transcription. Automatic TTS can speak quoted dialogue from both your messages
 and character replies. Expression sprites can be sent automatically.
 
 And Telegram Forum Topics can host multi-character group sessions with
-round-robin, contextual, manual, or autonomous turn modes.
+round-robin, contextual, Director, manual, or autonomous turn modes.
 
 ---
 
@@ -763,6 +763,7 @@ session, pick characters and World Info, and choose a turn mode:
 |---|---|
 | **Round-robin** | Characters speak in a set order |
 | **Contextual** | The bridge picks the next speaker based on context |
+| **Director** | A hidden bounded model call chooses a known next speaker plus a short scene direction; failures fall back safely |
 | **Manual** | An owner claims or passes the turn; ownership is verified server-side |
 | **Autonomous** | Characters continue on their own within configured bounds |
 

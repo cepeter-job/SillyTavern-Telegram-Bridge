@@ -10,6 +10,8 @@ import sqlite3
 from collections.abc import Callable, Mapping
 from typing import Any, ParamSpec, Protocol, TypeVar
 
+from bridge.provider_errors import ProviderRequestError
+from bridge.provider_health_values import HealthAttempt
 from bridge.request_types import PreparedMessage, RequestContext
 from bridge.token_usage_values import UsageCallback
 
@@ -72,6 +74,18 @@ class ChatSubmit(Protocol):
     def __call__(
         self, label: str, chat_id: str, function: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
     ) -> bool: ...
+
+
+class ProviderPolicy(Protocol):
+    def candidates(self, model: str, purpose: str) -> tuple[str, ...]: ...
+
+    def begin(self, model: str) -> HealthAttempt: ...
+
+    def succeed(self, attempt: HealthAttempt) -> None: ...
+
+    def fail(self, attempt: HealthAttempt, error: ProviderRequestError) -> None: ...
+
+    def cancel(self, attempt: HealthAttempt) -> None: ...
 
 
 class ProviderGenerate(Protocol):

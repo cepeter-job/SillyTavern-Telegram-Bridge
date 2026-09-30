@@ -10,7 +10,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
 
-from bridge.port_contracts import CancellationEvent, ProviderGenerate
+from bridge.port_contracts import CancellationEvent, ProviderGenerate, ProviderPolicy
 from bridge.provider_errors import ProviderRequestError, ProviderTransportError, provider_category_for_status
 from bridge.token_usage_values import TokenUsage, UsageEvent, UsageRecorder, UsageScope
 
@@ -43,6 +43,7 @@ class ProviderPort:
     generate_backend: ProviderGenerate
     usage_recorder: UsageRecorder | None = None
     usage_scope: UsageScope | None = None
+    policy: ProviderPolicy | None = None
 
     def for_usage(self, chat_id: str, session_id: str, purpose: str) -> ProviderPort:
         """Bind trusted use-case identity; never infer ownership from provider session strings."""
@@ -71,6 +72,8 @@ class ProviderPort:
         tracking = self.usage_recorder is not None and self.usage_scope is not None
         if tracking:
             backend = partial(backend, usage_callback=readings.append)
+        attempt = self.policy.begin(model) if self.policy is not None else None
+        observed_model = attempt.selection if attempt is not None else model
         started = time.monotonic()
         status = "failed"
         try:
@@ -87,17 +90,32 @@ class ProviderPort:
                     request_timeout=request_timeout,
                 )
             )
-            status = "cancelled" if tracking and cancel_event is not None and cancel_event.is_set() else "succeeded"
+            cancelled = (tracking or self.policy is not None) and cancel_event is not None and cancel_event.is_set()
+            status = "cancelled" if cancelled else "succeeded"
+            if self.policy is not None and attempt is not None:
+                if cancelled:
+                    self.policy.cancel(attempt)
+                else:
+                    self.policy.succeed(attempt)
             return result
         except Exception as exc:
-            normalized = _normalize_provider_exception(exc, model)
+            normalized = _normalize_provider_exception(exc, observed_model)
+            if self.policy is not None and attempt is not None and normalized is not None:
+                if cancel_event is None or not cancel_event.is_set():
+                    self.policy.fail(attempt, normalized)
             if normalized is not None:
                 raise normalized from None
             raise
         finally:
+            if self.policy is not None and attempt is not None:
+                self.policy.cancel(attempt)
             if tracking and self.usage_recorder is not None and self.usage_scope is not None:
                 event = UsageEvent(
-                    self.usage_scope, model, tuple(readings), max(0, int((time.monotonic() - started) * 1000)), status
+                    self.usage_scope,
+                    observed_model,
+                    tuple(readings),
+                    max(0, int((time.monotonic() - started) * 1000)),
+                    status,
                 )
                 try:
                     self.usage_recorder(event)

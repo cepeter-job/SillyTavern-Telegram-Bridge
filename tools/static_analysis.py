@@ -49,6 +49,9 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
+    "bridge/provider_health_values.py",
+    "bridge/provider_runtime_health.py",
+    "bridge/provider_execution_policy.py",
     "bridge/miniapp_auth.py",
     "bridge/miniapp_config.py",
     "bridge/tailscale_funnel.py",
@@ -114,7 +117,10 @@ TYPE_TARGETS: tuple[str, ...] = (
 PURE_CONTRACT_IMPORTS = {
     "bridge.token_usage_values": frozenset(),
     "bridge.rag_contracts": frozenset(),
-    "bridge.port_contracts": frozenset({"bridge.request_types", "bridge.token_usage_values"}),
+    "bridge.port_contracts": frozenset(
+        {"bridge.request_types", "bridge.token_usage_values", "bridge.provider_errors", "bridge.provider_health_values"}
+    ),
+    "bridge.provider_health_values": frozenset(),
     "bridge.provider_errors": frozenset(),
     "bridge.request_types": frozenset({"bridge.settings"}),
     "bridge.settings": frozenset({"bridge.config_values"}),

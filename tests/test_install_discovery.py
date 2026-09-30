@@ -8,6 +8,7 @@ from bridge.install_support import (
     build_minimal_configuration,
     configure_environment,
     discover_sillytavern,
+    interactive_configure,
     sillytavern_environment_updates,
 )
 
@@ -152,3 +153,67 @@ def test_configure_environment_rejects_newlines_in_values(tmp_path: Path):
 
     with pytest.raises(ValueError):
         configure_environment(env, {"SILLYTAVERN_MODEL": "provider::model\nINJECT=yes"})
+
+
+def test_interactive_configure_collects_minimal_first_run_values(tmp_path: Path):
+    home = tmp_path / "home"
+    root = home / "SillyTavern"
+    _make_sillytavern(root, users=("alice",))
+    env = home / ".local/share/sillytavern-telegram/.env"
+    env.parent.mkdir(parents=True)
+    env.write_text(
+        "SILLYTAVERN_TELEGRAM_BOT_TOKEN=\n"
+        "SILLYTAVERN_TELEGRAM_ALLOWED_USERS=\n"
+        "SILLYTAVERN_MODEL=default::replace-model\n",
+        encoding="utf-8",
+    )
+    env.chmod(0o600)
+    answers = iter(
+        [
+            "1",
+            "12345",
+            "1",
+            "provider::model",
+            "https://api.example.com/v1",
+        ]
+    )
+    secrets = iter(["123456:synthetic", "secret"])
+
+    complete = interactive_configure(
+        home=home,
+        env_path=env,
+        input_fn=lambda _prompt: next(answers),
+        secret_fn=lambda _prompt: next(secrets),
+        output_fn=lambda _message: None,
+    )
+
+    assert complete is True
+    text = env.read_text(encoding="utf-8")
+    assert "SILLYTAVERN_TELEGRAM_BOT_TOKEN=123456:synthetic" in text
+    assert "SILLYTAVERN_TELEGRAM_ALLOWED_USERS=12345" in text
+    assert "SILLYTAVERN_MODEL=provider::model" in text
+    assert "SILLYTAVERN_PROVIDER_ENDPOINT=https://api.example.com/v1" in text
+    assert "SILLYTAVERN_PROVIDER_ALLOWED_HOSTS=api.example.com" in text
+    assert "LLM_API_KEY=secret" in text
+    assert f"SILLYTAVERN_DIR={root}" in text
+    assert f"SILLYTAVERN_CHARACTER_DIR={root / 'data/alice/characters'}" in text
+
+
+def test_interactive_configure_can_defer_without_requesting_secrets(tmp_path: Path):
+    home = tmp_path / "home"
+    root = home / "SillyTavern"
+    _make_sillytavern(root)
+    env = home / ".env"
+    env.write_text("SILLYTAVERN_MODEL=default::replace-model\n", encoding="utf-8")
+    env.chmod(0o600)
+
+    complete = interactive_configure(
+        home=home,
+        env_path=env,
+        input_fn=lambda _prompt: "2",
+        secret_fn=lambda _prompt: (_ for _ in ()).throw(AssertionError("secret prompt should not run")),
+        output_fn=lambda _message: None,
+    )
+
+    assert complete is False
+    assert f"SILLYTAVERN_DIR={root}" in env.read_text(encoding="utf-8")

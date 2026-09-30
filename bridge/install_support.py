@@ -189,11 +189,7 @@ def sillytavern_environment_updates(installation: Mapping[str, object], user: st
     }
     characters = native / "characters"
     try:
-        cards = sorted(
-            path.name
-            for path in characters.iterdir()
-            if path.is_file() and path.suffix.casefold() == ".png"
-        )
+        cards = sorted(path.name for path in characters.iterdir() if path.is_file() and path.suffix.casefold() == ".png")
     except OSError:
         cards = []
     if cards:

@@ -15,7 +15,7 @@ import bridge.callbacks as callbacks
 import bridge.command_panels as command_panels
 import bridge.npc_callbacks as npc_callbacks
 import bridge.npc_panels as npc_panels
-from bridge.npc_repository import find_npc_exact, load_npc_fields
+from bridge.npc_repository import find_npc_exact, list_npc_field_history, load_npc_fields
 from bridge.npc_service import NpcService
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
 from bridge.schema import initialize_database_schema
@@ -239,5 +239,84 @@ def test_npc_command_opens_panel(monkeypatch):
 
         assert handled is True
         assert len(opened) == 1
+    finally:
+        db.close()
+
+
+def test_npc_undo_confirmation_rejects_newer_unreviewed_change(monkeypatch):
+    db = _db()
+    service = NpcService()
+    answers = []
+    delivered = []
+    try:
+        npc_id = _apply(service, db, 10, "cautious")
+        _apply(service, db, 20, "hostile")
+        entity = find_npc_exact(db, "chat", "s1", "maya torres")
+        assert entity is not None
+        reviewed_change = list_npc_field_history(db, entity.npc_id)[-1].change_id
+
+        monkeypatch.setattr(
+            npc_panels,
+            "send_panel_message",
+            lambda _token, _chat, text, markup, *a, **k: delivered.append((text, markup)),
+        )
+        npc_panels.send_npc_history(
+            "token",
+            "chat",
+            db,
+            _session(),
+            _fields(),
+            npc_id,
+            npc_service=service,
+            request_context=make_test_request_context(db, "s1", "actor", app_settings=SettingsBuilder().build()),
+        )
+        undo_callbacks = [
+            button["callback_data"]
+            for row in delivered[-1][1]["inline_keyboard"]
+            for button in row
+            if button["callback_data"].startswith("npc:undo:")
+        ]
+        assert undo_callbacks == [f"npc:undo:{npc_id}:relationship:{reviewed_change}"]
+
+        npc_callbacks.handle_npc_callback(
+            db,
+            "token",
+            {"id": "cb"},
+            lambda _token, _id, text: answers.append(text),
+            undo_callbacks[0],
+            "chat",
+            {"message_id": 55},
+            _session(),
+            _fields(),
+            npc_service=service,
+            provider_port=make_test_provider_port(),
+            request_context=make_test_request_context(db, "s1", "actor", app_settings=SettingsBuilder().build()),
+        )
+        confirm_callbacks = [
+            button["callback_data"]
+            for row in delivered[-1][1]["inline_keyboard"]
+            for button in row
+            if button["callback_data"].startswith("npc:undo-confirm:")
+        ]
+        assert confirm_callbacks == [f"npc:undo-confirm:{npc_id}:relationship:{reviewed_change}"]
+
+        _apply(service, db, 30, "friendly")
+        npc_callbacks.handle_npc_callback(
+            db,
+            "token",
+            {"id": "cb2"},
+            lambda _token, _id, text: answers.append(text),
+            confirm_callbacks[0],
+            "chat",
+            {"message_id": 55},
+            _session(),
+            _fields(),
+            npc_service=service,
+            provider_port=make_test_provider_port(),
+            request_context=make_test_request_context(db, "s1", "actor", app_settings=SettingsBuilder().build()),
+        )
+
+        assert answers[-1] == "NPC state changed; refresh history"
+        assert load_npc_fields(db, entity.npc_id)["relationship"].value == "friendly"
     finally:
         db.close()

@@ -372,6 +372,8 @@ class NpcService:
         session_id: str,
         npc_id: int,
         field_key: str,
+        *,
+        expected_change_id: int | None = None,
     ) -> bool:
         entity = self.get_npc(db, chat_id, session_id, npc_id)
         if entity is None:
@@ -380,6 +382,8 @@ class NpcService:
         if not history:
             return False
         latest = history[-1]
+        if expected_change_id is not None and latest.change_id != int(expected_change_id):
+            raise ValueError("NPC state changed; refresh history")
         prior_state = history[-2].after if len(history) > 1 else None
         now = time.time()
         with write_transaction(db):

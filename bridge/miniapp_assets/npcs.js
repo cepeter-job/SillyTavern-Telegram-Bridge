@@ -51,13 +51,13 @@ async function renderNpcBank() {
       const row=el('div',{class:'card'},
         el('h3',{},change.field.replaceAll('_',' ')),
         el('p',{class:'muted'},'row '+change.source_rowid+' · '+change.operation),
-        el('pre',{},JSON.stringify({before:change.before,after:change.after},null,2)),
-        button('Undo latest '+change.field.replaceAll('_',' '),async()=>{
-          if(!await confirmAction('Undo the latest '+change.field.replaceAll('_',' ')+' change for '+data.npc.name+'?'))return;
-          await api('/npcs/'+enc(npcId)+'/undo',{method:'POST',body:sessionBody({field:change.field,change_id:change.change_id,confirm:true})});
-          notice('NPC field restored.');
-          await detail(npcId);
-        },'danger'));
+        el('pre',{},JSON.stringify({before:change.before,after:change.after},null,2)));
+      if(change.latest_for_field)row.append(button('Undo latest '+change.field.replaceAll('_',' '),async()=>{
+        if(!await confirmAction('Undo the latest '+change.field.replaceAll('_',' ')+' change for '+data.npc.name+'?'))return;
+        await api('/npcs/'+enc(npcId)+'/undo',{method:'POST',body:sessionBody({field:change.field,change_id:change.change_id,confirm:true})});
+        notice('NPC field restored.');
+        await detail(npcId);
+      },'danger'));
       content.append(row);
     }
     root.replaceChildren(content);

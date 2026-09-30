@@ -128,3 +128,19 @@ def test_npc_refresh_is_a_background_miniapp_route():
     route = next(route for route in routes() if route.path == "/npcs/refresh")
     assert route.method == "POST"
     assert route.background_kind == "npc_refresh"
+
+
+def test_npc_history_marks_only_latest_change_per_field_undoable(tmp_path):
+    from bridge.miniapp_npc import npc_history
+
+    services, who, _params, session = setup(tmp_path)
+    npc_id = _apply(services, who, session, 10, "cautious")
+    _apply(services, who, session, 20, "hostile")
+    _apply(services, who, session, 30, "Archivist", field="role")
+
+    history = npc_history(services, who, {"npc_id": str(npc_id)})["history"]
+    relationship = [item for item in history if item["field"] == "relationship"]
+    role = [item for item in history if item["field"] == "role"]
+
+    assert [item["latest_for_field"] for item in relationship] == [False, True]
+    assert [item["latest_for_field"] for item in role] == [True]

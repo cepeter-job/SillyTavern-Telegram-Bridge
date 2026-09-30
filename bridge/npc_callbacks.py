@@ -136,9 +136,10 @@ def handle_npc_callback(
             request_context=request_context,
         )
         return True
-    if action == "undo" and len(parts) == 4:
+    if action == "undo" and len(parts) == 5:
         npc_id = _parse_npc_id(parts[2])
-        if npc_id is None:
+        change_id = _parse_npc_id(parts[4])
+        if npc_id is None or change_id is None:
             answer_callback(token, str(callback.get("id", "")), "NPC not found")
             return True
         send_npc_undo_confirm(
@@ -148,23 +149,30 @@ def handle_npc_callback(
             session,
             npc_id,
             parts[3],
+            change_id,
             message_id,
             npc_service=npc_service,
             request_context=request_context,
         )
         return True
-    if action == "undo-confirm" and len(parts) == 4:
+    if action == "undo-confirm" and len(parts) == 5:
         npc_id = _parse_npc_id(parts[2])
-        if npc_id is None:
+        change_id = _parse_npc_id(parts[4])
+        if npc_id is None or change_id is None:
             answer_callback(token, str(callback.get("id", "")), "NPC not found")
             return True
-        restored = npc_service.undo_latest_field_change(
-            db,
-            chat_id,
-            session["session_id"],
-            npc_id,
-            parts[3],
-        )
+        try:
+            restored = npc_service.undo_latest_field_change(
+                db,
+                chat_id,
+                session["session_id"],
+                npc_id,
+                parts[3],
+                expected_change_id=change_id,
+            )
+        except ValueError:
+            answer_callback(token, str(callback.get("id", "")), "NPC state changed; refresh history")
+            return True
         answer_callback(
             token,
             str(callback.get("id", "")),

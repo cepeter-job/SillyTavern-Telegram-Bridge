@@ -256,25 +256,63 @@ def test_character_backup_list_restore_and_stale_guard(tmp_path):
     alice = next(item for item in backups if item["filename"] == "Alice.png")
     assert alice["installed"] is True
     assert alice["digest"]
+    assert alice["backup_digest"] == hashlib.sha256(original).hexdigest()
+    assert alice["matches_installed"] is False
 
     with pytest.raises(MiniAppError) as missing_confirm:
-        restore_character_backup(s, w, {**p, "filename": "Alice.png", "digest": alice["digest"]})
+        restore_character_backup(
+            s,
+            w,
+            {
+                **p,
+                "filename": "Alice.png",
+                "digest": alice["digest"],
+                "backup_digest": alice["backup_digest"],
+            },
+        )
     assert missing_confirm.value.code == "confirmation"
 
     with pytest.raises(MiniAppError) as stale:
         restore_character_backup(
             s,
             w,
-            {**p, "filename": "Alice.png", "digest": "0" * 64, "confirm": True},
+            {
+                **p,
+                "filename": "Alice.png",
+                "digest": "0" * 64,
+                "backup_digest": alice["backup_digest"],
+                "confirm": True,
+            },
         )
     assert stale.value.code == "stale"
+
+    with pytest.raises(MiniAppError) as changed_backup:
+        restore_character_backup(
+            s,
+            w,
+            {
+                **p,
+                "filename": "Alice.png",
+                "digest": alice["digest"],
+                "backup_digest": "0" * 64,
+                "confirm": True,
+            },
+        )
+    assert changed_backup.value.code == "stale"
 
     restored = restore_character_backup(
         s,
         w,
-        {**p, "filename": "Alice.png", "digest": alice["digest"], "confirm": True},
+        {
+            **p,
+            "filename": "Alice.png",
+            "digest": alice["digest"],
+            "backup_digest": alice["backup_digest"],
+            "confirm": True,
+        },
     )
     assert restored["restored"] is True
+    assert "restoring again will undo this change" in restored["message"]
     assert target.read_bytes() == original
 
 
@@ -291,10 +329,54 @@ def test_deleted_character_can_be_restored_from_miniapp_backup(tmp_path):
     alice = next(item for item in character_backups(s, w, {})["backups"] if item["filename"] == "Alice.png")
     assert alice["installed"] is False
     assert alice["digest"] == ""
+    assert alice["backup_digest"] == hashlib.sha256(raw).hexdigest()
+    assert alice["matches_installed"] is False
 
     restore_character_backup(
         s,
         w,
-        {**p, "filename": "Alice.png", "digest": "", "confirm": True},
+        {
+            **p,
+            "filename": "Alice.png",
+            "digest": "",
+            "backup_digest": alice["backup_digest"],
+            "confirm": True,
+        },
     )
     assert target.read_bytes() == raw
+
+
+def test_character_restore_rejects_backup_identical_to_installed_card(tmp_path):
+    from bridge.miniapp_characters import character_backups, restore_character_backup
+    from bridge.miniapp_errors import MiniAppError
+    from bridge.native_imports import verify_character_card_backup
+
+    s, w, p = setup(tmp_path)
+    target = s.config.character_dir / "Alice.png"
+    raw = target.read_bytes()
+    verify_character_card_backup(target, raw, app_settings=s.config)
+
+    alice = next(item for item in character_backups(s, w, {})["backups"] if item["filename"] == "Alice.png")
+    assert alice["matches_installed"] is True
+
+    with pytest.raises(MiniAppError) as unchanged:
+        restore_character_backup(
+            s,
+            w,
+            {
+                **p,
+                "filename": "Alice.png",
+                "digest": alice["digest"],
+                "backup_digest": alice["backup_digest"],
+                "confirm": True,
+            },
+        )
+    assert unchanged.value.code == "unchanged"
+    assert target.read_bytes() == raw
+
+
+def test_character_restore_ui_disables_identical_backup_and_surfaces_undo_message():
+    source = (Path(__file__).parents[1] / "bridge/miniapp_assets/characters.js").read_text(encoding="utf-8")
+    assert "item.matches_installed" in source
+    assert "backup_digest:item.backup_digest" in source
+    assert "notice(result.message)" in source

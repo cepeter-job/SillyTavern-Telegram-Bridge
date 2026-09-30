@@ -58,6 +58,7 @@ def restore_character_card_backup(
     filename: str,
     *,
     expected_digest: str,
+    expected_backup_digest: str = "",
     app_settings: AppSettings,
 ) -> Path:
     target = _character_target(filename, app_settings=app_settings)
@@ -73,6 +74,11 @@ def restore_character_card_backup(
     ):
         raise ValueError("character backup is unavailable")
     raw = backup.read_bytes()
+    backup_digest = hashlib.sha256(raw).hexdigest()
+    if expected_backup_digest and backup_digest != expected_backup_digest:
+        raise ValueError("character backup changed since preview; reopen it")
+    if expected_digest and expected_digest == backup_digest:
+        raise ValueError("installed character already matches the backup")
     try:
         parse_png_chara_bytes(raw)
     except Exception as exc:

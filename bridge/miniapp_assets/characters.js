@@ -43,14 +43,18 @@ async function renderCharacters() {
       const content=card('Restore character backups',button('Back to characters',load,'secondary'));
       if(!data.backups.length)content.append(empty('No verified character backups are available yet.'));
       for(const item of data.backups) {
-        content.append(card(item.name,
-          el('p',{class:'muted'},item.installed?'Installed card will be backed up before restore.':'Character is currently deleted.'),
-          button('Restore backup',async()=>{
-            if(!await confirmAction('Restore the latest verified backup for '+item.name+'?'))return;
-            await api('/character-backups/'+enc(item.filename)+'/restore',{method:'POST',body:sessionBody({digest:item.digest,confirm:true})});
-            notice('Character backup restored.');
-            await load();
-          },'danger')));
+        const status=item.matches_installed
+          ? el('p',{class:'muted'},'Installed card already matches this backup.')
+          : el('p',{class:'muted'},item.installed?'Installed card will be backed up before restore. Restoring again afterward will undo this change.':'Character is currently deleted.');
+        const action=item.matches_installed
+          ? null
+          : button('Restore backup',async()=>{
+              if(!await confirmAction('Restore the latest verified backup for '+item.name+'?'))return;
+              const result=await api('/character-backups/'+enc(item.filename)+'/restore',{method:'POST',body:sessionBody({digest:item.digest,backup_digest:item.backup_digest,confirm:true})});
+              notice(result.message);
+              await load();
+            },'danger');
+        content.append(card(item.name,status,action));
       }
       root.replaceChildren(content);
     }

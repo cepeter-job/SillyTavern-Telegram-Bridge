@@ -102,10 +102,7 @@ def npc_detail(services: Any, who: MiniAppIdentity, values: dict) -> dict:
                 "first_seen_rowid": entity.first_seen_rowid,
                 "last_seen_rowid": entity.last_seen_rowid,
             },
-            "fields": {
-                key: _field_payload(state, change_id=latest_change.get(key))
-                for key, state in states.items()
-            },
+            "fields": {key: _field_payload(state, change_id=latest_change.get(key)) for key, state in states.items()},
             "session": scope.session,
         }
 
@@ -152,11 +149,7 @@ def undo_npc_field(services: Any, who: MiniAppIdentity, values: dict) -> dict:
         if visible is None:
             raise MiniAppError("NPC not found.", status=404, code="not_found")
         entity, visible_history = visible
-        all_changes = [
-            change
-            for change in list_npc_field_history(scope.db, entity.npc_id)
-            if change.field_key == field_key
-        ]
+        all_changes = [change for change in list_npc_field_history(scope.db, entity.npc_id) if change.field_key == field_key]
         if not all_changes:
             raise MiniAppError("No NPC change is available to undo.", status=404, code="not_found")
         latest = all_changes[-1]

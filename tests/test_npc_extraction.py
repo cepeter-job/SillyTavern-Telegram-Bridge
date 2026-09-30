@@ -283,14 +283,17 @@ def test_existing_state_preserves_restricted_visibility_metadata_in_extractor_pr
 
     try:
         provider = make_test_provider_port(generate_backend=generate)
-        assert refresh_npc_state_now(
-            db,
-            "chat",
-            _session(),
-            _fields(),
-            provider_port=provider,
-            app_settings=SettingsBuilder().build(),
-        ) == 1
+        assert (
+            refresh_npc_state_now(
+                db,
+                "chat",
+                _session(),
+                _fields(),
+                provider_port=provider,
+                app_settings=SettingsBuilder().build(),
+            )
+            == 1
+        )
         _messages(db, ("next user", "next assistant"))
         refresh_npc_state_now(
             db,

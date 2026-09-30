@@ -115,6 +115,10 @@ def npc_history(services: Any, who: MiniAppIdentity, values: dict) -> dict:
         if visible is None:
             raise MiniAppError("NPC not found.", status=404, code="not_found")
         entity, history = visible
+        all_history = list_npc_field_history(scope.db, entity.npc_id)
+        latest_by_field = {}
+        for change in all_history:
+            latest_by_field[change.field_key] = change.change_id
         return {
             "npc": {"npc_id": entity.npc_id, "name": entity.display_name},
             "history": [
@@ -125,6 +129,7 @@ def npc_history(services: Any, who: MiniAppIdentity, values: dict) -> dict:
                     "source_rowid": change.source_rowid,
                     "before": None if change.before is None else change.before.value,
                     "after": None if change.after is None else change.after.value,
+                    "latest_for_field": latest_by_field.get(change.field_key) == change.change_id,
                 }
                 for change in history[-40:]
             ],
@@ -164,6 +169,7 @@ def undo_npc_field(services: Any, who: MiniAppIdentity, values: dict) -> dict:
             scope.session["session_id"],
             npc_id,
             field_key,
+            expected_change_id=expected_change,
         )
         return {"restored": restored}
 

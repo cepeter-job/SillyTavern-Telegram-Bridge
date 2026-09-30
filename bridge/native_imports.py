@@ -15,7 +15,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 from bridge.card_content import card_fields, card_fields_from_file, parse_png_chara_bytes
-from bridge.character_backups import character_restore_targets
 from bridge.character_proposals import (
     discard_character_proposal,
     load_character_proposal,

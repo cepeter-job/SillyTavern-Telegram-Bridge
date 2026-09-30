@@ -18,18 +18,6 @@ GROUNDED_USER_POLICY = (
     "Do not force failure, humiliation, weakness, or punishment merely to oppose the user."
 )
 
-GROUNDED_CHOICE_POLICY = (
-    "Offer only plausible actions grounded in the established user persona and situation. "
-    "Do not assume an action succeeds, grants authority, wins admiration, bypasses established "
-    "obstacles, or reveals unestablished abilities merely because the user can choose it."
-)
-
-GROUNDED_DIRECTOR_POLICY = (
-    "Do not select a speaker merely to make the user the center of attention. "
-    "Choose whoever would naturally act or respond from the established scene, motives, relationships, "
-    "and recent events."
-)
-
 
 def normalize_grounded_user(value: str | None) -> str:
     normalized = str(value or "").strip().casefold()
@@ -70,10 +58,3 @@ def session_grounded_user(db: sqlite3.Connection, chat_id: str, session_id: str)
 def grounded_user_policy(value: str | None) -> str:
     return GROUNDED_USER_POLICY if grounded_user_enabled(value) else ""
 
-
-def grounded_choice_policy(value: str | None) -> str:
-    return GROUNDED_CHOICE_POLICY if grounded_user_enabled(value) else ""
-
-
-def grounded_director_policy(value: str | None) -> str:
-    return GROUNDED_DIRECTOR_POLICY if grounded_user_enabled(value) else ""

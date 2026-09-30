@@ -23,7 +23,14 @@ def make_test_settings(
     home: Path | None = None,
     **overrides: Any,
 ) -> AppSettings:
-    settings = base or load_app_settings(dict(os.environ) if environ is None else environ, home=home or Path.home())
+    if base is None:
+        if environ is None:
+            source_environ = {} if home is not None else dict(os.environ)
+        else:
+            source_environ = environ
+        settings = load_app_settings(source_environ, home=home or Path.home())
+    else:
+        settings = base
     if ("character_dir" in overrides or "default_character_file" in overrides) and "card_file" not in overrides:
         overrides["card_file"] = Path(overrides.get("character_dir", settings.character_dir)) / overrides.get(
             "default_character_file", settings.default_character_file

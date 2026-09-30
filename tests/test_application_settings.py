@@ -37,6 +37,19 @@ def test_settings_are_frozen_snapshots_with_independent_paths(tmp_path):
         first.environ["SILLYTAVERN_MODEL"] = "mutated"
 
 
+def test_test_settings_explicit_home_ignores_ambient_runtime_paths(tmp_path, monkeypatch):
+    from settings_test_support import make_test_settings
+
+    ambient = tmp_path / "ambient-production"
+    isolated = tmp_path / "isolated-test"
+    monkeypatch.setenv("SILLYTAVERN_DIR", str(ambient))
+
+    settings = make_test_settings(home=isolated)
+
+    assert settings.sillytavern_dir == isolated / ".local/share/SillyTavern"
+    assert settings.native_persona_settings_file.is_relative_to(isolated)
+
+
 def test_explicit_settings_override_process_environment(tmp_path, monkeypatch):
     monkeypatch.setenv("SILLYTAVERN_MODEL", "ambient::wrong")
     settings = loader()({"SILLYTAVERN_MODEL": "explicit::right"}, home=tmp_path)

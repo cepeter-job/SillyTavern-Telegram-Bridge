@@ -74,7 +74,7 @@ def _normalize_list_value(value) -> list[str]:
     return result
 
 
-def _validated_operation(operation: NpcOperation) -> NpcOperation | None:
+def validate_npc_operation(operation: NpcOperation) -> NpcOperation | None:
     field_key = str(operation.field_key or "").strip().casefold()
     expected_mode = _expected_mode(field_key)
     op = str(operation.operation or "").strip().casefold()
@@ -126,7 +126,7 @@ class NpcService:
         validated: list[NpcOperation] = []
         rejected = 0
         for operation in group.operations:
-            item = _validated_operation(operation)
+            item = validate_npc_operation(operation)
             if item is None:
                 rejected += 1
             else:

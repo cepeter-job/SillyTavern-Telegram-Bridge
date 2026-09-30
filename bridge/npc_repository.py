@@ -6,8 +6,7 @@ import json
 import sqlite3
 from collections.abc import Iterable
 
-from bridge.npc_types import NpcEntity, NpcFieldChange, NpcFieldState
-from bridge.repository_contracts import require_active_transaction
+from bridge.repository_contracts import NpcEntity, NpcFieldChange, NpcFieldState, require_active_transaction
 
 
 def _normalize_name(value: str) -> str:

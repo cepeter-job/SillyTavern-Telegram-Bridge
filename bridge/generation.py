@@ -254,7 +254,7 @@ def build_chat_messages(
         logging.info(
             (
                 "Context compacted original_tokens=%s final_tokens=%s budget_tokens=%s "
-                "dropped_history=%s rag_trimmed=%s memory_trimmed=%s summary_trimmed=%s"
+                "dropped_history=%s rag_trimmed=%s memory_trimmed=%s npc_trimmed=%s summary_trimmed=%s"
             ),
             stats["original_tokens"],
             stats["final_tokens"],
@@ -262,6 +262,7 @@ def build_chat_messages(
             stats["dropped_history"],
             stats["rag_trimmed"],
             stats["memory_trimmed"],
+            stats["npc_trimmed"],
             stats["summary_trimmed"],
         )
     if stats["over_budget"]:

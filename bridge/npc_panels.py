@@ -182,9 +182,7 @@ def send_npc_history(
         [
             {
                 "text": f"↩️ {change.field_key.replace('_', ' ').title()}",
-                "callback_data": (
-                    f"npc:undo:{entity.npc_id}:{change.field_key}:{change.change_id}"
-                ),
+                "callback_data": (f"npc:undo:{entity.npc_id}:{change.field_key}:{change.change_id}"),
             }
         ]
         for change in latest_changes
@@ -235,9 +233,7 @@ def send_npc_undo_confirm(
         [
             {
                 "text": "✅ Confirm undo",
-                "callback_data": (
-                    f"npc:undo-confirm:{entity.npc_id}:{field_key}:{expected_change_id}"
-                ),
+                "callback_data": (f"npc:undo-confirm:{entity.npc_id}:{field_key}:{expected_change_id}"),
             },
             {"text": "❌ Cancel", "callback_data": f"npc:history:{entity.npc_id}"},
         ]

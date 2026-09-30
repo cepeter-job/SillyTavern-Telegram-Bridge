@@ -316,6 +316,12 @@ def list_npc_field_history(db: sqlite3.Connection, npc_id: int) -> list[NpcField
     return result
 
 
+def delete_npc_field_change(db: sqlite3.Connection, change_id: int) -> bool:
+    require_active_transaction(db)
+    cursor = db.execute("DELETE FROM npc_field_history WHERE change_id=?", (int(change_id),))
+    return int(cursor.rowcount) > 0
+
+
 def delete_npc_history_from_row(db: sqlite3.Connection, npc_id: int, rowid: int) -> int:
     require_active_transaction(db)
     cursor = db.execute(

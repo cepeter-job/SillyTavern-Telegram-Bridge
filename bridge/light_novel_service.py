@@ -12,7 +12,6 @@ from collections.abc import Callable, Sequence
 
 from bridge.card_content import build_world_info
 from bridge.conversation_lifecycle import conversation_state
-from bridge.grounded_user_settings import grounded_choice_policy
 from bridge.job_store import enqueue_job
 from bridge.light_novel_format import parse_choice_response, validate_choices
 from bridge.light_novel_repository import (
@@ -36,6 +35,11 @@ _CHOICE_REQUEST_TIMEOUT_SECONDS = 60
 _CHOICE_PROVIDER_ATTEMPTS = 2
 _CHOICE_GENERATION_LEASE_SECONDS = _CHOICE_PROVIDER_ATTEMPTS * _CHOICE_REQUEST_TIMEOUT_SECONDS + 30
 _EMPTY_CONTENT_MARKERS = ("no assistant content", "no visible content")
+_GROUNDED_CHOICE_POLICY = (
+    "Offer only plausible actions grounded in the established user persona and situation. "
+    "Do not assume an action succeeds, grants authority, wins admiration, bypasses established "
+    "obstacles, or reveals unestablished abilities merely because the user can choose it."
+)
 
 
 class _EmptyChoiceResponse(RuntimeError):
@@ -258,7 +262,7 @@ def ensure_choices(
             "recent_history": [{"role": role, "text": str(text)[:1600]} for role, text in reversed(history)],
             "current_story": story[-10000:],
         }
-        grounding = grounded_choice_policy(session.get("grounded_user"))
+        grounding = _GROUNDED_CHOICE_POLICY if str(session.get("grounded_user") or "").casefold() == "on" else ""
         messages = [
             {
                 "role": "system",

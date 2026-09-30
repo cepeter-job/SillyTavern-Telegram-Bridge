@@ -90,9 +90,6 @@ def render_session_response(
         settings,
         provider_port=provider_port,
     )
-    if novel_turn:
-        reply = telegram_safe_output(novel_turn.finalize(reply))
-    return reply
     if humanizer_enabled(session.get("humanizer")):
         rendered = render_humanized_response(
             api_key,

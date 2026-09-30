@@ -149,7 +149,8 @@ def undo_npc_field(services: Any, who: MiniAppIdentity, values: dict) -> dict:
         if visible is None:
             raise MiniAppError("NPC not found.", status=404, code="not_found")
         entity, visible_history = visible
-        all_changes = [change for change in list_npc_field_history(scope.db, entity.npc_id) if change.field_key == field_key]
+        history = list_npc_field_history(scope.db, entity.npc_id)
+        all_changes = [change for change in history if change.field_key == field_key]
         if not all_changes:
             raise MiniAppError("No NPC change is available to undo.", status=404, code="not_found")
         latest = all_changes[-1]

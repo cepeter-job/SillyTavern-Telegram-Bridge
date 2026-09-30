@@ -45,7 +45,7 @@ def _apply(services, who, session, rowid, value, *, field="relationship", visibi
 def test_npc_list_search_detail_history_and_private_visibility(tmp_path):
     from bridge.miniapp_npc import npc_detail, npc_history, npcs
 
-    services, who, params, session = setup(tmp_path)
+    services, who, _params, session = setup(tmp_path)
     npc_id = _apply(services, who, session, 10, "Archivist", field="role")
     _apply(
         services,
@@ -76,8 +76,8 @@ def test_npc_list_search_detail_history_and_private_visibility(tmp_path):
 
 
 def test_npc_undo_requires_confirmation_and_rejects_stale_change(tmp_path):
-    from bridge.miniapp_errors import MiniAppError
     from bridge.miniapp_npc import npc_detail, undo_npc_field
+    from bridge.miniapp_errors import MiniAppError
 
     services, who, params, session = setup(tmp_path)
     npc_id = _apply(services, who, session, 10, "cautious")

@@ -288,6 +288,8 @@ def generate_and_store_reply(
             generation_settings,
             provider_port=provider_port,
         )
+    if novel_turn:
+        reply = novel_turn.finalize(reply)
     reply = telegram_safe_output(reply)
     stored_reply = (
         reply

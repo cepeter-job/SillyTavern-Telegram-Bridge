@@ -37,6 +37,17 @@ class NovelTurn:
             )
         return story
 
+    def finalize(self, rendered: str) -> str:
+        """Remove protocol text reintroduced by model-backed visible-response rewrites."""
+        if self.record.strategy != "a":
+            return rendered
+        story, choices, _reason, _observed_count = parse_story_response_diagnostic(
+            rendered, self.record.requested_count
+        )
+        if self.choices is None and choices is not None:
+            self.choices = choices
+        return story
+
     def commit(self, db: sqlite3.Connection, assistant_rowid: int, story: str) -> None:
         # Missing/invalid inline choices stay pending. attach_turn() already
         # schedules the durable choice-only worker, which performs one automatic

@@ -8,6 +8,7 @@ import logging
 import sqlite3
 
 from bridge.callback_tokens import resolve_dynamic_callback_token
+from bridge.character_backups import character_restore_targets
 from bridge.callbacks import close_panel_message, discard_panel_binding
 from bridge.card_content import card_fields_from_file, safe_character_path
 from bridge.cards import (
@@ -37,7 +38,6 @@ from bridge.native_imports import (
     apply_character_proposal,
     character_card_digest,
     character_delete_references,
-    character_restore_targets,
     restore_character_card_backup,
     verify_character_card_backup,
 )

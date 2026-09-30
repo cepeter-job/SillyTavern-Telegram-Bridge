@@ -4,10 +4,43 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Add the session-scoped persistent NPC Bank with structured durable fields, reversible field history, Utility-model background extraction, knowledge boundaries, and branch-safe edit/regeneration rollback.
+- Add Telegram `/npc` list, dossier, visible history, manual refresh, and confirmed field undo.
+- Add verified character-card backup restore for Telegram and the Mini App, including deleted-card recovery and stale-revision protection.
+- Add the Mini App NPC Bank with searchable dossiers, visibility-safe history, background refresh, and stale-safe field undo.
+
+### Fixed
+
+- Rerank character cards after Mini App optimizer proposals are applied, matching the Telegram flow, and hide empty rank overlays when no valid tier is available.
+
+## [0.2.047] - 2026-09-30
+
+### Added
+
+- Add a durable episodic-memory layer alongside the existing rolling session continuity summary.
+- Extract durable events from stable conversation segments using the session Utility/Memory model, with importance filtering, normalized deduplication, and source-row tracking.
+- Retrieve query-relevant episodic memories separately from Hindsight and the continuity summary, and inject them as explicitly untrusted historical context.
+- Add shared and restricted episodic-memory visibility with explicit `known_by` character boundaries.
+- Fail closed for unscoped secret memories so private facts are not exposed across characters.
+
+### Changed
+
+- Keep episodic memories isolated to the active session and bounded by the prompt context budget.
+- Suppress stale episodic recall during edited-message regeneration and invalidate memories derived from rewritten history.
+- Purge episodic memories during session reset and session deletion.
+- Add schema migration 5 using a companion visibility table without destructive `ALTER TABLE` upgrades.
+
 ### Fixed
 
 - Delete the consumed Light Novel selection panel and the replaced story's choice panel only after `/regen` commits successfully, while retaining the newly generated panel.
 - Keep edits bound to the owning session's model and character fields, and remove replaced Light Novel choice panels after the edited branch commits.
+
+### Compatibility
+
+- Runtime dependency files are unchanged from v0.2.046.
+- Existing episodic records without visibility metadata remain shared for backward compatibility.
 
 ## [0.2.045] - 2026-09-28
 

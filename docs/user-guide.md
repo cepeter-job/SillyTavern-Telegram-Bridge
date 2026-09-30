@@ -122,7 +122,7 @@ prevents accidental changes.
 
 | Command | What it does |
 |---|---|
-| `/settings` | Open sampling, token, stop-sequence, and Humanizer controls |
+| `/settings` | Open sampling, token, stop-sequence, Humanizer, and Grounded User controls |
 | `/stream` | Open streaming preview controls |
 | `/preset` | Apply, save, or delete generation presets |
 | `/prompt` | Open the read-only prompt inspector |
@@ -446,6 +446,27 @@ The setting applies to normal replies, regeneration, continuation, edited-messag
 regeneration, and image replies through their shared rendering paths.
 
 No weekly Humanizer reference sync, timer, or automatic prompt promotion is installed. The active prompt changes only through reviewed source changes and the normal release process. Prompt attribution is retained in [third-party notices](../THIRD_PARTY_NOTICES.md).
+
+### Optional Grounded User mode
+
+Open `/settings` and toggle **Grounded User: ON/OFF**. It is **off by default**
+and scoped to the selected session. Unlike Humanizer, it does not make a second
+provider request: it adds a compact policy to the Story prompt.
+
+When enabled, explicit Persona/story advantages remain valid, but the model is
+asked not to invent extra competence, authority, knowledge, admiration,
+attraction, protection, or plot importance merely because the user is the
+protagonist. NPCs keep independent goals, loyalties and preferences, and
+success/failure/consequences should follow established abilities, preparation,
+circumstances and prior events. The policy also explicitly rejects the opposite
+failure mode: it must not punish, humiliate, weaken, or force failure simply to
+be "anti-player."
+
+Normal replies, regeneration, edits, continuation, image-context replies and
+Light Novel inline narrative share the main grounded Story prompt. Separate
+Light Novel choice generation additionally avoids choices that presume success
+or unearned authority, and Group Director speaker selection avoids choosing an
+NPC merely to make the user the center of attention.
 
 ### Telegram-safe model output
 

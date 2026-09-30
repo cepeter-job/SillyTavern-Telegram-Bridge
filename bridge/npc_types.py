@@ -42,3 +42,27 @@ class NpcFieldChange:
     after: NpcFieldState | None
     source_rowid: int
     created_at: float
+
+
+@dataclass(frozen=True)
+class NpcOperation:
+    field_key: str
+    operation: str
+    value: Any
+    field_mode: str
+    visibility: str
+    known_by: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class NpcExtractionGroup:
+    name: str
+    aliases: tuple[str, ...]
+    operations: tuple[NpcOperation, ...]
+
+
+@dataclass(frozen=True)
+class NpcApplyResult:
+    applied: int
+    rejected: int
+    npc_id: int = 0

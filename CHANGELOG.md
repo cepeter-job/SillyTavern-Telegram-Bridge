@@ -6,19 +6,45 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [0.2.049] - 2026-09-30
 
+### Added
+
+- Add the session-scoped **Grounded User** mode. It preserves explicit Persona/story advantages while discouraging unearned competence, authority, admiration, attraction, protection, plot centrality, and automatic NPC deference. Light Novel choices and Group Director speaker selection follow the same grounded policy without adding another provider call.
+- Add the guided multi-choice installer with Linux package-manager detection, missing-dependency repair, pinned signer bootstrap, newest signed-release discovery, existing SillyTavern/dataRoot/native-user detection, and minimal first-install Telegram/provider prompts.
+- Add durable delivery-recovery records and checkpoints for committed replies, including source identity, rendered payload, acknowledged Telegram chunks, and bounded retry ownership.
+
+### Changed
+
+- Preserve queued-session ownership across edit, regeneration, continuation, media, greeting, Light Novel, and restart-recovery paths instead of redirecting work through the currently active session.
+- Keep existing SillyTavern Node/npm dependencies observational only during bridge installation; the installer reports their state but does not mutate an existing SillyTavern installation.
+- Harden application/service dependency boundaries and align coverage/security documentation with the enforced CI surface.
+
 ### Fixed
 
 - Bind Telegram NPC undo confirmations to the exact field-history revision the user reviewed, and refuse stale confirmations when background extraction changes that field before confirmation.
 - Show Mini App NPC undo only for the latest visible revision of each field and enforce the same change-revision guard in the NPC service/API.
+- Prevent character restore from performing a no-op rewrite when the installed card already matches the selected verified backup.
+- Sanitize completed Light Novel replies after language rendering so presentation HTML cannot leak into Telegram output.
+- Reject missing explicit image credentials before request construction, preventing fallback to unrelated text-provider credentials.
+- Prevent transcript message identity reuse and remove incompatible response variants when edited/rewritten branches invalidate their source turn.
+- Reject stale curated-memory completions and incompatible NPC audience mutations; keep summary coverage aligned only with successfully processed whole message rows.
+- Enforce manual group-turn ownership before conversational photo, image-document, voice, and ambiguous PNG external work.
+- Checkpoint Telegram delivery acknowledgements and keep locally committed edits/replies recoverable until delivery is complete.
+- Route transient SQLite claim failures through durable worker retry handling rather than misclassifying them as business failures.
+- Bind pending World uploads to the initiating actor and session and atomically consume the one-use authorization.
 
 ### Maintenance
 
 - Isolate explicit test settings homes from ambient runtime environment state so CI and release verification cannot accidentally read machine-level bridge paths.
+- Keep the full protected verification surface green across pytest/coverage, static analysis, dependency audits, secret scanning, mypy, architecture checks, shell syntax, and Mini App DOM smoke tests.
 
 ### Compatibility
 
-- Runtime and development dependency files are unchanged from v0.2.048.
-- Database schema is unchanged from v0.2.048; schema migration 6 remains the latest migration.
+- Runtime and development dependency lock files are unchanged from v0.2.048.
+- Database migrations advance from 6 to **9**:
+  - migration 7 adds non-reusable explicit message identity while preserving existing row IDs and indexes;
+  - migration 8 adds assistant delivery-progress state;
+  - migration 9 adds immutable job delivery intents for stale-safe recovery.
+- Back up the operational database before upgrading. Restoring an older bridge binary requires the matching pre-upgrade database backup.
 
 ## [0.2.048] - 2026-09-30
 

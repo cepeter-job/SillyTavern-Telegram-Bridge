@@ -57,4 +57,3 @@ def session_grounded_user(db: sqlite3.Connection, chat_id: str, session_id: str)
 
 def grounded_user_policy(value: str | None) -> str:
     return GROUNDED_USER_POLICY if grounded_user_enabled(value) else ""
-

@@ -87,7 +87,7 @@ def test_restore_targets_include_deleted_character(card_context):
 
 
 def test_character_menu_exposes_restore_action(card_context, monkeypatch):
-    db, ctx, _ = card_context
+    _db, ctx, _ = card_context
     (ctx.app_settings.character_dir / "Alice.png").write_bytes(_card_png("Alice", "installed"))
     delivered = []
     monkeypatch.setattr(

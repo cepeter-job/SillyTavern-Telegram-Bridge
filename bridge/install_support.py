@@ -305,7 +305,8 @@ def interactive_configure(
                 input_fn=input_fn,
             )
             selected = installations[int(choice) - 1]
-        users = [str(value) for value in selected.get("users", [])]
+        raw_users = selected.get("users", [])
+        users = [str(value) for value in raw_users] if isinstance(raw_users, list) else []
         if len(users) == 1:
             user = users[0]
         elif users:

@@ -325,3 +325,6 @@ def _generation_generate_rendered_reply(
         settings,
         provider_port=provider_port,
     )
+    if novel_turn:
+        reply = telegram_safe_output(novel_turn.finalize(reply))
+    return reply

@@ -313,11 +313,10 @@ if ((LINGER)); then
 fi
 
 validate_default_trust() {
-  local file=$1
+  local file=$1 fingerprints
   [[ -f "$file" && ! -L "$file" ]] || return 1
-  awk '$1 == "cepeter" { print $3, $4, $5 }' "$file" |
-    ssh-keygen -lf - 2>/dev/null |
-    grep -Fq "$TRUST_FINGERPRINT"
+  fingerprints=$(awk '$1 == "cepeter" { print $3, $4, $5 }' "$file" | ssh-keygen -lf - 2>/dev/null) || return 1
+  [[ "$fingerprints" == *"$TRUST_FINGERPRINT"* ]]
 }
 
 ensure_trust_file() {

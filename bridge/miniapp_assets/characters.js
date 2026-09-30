@@ -37,7 +37,24 @@ async function renderCharacters() {
       try{await uploadSelected();}catch(error){notice(error.message||'Upload failed.');}
       finally{file.value='';add.disabled=false;add.removeAttribute('aria-busy');}
     });
-    const header=el('div',{class:'character-page-header'},el('div',{},el('span',{class:'eyebrow'},'YOUR CAST'),el('h2',{},data.total+' Characters'),el('p',{class:'muted'},'Find a character. Start something new.')),add);
+    async function restoreBackups() {
+      const data=await api('/character-backups');scope.set(data.session);
+      const content=card('Restore character backups',button('Back to characters',load,'secondary'));
+      if(!data.backups.length)content.append(empty('No verified character backups are available yet.'));
+      for(const item of data.backups) {
+        content.append(card(item.name,
+          el('p',{class:'muted'},item.installed?'Installed card will be backed up before restore.':'Character is currently deleted.'),
+          button('Restore backup',async()=>{
+            if(!await confirmAction('Restore the latest verified backup for '+item.name+'?'))return;
+            await api('/character-backups/'+enc(item.filename)+'/restore',{method:'POST',body:sessionBody({digest:item.digest,confirm:true})});
+            notice('Character backup restored.');
+            await load();
+          },'danger')));
+      }
+      root.replaceChildren(content);
+    }
+    const restore=button('Restore backups',restoreBackups,'secondary');
+    const header=el('div',{class:'character-page-header'},el('div',{},el('span',{class:'eyebrow'},'YOUR CAST'),el('h2',{},data.total+' Characters'),el('p',{class:'muted'},'Find a character. Start something new.')),el('div',{class:'actions'},restore,add));
     const searchToolbar=el('div',{class:'character-search'},search,searchButton);
     const grid=el('div',{class:'character-grid'});
     for(const item of data.characters) {

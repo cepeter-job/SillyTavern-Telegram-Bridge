@@ -180,7 +180,12 @@ def _bootstrap_installer_fixture(tmp_path):
         'if [ "${1:-}" = --user ] && [ "${2:-}" = is-active ]; then exit 3; fi\nexit 0\n',
     )
     executable("loginctl", 'if [ "${1:-}" = show-user ]; then echo yes; fi\nexit 0\n')
-    executable("ssh-keygen", "exit 0\n")
+    executable(
+        "ssh-keygen",
+        'if [ "${1:-}" = -lf ]; then '
+        'echo "256 SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI cepeter-release-signing (ED25519)"; '
+        "fi\nexit 0\n",
+    )
     executable(
         "git",
         f"""printf '%s\\n' "$*" >> {git_log}\n
@@ -264,3 +269,42 @@ def test_unsafe_main_clone_is_explicit_and_does_not_claim_signature_verification
     calls = git_log.read_text(encoding="utf-8")
     assert "clone --branch main --single-branch" in calls
     assert "verify-tag" not in calls
+
+
+def test_release_clone_bootstraps_standard_pinned_trust_file(tmp_path):
+    script, home, git_log, env = _bootstrap_installer_fixture(tmp_path)
+    result = subprocess.run(
+        [
+            "/bin/bash",
+            str(script),
+            "--release",
+            "v0.2.039",
+            "--no-deps",
+            "--no-start",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    signers = home / ".config/sillytavern-telegram/trusted-maintainers"
+    assert signers.is_file()
+    assert signers.stat().st_mode & 0o077 == 0
+    assert "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGRaxgobK+D+zdXdUzLb1xTQ2EPs9iYkeQGOOlepl+35" in signers.read_text()
+    assert "verify-tag v0.2.039" in git_log.read_text(encoding="utf-8")
+
+
+def test_install_script_contains_interactive_standard_choices_and_multi_distro_detection():
+    text = (ROOT / "install.sh").read_text(encoding="utf-8")
+    for expected in (
+        "Standard install",
+        "Install + Tailscale Mini App",
+        "Prepare only",
+        "/etc/os-release",
+        "apt-get",
+        "dnf",
+        "yum",
+        "pacman",
+        "zypper",
+    ):
+        assert expected in text

@@ -33,7 +33,6 @@ _GROUNDED_DIRECTOR_POLICY = (
 )
 
 
-
 @dataclass(frozen=True)
 class GroupDirectorService:
     """Own the bounded Group Director decision workflow."""

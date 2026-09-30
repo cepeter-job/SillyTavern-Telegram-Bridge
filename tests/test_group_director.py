@@ -447,3 +447,39 @@ class GroupDirectorTests(SettingsTestCase):
             "parse_group_director_decision",
         ):
             self.assertNotIn(forbidden, source)
+
+
+    def test_grounded_user_director_does_not_center_user_by_default(self):
+        old_safe = _owner_card_content.safe_character_path
+        old_fields = _owner_card_content.card_fields_from_file
+        old_generate = self._generate_text
+        calls = []
+
+        _owner_card_content.safe_character_path = lambda filename, *, app_settings=None: Path(filename)
+        _owner_card_content.card_fields_from_file = lambda filename, *, app_settings=None: {
+            "name": Path(filename).stem.title()
+        }
+
+        def fake_generate(_key, model, messages, **kwargs):
+            calls.append((model, messages, kwargs))
+            return '{"speaker":"Alice","direction":"Continue naturally."}'
+
+        self._generate_text = fake_generate
+        self.session["grounded_user"] = "on"
+        try:
+            plan = self._service().plan(
+                self.db,
+                "key",
+                "chat|topic:1",
+                self.session,
+                "I enter the room.",
+            )
+        finally:
+            _owner_card_content.safe_character_path = old_safe
+            _owner_card_content.card_fields_from_file = old_fields
+            self._generate_text = old_generate
+
+        self.assertEqual(plan[0], "alice.png")
+        joined = "\n".join(str(message["content"]) for message in calls[0][1])
+        self.assertIn("Do not select a speaker merely to make the user the center of attention.", joined)
+        self.assertIn("Choose whoever would naturally act or respond", joined)

@@ -178,9 +178,12 @@ def test_grounded_user_toggle_and_settings_reset(context, monkeypatch):
         request_context=ctx,
         rag_service=rag,
     )
-    assert load_session(db, "chat", session["session_id"], "fixture::model", app_settings=ctx.app_settings)[
-        "grounded_user"
-    ] == "on"
+    assert (
+        load_session(db, "chat", session["session_id"], "fixture::model", app_settings=ctx.app_settings)[
+            "grounded_user"
+        ]
+        == "on"
+    )
 
     enum_callbacks.handle_enum_callback(
         db,
@@ -193,6 +196,9 @@ def test_grounded_user_toggle_and_settings_reset(context, monkeypatch):
         request_context=ctx,
         rag_service=rag,
     )
-    assert load_session(db, "chat", session["session_id"], "fixture::model", app_settings=ctx.app_settings)[
-        "grounded_user"
-    ] == "off"
+    assert (
+        load_session(db, "chat", session["session_id"], "fixture::model", app_settings=ctx.app_settings)[
+            "grounded_user"
+        ]
+        == "off"
+    )

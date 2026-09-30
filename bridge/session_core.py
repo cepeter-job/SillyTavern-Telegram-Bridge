@@ -11,6 +11,11 @@ from bridge.card_content import active_world_files, encode_world_files, safe_wor
 from bridge.conversation_lifecycle import initialize_conversation
 from bridge.expressions import expression_last_key, expression_mode_key
 from bridge.generation_settings import get_generation_settings
+from bridge.grounded_user_settings import (
+    grounded_user_key,
+    normalize_grounded_user,
+    session_grounded_user,
+)
 from bridge.humanizer_settings import humanizer_key, normalize_humanizer, session_humanizer
 from bridge.memory_backend import hindsight_session_lock
 from bridge.memory_service import MemoryService
@@ -82,6 +87,7 @@ def _normalize_session_defaults(
             update_session_row(db, session["chat_id"], session["session_id"], changes, time.time())
         session.update(changes)
     session["humanizer"] = session_humanizer(db, session["chat_id"], session["session_id"])
+    session["grounded_user"] = session_grounded_user(db, session["chat_id"], session["session_id"])
     return session
 
 
@@ -144,19 +150,23 @@ def update_session(
     **values: object,
 ) -> None:
     humanizer = normalize_humanizer(str(values.pop("humanizer"))) if "humanizer" in values else None
+    grounded_user = normalize_grounded_user(str(values.pop("grounded_user"))) if "grounded_user" in values else None
     allowed = set(SESSION_COLUMNS) - {"chat_id", "session_id"}
     values = {key: value for key, value in values.items() if key in allowed}
-    if not values and humanizer is None:
+    if not values and humanizer is None and grounded_user is None:
         return
     with write_transaction(db):
         if not claim_operation(db, operation_id, operation_kind, time.time()):
             return
         if values:
             update_session_row(db, chat_id, session_id, values, time.time())
-        if humanizer is not None:
+        if humanizer is not None or grounded_user is not None:
             if load_session_row(db, chat_id, session_id) is None:
                 raise ValueError("session not found")
+        if humanizer is not None:
             store_meta_value(db, humanizer_key(chat_id, session_id), humanizer)
+        if grounded_user is not None:
+            store_meta_value(db, grounded_user_key(chat_id, session_id), grounded_user)
         mark_operation_applied(db, operation_id, operation_kind, time.time())
 
 
@@ -219,6 +229,7 @@ def delete_session_data(
                 target_session_id,
                 (
                     humanizer_key(chat_id, target_session_id),
+                    grounded_user_key(chat_id, target_session_id),
                     swipe_state_key(chat_id, target_session_id),
                     f"swipe_message:{chat_id}:{target_session_id}",
                     expression_mode_key(chat_id, target_session_id),

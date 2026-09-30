@@ -119,10 +119,7 @@ def test_build_minimal_configuration_rejects_invalid_allowed_user(allowed_user: 
 def test_configure_environment_preserves_unrelated_values_and_replaces_managed_keys(tmp_path: Path):
     env = tmp_path / ".env"
     env.write_text(
-        "# existing config\n"
-        "CUSTOM_KEEP=yes\n"
-        "SILLYTAVERN_TELEGRAM_BOT_TOKEN=old-token\n"
-        "SILLYTAVERN_MODEL=old::model\n",
+        "# existing config\\nCUSTOM_KEEP=yes\\nSILLYTAVERN_TELEGRAM_BOT_TOKEN=old-token\\nSILLYTAVERN_MODEL=old::model\\n",
         encoding="utf-8",
     )
     env.chmod(0o600)

@@ -4,10 +4,6 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
-### Security
-
-- Update transitive `urllib3` from 2.7.0 to 2.8.0 after the dependency audit began flagging CVE-2026-97687 and CVE-2026-97689.
-
 
 ## [0.2.049] - 2026-09-30
 

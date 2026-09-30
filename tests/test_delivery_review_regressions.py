@@ -529,14 +529,25 @@ def test_exhausted_regular_delivery_manual_retry_preserves_job_actor_session_pay
 
 @pytest.mark.parametrize("restart", [False, True])
 @pytest.mark.parametrize("committed", [False, True])
-def test_attempt_cap_is_specific_to_committed_delivery_even_without_restart(case, restart, committed):
+@pytest.mark.parametrize("kind", ["edit", "regen", "continue", "greeting", "start_greeting", "legacy_delivery"])
+def test_attempt_cap_is_specific_to_committed_delivery_even_without_restart(case, restart, committed, kind):
     from bridge.operations import begin_operation, set_operation_phase
 
     c = case
     jid = job_store.enqueue_job(c.db, 1, "chat", "s1", 77, "edit", {})
     if committed:
-        begin_operation(c.db, jid, "edit")
-        set_operation_phase(c.db, jid, "edit", "local_committed")
+        begin_operation(c.db, jid, kind)
+        set_operation_phase(c.db, jid, kind, "local_committed")
+        if kind == "legacy_delivery":
+            c.db.execute(
+                "INSERT INTO messages(chat_id,session_id,role,content,created_at) "
+                "VALUES('chat','s1','assistant','saved',1)"
+            )
+            set_meta(
+                c.db,
+                f"operation_payload:{jid}",
+                '{"assistant_rowid":1,"source_content":"saved","delivery_payload":"saved"}',
+            )
     c.db.execute("UPDATE jobs SET state=?,attempts=3", ("running" if restart else "queued",))
     c.db.commit()
     if restart:
@@ -1003,3 +1014,58 @@ def test_choice_worker_does_not_bypass_original_narrative_intent(case, monkeypat
     assert c.db.execute("SELECT * FROM assistant_delivery_progress").fetchall() == before
     assert c.db.execute("SELECT state,attempts FROM jobs WHERE job_id=?", (jid,)).fetchone() == ("queued", 1)
     assert c.db.execute("SELECT state FROM jobs WHERE job_id=?", (choice_jid,)).fetchone() == ("done",)
+
+
+@pytest.mark.parametrize("attempts", [0, 3])
+@pytest.mark.parametrize("restart", [False, True])
+def test_callback_worker_committed_reset_stays_with_reset_owner(case, monkeypatch, attempts, restart):
+    from application_test_setup import make_test_input_flow_service, make_test_sync_service
+
+    from bridge import callbacks, conversation_callbacks
+    from bridge.conversation_lifecycle import lifecycle_key
+    from bridge.operations import begin_operation, set_operation_phase
+    from bridge.panel_bindings import bind_panel_session
+
+    c = case
+    c.services.delivery = make_test_delivery_port()
+    c.services.sync = make_test_sync_service()
+    c.services.input_flow = make_test_input_flow_service(app_settings=c.config)
+    c.services.memory = make_test_memory_service(purge_session_memory=lambda *a: pytest.fail("reset replayed purge"))
+    set_meta(c.db, "active_session:chat", "s1")
+    set_meta(c.db, lifecycle_key("started", "chat", "s1"), "0")
+    bind_panel_session(c.db, "chat", 88, "s1", "100")
+    monkeypatch.setattr(callbacks, "telegram_request", lambda *a: {})
+    monkeypatch.setattr(conversation_callbacks, "send_text", lambda *a: c.notices.append(a[-1]))
+    callback = {
+        "id": "reset-callback",
+        "from": {"id": "100"},
+        "message": {"chat": {"id": "chat"}, "message_id": 88},
+        "data": "reset:confirm",
+        "_queued": True,
+    }
+    jid = job_store.enqueue_job(c.db, 1, "chat", "s1", 88, "callback", {"actor_id": "100"})
+    # This is reset's valid durable crash boundary after clearing its transcript.
+    begin_operation(c.db, jid, "reset")
+    set_operation_phase(c.db, jid, "reset", "local_committed")
+    c.db.execute("UPDATE jobs SET state=?,attempts=?", ("running" if restart else "queued", attempts))
+    c.db.commit()
+    if restart:
+        assert len(job_store.recover_jobs(c.db)) == 1
+    assert c.db.execute("SELECT COUNT(*) FROM messages").fetchone() == (0,)
+    worker_orchestration.process_callback_job(c.services, "chat", callback, jid)
+    assert c.db.execute("SELECT state,attempts FROM jobs WHERE job_id=?", (jid,)).fetchone() == ("done", attempts + 1)
+    assert c.db.execute("SELECT state FROM operations").fetchone() == ("applied",)
+    assert c.db.execute("SELECT COUNT(*) FROM messages").fetchone() == (0,)
+    assert c.db.execute("SELECT COUNT(*) FROM assistant_delivery_progress").fetchone() == (0,)
+    assert c.effects == []
+    assert c.notices == ["Reset complete. The active session was cleared."]
+
+
+def test_callback_worker_fresh_greeting_still_commits_and_delivers(case, monkeypatch):
+    c = case
+    c.offline[0] = False
+    jid, _, sends, extras = _actual_callback_opening(c, monkeypatch)
+    assert c.db.execute("SELECT state,attempts FROM jobs WHERE job_id=?", (jid,)).fetchone() == ("done", 1)
+    assert c.db.execute("SELECT state FROM operations").fetchone() == ("applied",)
+    assert c.db.execute("SELECT complete FROM assistant_delivery_progress").fetchone() == (1,)
+    assert len(sends) == 3 and extras == [] and c.effects == []

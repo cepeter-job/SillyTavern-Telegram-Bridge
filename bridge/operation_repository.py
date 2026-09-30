@@ -95,11 +95,12 @@ def delivery_operation_valid(
 
 
 def committed_callback_operation(db: sqlite3.Connection, job_id: int | None) -> tuple[str, str, str] | None:
-    """The enqueued scope and committed kind, independent of the current panel/view."""
+    """Greeting delivery scope; other local commits retain their domain recovery."""
     row = db.execute(
         "SELECT j.chat_id,j.session_id,o.kind FROM jobs j JOIN operations o "
         "ON o.operation_id=CAST(j.job_id AS TEXT) "
-        "WHERE j.job_id=? AND j.kind='callback' AND o.state='local_committed'",
+        "WHERE j.job_id=? AND j.kind='callback' AND o.state='local_committed' "
+        "AND o.kind IN ('greeting','start_greeting')",
         (job_id,),
     ).fetchone()
     return (str(row[0]), str(row[1]), str(row[2])) if row else None

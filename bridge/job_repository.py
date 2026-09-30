@@ -113,6 +113,12 @@ def exhaust_committed_deliveries(db: sqlite3.Connection, now: float, job_id: int
         updated_at=? WHERE state IN ('queued','scheduled','running') AND attempts>=3
           AND (? IS NULL OR job_id=?) AND (EXISTS (SELECT 1 FROM job_delivery_intents d WHERE d.job_id=jobs.job_id)
             OR EXISTS (SELECT 1 FROM operations o WHERE o.operation_id=CAST(jobs.job_id AS TEXT)
-              AND o.state='local_committed'))""",
+              AND o.state='local_committed'
+              AND (o.kind IN ('greeting','start_greeting','edit','regen','continue')
+                OR EXISTS (SELECT 1 FROM meta m WHERE m.key='operation_payload:' || o.operation_id
+                  AND json_type(CASE WHEN json_valid(m.value) THEN m.value ELSE '{}' END,'$.assistant_rowid')='integer'
+                  AND json_type(CASE WHEN json_valid(m.value) THEN m.value ELSE '{}' END,'$.source_content')='text'
+                  AND json_type(CASE WHEN json_valid(m.value) THEN m.value ELSE '{}' END,'$.delivery_payload')='text'
+                ))))""",
         (now, job_id, job_id),
     )

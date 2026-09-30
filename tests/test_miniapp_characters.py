@@ -156,3 +156,62 @@ def test_upload_rejects_path_and_glob_metacharacters(tmp_path, filename):
     s, w, p = setup(tmp_path)
     with pytest.raises(ValueError):
         upload_character(s, w, {**p, "filename": filename, "data": base64.b64encode(card_bytes()).decode()})
+
+
+def test_character_backup_list_restore_and_stale_guard(tmp_path):
+    from bridge.miniapp_characters import character_backups, restore_character_backup
+    from bridge.miniapp_errors import MiniAppError
+    from bridge.native_imports import verify_character_card_backup
+
+    s, w, p = setup(tmp_path)
+    target = s.config.character_dir / "Alice.png"
+    original = target.read_bytes()
+    verify_character_card_backup(target, original, app_settings=s.config)
+    target.write_bytes(card_bytes("Alice changed"))
+
+    backups = character_backups(s, w, {})["backups"]
+    alice = next(item for item in backups if item["filename"] == "Alice.png")
+    assert alice["installed"] is True
+    assert alice["digest"]
+
+    with pytest.raises(MiniAppError) as missing_confirm:
+        restore_character_backup(s, w, {**p, "filename": "Alice.png", "digest": alice["digest"]})
+    assert missing_confirm.value.code == "confirmation"
+
+    with pytest.raises(MiniAppError) as stale:
+        restore_character_backup(
+            s,
+            w,
+            {**p, "filename": "Alice.png", "digest": "0" * 64, "confirm": True},
+        )
+    assert stale.value.code == "stale"
+
+    restored = restore_character_backup(
+        s,
+        w,
+        {**p, "filename": "Alice.png", "digest": alice["digest"], "confirm": True},
+    )
+    assert restored["restored"] is True
+    assert target.read_bytes() == original
+
+
+def test_deleted_character_can_be_restored_from_miniapp_backup(tmp_path):
+    from bridge.miniapp_characters import character_backups, restore_character_backup
+    from bridge.native_imports import verify_character_card_backup
+
+    s, w, p = setup(tmp_path)
+    target = s.config.character_dir / "Alice.png"
+    raw = target.read_bytes()
+    verify_character_card_backup(target, raw, app_settings=s.config)
+    target.unlink()
+
+    alice = next(item for item in character_backups(s, w, {})["backups"] if item["filename"] == "Alice.png")
+    assert alice["installed"] is False
+    assert alice["digest"] == ""
+
+    restore_character_backup(
+        s,
+        w,
+        {**p, "filename": "Alice.png", "digest": "", "confirm": True},
+    )
+    assert target.read_bytes() == raw

@@ -8,6 +8,7 @@ import hashlib
 from typing import Any
 
 from bridge.card_content import active_world_files, card_fields, character_card_paths, parse_png_chara_bytes
+from bridge.character_backups import character_restore_targets
 from bridge.character_optimizer import prepare_character_optimization
 from bridge.character_proposals import stage_character_proposal
 from bridge.character_quality import character_rank
@@ -23,7 +24,9 @@ from bridge.native_imports import (
     _current_digest,
     _install_character_bytes,
     apply_character_proposal,
+    character_card_digest,
     character_delete_references,
+    restore_character_card_backup,
     verify_character_card_backup,
 )
 from bridge.provider_errors import ProviderRequestError
@@ -133,6 +136,45 @@ def delete_character(services: Any, who: MiniAppIdentity, values: dict) -> dict:
         return {"deleted": True}
 
 
+def character_backups(services: Any, who: MiniAppIdentity, values: dict) -> dict:
+    with session_scope(services, who, values) as scope:
+        rows = []
+        for filename in character_restore_targets(app_settings=services.config):
+            try:
+                current = character_card_digest(filename, app_settings=services.config)
+            except (OSError, ValueError):
+                current = ""
+            rows.append(
+                {
+                    "filename": filename,
+                    "name": filename.rsplit(".", 1)[0],
+                    "installed": bool(current),
+                    "digest": current,
+                }
+            )
+        return {"backups": rows, "session": scope.session}
+
+
+def restore_character_backup(services: Any, who: MiniAppIdentity, values: dict) -> dict:
+    require_confirmation(values)
+    filename = text(values, "filename", 200)
+    expected = text(values, "digest", 64, required=False).casefold()
+    if expected and (len(expected) != 64 or any(ch not in "0123456789abcdef" for ch in expected)):
+        raise MiniAppError("Invalid content revision. Refresh this resource.", status=409, code="stale")
+    with session_scope(services, who, values, write=True) as scope:
+        if filename not in character_restore_targets(app_settings=services.config):
+            raise MiniAppError("Character backup is unavailable.", status=404, code="not_found")
+        current = character_card_digest(filename, app_settings=services.config)
+        if current != expected:
+            raise MiniAppError("Character changed. Refresh before restoring.", status=409, code="stale")
+        restored = restore_character_card_backup(
+            filename,
+            expected_digest=expected,
+            app_settings=services.config,
+        )
+        return {"restored": True, "filename": restored.name, "session": scope.session}
+
+
 def upload_character(services: Any, who: MiniAppIdentity, values: dict) -> dict:
     name = text(values, "filename")
     if (
@@ -227,6 +269,8 @@ def routes() -> list[ApiRoute]:
         ApiRoute("POST", "/characters/{filename}/select", select_character),
         ApiRoute("DELETE", "/characters/{filename}", delete_character),
         ApiRoute("POST", "/characters", upload_character),
+        ApiRoute("GET", "/character-backups", character_backups),
+        ApiRoute("POST", "/character-backups/{filename}/restore", restore_character_backup),
         ApiRoute("POST", "/characters/{filename}/optimize", optimize_character, "character_optimize"),
         ApiRoute("POST", "/character-proposals/{nonce}/apply", apply_proposal),
         ApiRoute("POST", "/character-proposals/{nonce}/discard", discard_proposal),

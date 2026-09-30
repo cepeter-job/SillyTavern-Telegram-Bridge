@@ -6,7 +6,8 @@ const rankTiers=new Set(['S','A','B','C','D']);
 let query='',offset=0,resumedProposal=null;
 function rankVisual(rank) {
   const tier=String(rank||'').trim().toUpperCase();
-  if(!rankTiers.has(tier))return el('span',{class:'badge'},rank||'Unranked');
+  if(!tier)return null;
+  if(!rankTiers.has(tier))return null;
   if(typeof window.matchMedia==='function'&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)return el('span',{class:'badge'},tier);
   const slot=el('span',{class:'rank-slot'}),video=el('video',{class:'rank-video',width:40,height:40,'aria-label':'Rank '+tier}),source=el('source',{src:'/miniapp/ranks/rank_'+tier+'.webm',type:'video/webm'});
   video.autoplay=true;video.loop=true;video.muted=true;video.playsInline=true;

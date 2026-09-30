@@ -107,6 +107,11 @@ class UpdatePanelTests(SettingsTestCase):
                 self.app_settings_builder.update_live_dir = old_live
                 self.app_settings_builder.update_repo_dir = old_repo
 
+    def test_release_changelog_matches_installed_release(self):
+        changelog = Path(__file__).parents[1] / "CHANGELOG.md"
+        self.assertEqual(_m_update._changelog_version(changelog), "0.2.047")
+        self.assertTrue(_m_update._changelog_has_unreleased(changelog))
+
     def test_update_noop_skips_subprocess_when_latest(self):
         from unittest.mock import patch
 

@@ -5,13 +5,21 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import logging
+import sqlite3
 from typing import Any
 
-from bridge.card_content import active_world_files, card_fields, character_card_paths, parse_png_chara_bytes
+from bridge.card_content import (
+    active_world_files,
+    card_fields,
+    card_fields_from_file,
+    character_card_paths,
+    parse_png_chara_bytes,
+)
 from bridge.character_backups import character_restore_targets
 from bridge.character_optimizer import prepare_character_optimization
 from bridge.character_proposals import stage_character_proposal
-from bridge.character_quality import character_rank
+from bridge.character_quality import character_rank, rank_character
 from bridge.conversation_setup import ConversationSetupService
 from bridge.limits import RAG_MAX_FILE_BYTES
 from bridge.miniapp_auth import MiniAppIdentity
@@ -250,7 +258,23 @@ def apply_proposal(services: Any, who: MiniAppIdentity, values: dict) -> dict:
             text(values, "action", 20),
             request_context=scope.context,
         )
-        return {"message": message, "filename": filename}
+        rank = ""
+        if filename:
+            try:
+                rank_character(
+                    scope.db,
+                    scope.chat_id,
+                    scope.session,
+                    card_fields_from_file(filename, app_settings=services.config),
+                    filename,
+                    provider_port=services.provider,
+                    app_settings=services.config,
+                )
+            except (OSError, ValueError, sqlite3.Error):
+                logging.warning("Mini App character applied; optional ranking was unavailable")
+            rank = character_rank(scope.db, filename, app_settings=services.config)
+            message += f" Re-ranked {rank}." if rank else " Rank unavailable; previous rank cleared."
+        return {"message": message, "filename": filename, "rank": rank}
 
 
 def discard_proposal(services: Any, who: MiniAppIdentity, values: dict) -> dict:

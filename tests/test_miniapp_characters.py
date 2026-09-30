@@ -3,6 +3,7 @@ import hashlib
 import json
 import urllib.error
 from email.message import Message
+from pathlib import Path
 
 import pytest
 from miniapp_test_support import card_bytes, identity, make_services
@@ -107,6 +108,88 @@ def test_optimizer_proposal_retains_original_and_is_actor_bound(tmp_path):
         apply_proposal(s, identity("67890"), {**p, "nonce": result["nonce"], "action": "apply", "confirm": True})
     apply_proposal(s, w, {**p, "nonce": result["nonce"], "action": "apply", "confirm": True})
     assert target.read_bytes() != before
+
+
+def test_miniapp_optimizer_apply_reranks_character(tmp_path):
+    from bridge.character_quality import character_rank, store_character_rank
+    from bridge.miniapp_characters import apply_proposal, optimize_character
+    from bridge.provider_port import ProviderPort
+
+    s, w, p = setup(tmp_path)
+    responses = iter(
+        [
+            json.dumps({"description": "A stronger, internally consistent character description."}),
+            "S — the rewritten card is distinctive and consistent.",
+        ]
+    )
+    s.provider = ProviderPort(generate_backend=lambda *a, **k: next(responses))
+    target = s.config.character_dir / "Alice.png"
+    with s.db_factory() as db:
+        store_character_rank(db, "Alice.png", "B", app_settings=s.config)
+
+    proposal = optimize_character(
+        s,
+        w,
+        {
+            **p,
+            "filename": "Alice.png",
+            "digest": hashlib.sha256(target.read_bytes()).hexdigest(),
+        },
+    )
+    applied = apply_proposal(
+        s,
+        w,
+        {**p, "nonce": proposal["nonce"], "action": "apply", "confirm": True},
+    )
+
+    with s.db_factory() as db:
+        assert character_rank(db, "Alice.png", app_settings=s.config) == "S"
+    assert applied["rank"] == "S"
+    assert "Re-ranked S" in applied["message"]
+
+
+def test_miniapp_optimizer_apply_clears_rank_when_reranking_has_no_result(tmp_path):
+    from bridge.character_quality import character_rank, store_character_rank
+    from bridge.miniapp_characters import apply_proposal, optimize_character
+    from bridge.provider_port import ProviderPort
+
+    s, w, p = setup(tmp_path)
+    responses = iter(
+        [
+            json.dumps({"description": "A stronger, internally consistent character description."}),
+            "not a valid tier",
+        ]
+    )
+    s.provider = ProviderPort(generate_backend=lambda *a, **k: next(responses))
+    target = s.config.character_dir / "Alice.png"
+    with s.db_factory() as db:
+        store_character_rank(db, "Alice.png", "A", app_settings=s.config)
+
+    proposal = optimize_character(
+        s,
+        w,
+        {
+            **p,
+            "filename": "Alice.png",
+            "digest": hashlib.sha256(target.read_bytes()).hexdigest(),
+        },
+    )
+    applied = apply_proposal(
+        s,
+        w,
+        {**p, "nonce": proposal["nonce"], "action": "apply", "confirm": True},
+    )
+
+    with s.db_factory() as db:
+        assert character_rank(db, "Alice.png", app_settings=s.config) == ""
+    assert applied["rank"] == ""
+    assert "Rank unavailable" in applied["message"]
+
+
+def test_miniapp_hides_rank_overlay_when_character_has_no_rank():
+    source = (Path(__file__).parents[1] / "bridge/miniapp_assets/characters.js").read_text(encoding="utf-8")
+    assert "if(!tier)return null" in source
+    assert "rank||'Unranked'" not in source
 
 
 def test_optimizer_provider_failure_returns_safe_miniapp_error(tmp_path):

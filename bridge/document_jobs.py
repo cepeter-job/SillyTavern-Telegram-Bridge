@@ -54,6 +54,7 @@ def process_document_job(
                     process_image_message,
                     provider_port=services.provider,
                     group_service=services.group,
+                    npc_service=services.npc,
                     app_settings=services.config,
                     rag_service=services.rag,
                 ),

@@ -80,7 +80,7 @@ def test_service_has_no_concrete_bridge_imports():
 def make_service(*, handled=False, prepare_handled=False, route_error=False):
     module = service_module()
     events = []
-    services = SimpleNamespace(memory=object(), persona=object(), group=object(), provider=object())
+    services = SimpleNamespace(memory=object(), npc=object(), persona=object(), group=object(), provider=object())
     context = SimpleNamespace(db=object(), session_id="queued-session", actor_id="actor")
     prepared = PreparedMessage(
         stripped="hello",

@@ -4,6 +4,7 @@ from application_test_setup import (
     make_test_group_service,
     make_test_input_flow_service,
     make_test_memory_service,
+    make_test_npc_service,
     make_test_persona_service,
     make_test_provider_port,
     make_test_request_context,
@@ -83,6 +84,7 @@ class SessionNamingTests(SettingsTestCase):
                 group_service=self.group,
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 persona_service=make_test_persona_service(),
                 request_context=make_test_request_context(
                     self.db, self.session["session_id"], app_settings=self.app_settings_builder.build()
@@ -143,6 +145,7 @@ class SessionNamingTests(SettingsTestCase):
                 group_service=self.group,
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 persona_service=make_test_persona_service(),
                 request_context=make_test_request_context(
                     self.db, self.session["session_id"], app_settings=self.app_settings_builder.build()
@@ -178,6 +181,7 @@ class SessionNamingTests(SettingsTestCase):
                 group_service=self.group,
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 persona_service=make_test_persona_service(),
                 request_context=make_test_request_context(
                     self.db, self.session["session_id"], app_settings=self.app_settings_builder.build()
@@ -208,6 +212,7 @@ class SessionNamingTests(SettingsTestCase):
                 group_service=self.group,
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 persona_service=make_test_persona_service(),
                 request_context=make_test_request_context(
                     self.db, self.session["session_id"], app_settings=self.app_settings_builder.build()
@@ -246,6 +251,7 @@ class SessionNamingTests(SettingsTestCase):
                 group_service=self.group,
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 persona_service=make_test_persona_service(),
                 request_context=make_test_request_context(
                     self.db, self.session["session_id"], app_settings=self.app_settings_builder.build()
@@ -294,6 +300,7 @@ class SessionNamingTests(SettingsTestCase):
                 group_service=self.group,
                 provider_port=make_test_provider_port(),
                 memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
                 persona_service=make_test_persona_service(),
                 request_context=make_test_request_context(
                     self.db, session["session_id"], app_settings=self.app_settings_builder.build()

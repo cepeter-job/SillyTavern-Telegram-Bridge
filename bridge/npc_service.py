@@ -6,6 +6,7 @@ import json
 import re
 import time
 from dataclasses import replace
+from typing import Any
 
 import bridge.limits as _limits
 from bridge.npc_repository import (
@@ -39,11 +40,11 @@ def normalize_npc_name(value: str) -> str:
     return " ".join(str(value or "").split()).strip().casefold()
 
 
-def _clean_text(value) -> str:
+def _clean_text(value: Any) -> str:
     return " ".join(str(value or "").split()).strip()
 
 
-def _normalize_known_by(values) -> tuple[str, ...]:
+def _normalize_known_by(values: Any) -> tuple[str, ...]:
     if not isinstance(values, (list, tuple)):
         return ()
     result = []
@@ -65,7 +66,7 @@ def _expected_mode(field_key: str) -> str | None:
     return None
 
 
-def _normalize_list_value(value) -> list[str]:
+def _normalize_list_value(value: Any) -> list[str]:
     source = value if isinstance(value, list) else [value]
     result = []
     seen = set()
@@ -107,7 +108,7 @@ def validate_npc_operation(operation: NpcOperation) -> NpcOperation | None:
     return NpcOperation(field_key, op, value, mode, visibility, known_by)
 
 
-def _all_entity_names(entity) -> set[str]:
+def _all_entity_names(entity: Any) -> set[str]:
     return {normalize_npc_name(entity.canonical_name), *(normalize_npc_name(alias) for alias in entity.aliases)}
 
 
@@ -134,7 +135,7 @@ def _mentions_name(text: str, name: str) -> bool:
     return re.search(rf"(?<!\w){re.escape(needle)}(?!\w)", haystack, flags=re.UNICODE) is not None
 
 
-def _scene_participant_names(db, chat_id: str, session_id: str, *, through_rowid: int | None) -> set[str]:
+def _scene_participant_names(db: Any, chat_id: str, session_id: str, *, through_rowid: int | None) -> set[str]:
     row = db.execute(
         "SELECT state_json,updated_through_rowid FROM scene_states WHERE chat_id=? AND session_id=?",
         (chat_id, session_id),
@@ -163,7 +164,7 @@ def _scene_participant_names(db, chat_id: str, session_id: str, *, through_rowid
     return {normalize_npc_name(name) for name in names if normalize_npc_name(name)}
 
 
-def _render_npc_field_value(value) -> str:
+def _render_npc_field_value(value: Any) -> str:
     if isinstance(value, list):
         return "; ".join(_clean_text(item) for item in value if _clean_text(item))
     return _clean_text(value)
@@ -172,7 +173,7 @@ def _render_npc_field_value(value) -> str:
 class NpcService:
     def apply_group(
         self,
-        db,
+        db: Any,
         chat_id: str,
         session_id: str,
         group: NpcExtractionGroup,
@@ -278,7 +279,7 @@ class NpcService:
         return NpcApplyResult(applied, rejected, npc_id if applied or entity is not None else 0)
 
     @staticmethod
-    def _next_value(before: NpcFieldState | None, operation: NpcOperation):
+    def _next_value(before: NpcFieldState | None, operation: NpcOperation) -> Any:
         if operation.operation == "set":
             return operation.value if before is None or before.value != operation.value else _NO_CHANGE
 
@@ -299,7 +300,7 @@ class NpcService:
 
     def context_for_prompt(
         self,
-        db,
+        db: Any,
         chat_id: str,
         session: dict[str, str],
         fields: dict[str, str],
@@ -412,7 +413,7 @@ class NpcService:
                 break
         return "\n\n".join(blocks)
 
-    def rollback_from_row(self, db, chat_id: str, session_id: str, rowid: int) -> int:
+    def rollback_from_row(self, db: Any, chat_id: str, session_id: str, rowid: int) -> int:
         cutoff = int(rowid)
         now = time.time()
         removed = 0
@@ -454,7 +455,7 @@ class NpcService:
                 set_npc_extraction_coverage(db, chat_id, session_id, max(0, cutoff - 1), now)
         return removed
 
-    def purge_session(self, db, chat_id: str, session_id: str) -> int:
+    def purge_session(self, db: Any, chat_id: str, session_id: str) -> int:
         with write_transaction(db):
             return purge_npc_session_rows(db, chat_id, session_id)
 

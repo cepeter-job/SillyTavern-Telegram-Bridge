@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Iterable
+from typing import Any
 
 from bridge.repository_contracts import NpcEntity, NpcFieldChange, NpcFieldState, require_active_transaction
 
@@ -23,7 +24,7 @@ def _decode_aliases(value: str) -> tuple[str, ...]:
     return tuple(str(item) for item in raw if str(item or "").strip())
 
 
-def _entity_from_row(row) -> NpcEntity:
+def _entity_from_row(row: tuple[Any, ...]) -> NpcEntity:
     return NpcEntity(
         npc_id=int(row[0]),
         chat_id=str(row[1]),
@@ -102,6 +103,10 @@ def insert_npc_entity(
             float(now),
         ),
     )
+    if cursor.lastrowid is None:
+        raise RuntimeError("NPC entity insert did not return a row id")
+    if cursor.lastrowid is None:
+        raise RuntimeError("NPC field history insert did not return a row id")
     return int(cursor.lastrowid)
 
 
@@ -127,7 +132,7 @@ def set_npc_extraction_coverage(db: sqlite3.Connection, chat_id: str, session_id
     )
 
 
-def _decode_json(value: str):
+def _decode_json(value: str) -> Any:
     try:
         return json.loads(value)
     except (TypeError, json.JSONDecodeError):
@@ -207,7 +212,7 @@ def insert_npc_field_change(
 ) -> int:
     require_active_transaction(db)
 
-    def value(state, attr):
+    def value(state: NpcFieldState | None, attr: str) -> Any:
         return getattr(state, attr) if state is not None else None
 
     cursor = db.execute(
@@ -234,6 +239,8 @@ def insert_npc_field_change(
             float(now),
         ),
     )
+    if cursor.lastrowid is None:
+        raise RuntimeError("NPC field history insert did not return a row id")
     return int(cursor.lastrowid)
 
 
@@ -253,16 +260,16 @@ def list_npc_field_history(db: sqlite3.Connection, npc_id: int) -> list[NpcField
         created_at = float(row[13])
 
         def snapshot(
-            value_json,
-            mode,
-            visibility,
-            known_by_json,
+            value_json: Any,
+            mode: Any,
+            visibility: Any,
+            known_by_json: Any,
             *,
-            row_npc_id,
-            field_key,
-            row_source,
-            row_created_at,
-        ):
+            row_npc_id: int,
+            field_key: str,
+            row_source: int,
+            row_created_at: float,
+        ) -> NpcFieldState | None:
             if value_json is None or mode is None:
                 return None
             return NpcFieldState(

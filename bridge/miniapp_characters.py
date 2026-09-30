@@ -191,10 +191,8 @@ def restore_character_backup(services: Any, who: MiniAppIdentity, values: dict) 
         )
         message = "Character backup restored."
         if current:
-            message += (
-                " The previous installed card is now the available backup; "
-                "restoring again will undo this change."
-            )
+            message += " The previous installed card is now the available backup;"
+            message += " restoring again will undo this change."
         return {"restored": True, "filename": restored.name, "message": message, "session": scope.session}
 
 

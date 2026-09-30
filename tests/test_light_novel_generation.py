@@ -435,7 +435,8 @@ def test_grounded_user_choice_generation_avoids_assumed_success(novel_db):
     set_task_model(db, "chat", "story", "utility::test")
     session["grounded_user"] = "on"
     record = prepare_turn(db, "chat", session, "grounded-turn", "owner", rng=lambda _: 2)
-    attach_turn(db, record, story_row(db), "The guard blocks the gate.")
+    story = "The guard blocks the gate."
+    attach_turn(db, record, story_row(db, story), story)
     calls = []
 
     def generate(*args, **kwargs):

@@ -37,8 +37,9 @@ Tracking starts only after a bridge version containing the usage ledger is insta
 
 Covered session-owned calls include ordinary stories, edited and image replies,
 regeneration/continuation, response-language rendering, Humanizer, Light Novel
-choices, character ranking/optimization, continuity summaries, memory curation and
-scene-state extraction. Usage follows the actual selected Story/Utility route.
+choices, character ranking/optimization, continuity summaries,
+curated/episodic-memory extraction, NPC-state extraction and scene-state
+extraction. Usage follows the actual selected Story/Utility route.
 Unscoped administrative/provider-health work, group-director planning and embedding
 requests are not included. The Mini App reports the authenticated private bot
 chat only; it does not combine group/forum-chat counters with a personal view.
@@ -68,4 +69,11 @@ authoritative billing record.
 
 ## Upgrade and rollback
 
-Token usage is stored by forward migration **3 — token_usage_ledger**. Existing messages and session settings are preserved when that migration is first applied. Older bridge versions that do not know migration 3 reject the newer schema; rollback across that boundary requires restoring a matching pre-upgrade database backup. Do not delete migration records to bypass the guard.
+Token usage is stored by forward migration **3 — token_usage_ledger**. Existing
+messages and session settings are preserved when that migration is first applied.
+The current application schema continues through migration **9**; migrations
+7–9 add message identity and durable delivery/recovery state but do not change the
+usage-ledger data model. Older bridge versions reject schema versions they do not
+know, so rollback across any newer migration boundary requires restoring a
+matching pre-upgrade database backup. Do not delete migration records to bypass
+the guard.

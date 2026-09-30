@@ -35,6 +35,7 @@ def set_bot_commands(token: str) -> None:
                     {"command": "macro", "description": "Preview a macro"},
                     {"command": "stscript", "description": "Open allowlisted STscript actions"},
                     {"command": "memory", "description": "Open active-session memory controls"},
+                    {"command": "npc", "description": "Open persistent NPC Bank"},
                     {"command": "remember", "description": "Store an explicit memory"},
                     {"command": "summarize", "description": "Confirm active-session summary regeneration"},
                     {"command": "databank", "description": "Open RAG/list/remove panel"},

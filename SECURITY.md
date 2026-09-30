@@ -22,10 +22,12 @@ before sharing them. Do not test against another person's bot, endpoint or data.
 ## Supported development line
 
 This is a **preproduction** project. Security fixes are developed on `main` and
-released after review. Older release tags do not have a standing backport or
-long-term-support commitment. A historical tag is an immutable release record,
-not an assurance that it contains current fixes. Review the changelog and locked
-dependency changes before updating; keep recoverable backups of private data.
+released after review. Older releases do not have a standing backport or
+long-term-support commitment. The repository intentionally retains only the
+latest GitHub release/tag; older release history remains in `CHANGELOG.md` and
+Git history. A published signed tag must never be force-moved or rewritten to
+change its meaning. Review the changelog and locked dependency changes before
+updating; keep recoverable backups of private data.
 
 ## Operational boundaries
 

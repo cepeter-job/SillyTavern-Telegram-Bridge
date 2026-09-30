@@ -134,9 +134,9 @@ Hindsight origins and explicitly bypasses environment proxy routing for loopback
 | `SILLYTAVERN_PERF_LOG` | `false` | Boolean (`true/yes/on/1` or `false/no/off/0`); logs low-overhead timing spans. |
 
 The prompt input budget is approximately context window minus output reserve.
-When over budget, older history, Data Bank context, Hindsight recall and continuity
-summary are reduced before fixed character/system instructions or the current
-user turn.
+When over budget, older history, Data Bank context, Hindsight/episodic recall,
+NPC state and continuity summary are reduced before fixed character/system
+instructions or the current user turn.
 
 #### Hindsight memory
 
@@ -152,6 +152,14 @@ tunnel or reverse proxy bound to `127.0.0.1` or `::1`. The bridge adds both loop
 addresses to `NO_PROXY/no_proxy` before constructing the SDK client. Session
 generation only recalls memory scoped to the active session. Reset/session deletion
 refuses destructive local cleanup when required Hindsight cleanup cannot be verified.
+
+Continuity summary, episodic memory and NPC Bank state are local derived layers
+and do not require separate endpoint environment variables. Episodic extraction
+uses the configured Utility/Memory route after completed summary segments; NPC
+state refresh uses the Utility route in bounded background work. Both remain
+session-scoped, revision-aware and optional prompt context. Curated memory is
+published through Hindsight and therefore still depends on Hindsight memory being
+enabled.
 
 #### Data Bank semantic embeddings
 

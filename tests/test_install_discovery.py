@@ -73,6 +73,8 @@ def test_sillytavern_environment_updates_use_detected_user_data_paths(tmp_path: 
     root = tmp_path / "SillyTavern"
     data = tmp_path / "data-root"
     _make_sillytavern(root, data_root=data, users=("alice",))
+    card = data / "alice" / "characters" / "Alice.png"
+    card.write_bytes(b"fixture")
     installation = {"root": str(root), "data_root": str(data), "users": ["alice"]}
 
     updates = sillytavern_environment_updates(installation, "alice")
@@ -83,6 +85,7 @@ def test_sillytavern_environment_updates_use_detected_user_data_paths(tmp_path: 
     assert updates["SILLYTAVERN_SYSTEM_PROMPTS_DIR"] == str(data / "alice" / "sysprompt")
     assert updates["SILLYTAVERN_NATIVE_SETTINGS_FILE"] == str(data / "alice" / "settings.json")
     assert updates["SILLYTAVERN_NATIVE_AVATAR_DIR"] == str(data / "alice" / "User Avatars")
+    assert updates["SILLYTAVERN_DEFAULT_CHARACTER"] == "Alice.png"
 
 
 def test_build_minimal_configuration_derives_provider_allowed_host():

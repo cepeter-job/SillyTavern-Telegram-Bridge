@@ -20,7 +20,10 @@ def _make_sillytavern(
 ) -> Path:
     root.mkdir(parents=True)
     (root / "server.js").write_text("// fixture\n", encoding="utf-8")
-    (root / "package.json").write_text('{"name":"sillytavern","scripts":{"start":"node server.js"}}\n', encoding="utf-8")
+    (root / "package.json").write_text(
+        '{"name":"sillytavern","scripts":{"start":"node server.js"}}\\n',
+        encoding="utf-8",
+    )
     actual_data = data_root or root / "data"
     config_value = str(actual_data) if data_root is not None else "./data"
     (root / "config.yaml").write_text(f"dataRoot: {config_value}\n", encoding="utf-8")

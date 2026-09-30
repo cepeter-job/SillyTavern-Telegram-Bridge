@@ -291,7 +291,7 @@ try {
   const newView=document.createElement('div');newView.textContent='Current view';finishNew(newView);await newNavigation;
   assert.equal(document.querySelector('main').textContent,'Current view','Only the latest page is committed');
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
-  console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=12 passed; browser-errors=0');
+  console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=13 passed; browser-errors=0');
 } finally {
   dom.window.close();lines.close();child.kill('SIGTERM');
 }

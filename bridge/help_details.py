@@ -121,6 +121,10 @@ HELP_CATEGORIES = {
         ),
         ("/memory curated", "Open the curated-memory panel to view durable distilled facts."),
         ("/memory curated refresh", "Refresh curated durable memory immediately with the configured Utility model."),
+        (
+            "/npc",
+            "Open the active session's persistent NPC Bank with visible dossiers, history, refresh and stale-safe undo.",
+        ),
         ("/remember", "Open scoped input for one explicit long-term fact."),
         ("/remember <fact>", "Store one explicit long-term fact immediately in active-session Hindsight memory."),
         ("/summarize", "Open a confirmation panel before regenerating the active-session summary."),
@@ -196,7 +200,7 @@ HELP_CATEGORY_INTROS = {
     "basic": "Start a conversation, check what's active, or manage your sessions.",
     "characters": "Pick the character, persona, lore, system prompt, or reply language for this session.",
     "generation": "Control how replies are generated, edited, continued, streamed, and retried.",
-    "memory_rag": "Manage memory, summaries, and Data Bank search for this chat.",
+    "memory_rag": "Manage memory, episodic continuity, NPC state, summaries, and Data Bank search for this chat.",
     "voice_group": "Use voice features and manage multi-character group chats in Forum Topics.",
 }
 

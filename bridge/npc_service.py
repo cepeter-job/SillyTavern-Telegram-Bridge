@@ -28,7 +28,14 @@ from bridge.npc_repository import (
     update_npc_entity_seen,
     upsert_npc_field,
 )
-from bridge.npc_types import NpcApplyResult, NpcExtractionGroup, NpcFieldState, NpcOperation
+from bridge.npc_types import (
+    NpcApplyResult,
+    NpcEntity,
+    NpcExtractionGroup,
+    NpcFieldChange,
+    NpcFieldState,
+    NpcOperation,
+)
 from bridge.sqlite_store import write_transaction
 
 _FIXED_FIELDS = frozenset({"appearance", "voice", "background", "canon"})
@@ -302,10 +309,10 @@ class NpcService:
         current.pop(matches[0])
         return current if current else _REMOVE_FIELD
 
-    def list_npcs(self, db: Any, chat_id: str, session_id: str):
+    def list_npcs(self, db: Any, chat_id: str, session_id: str) -> list[NpcEntity]:
         return list_npc_entities(db, chat_id, session_id)
 
-    def get_npc(self, db: Any, chat_id: str, session_id: str, npc_id: int):
+    def get_npc(self, db: Any, chat_id: str, session_id: str, npc_id: int) -> NpcEntity | None:
         return next(
             (entity for entity in list_npc_entities(db, chat_id, session_id) if entity.npc_id == int(npc_id)),
             None,
@@ -325,7 +332,7 @@ class NpcService:
         session: dict[str, str],
         fields: dict[str, str],
         npc_id: int,
-    ) -> tuple[Any, dict[str, NpcFieldState]] | None:
+    ) -> tuple[NpcEntity, dict[str, NpcFieldState]] | None:
         session_id = str(session["session_id"])
         entity = self.get_npc(db, chat_id, session_id, npc_id)
         if entity is None:
@@ -345,7 +352,7 @@ class NpcService:
         session: dict[str, str],
         fields: dict[str, str],
         npc_id: int,
-    ) -> tuple[Any, list[Any]] | None:
+    ) -> tuple[NpcEntity, list[NpcFieldChange]] | None:
         session_id = str(session["session_id"])
         entity = self.get_npc(db, chat_id, session_id, npc_id)
         if entity is None:

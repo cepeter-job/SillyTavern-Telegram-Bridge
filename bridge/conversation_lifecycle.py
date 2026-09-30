@@ -77,8 +77,8 @@ def mark_started(db: sqlite3.Connection, chat_id: str, session_id: str, epoch: i
 
 def reset_conversation(db: sqlite3.Connection, chat_id: str, session_id: str) -> list[int]:
     with write_transaction(db):
-        panel_ids = choice_panel_message_ids(db, chat_id, session_id)
         current = conversation_state(db, chat_id, session_id)
+        panel_ids = choice_panel_message_ids(db, chat_id, session_id, current.epoch)
         store_meta_value(db, lifecycle_key("started", chat_id, session_id), "0")
         store_meta_value(db, lifecycle_key("epoch", chat_id, session_id), str(current.epoch + 1))
         store_meta_value(db, lifecycle_key("opening", chat_id, session_id), "")

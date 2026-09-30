@@ -18,6 +18,7 @@ from bridge.databank_panels import (
     send_databank_versions_menu,
 )
 from bridge.generation_settings import update_generation_settings
+from bridge.grounded_user_settings import grounded_user_enabled, normalize_grounded_user, session_grounded_user
 from bridge.humanizer_settings import humanizer_enabled, normalize_humanizer, session_humanizer
 from bridge.input_flow_service import InputFlowService
 from bridge.language import normalize_stt_language
@@ -97,7 +98,7 @@ def handle_enum_callback(
     if data == "enum:settings:reset":
         with write_transaction(db):
             update_generation_settings(db, chat_id, session["session_id"], **GENERATION_DEFAULTS)
-            update_session(db, chat_id, session["session_id"], humanizer="off")
+            update_session(db, chat_id, session["session_id"], humanizer="off", grounded_user="off")
         send_settings_menu(token, chat_id, db, session["session_id"], message_id, request_context=request_context)
         return
     if data.startswith("enum:settings:reasoning:"):
@@ -116,6 +117,18 @@ def handle_enum_callback(
             update_session(db, chat_id, session["session_id"], humanizer=normalize_humanizer(value))
         except ValueError:
             send_text(token, chat_id, "Invalid Humanizer choice.")
+            return
+        send_settings_menu(token, chat_id, db, session["session_id"], message_id, request_context=request_context)
+        return
+    if data.startswith("enum:grounded:"):
+        value = data.rsplit(":", 1)[1]
+        if value == "toggle":
+            current = grounded_user_enabled(session_grounded_user(db, chat_id, session["session_id"]))
+            value = "off" if current else "on"
+        try:
+            update_session(db, chat_id, session["session_id"], grounded_user=normalize_grounded_user(value))
+        except ValueError:
+            send_text(token, chat_id, "Invalid Grounded User choice.")
             return
         send_settings_menu(token, chat_id, db, session["session_id"], message_id, request_context=request_context)
         return

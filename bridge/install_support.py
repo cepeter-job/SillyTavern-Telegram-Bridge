@@ -179,7 +179,7 @@ def sillytavern_environment_updates(installation: Mapping[str, object], user: st
     if known_users and user not in known_users:
         raise ValueError("Unknown SillyTavern user")
     native = data_root / user
-    return {
+    updates = {
         "SILLYTAVERN_DIR": str(root),
         "SILLYTAVERN_CHARACTER_DIR": str(native / "characters"),
         "SILLYTAVERN_WORLD_DIR": str(native / "worlds"),
@@ -187,6 +187,18 @@ def sillytavern_environment_updates(installation: Mapping[str, object], user: st
         "SILLYTAVERN_NATIVE_SETTINGS_FILE": str(native / "settings.json"),
         "SILLYTAVERN_NATIVE_AVATAR_DIR": str(native / "User Avatars"),
     }
+    characters = native / "characters"
+    try:
+        cards = sorted(
+            path.name
+            for path in characters.iterdir()
+            if path.is_file() and path.suffix.casefold() == ".png"
+        )
+    except OSError:
+        cards = []
+    if cards:
+        updates["SILLYTAVERN_DEFAULT_CHARACTER"] = cards[0]
+    return updates
 
 
 def build_minimal_configuration(

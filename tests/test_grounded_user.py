@@ -202,3 +202,36 @@ def test_grounded_user_toggle_and_settings_reset(context, monkeypatch):
         ]
         == "off"
     )
+
+
+
+def test_session_deletion_removes_grounded_user_metadata(context):
+    from bridge.grounded_user_settings import grounded_user_key
+    from bridge.metadata import get_meta
+    from bridge.session_core import create_session, delete_session_data
+
+    db, active, ctx = context
+    target = create_session(
+        db,
+        "chat",
+        "fixture::model",
+        session_id="grounded-delete",
+        app_settings=ctx.app_settings,
+    )
+    update_session(db, "chat", target["session_id"], grounded_user="on")
+    assert get_meta(db, grounded_user_key("chat", target["session_id"]), "") == "on"
+
+    class _Memory:
+        def purge_session(self, *_args, **_kwargs):
+            return 0
+
+    deleted, reason = delete_session_data(
+        db,
+        "chat",
+        target["session_id"],
+        active["session_id"],
+        memory_service=_Memory(),
+    )
+
+    assert deleted, reason
+    assert get_meta(db, grounded_user_key("chat", target["session_id"]), "") == ""

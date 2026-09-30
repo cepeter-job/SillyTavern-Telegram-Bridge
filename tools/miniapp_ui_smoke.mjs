@@ -67,7 +67,7 @@ try {
   const sessionsTab=[...shellDocument.querySelectorAll('#navigation button')].find(n=>n.textContent.trim()==='Sessions');
   assert.ok(sessionsTab,'Sessions navigation button exists');sessionsTab.click();
   await until(()=>shellDocument.getElementById('page-title').textContent==='Sessions'&&shellDocument.querySelector('main').textContent.includes('Create session'),'Sessions tab click renders Sessions');
-  for(const page of ['dashboard','characters','sessions','manage','advanced','usage','models','personas','worlds','memory','databank','system']) {
+  for(const page of ['dashboard','characters','sessions','manage','advanced','usage','models','personas','worlds','memory','npcs','databank','system']) {
     await app.namespace.navigate(page);
     assert.ok(shellDocument.getElementById('page-title').textContent.trim().length>0,page+' updates the compact page title');
     const body=dom.window.document.querySelector('main').textContent;
@@ -91,7 +91,7 @@ try {
       portraitMode='empty';
     }
     if(page==='manage') {
-      assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['models','personas','worlds','generation','memory','databank','advanced'],'Manage exposes unique design destinations in order');
+      assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['models','personas','worlds','generation','memory','npcs','databank','advanced'],'Manage exposes unique design destinations in order');
       assert.deepEqual([...shellDocument.querySelectorAll('.manage-section-title')].map(node=>node.textContent.trim()),['Story setup','Knowledge','Advanced']);
       const generation=[...shellDocument.querySelectorAll('.manage-link')].find(node=>node.textContent.includes('Generation'));
       generation.click();
@@ -99,6 +99,10 @@ try {
     }
     if(page==='advanced') {
       assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['usage'],'Advanced settings keeps Usage reachable');
+    }
+    if(page==='npcs') {
+      assert.ok(shellDocument.querySelector('.npc-bank-page'),'NPC Bank page renders');
+      assert.ok(body.includes('NPC Bank'),'NPC Bank labels its page');
     }
     if(page==='usage') {
       assert.ok(shellDocument.querySelector('.usage-dashboard'),'Dedicated usage page renders');
@@ -119,6 +123,7 @@ try {
       assert.ok(shellDocument.querySelector('.character-page-header'),'Characters exposes the compact concept header');
       assert.ok(shellDocument.querySelector('.character-card details.character-actions-menu'),'Secondary character actions use a compact menu');
       assert.ok(shellDocument.querySelector('.character-card button.character-use'),'Use remains the primary character action');
+      assert.ok([...shellDocument.querySelectorAll('main button')].some(n=>n.textContent==='Restore backups'),'Characters exposes verified backup restore');
       const uploadInput=shellDocument.querySelector('input.character-file-input[type="file"]');
       assert.ok(uploadInput&&uploadInput.isConnected,'Add character keeps its upload input connected to the page');
       assert.equal(uploadInput.hidden,true,'Upload input stays visually hidden behind the add action');

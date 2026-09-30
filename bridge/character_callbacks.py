@@ -8,7 +8,6 @@ import logging
 import sqlite3
 
 from bridge.callback_tokens import resolve_dynamic_callback_token
-from bridge.character_backups import character_restore_targets
 from bridge.callbacks import close_panel_message, discard_panel_binding
 from bridge.card_content import card_fields_from_file, safe_character_path
 from bridge.cards import (
@@ -20,6 +19,7 @@ from bridge.cards import (
     send_character_restore_confirm,
     send_character_restore_menu,
 )
+from bridge.character_backups import character_restore_targets
 from bridge.character_optimizer import prepare_character_optimization
 from bridge.character_optimizer_input import start_character_optimizer_suggestion_input
 from bridge.character_optimizer_panels import (

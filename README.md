@@ -6,8 +6,9 @@
 
 Use your SillyTavern characters from Telegram while SillyTavern remains the owner
 of character cards, Personas, World Info, System Prompts, and other native data.
-The bridge adds Telegram sessions, memory, media handling, model/provider routing,
-and an optional private management Mini App.
+The bridge adds Telegram sessions, layered continuity memory, persistent NPC state,
+media handling, model/provider routing, durable delivery recovery, and an optional
+private management Mini App.
 
 ## Quick start
 
@@ -73,15 +74,20 @@ instead.
 - Chat with native SillyTavern characters from Telegram.
 - Keep multiple sessions with separate model, Persona, World Info, notes, memory,
   summaries, variants, and generation settings.
+- Use layered continuity memory: rolling summaries, session-scoped Hindsight
+  recall, curated facts, durable episodic events, and a persistent NPC Bank.
 - Use text, images, documents, voice transcription, optional TTS, expressions,
-  Data Bank retrieval, Hindsight memory, and Live Sync.
+  versioned Data Bank retrieval, and Live Sync.
 - Run forum-topic group scenes, Director goals, structured scene state, and Light
   Novel choice mode.
 - Enable session-scoped Grounded User mode to keep user abilities, success and
   NPC/world reactions tied to established story facts without removing explicit
   Persona advantages.
 - Manage Characters, Optimizer proposals, models, sessions, Personas, Worlds,
-  memory, Data Bank, status, and verified updates from the optional Mini App.
+  memory, NPC Bank, Data Bank, token Usage, status, and verified updates from the
+  optional Mini App.
+- Recover already-saved replies and greetings after interrupted Telegram delivery
+  without regenerating the committed model output when recovery is still valid.
 - Use a private provider catalog for OpenAI-compatible, native OpenAI Codex OAuth,
   Anthropic Messages, and OpenCode Muse routes without exposing provider credentials
   to Telegram clients.
@@ -94,7 +100,7 @@ For behavior and workflows, see the [User guide](docs/user-guide.md).
 2. Use `/start` to choose the opening greeting for a new or reset session.
 3. Send normal messages to continue the conversation.
 4. Use `/character`, `/session`, `/providers`, `/settings`, `/persona`, `/world`,
-   `/memory`, and `/databank` to manage the active session.
+   `/memory`, `/npc`, `/scene`, and `/databank` to manage the active session.
 5. Use `/status` for the current session/runtime summary.
 
 Telegram `/help` is the **canonical command reference**. Use a command name for
@@ -125,9 +131,9 @@ and available controls are populated from the authenticated bridge at runtime.
 |---|---|
 | [Installation](docs/installation.md) | Fresh install, manual install, systemd, Tailscale Funnel, upgrades |
 | [Configuration](docs/configuration.md) | `.env`, paths, providers, network policy, memory/RAG/voice settings |
-| [User guide](docs/user-guide.md) | Bot workflows, sessions, generation, native assets, groups, media |
-| [Operations](docs/operations.md) | Reliability, privacy, signed updates, downloads, database compatibility, troubleshooting |
-| [Mini App](docs/miniapp.md) | Mini App security model, pages, Funnel deployment, installer behavior |
+| [User guide](docs/user-guide.md) | Bot workflows, layered memory/NPC state, generation, recovery, native assets, groups, media |
+| [Operations](docs/operations.md) | Reliability, durable delivery recovery, privacy, signed updates, database migrations/backups, troubleshooting |
+| [Mini App](docs/miniapp.md) | Mini App security model, Characters/Memory/NPC Bank/Usage pages, Funnel deployment, installer behavior |
 | [Token usage](docs/token-usage.md) | Provider-reported counts, coverage, privacy, retention and migration notes |
 
 Project-level references:

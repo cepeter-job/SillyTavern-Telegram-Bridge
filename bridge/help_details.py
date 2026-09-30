@@ -123,7 +123,10 @@ HELP_CATEGORIES = {
         ("/memory curated refresh", "Refresh curated durable memory immediately with the configured Utility model."),
         (
             "/npc",
-            "Open the active session's persistent NPC Bank with visible dossiers, history, refresh and stale-safe undo.",
+            (
+                "Open the active session's persistent NPC Bank with visible dossiers, "
+                "history, refresh and stale-safe undo."
+            ),
         ),
         ("/remember", "Open scoped input for one explicit long-term fact."),
         ("/remember <fact>", "Store one explicit long-term fact immediately in active-session Hindsight memory."),

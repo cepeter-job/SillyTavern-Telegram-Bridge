@@ -413,12 +413,75 @@ def migrate_episodic_memory_visibility(db: sqlite3.Connection) -> None:
     )
 
 
+def migrate_npc_bank_core(db: sqlite3.Connection) -> None:
+    db.execute("""CREATE TABLE IF NOT EXISTS npc_entities (
+        npc_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        canonical_name TEXT NOT NULL,
+        display_name TEXT NOT NULL,
+        aliases_json TEXT NOT NULL DEFAULT '[]',
+        first_seen_rowid INTEGER NOT NULL,
+        last_seen_rowid INTEGER NOT NULL,
+        created_at REAL NOT NULL,
+        updated_at REAL NOT NULL,
+        UNIQUE(chat_id, session_id, canonical_name),
+        FOREIGN KEY(chat_id, session_id) REFERENCES sessions(chat_id, session_id) ON DELETE CASCADE
+    )""")
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS npc_entities_session_seen_idx "
+        "ON npc_entities(chat_id, session_id, last_seen_rowid)"
+    )
+    db.execute("""CREATE TABLE IF NOT EXISTS npc_fields (
+        npc_id INTEGER NOT NULL,
+        field_key TEXT NOT NULL,
+        value_json TEXT NOT NULL,
+        field_mode TEXT NOT NULL,
+        visibility TEXT NOT NULL DEFAULT 'shared',
+        known_by_json TEXT NOT NULL DEFAULT '[]',
+        updated_rowid INTEGER NOT NULL,
+        updated_at REAL NOT NULL,
+        PRIMARY KEY(npc_id, field_key),
+        FOREIGN KEY(npc_id) REFERENCES npc_entities(npc_id) ON DELETE CASCADE
+    )""")
+    db.execute("""CREATE TABLE IF NOT EXISTS npc_field_history (
+        change_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        npc_id INTEGER NOT NULL,
+        field_key TEXT NOT NULL,
+        operation TEXT NOT NULL,
+        before_json TEXT,
+        after_json TEXT,
+        before_mode TEXT,
+        after_mode TEXT,
+        before_visibility TEXT,
+        after_visibility TEXT,
+        before_known_by_json TEXT,
+        after_known_by_json TEXT,
+        source_rowid INTEGER NOT NULL,
+        created_at REAL NOT NULL,
+        FOREIGN KEY(npc_id) REFERENCES npc_entities(npc_id) ON DELETE CASCADE
+    )""")
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS npc_field_history_row_idx "
+        "ON npc_field_history(npc_id, source_rowid, change_id)"
+    )
+    db.execute("""CREATE TABLE IF NOT EXISTS npc_extraction_state (
+        chat_id TEXT NOT NULL,
+        session_id TEXT NOT NULL,
+        updated_through_rowid INTEGER NOT NULL DEFAULT 0,
+        updated_at REAL NOT NULL,
+        PRIMARY KEY(chat_id, session_id),
+        FOREIGN KEY(chat_id, session_id) REFERENCES sessions(chat_id, session_id) ON DELETE CASCADE
+    )""")
+
+
 SCHEMA_MIGRATIONS = (
     _Migration(1, "initial_schema", _create_initial_schema),
     _Migration(2, "conversation_modes", migrate_conversation_modes),
     _Migration(3, "token_usage_ledger", migrate_token_usage),
     _Migration(4, "episodic_memory_layer", migrate_episodic_memory_layer),
     _Migration(5, "episodic_memory_visibility", migrate_episodic_memory_visibility),
+    _Migration(6, "npc_bank_core", migrate_npc_bank_core),
 )
 
 

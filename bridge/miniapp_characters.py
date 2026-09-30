@@ -16,7 +16,7 @@ from bridge.card_content import (
     character_card_paths,
     parse_png_chara_bytes,
 )
-from bridge.character_backups import character_restore_targets
+from bridge.character_backups import character_backup_digest, character_restore_targets
 from bridge.character_optimizer import prepare_character_optimization
 from bridge.character_proposals import stage_character_proposal
 from bridge.character_quality import character_rank, rank_character
@@ -150,14 +150,17 @@ def character_backups(services: Any, who: MiniAppIdentity, values: dict) -> dict
         for filename in character_restore_targets(app_settings=services.config):
             try:
                 current = character_card_digest(filename, app_settings=services.config)
+                backup = character_backup_digest(filename, app_settings=services.config)
             except (OSError, ValueError):
-                current = ""
+                continue
             rows.append(
                 {
                     "filename": filename,
                     "name": filename.rsplit(".", 1)[0],
                     "installed": bool(current),
                     "digest": current,
+                    "backup_digest": backup,
+                    "matches_installed": bool(current and current == backup),
                 }
             )
         return {"backups": rows, "session": scope.session}
@@ -167,6 +170,7 @@ def restore_character_backup(services: Any, who: MiniAppIdentity, values: dict) 
     require_confirmation(values)
     filename = text(values, "filename", 200)
     expected = text(values, "digest", 64, required=False).casefold()
+    expected_backup = digest(values, "backup_digest")
     if expected and (len(expected) != 64 or any(ch not in "0123456789abcdef" for ch in expected)):
         raise MiniAppError("Invalid content revision. Refresh this resource.", status=409, code="stale")
     with session_scope(services, who, values, write=True) as scope:
@@ -175,12 +179,20 @@ def restore_character_backup(services: Any, who: MiniAppIdentity, values: dict) 
         current = character_card_digest(filename, app_settings=services.config)
         if current != expected:
             raise MiniAppError("Character changed. Refresh before restoring.", status=409, code="stale")
+        if character_backup_digest(filename, app_settings=services.config) != expected_backup:
+            raise MiniAppError("Character backup changed. Refresh before restoring.", status=409, code="stale")
+        if current and current == expected_backup:
+            raise MiniAppError("The installed card already matches this backup.", status=409, code="unchanged")
         restored = restore_character_card_backup(
             filename,
             expected_digest=expected,
+            expected_backup_digest=expected_backup,
             app_settings=services.config,
         )
-        return {"restored": True, "filename": restored.name, "session": scope.session}
+        message = "Character backup restored."
+        if current:
+            message += " The previous installed card is now the available backup; restoring again will undo this change."
+        return {"restored": True, "filename": restored.name, "message": message, "session": scope.session}
 
 
 def upload_character(services: Any, who: MiniAppIdentity, values: dict) -> dict:

@@ -11,6 +11,18 @@ from bridge.telegram_output import telegram_safe_output
 MAX_CHOICE_CHARS = 160
 MAX_RESPONSE_CHARS = 96000
 
+CHOICE_MATURITY_POLICY = (
+    "Choice tone must preserve the established scene's maturity, intensity, genre, "
+    "intimacy, danger, and subject matter. "
+    "Do not sanitize, soften, euphemize, or de-escalate established adult content "
+    "merely because it is presented as a choice. "
+    "When adult content is already established, choices may reflect the same maturity "
+    "when plausible and consistent with the characters and scene. "
+    "Grounding constrains causality, character agency, consent, knowledge, and probability "
+    "of success; it does not impose a safer content rating. "
+    "Do not introduce or escalate mature content beyond what the current context supports."
+)
+
 
 def validate_choices(value: object, requested_count: int) -> list[str]:
     if requested_count not in {2, 3, 4} or not isinstance(value, list) or len(value) != requested_count:
@@ -192,7 +204,9 @@ def inline_instruction(count: int, language: str) -> str:
         f"exactly {count} distinct next actions for the USER, each 1–{MAX_CHOICE_CHARS} characters). "
         "Do not choose for the user, predict outcomes, put menu text inside the story, or include slash commands. "
         "Preserve the character, persona, world and all established story context. "
-        f"Both narrative and actions must match response language {language or 'auto (the conversation language)'}. "
+        + CHOICE_MATURITY_POLICY
+        + " "
+        + f"Both narrative and actions must match response language {language or 'auto (the conversation language)'}. "
         "No markdown fences, explanations or extra keys."
     )
 

@@ -44,6 +44,17 @@ def test_normal_turn_does_not_create_choice_records(novel_db):
     assert db.execute("SELECT count(*) FROM light_novel_choice_sets").fetchone()[0] == 0
 
 
+def test_inline_choice_contract_preserves_established_maturity_without_forced_escalation():
+    from bridge.light_novel_format import inline_instruction
+
+    prompt = inline_instruction(3, "auto")
+
+    assert "preserve the established scene's maturity" in prompt
+    assert "Do not sanitize, soften, euphemize, or de-escalate established adult content" in prompt
+    assert "does not impose a safer content rating" in prompt
+    assert "Do not introduce or escalate mature content beyond what the current context supports" in prompt
+
+
 def test_inline_parser_keeps_story_when_choice_tail_is_invalid():
     from bridge.light_novel_format import parse_story_response
 
@@ -516,3 +527,6 @@ def test_grounded_user_choice_generation_avoids_assumed_success(novel_db):
     assert "Offer only plausible actions grounded in the established user persona and situation." in prompt
     assert "Do not assume an action succeeds" in prompt
     assert "wins admiration" in prompt
+    assert "preserve the established scene's maturity" in prompt
+    assert "does not impose a safer content rating" in prompt
+    assert "Do not introduce or escalate mature content beyond what the current context supports" in prompt

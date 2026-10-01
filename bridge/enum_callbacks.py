@@ -128,7 +128,7 @@ def handle_enum_callback(
         try:
             update_session(db, chat_id, session["session_id"], grounded_user=normalize_grounded_user(value))
         except ValueError:
-            send_text(token, chat_id, "Invalid Grounded User choice.")
+            send_text(token, chat_id, "Invalid I am not MC mode choice.")
             return
         send_settings_menu(token, chat_id, db, session["session_id"], message_id, request_context=request_context)
         return

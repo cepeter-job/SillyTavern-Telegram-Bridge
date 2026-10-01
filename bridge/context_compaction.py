@@ -12,18 +12,76 @@ from __future__ import annotations
 import copy
 import math
 import re
+from dataclasses import dataclass
 
 from bridge.codex_models import codex_context_window_tokens
+from bridge.provider_catalog import context_metadata_for_model
+from bridge.provider_errors import ProviderRequestError
 from bridge.settings import AppSettings
 
 DEFAULT_CONTEXT_WINDOW_TOKENS = 32768
 DEFAULT_CONTEXT_OUTPUT_RESERVE_TOKENS = 4096
 DEFAULT_CONTEXT_HISTORY_CANDIDATES = 96
 MIN_CONTEXT_INPUT_BUDGET_TOKENS = 2048
+CONTEXT_SAFETY_MARGIN_RATIO = 0.02
+MIN_CONTEXT_SAFETY_MARGIN_TOKENS = 512
+MAX_CONTEXT_SAFETY_MARGIN_TOKENS = 8192
+DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN = 4.0
+
+
+@dataclass(frozen=True)
+class ContextProfile:
+    window_tokens: int
+    output_reserve_tokens: int
+    safety_margin_tokens: int
+    input_budget_tokens: int
+    chars_per_token: float
+    source: str
+
+
+class ContextWindowBudgetError(ProviderRequestError):
+    """Prompt cannot fit before any provider request is attempted."""
+
+    def __init__(self, model: str, stats: dict[str, object]) -> None:
+        self.stats = dict(stats)
+        super().__init__(model or "the selected model", "request_too_large")
+
+    def _user_message(self) -> str:
+        final_tokens = int(self.stats.get("final_tokens") or 0)
+        budget_tokens = int(self.stats.get("budget_tokens") or 0)
+        window_tokens = int(self.stats.get("window_tokens") or 0)
+        return (
+            f"Prompt for {self.model} cannot fit the configured context window "
+            f"({final_tokens:,} estimated input tokens; {budget_tokens:,} usable of "
+            f"{window_tokens:,}). Reduce fixed character/world/system instructions "
+            "or choose a larger-context model."
+        )
+
+
+def context_profile(model: str = "", *, app_settings: AppSettings) -> ContextProfile:
+    codex_window = codex_context_window_tokens(model)
+    metadata = {} if codex_window is not None else context_metadata_for_model(model, app_settings=app_settings)
+    if codex_window is not None:
+        window = codex_window
+        source = "codex-alias"
+    else:
+        window = int(metadata.get("window_tokens") or app_settings.context_window_tokens)
+        source = str(metadata.get("source") or "global-fallback")
+    chars_per_token = float(metadata.get("chars_per_token") or DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN)
+    safety = min(
+        MAX_CONTEXT_SAFETY_MARGIN_TOKENS,
+        max(MIN_CONTEXT_SAFETY_MARGIN_TOKENS, math.ceil(window * CONTEXT_SAFETY_MARGIN_RATIO)),
+    )
+    reserve = min(
+        int(app_settings.context_output_reserve_tokens),
+        max(512, window - safety - MIN_CONTEXT_INPUT_BUDGET_TOKENS),
+    )
+    budget = max(MIN_CONTEXT_INPUT_BUDGET_TOKENS, window - reserve - safety)
+    return ContextProfile(window, reserve, safety, budget, chars_per_token, source)
 
 
 def context_window_tokens(model: str = "", *, app_settings: AppSettings) -> int:
-    return codex_context_window_tokens(model) or app_settings.context_window_tokens
+    return context_profile(model, app_settings=app_settings).window_tokens
 
 
 def context_output_reserve_tokens(*, app_settings: AppSettings) -> int:
@@ -31,38 +89,37 @@ def context_output_reserve_tokens(*, app_settings: AppSettings) -> int:
 
 
 def context_input_budget_tokens(model: str = "", *, app_settings: AppSettings) -> int:
-    return max(
-        MIN_CONTEXT_INPUT_BUDGET_TOKENS,
-        context_window_tokens(model, app_settings=app_settings)
-        - context_output_reserve_tokens(app_settings=app_settings),
-    )
+    return context_profile(model, app_settings=app_settings).input_budget_tokens
 
 
 def context_history_candidate_limit(*, app_settings: AppSettings) -> int:
     return app_settings.context_history_candidates
 
 
-def _content_tokens(content) -> int:
+def _content_tokens(content, chars_per_token: float) -> int:
+    ratio = min(8.0, max(1.0, float(chars_per_token or DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN)))
     if isinstance(content, str):
-        return max(1, math.ceil(len(content) / 4))
+        return max(1, math.ceil(len(content) / ratio))
     if isinstance(content, list):
         total = 0
         for item in content:
             if not isinstance(item, dict):
-                total += _content_tokens(str(item))
+                total += _content_tokens(str(item), ratio)
                 continue
             if item.get("type") == "image_url":
                 # Do not count a base64 data URI as text. Reserve a conservative
                 # fixed amount; providers account for image tokens differently.
                 total += 1024
             else:
-                total += _content_tokens(item.get("text") or "")
+                total += _content_tokens(item.get("text") or "", ratio)
         return total
-    return _content_tokens(str(content or ""))
+    return _content_tokens(str(content or ""), ratio)
 
 
-def estimate_message_tokens(messages: list[dict]) -> int:
-    return sum(8 + _content_tokens(message.get("content", "")) for message in messages) + 16
+def estimate_message_tokens(
+    messages: list[dict], *, chars_per_token: float = DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN
+) -> int:
+    return sum(8 + _content_tokens(message.get("content", ""), chars_per_token) for message in messages) + 16
 
 
 def _replace_text_content(message: dict, text: str) -> None:
@@ -133,20 +190,28 @@ def _shrink_summary_section(text: str, target_chars: int) -> tuple[str, bool]:
 
 
 def compact_chat_messages(
-    messages: list[dict], budget_tokens: int | None = None, *, min_recent_messages: int = 6, app_settings: AppSettings
-) -> tuple[list[dict], dict[str, int | bool]]:
+    messages: list[dict],
+    budget_tokens: int | None = None,
+    *,
+    min_recent_messages: int = 6,
+    chars_per_token: float = DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN,
+    app_settings: AppSettings,
+) -> tuple[list[dict], dict[str, object]]:
     """Compact a built prompt while preserving fixed instructions/current turn."""
     budget = max(
         MIN_CONTEXT_INPUT_BUDGET_TOKENS,
         int(budget_tokens or context_input_budget_tokens(app_settings=app_settings)),
     )
     compacted = copy.deepcopy(messages)
-    original_tokens = estimate_message_tokens(compacted)
+    original_tokens = estimate_message_tokens(compacted, chars_per_token=chars_per_token)
     dropped_history = 0
     rag_trimmed = memory_trimmed = npc_trimmed = summary_trimmed = False
 
     def current_tokens() -> int:
-        return estimate_message_tokens([message for message in compacted if not message.get("_drop_for_context")])
+        return estimate_message_tokens(
+            [message for message in compacted if not message.get("_drop_for_context")],
+            chars_per_token=chars_per_token,
+        )
 
     def drop_old_turns(floor: int) -> None:
         """Mark the oldest removable turns as dropped until budget or the floor."""

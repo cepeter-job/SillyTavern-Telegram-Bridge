@@ -271,3 +271,38 @@ def test_loaded_dirty_checkout_cannot_be_reported_as_verified_commit(tmp_path, m
     monkeypatch.setattr(health.subprocess, "run", run)
     result = health.capture_deployment(settings)
     assert result.commit == ("" if dirty else "a" * 40)
+
+
+def test_status_includes_last_context_window_diagnostics(tmp_path):
+    from bridge.metadata import set_meta
+    from bridge.miniapp_context import current_session
+    from bridge.miniapp_system import system_status
+
+    s, w, _p = setup(tmp_path)
+    with s.db_factory() as db:
+        session = current_session(s, w, {})["session"]
+        set_meta(
+            db,
+            f"context_stats:{w.chat_id}:{session['session_id']}",
+            json.dumps(
+                {
+                    "window_tokens": 131072,
+                    "budget_tokens": 122000,
+                    "final_tokens": 54321,
+                    "safety_margin_tokens": 4096,
+                    "dropped_history": 8,
+                    "memory_trimmed": True,
+                    "rag_trimmed": False,
+                    "npc_trimmed": False,
+                    "summary_trimmed": False,
+                    "source": "provider-model",
+                }
+            ),
+        )
+        db.commit()
+
+    result = system_status(s, w, {})
+    assert result["context_diagnostics"]["window_tokens"] == 131072
+    assert result["context_diagnostics"]["final_tokens"] == 54321
+    assert result["context_diagnostics"]["dropped_history"] == 8
+    assert result["context_diagnostics"]["memory_trimmed"] is True

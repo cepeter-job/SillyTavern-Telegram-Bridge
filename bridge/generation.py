@@ -8,7 +8,7 @@ from pathlib import Path
 
 from bridge.card_content import active_world_files, build_system_prompt, build_world_info, replace_macros
 from bridge.config import GENERATION_DEFAULTS
-from bridge.context_compaction import compact_chat_messages, context_input_budget_tokens
+from bridge.context_compaction import ContextWindowBudgetError, compact_chat_messages, context_profile
 from bridge.delivery_port import DeliveryPort
 from bridge.generation_settings import get_generation_settings
 from bridge.grounded_user_settings import grounded_user_policy
@@ -134,6 +134,7 @@ def build_chat_messages(
     rag_context: str = "",
     group_context: str = "",
     app_settings: AppSettings,
+    context_stats: dict[str, object] | None = None,
 ) -> list[dict]:
     current_persona = session["persona_id"]
     user_name = persona_service.name(current_persona) if current_persona else app_settings.default_user_name
@@ -249,11 +250,26 @@ def build_chat_messages(
         )
     else:
         messages.append({"role": "user", "content": user_content})
+    selected_model = session.get("model_id", "")
+    profile = context_profile(selected_model, app_settings=app_settings)
     compacted, stats = compact_chat_messages(
         messages,
-        budget_tokens=context_input_budget_tokens(session.get("model_id", ""), app_settings=app_settings),
+        budget_tokens=profile.input_budget_tokens,
+        chars_per_token=profile.chars_per_token,
         app_settings=app_settings,
     )
+    stats.update(
+        {
+            "window_tokens": profile.window_tokens,
+            "output_reserve_tokens": profile.output_reserve_tokens,
+            "safety_margin_tokens": profile.safety_margin_tokens,
+            "chars_per_token": profile.chars_per_token,
+            "source": profile.source,
+        }
+    )
+    if context_stats is not None:
+        context_stats.clear()
+        context_stats.update(stats)
     if stats["original_tokens"] != stats["final_tokens"]:
         logging.info(
             (
@@ -275,6 +291,7 @@ def build_chat_messages(
             stats["final_tokens"],
             stats["budget_tokens"],
         )
+        raise ContextWindowBudgetError(str(selected_model or app_settings.default_model), stats)
     return compacted
 
 

@@ -122,7 +122,8 @@ try {
       assert.equal(dom.window.getComputedStyle(statusCopy).minWidth,'0px','Status copy may shrink so long values cannot overlap adjacent columns');
       assert.equal(shellDocument.querySelectorAll('.dashboard-shortcuts button').length,4,'Dashboard exposes four quick actions');
       assert.ok(shellDocument.querySelector('.recent-stories'),'Home includes recent stories');
-      assert.deepEqual([...shellDocument.querySelectorAll('.dashboard-health [data-health-icon]')].map(node=>node.dataset.healthIcon),['system','telegram','database','memory'],'Dashboard Bridge health labels all four status cards with local icons');
+      assert.deepEqual([...shellDocument.querySelectorAll('.dashboard-health [data-health-icon]')].map(node=>node.dataset.healthIcon),['system','telegram','database','models','memory'],'Dashboard Bridge health labels all five status cards with local icons');
+      assert.ok(shellDocument.querySelector('.dashboard-health').textContent.includes('Context'),'Home Bridge health includes context diagnostics');
       assert.ok(shellDocument.querySelector('.dashboard-health').textContent.includes('Memory'),'Home Bridge health includes memory diagnostics');
       assert.ok(shellDocument.querySelector('.dashboard-health').textContent.includes('Disabled'),'Disabled memory diagnostics are labeled');
       assert.equal(memoryDetailRequests,0,'Home never fetches detailed memory diagnostics');
@@ -150,7 +151,7 @@ try {
       assert.ok(body.includes('provider-reported'),'Usage describes its measurement source');
     }
     if(page==='system') {
-      assert.deepEqual([...shellDocument.querySelectorAll('main [data-health-icon]')].map(node=>node.dataset.healthIcon),['system','telegram','database','memory'],'System status labels all four health cards with local icons');
+      assert.deepEqual([...shellDocument.querySelectorAll('main [data-health-icon]')].map(node=>node.dataset.healthIcon),['system','telegram','database','models','memory'],'System status labels all five health cards with local icons');
       const review=[...shellDocument.querySelectorAll('main button')].find(n=>n.textContent==='Review latest release');
       assert.ok(review,'System exposes release review');review.click();
       await until(()=>shellDocument.querySelector('main').textContent.includes('Already latest'),'already-latest review state');

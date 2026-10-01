@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING
 from bridge.card_content import card_fields_from_file
 from bridge.cards import send_session_menu
 from bridge.character_identity import reconcile_session_character
-from bridge.context_compaction import context_history_candidate_limit
+from bridge.context_compaction import ContextWindowBudgetError, context_history_candidate_limit
+from bridge.context_diagnostics import context_stats_key
 from bridge.continuation import continue_last
 from bridge.conversation_lifecycle import (
     START_REQUIRED,
@@ -205,22 +206,29 @@ def generate_and_store_reply(
         text,
         history_rows,
     )
-    messages = timed_call(
-        "prompt_assembly",
-        _partial(build_chat_messages, app_settings=app_settings),
-        session,
-        fields,
-        text,
-        history_rows,
-        memory_context=memory_context,
-        episodic_context=episodic_context,
-        npc_context=npc_context,
-        session_summary=session_summary,
-        rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
-        group_context=group_context,
-        persona_service=persona_service,
-        app_settings=app_settings,
-    )
+    context_stats: dict[str, object] = {}
+    try:
+        messages = timed_call(
+            "prompt_assembly",
+            _partial(build_chat_messages, app_settings=app_settings),
+            session,
+            fields,
+            text,
+            history_rows,
+            memory_context=memory_context,
+            episodic_context=episodic_context,
+            npc_context=npc_context,
+            session_summary=session_summary,
+            rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
+            group_context=group_context,
+            persona_service=persona_service,
+            app_settings=app_settings,
+            context_stats=context_stats,
+        )
+    except ContextWindowBudgetError as exc:
+        set_meta(db, context_stats_key(chat_id, session_id), json.dumps(exc.stats, sort_keys=True))
+        raise
+    set_meta(db, context_stats_key(chat_id, session_id), json.dumps(context_stats, sort_keys=True))
     identity = (
         telegram_message_id
         if telegram_message_id is not None

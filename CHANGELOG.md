@@ -2,7 +2,19 @@
 
 All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
-## [Unreleased]
+## [0.2.051] - 2026-10-01
+
+### Added
+
+- Added provider/default and per-model context-window metadata, conservative
+  tokenizer estimates, and persisted prompt-compaction diagnostics in /prompt
+  and Mini App system health.
+
+### Changed
+
+- Context planning now reserves an additional bounded safety margin and rejects
+  fixed prompts that still cannot fit after compaction before contacting the
+  provider, with a user-visible oversized-context diagnostic.
 
 ## [0.2.050] - 2026-10-01
 

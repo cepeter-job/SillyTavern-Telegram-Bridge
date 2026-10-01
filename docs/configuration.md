@@ -131,6 +131,13 @@ Hindsight origins and explicitly bypasses environment proxy routing for loopback
 | `SILLYTAVERN_CONTEXT_WINDOW_TOKENS` | `32768` | `4096..1000000`; total prompt context window. |
 | `SILLYTAVERN_CONTEXT_OUTPUT_RESERVE_TOKENS` | `4096` | `512..131072`; tokens reserved for model output. |
 | `SILLYTAVERN_CONTEXT_HISTORY_CANDIDATES` | `96` | `8..512`; recent transcript messages considered before compaction. |
+
+The bridge also keeps a conservative context safety margin (2% of the resolved
+window, bounded to 512..8192 tokens) in addition to the configured output
+reserve. Provider catalogs may declare `context_window_tokens` and
+`token_estimate_chars_per_token`, with per-model overrides in
+`model_context_window_tokens` and `model_token_estimate_chars_per_token`.
+Unknown models continue to use `SILLYTAVERN_CONTEXT_WINDOW_TOKENS`.
 | `SILLYTAVERN_PERF_LOG` | `false` | Boolean (`true/yes/on/1` or `false/no/off/0`); logs low-overhead timing spans. |
 | `SILLYTAVERN_MEMORY_DIAGNOSTICS` | disabled | Exact opt-in: only `1` enables low-overhead OOM diagnostics; never enabled automatically. |
 

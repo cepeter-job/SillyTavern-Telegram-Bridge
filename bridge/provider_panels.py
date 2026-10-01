@@ -11,7 +11,7 @@ from bridge.config import REASONING_LEVELS
 from bridge.generation_settings import get_generation_settings
 from bridge.model_selection import utility_reasoning_for_session
 from bridge.panel_utils import panel_label, panel_page
-from bridge.port_contracts import ProviderPolicy
+from bridge.port_contracts import ProviderPolicy, ProviderProbes
 from bridge.provider_discovery import get_model_groups, provider_health_checks
 from bridge.provider_health_views import observation_age, provider_status_text
 from bridge.provider_panel_tokens import ProviderReport, provider_action_token, store_provider_report
@@ -270,6 +270,7 @@ def send_provider_health_menu(
     *,
     request_context,
     provider_policy: ProviderPolicy | None = None,
+    provider_probes: ProviderProbes | None = None,
     provider_id: str | None = None,
     report: ProviderReport | None = None,
     report_token: str = "",
@@ -277,11 +278,14 @@ def send_provider_health_menu(
 ) -> None:
     """Reuse a bound report for paging; only an explicit new test performs network I/O."""
     if report is None:
-        checks = (
-            provider_health_checks(app_settings=request_context.app_settings)
-            if provider_id is None
-            else provider_health_checks(provider_id, app_settings=request_context.app_settings)
-        )
+        if provider_probes is not None:
+            checks = provider_probes.check(provider_id)
+        else:
+            checks = (
+                provider_health_checks(app_settings=request_context.app_settings)
+                if provider_id is None
+                else provider_health_checks(provider_id, app_settings=request_context.app_settings)
+            )
         # Bound persisted reports and Telegram labels, even with an oversized private catalog.
         safe_checks = tuple((pid[:200], name[:80], status[:160]) for pid, name, status in checks[:1024])
         report = ProviderReport(safe_checks, time.time(), provider_id)

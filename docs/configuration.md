@@ -485,3 +485,24 @@ TTL, not on every panel redraw; a manual refresh bypasses that TTL. A broken
 provider configuration is reported individually and cannot abort the other
 checks. Discovery cache writes are bounded, private and atomic. Model pagination
 is no longer limited to the first 50 IDs.
+
+### Provider runtime history and restart recovery
+
+The bridge stores sanitized runtime observations in
+`$SILLYTAVERN_BRIDGE_HOME/provider_health.json`. The versioned file is written
+atomically with owner-only permissions (`0600`) and retains at most 1,024
+provider/model entries, ten recent events per entry, and 24 hours of history.
+Only identifiers, status/category values, timestamps and circuit counters are
+stored; prompts, credentials, endpoints and raw provider responses are excluded.
+The provider detail and health panels show a short recent-event summary.
+
+Valid cooldowns survive a restart, but in-flight requests and half-open probe
+ownership never do. Expired observations become unknown; corrupt or unsupported
+files are ignored. Storage errors are logged without changing the original
+request result. **Reset runtime** is persisted and invalidates older in-flight
+observations so that they cannot re-block a provider after a manual reset.
+
+Manual health sweeps use at most three concurrent provider probes. Each bridge
+instance serializes its sweeps, so simultaneous users cannot multiply that limit.
+Results retain catalog order; a failed probe does not hide its neighbors. This
+adds no timer, background health traffic, or automatic paid inference requests.

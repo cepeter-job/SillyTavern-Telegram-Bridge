@@ -55,4 +55,11 @@ def provider_status_text(provider_id: str, *, app_settings: AppSettings, provide
     if unavailable:
         labels = ", ".join(m[:32] for m in unavailable[:3])
         lines.append(f"Unavailable models: {len(unavailable)} ({labels})")
+    events = provider_policy.history(provider_id)[-3:]
+    if events:
+        recent = "; ".join(
+            f"{(event.category or event.state).replace('_', ' ')} {observation_age(event.at)}"
+            for event in reversed(events)
+        )
+        lines.append(f"Recent: {recent}")
     return "\n".join(lines)

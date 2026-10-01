@@ -4,6 +4,37 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.2.050] - 2026-10-01
+
+### Added
+
+- Runtime provider/model health learned from real requests, categorized failures,
+  bounded circuit cooldowns, Retry-After handling and single-request half-open recovery.
+- Explicit Utility fallback chains and opt-in Story fallback, with cancellation,
+  visible-output, deadline and credential-isolation safeguards.
+- `/providers` diagnostics with targeted model refresh, provider tests, local
+  runtime reset, cached probe pagination and catalog freshness metadata.
+- Private, bounded runtime history and restart recovery; manual provider probes
+  use at most three workers and serialize sweeps per bridge instance.
+
+### Fixed
+
+- Broken provider configuration no longer aborts an entire maintenance sweep.
+  Discovery keeps last-known models, preserves configured IDs, handles malformed
+  caches, and does not truncate the model picker to fifty entries.
+- Refresh completion redraws avoid a second discovery request. Manual probes
+  distinguish catalog reachability, local OAuth and unvalidated inference streams
+  from successful real generation; probes cannot clear runtime cooldowns.
+- Private model-cache writes are atomic and preserve newer concurrent results.
+
+### Security and upgrade notes
+
+- Includes the previously merged locked `urllib3` 2.8.0 update. Upgrading from
+  v0.2.049 changes runtime dependencies: install the verified release and its
+  locked dependencies manually. The Telegram `/update` dependency safeguard
+  intentionally refuses this automatic upgrade.
+- Provider health changes add no dependency, operational database migration,
+  background probing or default silent Story-model switch.
 
 ## [0.2.049] - 2026-09-30
 

@@ -25,7 +25,7 @@ def context(tmp_path):
     db.close()
 
 
-def handle(context, data, *, policy=None, answer=lambda *a: None):
+def handle(context, data, *, policy=None, probes=None, answer=lambda *a: None):
     return callbacks.handle_provider_model_callback(
         context.db,
         "token",
@@ -39,6 +39,7 @@ def handle(context, data, *, policy=None, answer=lambda *a: None):
         None,
         request_context=context,
         provider_policy=policy,
+        provider_probes=probes,
     )
 
 
@@ -178,3 +179,42 @@ def test_extreme_provider_labels_still_fit_telegram_limits(context, monkeypatch)
     monkeypatch.setattr(panels, "send_panel_message", lambda token, chat, text, *a, **kw: sent.append(text))
     panels.send_provider_health_menu("token", "chat", 1, request_context=context, provider_policy=policy)
     assert len(sent[0].encode("utf-16-le")) // 2 <= 4096
+
+
+def test_callbacks_use_application_probe_service_and_paging_does_not_probe(context, monkeypatch):
+    calls, sent = [], []
+
+    class Probes:
+        def check(self, provider_id=None):
+            calls.append(provider_id)
+            return [(f"p{i}", f"Provider {i}", "catalog reachable") for i in range(6)]
+
+    _, health, policy = setup()
+    health.fail(health.begin("p0", "one"), ProviderRequestError("p0::one", "timeout"))
+    monkeypatch.setattr(panels, "provider_health_checks", lambda **kw: pytest.fail("legacy probe path used"))
+    monkeypatch.setattr(
+        panels, "send_panel_message", lambda token, chat, text, markup, *a, **kw: sent.append((text, markup))
+    )
+    probes = Probes()
+    handle(context, "provider:health", policy=policy, probes=probes)
+    assert calls == [None]
+    assert "Recent: timeout" in sent[-1][0]
+    next_button = next(b for row in sent[-1][1]["inline_keyboard"] for b in row if b["text"].startswith("Next"))
+    handle(context, next_button["callback_data"], policy=policy, probes=probes)
+    assert calls == [None]
+    assert len(sent[-1][0].encode("utf-16-le")) // 2 <= 4096
+
+
+def test_targeted_health_forwards_exact_provider_to_application_service(context, monkeypatch):
+    calls = []
+
+    class Probes:
+        def check(self, provider_id=None):
+            calls.append(provider_id)
+            return [(provider_id, "Alpha", "catalog reachable")]
+
+    token = tokens().provider_action_token("test", "alpha", "chat", request_context=context)
+    monkeypatch.setattr(panels, "provider_health_checks", lambda **kw: pytest.fail("legacy probe path used"))
+    monkeypatch.setattr(panels, "send_panel_message", lambda *a, **kw: None)
+    handle(context, f"provider:maint:test:{token}", probes=Probes())
+    assert calls == ["alpha"]

@@ -81,8 +81,11 @@ from bridge.persona_sync import (
     upsert_native_persona,
 )
 from bridge.provider_catalog import load_routing_catalog
+from bridge.provider_discovery import probe_provider
 from bridge.provider_execution_policy import ProviderExecutionPolicy
+from bridge.provider_health_store import JsonProviderHealthStore
 from bridge.provider_port import ProviderPort as _ProviderPort
+from bridge.provider_probe_service import ProviderProbeService
 from bridge.provider_runtime_health import ProviderRuntimeHealth
 from bridge.provider_transport import generate_provider_text
 from bridge.rag_composition import build_rag_service
@@ -166,7 +169,10 @@ def _build_startup_services(
     durable_worker_guard = _DurableWorkerGuard(_sqlite_store._lightweight_db_connect)
     provider = _ProviderPort(
         generate_backend=_partial(generate_provider_text, model_router, app_settings=config),
-        policy=ProviderExecutionPolicy(model_router, ProviderRuntimeHealth()),
+        policy=ProviderExecutionPolicy(
+            model_router,
+            ProviderRuntimeHealth(store=JsonProviderHealthStore(config.bridge_home / "provider_health.json")),
+        ),
         usage_recorder=_partial(
             record_usage, db_factory=_partial(_sqlite_store._lightweight_db_connect, config.db_file, timeout=2.0)
         ),
@@ -370,6 +376,9 @@ def _build_startup_services(
         delivery=delivery,
         conversation=conversation,
         health=RuntimeHealth(),
+        provider_probes=ProviderProbeService(
+            app_settings=config, probe_backend=_partial(probe_provider, app_settings=config)
+        ),
     )
 
 

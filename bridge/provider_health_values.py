@@ -32,3 +32,18 @@ class HealthAttempt:
     @property
     def selection(self) -> str:
         return f"{self.provider_id}::{self.model_id}"
+
+
+@dataclass(frozen=True)
+class HealthTransition:
+    at: float
+    state: str
+    category: str | None = None
+    status: int | None = None
+
+
+@dataclass(frozen=True)
+class HealthRecord:
+    snapshot: HealthSnapshot
+    history: tuple[HealthTransition, ...]
+    updated_at: float

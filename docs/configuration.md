@@ -132,6 +132,14 @@ Hindsight origins and explicitly bypasses environment proxy routing for loopback
 | `SILLYTAVERN_CONTEXT_OUTPUT_RESERVE_TOKENS` | `4096` | `512..131072`; tokens reserved for model output. |
 | `SILLYTAVERN_CONTEXT_HISTORY_CANDIDATES` | `96` | `8..512`; recent transcript messages considered before compaction. |
 | `SILLYTAVERN_PERF_LOG` | `false` | Boolean (`true/yes/on/1` or `false/no/off/0`); logs low-overhead timing spans. |
+| `SILLYTAVERN_MEMORY_DIAGNOSTICS` | disabled | Exact opt-in: only `1` enables low-overhead OOM diagnostics; never enabled automatically. |
+
+Memory diagnostics sample process RSS every 20 seconds. They warn at 256 MiB,
+start temporary Python allocation tracing at 320 MiB, and capture an incident
+report at 384 MiB. Reports are private files under
+`$SILLYTAVERN_BRIDGE_HOME/diagnostics/memory/`; only the newest three are
+retained. See [operations](operations.md#memory-oom-diagnostics) for the
+enable/collect/disable workflow and privacy boundary.
 
 The prompt input budget is approximately context window minus output reserve.
 When over budget, older history, Data Bank context, Hindsight/episodic recall,

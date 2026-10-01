@@ -239,6 +239,47 @@ systemctl --user status sillytavern-telegram.service
 journalctl --user -u sillytavern-telegram.service -n 100 --no-pager
 ```
 
+### Memory OOM diagnostics
+
+Memory diagnostics are disabled by default and are never added to the service
+automatically. Enable them only while investigating unexplained process growth:
+
+```dotenv
+SILLYTAVERN_MEMORY_DIAGNOSTICS=1
+```
+
+Restart the bridge after changing the environment. While enabled, the bridge
+samples process RSS every 20 seconds with no Python allocation tracing below
+320 MiB. The fixed incident thresholds are:
+
+- 256 MiB RSS: arm a warning incident;
+- 320 MiB RSS: start one-frame `tracemalloc` allocation tracing;
+- 384 MiB RSS: write one private incident report and stop tracing when the
+  diagnostics subsystem owns the tracing session.
+
+Reports are stored at:
+
+```text
+$SILLYTAVERN_BRIDGE_HOME/diagnostics/memory/memory-*.json
+```
+
+The directory is mode 0700, report files are mode 0600, and only the newest
+three reports are retained. Reports contain process-level aggregates such as
+RSS, selected `smaps_rollup` totals, Python traced current/peak bytes, thread
+count, and top allocation sites. They never include prompts, model responses,
+credentials, provider bodies, database contents, Python object values, or
+arbitrary exception messages.
+
+For interpretation, compare `rss_kib` and `smaps_kib` with
+`traced_current_bytes` / `traced_peak_bytes`. Large traced growth that tracks
+RSS points toward Python allocations; large RSS/private-memory growth with
+relatively small traced growth points toward native or otherwise untraced
+memory.
+
+After collecting useful incidents, remove `SILLYTAVERN_MEMORY_DIAGNOSTICS=1`
+and restart the bridge. Do not leave diagnostic tracing enabled as a normal
+production setting.
+
 Common configuration/update failures:
 
 | Symptom / updater code | What to check |

@@ -289,6 +289,29 @@ class HindsightSessionCleanupTests(SettingsTestCase):
         self.assertEqual(memory_client.closed, 1)
         self.assertEqual(document_client.closed, 1)
 
+    def test_close_hindsight_client_prefers_public_sync_lifecycle(self):
+        class _ApiClient:
+            def __init__(self):
+                self.closed = 0
+
+            async def close(self):
+                self.closed += 1
+
+        class _Wrapper:
+            def __init__(self):
+                self.closed = 0
+                self.private_client = _ApiClient()
+                self._memory_api = SimpleNamespace(api_client=self.private_client)
+
+            def close(self):
+                self.closed += 1
+
+        wrapper = _Wrapper()
+        _m_memory.close_hindsight_client(wrapper)
+
+        self.assertEqual(wrapper.closed, 1)
+        self.assertEqual(wrapper.private_client.closed, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -314,6 +314,36 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class OptimizerMaturityPromptTests(unittest.TestCase):
+    def test_auto_optimizer_preserves_established_maturity_without_sanitizing(self):
+        prompt = quality.optimize_prompt(
+            {
+                "name": "Alice",
+                "description": "An adult character with intentionally explicit erotic themes.",
+            }
+        )
+        joined = "\n".join(str(message["content"]) for message in prompt)
+
+        self.assertIn("Preserve the original card's established maturity", joined)
+        self.assertIn("Treat these as character-design attributes, not quality defects", joined)
+        self.assertIn("Do not sanitize, censor, euphemize, moralize", joined)
+        self.assertIn("Improve writing quality without changing content rating", joined)
+        self.assertIn("Do not introduce or escalate mature content beyond what the original card supports", joined)
+
+    def test_manual_guidance_may_explicitly_request_maturity_change(self):
+        prompt = quality.optimize_prompt(
+            {"name": "Alice", "description": "Adult character."},
+            suggestion="Make the adult content less explicit.",
+        )
+        joined = "\n".join(str(message["content"]) for message in prompt)
+
+        self.assertIn(
+            "Only change these maturity or content-rating attributes when user editing guidance explicitly requests it",
+            joined,
+        )
+        self.assertIn("Make the adult content less explicit.", joined)
+
+
 class OptimizerSuggestionPromptTests(unittest.TestCase):
     def test_optimizer_prompt_includes_manual_suggestion_as_bounded_guidance(self):
         prompt = quality.optimize_prompt(

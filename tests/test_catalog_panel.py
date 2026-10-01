@@ -64,7 +64,7 @@ class CatalogPanelTests(SettingsTestCase):
             else:
                 os.environ["SILLYTAVERN_PROVIDER_ALLOWED_HOSTS"] = old_hosts
 
-        self.assertEqual(result[0][2], "healthy (chat completion)")
+        self.assertEqual(result[0][2], "inference stream opened (completion not validated)")
         self.assertEqual(len(calls), 1)
         request, _timeout = calls[0]
         self.assertTrue(request.full_url.endswith("/api/v3/chat/completions"))

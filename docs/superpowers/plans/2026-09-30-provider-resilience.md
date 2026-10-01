@@ -47,11 +47,11 @@ Files: `provider_discovery.py`, `provider_panels.py`, `provider_callbacks.py`,
 `callback_dispatch.py`, health values/service, docs/help and panel tests.
 Consumes monitor snapshots via optional policy injection. Produces per-provider
 maintenance and compact paginated diagnostics without ambient runtime context.
-- [ ] Test isolated invalid endpoints, targeted refresh, malformed caches, stale
+- [x] Test isolated invalid endpoints, targeted refresh, malformed caches, stale
   metadata, merged catalog IDs, more than 50 models and no double refresh.
-- [ ] Test bound actions, early acknowledgments, read-only status paging.
-- [ ] Implement and document exact controls; retain compatibility of existing APIs.
-- [ ] Run full verification; push `feat/provider-health-panels`; merge green PR.
+- [x] Test bound actions, early acknowledgments, read-only status paging.
+- [x] Implement and document exact controls; retain compatibility of existing APIs.
+- [x] Run full verification; push `feat/provider-health-panels`; merge green PR.
 
 ## Task 4: persistence, history and bounded manual probes
 Files: new `provider_health_store.py`, monitor/diagnostics, startup, tests/docs.

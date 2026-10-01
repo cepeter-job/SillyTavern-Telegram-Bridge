@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from functools import partial
 
 from bridge.callback_tokens import resolve_dynamic_callback_token
 from bridge.callbacks import remove_inline_keyboard
@@ -19,7 +20,9 @@ from bridge.model_selection import (
     set_utility_reasoning,
     task_model_for_session,
 )
+from bridge.port_contracts import ProviderPolicy
 from bridge.provider_discovery import refresh_model_catalog
+from bridge.provider_panel_tokens import load_provider_report, resolve_provider_action
 from bridge.provider_panels import (
     send_model_menu,
     send_model_target_menu,
@@ -38,14 +41,27 @@ def _catalog_current_model(db, chat_id: str, session: dict, session_id: str, *, 
 
 
 def handle_provider_model_callback(
-    db, token, callback, answer_callback, data, chat_id, message, session, session_id, operation_id, *, request_context
+    db,
+    token,
+    callback,
+    answer_callback,
+    data,
+    chat_id,
+    message,
+    session,
+    session_id,
+    operation_id,
+    *,
+    request_context,
+    provider_policy: ProviderPolicy | None = None,
 ):
     """Handle provider, model, and catalog-only callbacks."""
     message_id = message.get("message_id")
+    send_models = partial(send_model_menu, provider_policy=provider_policy)
     if data.startswith("models:providers:"):
         page = int(data.rsplit(":", 1)[1])
         answer_callback(token, str(callback.get("id", "")), "Page")
-        send_model_menu(
+        send_models(
             token,
             chat_id,
             _catalog_current_model(db, chat_id, session, session_id, request_context=request_context),
@@ -59,7 +75,7 @@ def handle_provider_model_callback(
         provider_id = resolve_dynamic_callback_token(parts[2], "provider", chat_id, db=db) or ""
         page = int(parts[3])
         answer_callback(token, str(callback.get("id", "")), "Page")
-        send_model_menu(
+        send_models(
             token,
             chat_id,
             _catalog_current_model(db, chat_id, session, session_id, request_context=request_context),
@@ -166,7 +182,7 @@ def handle_provider_model_callback(
         return True
     if data == "models:back":
         answer_callback(token, str(callback.get("id", "")), "Back to providers")
-        send_model_menu(
+        send_models(
             token,
             chat_id,
             _catalog_current_model(db, chat_id, session, session_id, request_context=request_context),
@@ -176,13 +192,25 @@ def handle_provider_model_callback(
         return True
     if data == "provider:health":
         answer_callback(token, str(callback.get("id", "")), "Health")
-        send_provider_health_menu(token, chat_id, message_id, request_context=request_context)
+        send_provider_health_menu(
+            token, chat_id, message_id, request_context=request_context, provider_policy=provider_policy
+        )
         return True
     if data == "provider:refresh":
+        answer_callback(token, str(callback.get("id", "")), "Refreshing")
         _config, refreshed, failed = refresh_model_catalog(force=True, app_settings=request_context.app_settings)
-        answer_callback(token, str(callback.get("id", "")), "Refreshed")
         send_text(token, chat_id, f"Model catalog refreshed: {refreshed} providers updated; {failed} failed.")
-        send_model_menu(
+        send_models(
+            token,
+            chat_id,
+            _catalog_current_model(db, chat_id, session, session_id, request_context=request_context),
+            message_id=message_id,
+            request_context=request_context,
+            refresh_catalog=False,
+        )
+        return True
+    if data == "provider:back":
+        send_models(
             token,
             chat_id,
             _catalog_current_model(db, chat_id, session, session_id, request_context=request_context),
@@ -190,19 +218,75 @@ def handle_provider_model_callback(
             request_context=request_context,
         )
         return True
-    if data == "provider:back":
-        send_model_menu(
+    if data.startswith("provider:health-page:"):
+        parts = data.split(":")
+        if len(parts) != 4 or not parts[3].isascii() or not parts[3].isdecimal() or len(parts[3]) > 4:
+            answer_callback(token, str(callback.get("id", "")), "Panel expired; reopen /providers")
+            return True
+        report = load_provider_report(parts[2], chat_id, request_context=request_context)
+        if report is None:
+            answer_callback(token, str(callback.get("id", "")), "Panel expired; reopen /providers")
+            return True
+        answer_callback(token, str(callback.get("id", "")), "Status")
+        send_provider_health_menu(
             token,
             chat_id,
-            _catalog_current_model(db, chat_id, session, session_id, request_context=request_context),
+            message_id,
+            request_context=request_context,
+            provider_policy=provider_policy,
+            report=report,
+            report_token=parts[2],
+            page=int(parts[3]),
+        )
+        return True
+    if data.startswith("provider:maint:"):
+        parts = data.split(":")
+        provider_id = (
+            resolve_provider_action(parts[3], parts[2], chat_id, request_context=request_context)
+            if len(parts) == 4 and parts[2] in {"refresh", "test", "reset"}
+            else None
+        )
+        if provider_id is None:
+            answer_callback(token, str(callback.get("id", "")), "Panel expired; reopen /providers")
+            return True
+        action = parts[2]
+        answer_callback(token, str(callback.get("id", "")), "Running provider action")
+        if action == "test":
+            send_provider_health_menu(
+                token,
+                chat_id,
+                message_id,
+                request_context=request_context,
+                provider_policy=provider_policy,
+                provider_id=provider_id,
+            )
+            return True
+        if action == "refresh":
+            _config, refreshed, failed = refresh_model_catalog(
+                force=True, provider_id=provider_id, app_settings=request_context.app_settings
+            )
+            send_text(token, chat_id, f"Model catalog refreshed: {refreshed} providers updated; {failed} failed.")
+        elif provider_policy is not None:
+            provider_policy.reset(provider_id)
+            send_text(
+                token, chat_id, "Local runtime state reset. Provider credentials and model selection are unchanged."
+            )
+        else:
+            send_text(token, chat_id, "Runtime diagnostics are not available.")
+        send_models(
+            token,
+            chat_id,
+            session["model_id"] or request_context.app_settings.default_model,
+            provider_id,
             message_id=message_id,
             request_context=request_context,
+            refresh_catalog=False,
         )
         return True
     if data.startswith("provider:"):
         provider_id = resolve_dynamic_callback_token(data.split(":", 1)[1], "provider", chat_id, db=db) or ""
         answer_callback(token, str(callback.get("id", "")), "Provider selected")
-        send_model_menu(
+        send_models(
             token,
             chat_id,
             _catalog_current_model(db, chat_id, session, session_id, request_context=request_context),
@@ -227,7 +311,7 @@ def handle_provider_model_callback(
             return True
         set_model_target_selection(db, chat_id, session_id, target)
         answer_callback(token, str(callback.get("id", "")), "Target selected")
-        send_model_menu(
+        send_models(
             token,
             chat_id,
             _catalog_current_model(db, chat_id, session, session_id, request_context=request_context),

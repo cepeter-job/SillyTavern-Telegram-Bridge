@@ -11,7 +11,7 @@ from collections.abc import Callable, Mapping
 from typing import Any, ParamSpec, Protocol, TypeVar
 
 from bridge.provider_errors import ProviderRequestError
-from bridge.provider_health_values import HealthAttempt
+from bridge.provider_health_values import HealthAttempt, HealthSnapshot
 from bridge.request_types import PreparedMessage, RequestContext
 from bridge.token_usage_values import UsageCallback
 
@@ -77,6 +77,10 @@ class ChatSubmit(Protocol):
 
 
 class ProviderPolicy(Protocol):
+    def snapshot(self, provider_id: str, model_id: str = "") -> HealthSnapshot: ...
+
+    def reset(self, provider_id: str) -> None: ...
+
     def candidates(self, model: str, purpose: str) -> tuple[str, ...]: ...
 
     def begin(self, model: str) -> HealthAttempt: ...

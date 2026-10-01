@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from bridge.callback_tokens import dynamic_callback_token
 from bridge.cards import send_panel_message
@@ -10,7 +11,10 @@ from bridge.config import REASONING_LEVELS
 from bridge.generation_settings import get_generation_settings
 from bridge.model_selection import utility_reasoning_for_session
 from bridge.panel_utils import panel_label, panel_page
+from bridge.port_contracts import ProviderPolicy
 from bridge.provider_discovery import get_model_groups, provider_health_checks
+from bridge.provider_health_views import observation_age, provider_status_text
+from bridge.provider_panel_tokens import ProviderReport, provider_action_token, store_provider_report
 
 
 def send_model_menu(
@@ -22,8 +26,14 @@ def send_model_menu(
     page: int = 0,
     *,
     request_context,
+    provider_policy: ProviderPolicy | None = None,
+    refresh_catalog: bool = True,
 ) -> None:
-    groups = get_model_groups(app_settings=request_context.app_settings)
+    groups = (
+        get_model_groups(app_settings=request_context.app_settings)
+        if refresh_catalog
+        else get_model_groups(app_settings=request_context.app_settings, refresh=False)
+    )
     if provider_id is None:
         options = [
             (group_id, f"{label} ({len(models)}){'' if is_supported else ' · catalog only'}", models, is_supported)
@@ -107,9 +117,23 @@ def send_model_menu(
                     }
                 )
             rows.append(navigation)
+        maintenance = []
+        for action, title in (
+            ("test", "Test provider"),
+            ("refresh", "Refresh this provider"),
+            ("reset", "Reset runtime"),
+        ):
+            if action == "reset" and provider_policy is None:
+                continue
+            handle = provider_action_token(action, provider_id, chat_id, request_context=request_context)
+            maintenance.append({"text": title, "callback_data": f"provider:maint:{action}:{handle}"})
+        rows.extend([[button] for button in maintenance])
         rows.append([{"text": "⬅️ Back to providers", "callback_data": "models:back"}])
         rows.append([{"text": "❌ Cancel", "callback_data": "models:cancel"}])
-        text = f"Provider: {label}\nCurrent model: {current_model}"
+        text = f"Provider: {panel_label(label)}\nCurrent model: {current_model}"
+        text += "\n\n" + provider_status_text(
+            provider_id, app_settings=request_context.app_settings, provider_policy=provider_policy
+        )
         if total_pages > 1:
             text += f"\nPage {current_page + 1}/{total_pages}"
         if not is_supported:
@@ -239,21 +263,72 @@ def send_utility_reasoning_menu(
     )
 
 
-def send_provider_health_menu(token: str, chat_id: str, message_id: int | None = None, *, request_context) -> None:
-    checks = provider_health_checks(app_settings=request_context.app_settings)
-    lines = [f"{name}: {status}" for _provider_id, name, status in checks]
-    text = "Provider health\n\n" + ("\n".join(lines) if lines else "No providers configured.")
-    markup = {
-        "inline_keyboard": [
-            [{"text": "🔄 Refresh models", "callback_data": "provider:refresh"}],
-            [
-                {"text": "⬅️ Back to providers", "callback_data": "provider:back"},
-                {"text": "❌ Close", "callback_data": "models:cancel"},
-            ],
+def send_provider_health_menu(
+    token: str,
+    chat_id: str,
+    message_id: int | None = None,
+    *,
+    request_context,
+    provider_policy: ProviderPolicy | None = None,
+    provider_id: str | None = None,
+    report: ProviderReport | None = None,
+    report_token: str = "",
+    page: int = 0,
+) -> None:
+    """Reuse a bound report for paging; only an explicit new test performs network I/O."""
+    if report is None:
+        checks = (
+            provider_health_checks(app_settings=request_context.app_settings)
+            if provider_id is None
+            else provider_health_checks(provider_id, app_settings=request_context.app_settings)
+        )
+        # Bound persisted reports and Telegram labels, even with an oversized private catalog.
+        safe_checks = tuple((pid[:200], name[:80], status[:160]) for pid, name, status in checks[:1024])
+        report = ProviderReport(safe_checks, time.time(), provider_id)
+    if not report_token and request_context.db is not None:
+        report_token = store_provider_report(report, chat_id, request_context=request_context)
+    page_count = max(1, (len(report.checks) + 3) // 4)
+    page = max(0, min(page, page_count - 1))
+    selected = report.checks[page * 4 : (page + 1) * 4]
+    blocks = []
+    for pid, name, status in selected:
+        details = provider_status_text(pid, app_settings=request_context.app_settings, provider_policy=provider_policy)
+        probe_kind = "Local OAuth" if status.startswith(("authenticated", "not logged in")) else "Probe"
+        blocks.append(f"{name}\n{details}\n{probe_kind}: {status}")
+    text = (
+        f"Provider health — page {page + 1}/{page_count}\n"
+        f"Probe snapshot: {observation_age(report.checked_at)}\n"
+        "Probes do not change runtime health. Inference probes can use quota.\n\n"
+        + ("\n\n".join(blocks) if blocks else "No providers configured.")
+    )
+    rows = []
+    if report_token:
+        navigation = []
+        if page > 0:
+            navigation.append({"text": "Previous", "callback_data": f"provider:health-page:{report_token}:{page - 1}"})
+        if page + 1 < page_count:
+            navigation.append({"text": "Next", "callback_data": f"provider:health-page:{report_token}:{page + 1}"})
+        if navigation:
+            rows.append(navigation)
+        rows.append([{"text": "Update runtime status", "callback_data": f"provider:health-page:{report_token}:{page}"}])
+    if request_context.db is not None:
+        for pid, name, _status in selected:
+            handle = dynamic_callback_token("provider", pid, chat_id, db=request_context.db)
+            rows.append([{"text": "Open " + panel_label(name), "callback_data": "provider:" + handle}])
+    if report.provider_id is not None and request_context.db is not None:
+        handle = provider_action_token("test", report.provider_id, chat_id, request_context=request_context)
+        rows.append([{"text": "Test this provider again", "callback_data": f"provider:maint:test:{handle}"}])
+    else:
+        rows.append([{"text": "Run probes again", "callback_data": "provider:health"}])
+    rows.append([{"text": "Refresh models", "callback_data": "provider:refresh"}])
+    rows.append(
+        [
+            {"text": "Back to providers", "callback_data": "provider:back"},
+            {"text": "Close", "callback_data": "models:cancel"},
         ]
-    }
+    )
     try:
-        send_panel_message(token, chat_id, text, markup, message_id, request_context=request_context)
+        send_panel_message(token, chat_id, text, {"inline_keyboard": rows}, message_id, request_context=request_context)
     except RuntimeError as exc:
         if "not modified" in str(exc).casefold():
             logging.info("Panel already shows the requested state")

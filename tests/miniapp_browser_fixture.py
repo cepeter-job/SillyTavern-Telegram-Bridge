@@ -19,6 +19,7 @@ from application_test_setup import make_native_test_persona_service
 from miniapp_test_support import make_services, signed_data
 
 import bridge.miniapp_system as system
+from bridge.memory_diagnostics import MemoryDiagnostics
 from bridge.miniapp_config import load_miniapp_config
 from bridge.miniapp_http import create_miniapp_app
 from bridge.model_router import ModelRouter
@@ -28,6 +29,7 @@ from bridge.provider_port import ProviderPort
 async def serve() -> None:
     with tempfile.TemporaryDirectory(prefix="miniapp-dom-") as directory:
         services = make_services(Path(directory))
+        services.memory_diagnostics = MemoryDiagnostics(services.config.bridge_home, {})
         from bridge.character_quality import store_character_rank
 
         db = services.db_factory()

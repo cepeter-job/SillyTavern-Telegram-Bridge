@@ -7,10 +7,70 @@ function healthCard(iconName,title,...children) {
   heading.classList.add('health-card-title');heading.prepend(mark);
   return view;
 }
+function memoryStateLabel(value) {
+  const state=String(value||'disabled');return state.charAt(0).toUpperCase()+state.slice(1);
+}
+function memoryMiB(kib) {
+  return Number.isFinite(kib)?Math.round(kib/1024)+' MiB':'Not sampled';
+}
+function memoryHealthCard(memory={}) {
+  const thresholds=memory.thresholds_kib||{},state=String(memory.state||'disabled');
+  let hint='Monitoring is disabled.';
+  if(state==='armed')hint='Warning at '+memoryMiB(thresholds.warning);
+  else if(state==='warned')hint='Tracing starts at '+memoryMiB(thresholds.tracing);
+  else if(state==='tracing')hint='Capture at '+memoryMiB(thresholds.capture);
+  else if(state==='captured')hint=(memory.report_count||0)+' retained report'+((memory.report_count||0)===1?'':'s');
+  return healthCard('memory','Memory',el('span',{class:'badge'},memoryStateLabel(state)),el('p',{},'RSS: '+memoryMiB(memory.rss_kib)),el('p',{class:'muted'},hint));
+}
 function details(data) {
   return el('div',{class:'grid'},healthCard('system','Bridge',el('p',{},'Running: v'+data.deployment.version),el('p',{class:'muted'},'Revision: '+(data.deployment.commit.slice(0,12)||'unverified')),el('p',{},'Uptime: '+Math.floor(data.uptime_seconds/60)+' minutes'),el('p',{class:'muted'},'Installed files: v'+data.installed_version)),
     healthCard('telegram','Telegram',el('span',{class:'badge'},data.telegram.state),el('p',{class:'muted'},data.telegram.last_success?'Last successful poll: '+new Date(data.telegram.last_success*1000).toLocaleTimeString():'No successful polling observation yet.')),
-    healthCard('database','Database',el('p',{},'SQLite '+data.database.sqlite_version+' · '+data.database.state),el('p',{},data.database.sessions+' private sessions'),el('p',{},data.database.messages+' stored messages')));
+    healthCard('database','Database',el('p',{},'SQLite '+data.database.sqlite_version+' · '+data.database.state),el('p',{},data.database.sessions+' private sessions'),el('p',{},data.database.messages+' stored messages')),
+    memoryHealthCard(data.memory_diagnostics||{}));
+}
+function memoryBytesMiB(value) {
+  return Number.isFinite(value)?Math.round(value/1048576)+' MiB':'Unavailable';
+}
+function safeAllocationSite(value) {
+  const raw=String(value||'external:unknown');
+  if(/^(bridge|tests|tools)\//.test(raw))return raw;
+  if(raw.includes('/')||raw.includes('\\'))return 'external:'+raw.replaceAll('\\','/').split('/').pop();
+  return raw;
+}
+function memoryInterpretation(report) {
+  const rssBytes=Number(report?.rss_kib)*1024,traced=Number(report?.traced_current_bytes);
+  if(!Number.isFinite(rssBytes)||rssBytes<=0||!Number.isFinite(traced))return 'The report is mixed; inspect allocation sites and process-memory totals.';
+  const ratio=traced/rssBytes;
+  if(ratio>=0.60)return 'Python-traced allocations are a significant share of process memory.';
+  if(ratio<=0.35)return 'Native or otherwise untraced memory appears significant.';
+  return 'The report is mixed; inspect allocation sites and process-memory totals.';
+}
+function memoryDiagnosticsCard(summary={},detail=null) {
+  const view=card('Memory diagnostics',el('div',{class:'memory-diagnostics-summary'},
+    el('span',{class:'badge'},memoryStateLabel(summary.state)),
+    el('p',{},'Current RSS: '+memoryMiB(summary.rss_kib)),
+    el('p',{class:'muted'},'Warning '+memoryMiB(summary.thresholds_kib?.warning)+' · Trace '+memoryMiB(summary.thresholds_kib?.tracing)+' · Capture '+memoryMiB(summary.thresholds_kib?.capture))));
+  if(detail===null) {view.append(el('p',{class:'muted'},'Memory diagnostics unavailable'));return view;}
+  const reports=Array.isArray(detail.reports)?detail.reports.slice(0,3):[];
+  if(!reports.length) {view.append(empty('No memory incident reports.'));return view;}
+  const list=el('div',{class:'memory-incident-list'});
+  for(const report of reports) {
+    const smaps=report.smaps_kib||{},topSites=Array.isArray(report.top_sites)?report.top_sites.slice(0,10):[];
+    const incident=el('section',{class:'memory-incident'},
+      el('div',{class:'row spaced'},el('strong',{},new Date(report.timestamp_utc).toLocaleString()),el('span',{class:'badge'},memoryMiB(report.rss_kib))),
+      el('p',{class:'muted'},'PSS '+memoryMiB(smaps.Pss)+' · Private dirty '+memoryMiB(smaps.Private_Dirty)+' · Anonymous '+memoryMiB(smaps.Anonymous)),
+      el('p',{},'Python traced: '+memoryBytesMiB(report.traced_current_bytes)+' current · '+memoryBytesMiB(report.traced_peak_bytes)+' peak'),
+      el('p',{},Number.isFinite(report.thread_count)?report.thread_count+' threads':'Thread count unavailable'),
+      el('p',{class:'info-note'},memoryInterpretation(report)));
+    const allocations=el('details',{class:'memory-allocations'},el('summary',{},'Top Python allocations'));
+    if(topSites.length) {
+      const items=el('ul');
+      for(const site of topSites)items.append(el('li',{},safeAllocationSite(site.file)+':'+site.line+' · '+memoryBytesMiB(site.size_bytes)));
+      allocations.append(items);
+    } else allocations.append(el('p',{class:'muted'},'No traced allocation sites recorded.'));
+    incident.append(allocations);list.append(incident);
+  }
+  view.append(list);return view;
 }
 async function dashboard() {
   const data=await api('/status');
@@ -71,7 +131,7 @@ async function renderSystem() {
   const root=el('div');
   const scope=createSessionScope(),sessionBody=scope.body;
   async function load() {
-    const [data,operations]=await Promise.all([api('/status'),api('/jobs')]);scope.set(data.session);
+    const [data,operations,memoryDetail]=await Promise.all([api('/status'),api('/jobs'),api('/memory-diagnostics').catch(()=>null)]);scope.set(data.session);
     const history=card('Operations',el('p',{class:'muted'},'Results are private to your account. Interrupted jobs are not silently replayed. Refresh this page to check pending work.'));
     for(const job of operations.jobs) {
       const view=card(job.kind.replaceAll('_',' '),el('span',{class:'badge'},job.state),el('p',{class:'muted'},new Date(job.created_at*1000).toLocaleString()));
@@ -87,6 +147,7 @@ async function renderSystem() {
     }
     if(!operations.jobs.length)history.append(empty('No recent operations.'));
     root.replaceChildren(card('System',el('p',{class:'muted'},'Runtime status is observed, not inferred from installed files.'),button('Refresh status',load,'secondary')),details(data),
+      memoryDiagnosticsCard(memoryDetail?.summary||data.memory_diagnostics||{},memoryDetail),
       card('Verified update',el('p',{},data.automatic_update_trust_configured?'A public release trust file is configured. The updater still verifies signatures and deployment safety.':'Automatic update trust is not configured. Add the independently obtained public release key and external allowed-signers path in .env, then rerun install.sh.'),button('Review latest release',review)),history);
   }
   async function review() {

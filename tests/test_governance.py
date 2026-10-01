@@ -230,12 +230,23 @@ def test_user_documentation_relative_links_resolve():
             assert resolved.exists(), f"{document.relative_to(ROOT)} -> {target}"
 
 
-def test_completed_superpowers_planning_artifacts_are_not_shipped_as_user_docs():
+def test_completed_internal_planning_artifacts_are_not_shipped_as_user_docs():
     retired = (
+        "docs/audit-repairs-2026-09-30.md",
         "docs/superpowers/plans/2026-09-26-light-novel-mode.md",
         "docs/superpowers/plans/2026-09-27-miniapp-delivery.md",
+        "docs/superpowers/plans/2026-09-30-audit-repairs.md",
+        "docs/superpowers/plans/2026-09-30-npc-bank-core.md",
+        "docs/superpowers/plans/2026-09-30-provider-resilience.md",
+        "docs/superpowers/plans/2026-10-01-memory-diagnostics.md",
+        "docs/superpowers/plans/2026-10-01-miniapp-memory-monitoring.md",
         "docs/superpowers/specs/2026-09-26-light-novel-mode-design.md",
         "docs/superpowers/specs/2026-09-27-miniapp-design.md",
+        "docs/superpowers/specs/2026-09-30-audit-repairs-design.md",
+        "docs/superpowers/specs/2026-09-30-npc-bank-core-design.md",
+        "docs/superpowers/specs/2026-09-30-provider-resilience-design.md",
+        "docs/superpowers/specs/2026-10-01-memory-diagnostics-design.md",
+        "docs/superpowers/specs/2026-10-01-miniapp-memory-monitoring-design.md",
     )
     assert all(not (ROOT / path).exists() for path in retired)
 

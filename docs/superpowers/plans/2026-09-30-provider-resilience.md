@@ -36,11 +36,11 @@ snapshot; policy candidates/begin/succeed/fail/cancel. Port accepts optional pol
 Files: health/policy/port/errors above; `codex_transport.py`; new resilience tests.
 Consumes Task 1 monitor/attempt interfaces. Produces guarded admission, Retry-After
 metadata and explicit fallback candidates while preserving ProviderGenerate.
-- [ ] Test three failures/60s, single half-open request, backoff, cancel release,
+- [x] Test three failures/60s, single half-open request, backoff, cancel release,
   rate-limit/date parsing, auth/model scope, fallback usage/credentials/deadlines.
-- [ ] Observe failures; implement guards and one bounded ordered candidate loop.
-- [ ] Test streaming/no-output and request-local failure exclusions.
-- [ ] Run full verification; push `feat/provider-health-resilience`; merge green PR.
+- [x] Observe failures; implement guards and one bounded ordered candidate loop.
+- [x] Test streaming/no-output and request-local failure exclusions.
+- [x] Run full verification; push `feat/provider-health-resilience`; merge green PR.
 
 ## Task 3: diagnostics and catalog maintenance
 Files: `provider_discovery.py`, `provider_panels.py`, `provider_callbacks.py`,

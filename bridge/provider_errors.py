@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import math
+import time
+from email.utils import parsedate_to_datetime
+
 _CATEGORIES = {
     "rate_limit",
     "authentication",
@@ -14,6 +18,29 @@ _CATEGORIES = {
     "provider_rejected",
     "provider_failure",
 }
+
+
+def _bounded_delay(value: float | None) -> float | None:
+    if value is None or isinstance(value, bool) or not math.isfinite(value) or value < 0:
+        return None
+    return min(float(value), 86400.0)
+
+
+def parse_retry_after(value: object, *, now: float | None = None) -> float | None:
+    """Parse RFC 9110 delay-seconds or HTTP-date without retaining raw headers."""
+    if not isinstance(value, str) or len(value) > 128:
+        return None
+    raw = value.strip()
+    if raw.isascii() and raw.isdecimal():
+        return min(float(int(raw)), 86400.0)
+    try:
+        date = parsedate_to_datetime(raw)
+        if date.tzinfo is None:
+            return None
+        delay = date.timestamp() - (time.time() if now is None else now)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return _bounded_delay(max(0.0, delay)) if math.isfinite(delay) else None
 
 
 def _safe_model_name(model: str) -> str:
@@ -44,29 +71,50 @@ def provider_category_for_status(status: int) -> str:
 class ProviderTransportError(RuntimeError):
     """Sanitized transport failure without user/model identity."""
 
-    def __init__(self, category: str, status: int | None = None) -> None:
+    def __init__(self, category: str, status: int | None = None, *, retry_after: float | None = None) -> None:
         if category not in _CATEGORIES:
             raise ValueError("invalid provider failure category")
         self.category = category
         self.status = int(status) if status is not None else None
+        self.retry_after = _bounded_delay(retry_after)
         super().__init__("provider transport failed")
 
 
 class ProviderRequestError(RuntimeError):
     """Sanitized provider failure bound to the selected model."""
 
-    def __init__(self, model: str, category: str, status: int | None = None) -> None:
+    def __init__(
+        self,
+        model: str,
+        category: str,
+        status: int | None = None,
+        *,
+        retry_after: float | None = None,
+        blocked: bool = False,
+    ) -> None:
         if category not in _CATEGORIES:
             raise ValueError("invalid provider failure category")
         self.model = _safe_model_name(model)
         self.category = category
         self.status = int(status) if status is not None else None
+        self.retry_after = _bounded_delay(retry_after)
+        self.blocked = blocked
         super().__init__(self._user_message())
 
     def _user_message(self) -> str:
         model = self.model
         status = self.status
         suffix = f" (HTTP {status})" if status is not None else ""
+        if self.blocked:
+            wait = (
+                f"Retry in {math.ceil(self.retry_after)} seconds."
+                if self.retry_after is not None and self.retry_after > 0
+                else "A recovery request is already in progress."
+            )
+            return (
+                f"Model {model} is temporarily paused after {self.category}{suffix}. "
+                f"{wait} Open /providers for details."
+            )
         if self.category == "rate_limit":
             return f"Model {model} is rate-limited{suffix}. Try again later or choose another model."
         if self.category == "authentication":

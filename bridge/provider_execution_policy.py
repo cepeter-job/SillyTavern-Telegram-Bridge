@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from bridge.model_router import ModelRouter
+from bridge.model_router import ModelRouter, ModelRoutingError
 from bridge.provider_errors import ProviderRequestError
 from bridge.provider_health_values import HealthAttempt
 from bridge.provider_runtime_health import ProviderRuntimeHealth
@@ -17,7 +17,26 @@ class ProviderExecutionPolicy:
 
     def candidates(self, model: str, purpose: str) -> tuple[str, ...]:
         route = self.model_router.route(model)
-        return (f"{route.provider_id}::{route.model_id}",)
+        choices = [f"{route.provider_id}::{route.model_id}"]
+        if purpose in {"summary", "memory", "scene", "rank", "optimizer", "choices", "npc"}:
+            raw = route.spec.get("utility_fallbacks")
+        elif route.spec.get("allow_story_fallback") is True:
+            raw = route.spec.get("story_fallbacks")
+        else:
+            raw = None
+        if not isinstance(raw, (list, tuple)):
+            return tuple(choices)
+        for candidate in raw:
+            if not isinstance(candidate, str) or "::" not in candidate or candidate in choices:
+                continue
+            try:
+                resolved = self.model_router.route(candidate)
+            except ModelRoutingError:
+                continue
+            choices.append(f"{resolved.provider_id}::{resolved.model_id}")
+            if len(choices) >= 3:
+                break
+        return tuple(choices)
 
     def begin(self, model: str) -> HealthAttempt:
         route = self.model_router.route(model)

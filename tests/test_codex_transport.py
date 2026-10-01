@@ -296,6 +296,10 @@ class CodexTransportTests(SettingsTestCase):
         class RateLimited(RuntimeError):
             code = 429
 
+            def __init__(self, message):
+                super().__init__(message)
+                self.headers = {"Retry-After": "37"}
+
             def close(self):
                 return None
 
@@ -312,6 +316,7 @@ class CodexTransportTests(SettingsTestCase):
 
         self.assertEqual(raised.exception.category, "rate_limit")
         self.assertEqual(raised.exception.status, 429)
+        self.assertEqual(getattr(raised.exception, "retry_after", None), 37)
         self.assertNotIn("secret", str(raised.exception))
 
     def test_failed_response_raises_bounded_provider_error(self):

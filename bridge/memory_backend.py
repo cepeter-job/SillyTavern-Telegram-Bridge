@@ -91,7 +91,15 @@ _HINDSIGHT_SESSION_LOCKS_GUARD = threading.Lock()
 
 
 async def _close_hindsight_client_async(client) -> None:
-    """Close any generated Hindsight API clients owned by a wrapper instance."""
+    """Close a Hindsight client on the caller's active event loop."""
+    aclose = getattr(client, "aclose", None)
+    if callable(aclose):
+        result = aclose()
+        if inspect.isawaitable(result):
+            await result
+        return
+
+    # Compatibility fallback for older SDKs and narrow test doubles.
     seen = set()
     candidates = [
         getattr(client, "_memory_api", None),
@@ -112,10 +120,37 @@ async def _close_hindsight_client_async(client) -> None:
 
 
 def close_hindsight_client(client) -> None:
+    """Close a synchronous Hindsight wrapper on its SDK-owned event loop."""
     if client is None:
         return
     try:
-        asyncio.run(_close_hindsight_client_async(client))
+        close = getattr(client, "close", None)
+        if callable(close):
+            result = close()
+            if inspect.isawaitable(result):
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                if loop.is_running():
+                    raise RuntimeError("async Hindsight close returned on a running event loop")
+                loop.run_until_complete(result)
+            return
+
+        # Compatibility fallback: reuse the thread-local loop instead of
+        # creating a new loop with asyncio.run().
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        if loop.is_running():
+            raise RuntimeError("cannot synchronously close Hindsight client on a running event loop")
+        loop.run_until_complete(_close_hindsight_client_async(client))
     except Exception:
         logging.debug("Could not close Hindsight client cleanly", exc_info=True)
 

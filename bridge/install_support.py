@@ -463,6 +463,11 @@ RestrictSUIDSGID=true
 LockPersonality=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 TasksMax=128
+MemoryAccounting=yes
+MemoryHigh=512M
+MemoryMax=768M
+MemorySwapMax=256M
+OOMPolicy=stop
 [Install]
 WantedBy=default.target
 """

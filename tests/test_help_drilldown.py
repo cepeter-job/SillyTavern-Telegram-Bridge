@@ -318,7 +318,6 @@ class HelpDrilldownTests(SettingsTestCase):
         }
         expected_direct = {
             "/language <language>",
-            "/imagine <prompt>",
             "/macro <text>",
             "/edit <text>",
             "/prompt text",

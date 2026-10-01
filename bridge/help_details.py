@@ -81,8 +81,7 @@ HELP_CATEGORIES = {
         ("/language", "Open the reply-language panel for this session."),
         ("/language <language>", "Set the session reply language directly, or use auto to follow the user's language."),
         ("/expression", "Open native expression controls for the active character."),
-        ("/imagine", "Open scoped image-prompt input when an image provider is configured."),
-        ("/imagine <prompt>", "Generate an image immediately from a 1–4,000 character prompt."),
+        ("/imagine", "Open the image panel for Current Scene or Custom Prompt generation."),
     ],
     "generation": [
         (

@@ -153,7 +153,7 @@ prevents accidental changes.
 |---|---|
 | `/voice` | Open automatic quote-driven TTS controls |
 | `/voice_input` | Configure transcription, STT model, and language |
-| `/imagine` | Generate an image through an enabled image provider |
+| `/imagine` | Open the image panel for Current Scene or Custom Prompt generation |
 | `/memory` | Open active-session Hindsight/curated-memory controls |
 | `/remember` | Store one explicit long-term fact |
 | `/summarize` | Confirm active-session summary regeneration |
@@ -704,8 +704,17 @@ normal text turn.
 ### Images
 
 `/imagine` stays disabled until you explicitly configure an image provider with
-an endpoint, model, and output size. Prompts must be 1–4,000 characters.
-Chat-only models are never silently reused for image generation.
+an endpoint, model, and output size. The command always opens a session-scoped
+panel: **Current Scene** builds a bounded visual prompt from the latest committed
+assistant turn plus structured scene state using the session Utility-model route,
+while **Custom Prompt** asks for a 1–4,000 character prompt after you select it.
+**Options** stores an image-model override plus Square (`1024x1024`), Landscape
+(`1536x1024`), or Portrait (`1024x1536`) output size for the active session; both
+Current Scene and Custom Prompt use the same setting, and Reset defaults returns
+to the provider's first configured image model and `1024x1024`. Typing
+`/imagine <text>` no longer sends that text directly to an image provider; it
+opens the same panel. Image generation never appends or rewrites roleplay
+transcript rows. Chat-only models are never silently reused for image generation.
 
 Telegram photos with captions are queued for vision analysis when the active
 model supports vision. If it doesn't, the bridge fails closed — no changes to

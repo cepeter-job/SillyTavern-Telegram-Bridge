@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+
+from bridge.callback_tokens import resolve_dynamic_callback_token
 from bridge.callbacks import close_panel_message
 from bridge.card_content import card_fields_from_file
 from bridge.cards import send_panel_message
@@ -9,6 +12,18 @@ from bridge.director_goals import set_director_goal
 from bridge.feature_panels import send_curated_memory_menu, send_director_goal_menu, send_scene_menu
 from bridge.group_commands import handle_summary_command
 from bridge.group_service import GroupService
+from bridge.image_generation import (
+    handle_imagine_scene,
+    reset_session_image_settings,
+    set_session_image_model,
+    set_session_image_size,
+)
+from bridge.image_panels import (
+    send_imagine_menu,
+    send_imagine_model_menu,
+    send_imagine_options_menu,
+    send_imagine_size_menu,
+)
 from bridge.memory_backend import memory_mode
 from bridge.memory_curator import curate_memory_now
 from bridge.memory_panels import send_memory_menu
@@ -86,7 +101,7 @@ def handle_prompt_and_feature_callback(
                 request_context=request_context,
             )
         return True
-    if data.startswith(("scene:", "goal:", "curated:", "summary:")):
+    if data.startswith(("scene:", "imagine:", "goal:", "curated:", "summary:")):
         return handle_feature_panel_callback(
             db,
             token,
@@ -131,6 +146,158 @@ def handle_feature_panel_callback(
             answer_callback(token, str(callback.get("id", "")), "Summarizing")
             handle_summary_command(
                 db, token, chat_id, session, provider_port=provider_port, app_settings=request_context.app_settings
+            )
+        return True
+    if data.startswith("imagine:"):
+        action = data.split(":", 1)[1]
+        if action == "close":
+            answer_callback(token, str(callback.get("id", "")), "Closed")
+            close_panel_message(db, token, chat_id, callback)
+        elif action == "custom":
+            answer_callback(token, str(callback.get("id", "")), "Send prompt")
+            start_text_action_input(
+                db,
+                token,
+                chat_id,
+                session_id,
+                "imagine",
+                "Send a custom image prompt (1–4,000 characters).",
+                callback,
+            )
+        elif action == "scene":
+            answer_callback(token, str(callback.get("id", "")), "Generating current scene")
+            send_typing(token, chat_id)
+            try:
+                handle_imagine_scene(
+                    db,
+                    token,
+                    chat_id,
+                    session,
+                    card_fields_from_file(session["character_file"], app_settings=request_context.app_settings),
+                    provider_port=provider_port,
+                    app_settings=request_context.app_settings,
+                )
+            except ValueError as exc:
+                send_text(token, chat_id, f"Image generation unavailable: {exc}")
+            except Exception:
+                logging.warning("Current-scene image generation failed", exc_info=True)
+                send_text(token, chat_id, "Current-scene image generation failed. Open /imagine and retry.")
+        elif action == "menu":
+            answer_callback(token, str(callback.get("id", "")), "Image menu")
+            send_imagine_menu(
+                token,
+                chat_id,
+                db,
+                session,
+                message_id,
+                request_context=request_context,
+            )
+        elif action == "options":
+            answer_callback(token, str(callback.get("id", "")), "Image options")
+            send_imagine_options_menu(
+                token,
+                chat_id,
+                db,
+                session,
+                message_id,
+                request_context=request_context,
+            )
+        elif action == "model":
+            answer_callback(token, str(callback.get("id", "")), "Choose image model")
+            send_imagine_model_menu(
+                token,
+                chat_id,
+                db,
+                session,
+                message_id,
+                request_context=request_context,
+            )
+        elif action.startswith("model:"):
+            handle = action.split(":", 1)[1]
+            selection = resolve_dynamic_callback_token(handle, "image_model", chat_id, db=db)
+            if selection is None:
+                answer_callback(token, str(callback.get("id", "")), "Image model choice expired")
+                send_imagine_model_menu(
+                    token,
+                    chat_id,
+                    db,
+                    session,
+                    message_id,
+                    request_context=request_context,
+                )
+            else:
+                try:
+                    set_session_image_model(
+                        db,
+                        chat_id,
+                        session_id,
+                        selection,
+                        app_settings=request_context.app_settings,
+                    )
+                except ValueError:
+                    answer_callback(token, str(callback.get("id", "")), "Image model is no longer available")
+                    send_imagine_model_menu(
+                        token,
+                        chat_id,
+                        db,
+                        session,
+                        message_id,
+                        request_context=request_context,
+                    )
+                else:
+                    answer_callback(token, str(callback.get("id", "")), "Image model updated")
+                    send_imagine_options_menu(
+                        token,
+                        chat_id,
+                        db,
+                        session,
+                        message_id,
+                        request_context=request_context,
+                    )
+        elif action == "size":
+            answer_callback(token, str(callback.get("id", "")), "Choose image size")
+            send_imagine_size_menu(
+                token,
+                chat_id,
+                db,
+                session,
+                message_id,
+                request_context=request_context,
+            )
+        elif action.startswith("size:"):
+            size = action.split(":", 1)[1]
+            try:
+                set_session_image_size(db, chat_id, session_id, size)
+            except ValueError:
+                answer_callback(token, str(callback.get("id", "")), "Unsupported image size")
+                send_imagine_size_menu(
+                    token,
+                    chat_id,
+                    db,
+                    session,
+                    message_id,
+                    request_context=request_context,
+                )
+            else:
+                answer_callback(token, str(callback.get("id", "")), "Image size updated")
+                send_imagine_options_menu(
+                    token,
+                    chat_id,
+                    db,
+                    session,
+                    message_id,
+                    request_context=request_context,
+                )
+        elif action == "reset":
+            reset_session_image_settings(db, chat_id, session_id)
+            answer_callback(token, str(callback.get("id", "")), "Image defaults restored")
+            send_imagine_options_menu(
+                token,
+                chat_id,
+                db,
+                session,
+                message_id,
+                request_context=request_context,
             )
         return True
     if data.startswith("scene:"):

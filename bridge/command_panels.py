@@ -8,7 +8,7 @@ from bridge.expressions import send_expression_menu
 from bridge.feature_panels import send_summary_menu
 from bridge.group_commands import handle_group_command
 from bridge.group_panels import send_group_menu
-from bridge.image_generation import handle_imagine_prompt
+from bridge.image_panels import send_imagine_menu
 from bridge.language import handle_language_command, send_language_menu
 from bridge.macro_commands import send_stscript_menu
 from bridge.memory import handle_memory_command
@@ -50,14 +50,8 @@ def _handle_generation_panels(
     if command == "/update":
         send_update_menu(token, chat_id, request_context=request_context)
         return True
-    if command == "/imagine":
-        start_text_action_input(db, token, chat_id, session_id, "imagine", "Send an image prompt (1–4,000 characters).")
-        return True
-    if command.startswith("/imagine "):
-        try:
-            handle_imagine_prompt(token, chat_id, stripped.split(None, 1)[1], app_settings=request_context.app_settings)
-        except ValueError as exc:
-            send_text(token, chat_id, f"Image generation unavailable: {exc}")
+    if command == "/imagine" or command.startswith("/imagine "):
+        send_imagine_menu(token, chat_id, db, session, request_context=request_context)
         return True
     if command == "/expression":
         send_expression_menu(token, chat_id, session, db, delivery_port=delivery_port, request_context=request_context)

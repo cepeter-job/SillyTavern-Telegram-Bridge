@@ -107,9 +107,38 @@ class UpdatePanelTests(SettingsTestCase):
                 self.app_settings_builder.update_live_dir = old_live
                 self.app_settings_builder.update_repo_dir = old_repo
 
+    def test_managed_deployment_marker_takes_precedence_over_stale_changelog(self):
+        import json
+
+        from bridge.self_update import APPLICATION, MARKER
+
+        old_live = self.app_settings_builder.update_live_dir
+        old_repo = self.app_settings_builder.update_repo_dir
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            live = root / "live"
+            repo = root / "repo"
+            live.mkdir()
+            repo.mkdir()
+            (live / "CHANGELOG.md").write_text("## [0.2.054] - 2026-10-01\n", encoding="utf-8")
+            (repo / "CHANGELOG.md").write_text("## [0.2.055] - 2026-10-01\n", encoding="utf-8")
+            (live / MARKER).write_text(
+                json.dumps({"application": APPLICATION, "format": 1, "version": "0.2.055", "commit": "a" * 40}),
+                encoding="utf-8",
+            )
+            self.app_settings_builder.update_live_dir = live
+            self.app_settings_builder.update_repo_dir = repo
+            try:
+                self.assertEqual(
+                    _m_update.installed_bridge_version(app_settings=self.app_settings_builder.build()), "0.2.055"
+                )
+            finally:
+                self.app_settings_builder.update_live_dir = old_live
+                self.app_settings_builder.update_repo_dir = old_repo
+
     def test_release_changelog_matches_installed_release(self):
         changelog = Path(__file__).parents[1] / "CHANGELOG.md"
-        self.assertEqual(_m_update._changelog_version(changelog), "0.2.054")
+        self.assertEqual(_m_update._changelog_version(changelog), "0.2.055")
         self.assertFalse(_m_update._changelog_has_unreleased(changelog))
 
     def test_update_noop_skips_subprocess_when_latest(self):

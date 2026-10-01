@@ -2,6 +2,18 @@
 
 All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
+## [0.2.055] - 2026-10-01
+
+### Fixed
+
+- Serialize busy interactive panel callbacks so repeated clicks cannot launch overlapping work or duplicate task execution.
+- Report the installed bridge version from the managed deployment marker when available, avoiding stale version reporting when release files and changelog metadata diverge.
+
+### Security and maintenance
+
+- Update `pypdf` for current security advisories and synchronize dependency locks.
+- Remove completed internal planning artifacts that are no longer required at runtime.
+
 ## [0.2.054] - 2026-10-01
 
 ### Added

@@ -553,6 +553,26 @@ def test_summary_initializes_retained_incident_metadata_once(tmp_path, monkeypat
     assert summary["latest_incident"] == {"timestamp_utc": "2026-10-01T00:00:01+00:00", "rss_kib": 400000}
 
 
+def test_report_index_scan_failure_is_nonfatal(tmp_path, monkeypatch, caplog):
+    home = tmp_path / "bridge-home"
+    directory = home / "diagnostics" / "memory"
+    directory.mkdir(parents=True)
+    original_glob = Path.glob
+
+    def failing_glob(path, pattern):
+        if path == directory:
+            raise PermissionError("PRIVATE_REPORT_SCAN_DETAIL")
+        return original_glob(path, pattern)
+
+    monkeypatch.setattr(Path, "glob", failing_glob)
+    with caplog.at_level("WARNING"):
+        diagnostics = MemoryDiagnostics(home, {})
+
+    assert diagnostics.summary()["report_count"] == 0
+    assert "Memory diagnostics retained report index unavailable" in caplog.text
+    assert "PRIVATE_REPORT_SCAN_DETAIL" not in caplog.text
+
+
 def test_summary_updates_incident_index_after_capture(tmp_path, monkeypatch):
     diagnostics = _diagnostics(tmp_path)
     monkeypatch.setattr(memory_diagnostics, "_resident_memory_kib", lambda: 384 * 1024)
@@ -645,6 +665,7 @@ def test_recent_reports_skip_malformed_sibling_and_work_while_disabled(tmp_path)
     ("raw", "expected"),
     [
         ("/home/private/project/secret_module.py", "external:secret_module.py"),
+        ("vendor/private/secret_module.py", "external:secret_module.py"),
         (r"C:\\Users\\Private\\secret_module.py", "external:secret_module.py"),
     ],
 )

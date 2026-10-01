@@ -13,13 +13,20 @@ function memoryStateLabel(value) {
 function memoryMiB(kib) {
   return Number.isFinite(kib)?Math.round(kib/1024)+' MiB':'Not sampled';
 }
+function memoryRetainedHint(memory={}) {
+  const count=Number.isFinite(memory.report_count)?memory.report_count:0;
+  if(!count&&!memory.latest_incident?.timestamp_utc)return '';
+  const countText=count+' retained report'+(count===1?'':'s');
+  const when=new Date(memory.latest_incident?.timestamp_utc||'');
+  return countText+(Number.isNaN(when.getTime())?'':' · Last incident '+when.toLocaleString());
+}
 function memoryHealthCard(memory={}) {
-  const thresholds=memory.thresholds_kib||{},state=String(memory.state||'disabled');
-  let hint='Monitoring is disabled.';
+  const thresholds=memory.thresholds_kib||{},state=String(memory.state||'disabled'),retained=memoryRetainedHint(memory);
+  let hint=retained?'Monitoring is disabled. '+retained:'Monitoring is disabled.';
   if(state==='armed')hint='Warning at '+memoryMiB(thresholds.warning);
   else if(state==='warned')hint='Tracing starts at '+memoryMiB(thresholds.tracing);
   else if(state==='tracing')hint='Capture at '+memoryMiB(thresholds.capture);
-  else if(state==='captured')hint=(memory.report_count||0)+' retained report'+((memory.report_count||0)===1?'':'s');
+  else if(state==='captured')hint=retained||'0 retained reports';
   return healthCard('memory','Memory',el('span',{class:'badge'},memoryStateLabel(state)),el('p',{},'RSS: '+memoryMiB(memory.rss_kib)),el('p',{class:'muted'},hint));
 }
 function details(data) {
@@ -38,9 +45,9 @@ function safeAllocationSite(value) {
   return raw;
 }
 function memoryInterpretation(report) {
-  const rssBytes=Number(report?.rss_kib)*1024,traced=Number(report?.traced_current_bytes);
-  if(!Number.isFinite(rssBytes)||rssBytes<=0||!Number.isFinite(traced))return 'The report is mixed; inspect allocation sites and process-memory totals.';
-  const ratio=traced/rssBytes;
+  const rss=report?.rss_kib,traced=report?.traced_current_bytes;
+  if(typeof rss!=='number'||!Number.isFinite(rss)||rss<=0||typeof traced!=='number'||!Number.isFinite(traced))return 'The report is mixed; inspect allocation sites and process-memory totals.';
+  const ratio=traced/(rss*1024);
   if(ratio>=0.60)return 'Python-traced allocations are a significant share of process memory.';
   if(ratio<=0.35)return 'Native or otherwise untraced memory appears significant.';
   return 'The report is mixed; inspect allocation sites and process-memory totals.';

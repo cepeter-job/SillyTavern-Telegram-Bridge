@@ -196,10 +196,16 @@ try {
     const healthText=shellDocument.querySelector('.dashboard-health').textContent;
     assert.ok(healthText.includes(label),'Home renders '+name+' memory state');
     assert.ok(healthText.includes(rssText),'Home renders '+name+' memory RSS');
+    if(name==='captured')assert.ok(healthText.includes('Last incident'),'Captured Home memory state shows latest incident time');
     assert.equal(memoryDetailRequests,detailBefore,'Home '+name+' state does not request detailed diagnostics');
   }
-  memoryStatusScenario=null;
-
+  memoryStatusScenario={...memorySummaries.disabled,report_count:2,latest_incident:memorySummaries.captured.latest_incident};
+  let retainedDetailBefore=memoryDetailRequests;
+  await app.namespace.navigate('dashboard');
+  const disabledRetainedText=shellDocument.querySelector('.dashboard-health').textContent;
+  assert.ok(disabledRetainedText.includes('2 retained reports'),'Disabled Home memory state preserves retained report count');
+  assert.ok(disabledRetainedText.includes('Last incident'),'Disabled Home memory state preserves latest incident time');
+  assert.equal(memoryDetailRequests,retainedDetailBefore,'Disabled Home retained history still uses status summary only');
   memoryStatusScenario=memorySummaries.disabled;
   memoryDetailScenario={summary:memorySummaries.disabled,reports:[]};
   let detailBefore=memoryDetailRequests;
@@ -235,6 +241,17 @@ try {
     assert.ok(allocationDetails.querySelectorAll('li').length<=10,'System caps allocation sites at ten');
     assert.ok(!systemText.includes('/home/private'),'System never renders an absolute private path');
   }
+
+  const unavailableTraceReport=makeReport(0.45);
+  unavailableTraceReport.traced_current_bytes=null;
+  memoryStatusScenario={...memorySummaries.captured,report_count:1};
+  memoryDetailScenario={summary:memoryStatusScenario,reports:[unavailableTraceReport]};
+  detailBefore=memoryDetailRequests;
+  await app.namespace.navigate('system');
+  await until(()=>memoryDetailRequests===detailBefore+1,'System renders unavailable traced-memory diagnostics');
+  const unavailableTraceText=shellDocument.querySelector('main').textContent;
+  assert.ok(unavailableTraceText.includes('The report is mixed; inspect allocation sites and process-memory totals.'),'Missing traced-current memory yields a mixed interpretation');
+  assert.ok(!unavailableTraceText.includes('Native or otherwise untraced memory appears significant.'),'Missing traced-current memory is not misclassified as native/untraced');
 
   memoryStatusScenario=memorySummaries.disabled;
   memoryDetailScenario='failure';

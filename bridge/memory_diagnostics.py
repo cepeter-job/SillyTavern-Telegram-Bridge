@@ -124,7 +124,12 @@ class MemoryDiagnostics:
         if diagnostics.is_symlink() or directory.is_symlink() or not directory.is_dir():
             return ()
         indexed: list[tuple[Path, dict[str, object]]] = []
-        for path in sorted(directory.glob("memory-*.json"), reverse=True)[:REPORT_RETENTION]:
+        try:
+            candidates = sorted(directory.glob("memory-*.json"), reverse=True)[:REPORT_RETENTION]
+        except OSError:
+            logging.warning("Memory diagnostics retained report index unavailable")
+            return ()
+        for path in candidates:
             if path.is_symlink() or not path.is_file():
                 continue
             try:
@@ -169,7 +174,7 @@ class MemoryDiagnostics:
             return relative.as_posix()[:256]
         if ".." not in candidate.parts:
             normalized = candidate.as_posix().lstrip("./")
-            if normalized:
+            if normalized and (len(candidate.parts) == 1 or candidate.parts[0] in {"bridge", "tests", "tools"}):
                 return normalized[:256]
         return f"external:{(candidate.name or 'unknown')[:128]}"
 

@@ -2,6 +2,37 @@
 
 All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
+## [0.2.054] - 2026-10-01
+
+### Added
+
+- Replace direct `/imagine <prompt>` generation with a session-scoped image panel
+  offering **Current Scene**, **Custom Prompt**, and image-generation options.
+- Current Scene builds a bounded visual prompt from structured scene state, the
+  latest committed assistant turn, and established character appearance context
+  through the session Utility-model route without changing the roleplay transcript.
+- Add per-session image model selection plus Square, Landscape, and Portrait output
+  size presets with a reset-to-defaults action.
+
+### Changed
+
+- Inline `/imagine <prompt>` now opens the panel instead of bypassing the scoped
+  image workflow.
+- Character Auto Optimizer now preserves the original card's established maturity,
+  sexual explicitness, taboo level, intimacy style, violence level, and intentional
+  adult themes instead of treating them as quality defects. Manual Suggestion may
+  change those attributes only when the user's guidance explicitly requests it.
+- Optimizer guidance also prevents automatic mature-content escalation beyond what
+  the original character card supports.
+
+### Validation and compatibility
+
+- Image generation remains read-only with respect to roleplay transcript/history,
+  and image model/size overrides remain scoped to the active session.
+- Combined feature tree passed 2,385 tests and 778 subtests before release
+  finalization.
+- No runtime dependency lockfiles or database migrations changed in this release.
+
 ## [0.2.053] - 2026-10-01
 
 ### Changed

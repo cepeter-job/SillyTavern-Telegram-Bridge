@@ -19,6 +19,7 @@ from bridge.model_selection import task_model_for_session
 from bridge.npc_service import NpcService
 from bridge.prompt_diagnostics import prompt_diagnostics
 from bridge.prompt_panels import send_prompt_menu
+from bridge.provider_errors import ProviderRequestError
 from bridge.provider_panels import send_model_target_menu
 from bridge.rag_service import RagService
 from bridge.regeneration import regenerate_last
@@ -35,6 +36,38 @@ from bridge.world_panels import send_world_menu
 
 if TYPE_CHECKING:
     pass
+
+
+def _retry_failure_report(failed: tuple, error: BaseException) -> str:
+    model = error.model if isinstance(error, ProviderRequestError) else str(failed[2] or "")
+    if not model or len(model) > 200 or any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in model):
+        model = "the selected model"
+    try:
+        attempt = max(1, int(failed[3] or 0) + 1)
+    except (TypeError, ValueError, OverflowError):
+        attempt = 1
+    try:
+        turn_id = str(int(failed[0]))
+    except (TypeError, ValueError, OverflowError):
+        turn_id = "unavailable"
+    if isinstance(error, ProviderRequestError):
+        reason = str(error)
+    elif isinstance(error, TimeoutError):
+        reason = "The retry timed out before producing a usable response."
+    elif isinstance(error, ValueError) and str(error) == "Story response has no usable narrative":
+        reason = "The model returned an empty or malformed Light Novel response."
+    elif isinstance(error, ValueError) and str(error) == "Malformed story envelope; no complete narrative to recover":
+        reason = "The model returned malformed Light Novel JSON without a complete story."
+    else:
+        reason = "The character backend failed before producing a usable response."
+    return (
+        f"Retry attempt {attempt} failed.\n"
+        f"Turn: Telegram message {turn_id}\n"
+        f"Model: {model}\n"
+        f"Reason: {reason}\n"
+        "Status: The turn remains queued for /retry.\n"
+        "Next: Try /retry again later, or open /providers to inspect health and choose another model."
+    )
 
 
 def _handle_basic(
@@ -168,7 +201,7 @@ def _handle_basic(
             record_failed_turn(
                 db, chat_id, failed_message_id, str(failed[1]), str(failed[2]), str(exc), failed_session_id
             )
-            send_text(token, chat_id, "Retry failed again; the turn remains queued for /retry.")
+            send_text(token, chat_id, _retry_failure_report(failed, exc))
         return True
     if command == "/prompt":
         send_prompt_menu(

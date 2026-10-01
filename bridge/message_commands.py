@@ -291,9 +291,9 @@ def generate_and_store_reply(
             generation_settings,
             provider_port=provider_port,
         )
-    if novel_turn:
-        reply = novel_turn.finalize(reply)
     reply = telegram_safe_output(reply)
+    if novel_turn:
+        reply = telegram_safe_output(novel_turn.finalize(reply))
     stored_reply = (
         reply
         if group_turn and group_turn[1].get("mode") == "autonomous"

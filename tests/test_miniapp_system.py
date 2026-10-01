@@ -24,6 +24,132 @@ def test_status_is_scoped_and_does_not_expose_runtime_secrets(tmp_path):
     assert result["telegram"]["state"] == "unobserved"
 
 
+def test_status_includes_memory_diagnostics_summary(tmp_path):
+    from bridge.miniapp_system import system_status
+
+    s, w, _p = setup(tmp_path)
+
+    class Diagnostics:
+        def summary(self):
+            return {
+                "enabled": True,
+                "state": "tracing",
+                "rss_kib": 350000,
+                "thresholds_kib": {"warning": 262144, "tracing": 327680, "capture": 393216},
+                "report_count": 2,
+                "latest_incident": {"timestamp_utc": "2026-10-01T00:00:00+00:00", "rss_kib": 400000},
+            }
+
+    s.memory_diagnostics = Diagnostics()
+    result = system_status(s, w, {})
+
+    assert result["memory_diagnostics"]["enabled"] is True
+    assert result["memory_diagnostics"]["state"] == "tracing"
+    assert result["memory_diagnostics"]["rss_kib"] == 350000
+    assert result["database"]["sessions"] == 1
+
+
+def test_status_memory_diagnostics_missing_or_broken_uses_stable_fallback(tmp_path):
+    from bridge.miniapp_system import system_status
+
+    fallback = {
+        "enabled": False,
+        "state": "disabled",
+        "rss_kib": None,
+        "thresholds_kib": {"warning": 262144, "tracing": 327680, "capture": 393216},
+        "report_count": 0,
+        "latest_incident": None,
+    }
+    s, w, _p = setup(tmp_path)
+    assert system_status(s, w, {})["memory_diagnostics"] == fallback
+
+    class BrokenDiagnostics:
+        def summary(self):
+            raise RuntimeError("PRIVATE_DIAGNOSTICS_SECRET")
+
+    s.memory_diagnostics = BrokenDiagnostics()
+    result = system_status(s, w, {})
+    assert result["memory_diagnostics"] == fallback
+    assert result["database"]["sessions"] == 1
+    assert "PRIVATE_DIAGNOSTICS_SECRET" not in json.dumps(result)
+
+
+def test_memory_diagnostics_detail_is_db_free_and_preserves_retained_history(tmp_path):
+    from types import SimpleNamespace
+
+    from bridge.miniapp_system import memory_diagnostics_status
+
+    summary = {
+        "enabled": False,
+        "state": "disabled",
+        "rss_kib": None,
+        "thresholds_kib": {"warning": 262144, "tracing": 327680, "capture": 393216},
+        "report_count": 1,
+        "latest_incident": {"timestamp_utc": "2026-10-01T00:00:00+00:00", "rss_kib": 400000},
+    }
+    reports = (
+        {
+            "timestamp_utc": "2026-10-01T00:00:00+00:00",
+            "rss_kib": 400000,
+            "smaps_kib": {"Rss": 400000},
+            "traced_current_bytes": 100,
+            "traced_peak_bytes": 200,
+            "thread_count": 4,
+            "safe_counters": {},
+            "top_sites": [],
+        },
+    )
+
+    class Diagnostics:
+        def summary(self):
+            return summary
+
+        def recent_reports(self):
+            return reports
+
+    services = SimpleNamespace(
+        memory_diagnostics=Diagnostics(),
+        db_factory=lambda: (_ for _ in ()).throw(AssertionError("detail endpoint must not open DB")),
+    )
+    result = memory_diagnostics_status(services, identity(), {})
+
+    assert result == {"summary": summary, "reports": list(reports)}
+
+
+def test_memory_diagnostics_detail_keeps_summary_when_report_read_fails(tmp_path):
+    from types import SimpleNamespace
+
+    from bridge.miniapp_system import memory_diagnostics_status
+
+    summary = {
+        "enabled": True,
+        "state": "armed",
+        "rss_kib": 200000,
+        "thresholds_kib": {"warning": 262144, "tracing": 327680, "capture": 393216},
+        "report_count": 1,
+        "latest_incident": None,
+    }
+
+    class Diagnostics:
+        def summary(self):
+            return summary
+
+        def recent_reports(self):
+            raise RuntimeError("PRIVATE_REPORT_SECRET")
+
+    result = memory_diagnostics_status(SimpleNamespace(memory_diagnostics=Diagnostics()), identity(), {})
+    assert result == {"summary": summary, "reports": []}
+    assert "PRIVATE_REPORT_SECRET" not in json.dumps(result)
+
+
+def test_memory_diagnostics_routes_are_get_only():
+    from bridge.miniapp_system import routes
+
+    diagnostics_routes = [route for route in routes() if route.path == "/memory-diagnostics"]
+    assert len(diagnostics_routes) == 1
+    assert diagnostics_routes[0].method == "GET"
+
+
 def test_update_requires_owned_fresh_confirmation_and_reuses_guarded_engine(tmp_path, monkeypatch):
     import bridge.miniapp_system as system
     from bridge.self_update import UpdateOutcome, UpdateStatus

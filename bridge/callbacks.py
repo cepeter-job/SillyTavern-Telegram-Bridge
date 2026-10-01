@@ -73,6 +73,7 @@ def is_session_scoped_panel_callback(data: str) -> bool:
             "status:",
             "prompt:",
             "scene:",
+            "imagine:",
             "goal:",
             "curated:",
             "summary:",

@@ -416,3 +416,46 @@ The built-in provider/image/embedding HTTP transport validates DNS addresses, pi
 Hindsight is intentionally different: its third-party SDK is accepted only at a numeric loopback origin (`127.0.0.1` or `::1`) and the bridge forces loopback proxy bypass. A remote Hindsight service must be exposed through a separately trusted local tunnel/proxy; there is no public Hindsight host allowlist setting.
 
 ---
+
+## Provider runtime health and fallback
+
+The bridge observes actual text-generation requests independently of model
+discovery. One transient failure is shown as degraded; three consecutive network,
+timeout or server failures pause that provider for 60 seconds. After the pause,
+only one real request is allowed to test recovery. Failed recovery doubles the
+pause up to 15 minutes. Successful recovery restores normal requests. No scheduled
+background inference or paid health polling is added.
+
+Rate limits honor a valid `Retry-After` delay or HTTP date (bounded to 24 hours);
+without one, the delay is 60 seconds. Concurrent rate limits retain the longest
+delay. Authentication/credit errors require operator attention and allow one
+recheck after five minutes. A model-unavailable error pauses only that model for
+five minutes, not every model at the provider. Invalid/oversized user requests
+and cancelled operations do not count as provider failures.
+
+Fallback is **opt-in through the private provider YAML**. Add these fields to the
+primary provider entry, using model IDs already configured or discovered at the
+target providers:
+
+```yaml
+utility_fallbacks:
+  - backup-provider::backup-model
+# Story fallback remains off unless explicitly enabled:
+allow_story_fallback: false
+story_fallbacks:
+  - story-backup::story-model
+```
+
+Utility fallback applies to summary, memory, scene, rank, optimizer, Light Novel
+choice and NPC extraction operations. It does not automatically apply to Story
+replies, edits, images, language rendering or humanization. To permit Story
+fallback, explicitly set `allow_story_fallback: true`; otherwise use `/providers`
+to choose another Story model yourself. No fallback routes are invented.
+
+The bridge attempts at most two distinct configured alternatives after the
+primary. Unknown, unqualified and duplicate routes are ignored. It stops switching
+after visible streaming output, cancellation, a request-local error, or the
+original timeout budget expires (240 seconds when no timeout was supplied).
+Each alternative resolves its own credentials; the primary key is never forwarded
+to a fallback. Usage is recorded against every model actually attempted, including
+failed attempts. The session's selected Story/Utility model is not rewritten.

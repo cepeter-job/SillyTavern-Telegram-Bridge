@@ -11,7 +11,12 @@ from dataclasses import dataclass, replace
 from functools import partial
 
 from bridge.port_contracts import CancellationEvent, ProviderGenerate, ProviderPolicy
-from bridge.provider_errors import ProviderRequestError, ProviderTransportError, provider_category_for_status
+from bridge.provider_errors import (
+    ProviderRequestError,
+    ProviderTransportError,
+    parse_retry_after,
+    provider_category_for_status,
+)
 from bridge.token_usage_values import TokenUsage, UsageEvent, UsageRecorder, UsageScope
 
 
@@ -19,13 +24,15 @@ def _normalize_provider_exception(error: BaseException, model: str) -> ProviderR
     if isinstance(error, ProviderRequestError):
         return error
     if isinstance(error, ProviderTransportError):
-        return ProviderRequestError(model, error.category, error.status)
+        return ProviderRequestError(model, error.category, error.status, retry_after=error.retry_after)
     if isinstance(error, urllib.error.HTTPError):
         try:
             status = int(error.code)
         except (TypeError, ValueError):
             return None
-        return ProviderRequestError(model, provider_category_for_status(status), status)
+        headers = error.headers
+        delay = parse_retry_after(headers.get("Retry-After")) if headers is not None else None
+        return ProviderRequestError(model, provider_category_for_status(status), status, retry_after=delay)
     if isinstance(error, (TimeoutError, socket.timeout)):
         return ProviderRequestError(model, "timeout")
     if isinstance(error, urllib.error.URLError):
@@ -67,6 +74,68 @@ class ProviderPort:
         force_non_stream: bool = False,
         request_timeout: float | None = None,
     ) -> str:
+        purpose = self.usage_scope.purpose if self.usage_scope is not None else ""
+        candidates = self.policy.candidates(model, purpose) if self.policy is not None else (model,)
+        visible = False
+
+        def report(text: str) -> object:
+            nonlocal visible
+            visible = visible or bool(text)
+            return stream_callback(text) if stream_callback is not None else None
+
+        started = time.monotonic()
+        budget = request_timeout if request_timeout is not None else 240.0
+        for index, candidate in enumerate(candidates):
+            if self.policy is not None and cancel_event is not None and cancel_event.is_set():
+                raise RuntimeError("Provider request cancelled")
+            timeout = request_timeout if index == 0 else max(0.001, budget - (time.monotonic() - started))
+            try:
+                return self._generate_once(
+                    api_key if index == 0 else "",
+                    candidate,
+                    messages,
+                    session_id=session_id,
+                    settings=settings,
+                    stream_callback=report
+                    if self.policy is not None and stream_callback is not None
+                    else stream_callback,
+                    cancel_event=cancel_event,
+                    force_non_stream=force_non_stream,
+                    request_timeout=timeout,
+                )
+            except ProviderRequestError as error:
+                if (
+                    index + 1 == len(candidates)
+                    or error.category
+                    not in {
+                        "timeout",
+                        "network",
+                        "provider_unavailable",
+                        "rate_limit",
+                        "authentication",
+                        "credits",
+                        "model_unavailable",
+                    }
+                    or visible
+                    or (cancel_event is not None and cancel_event.is_set())
+                    or time.monotonic() - started >= budget
+                ):
+                    raise
+        raise RuntimeError("No provider route available")  # defensive contract guard
+
+    def _generate_once(
+        self,
+        api_key: str,
+        model: str,
+        messages: list[dict],
+        *,
+        session_id: str = "telegram",
+        settings: Mapping[str, object] | None = None,
+        stream_callback: Callable[[str], object] | None = None,
+        cancel_event: CancellationEvent | None = None,
+        force_non_stream: bool = False,
+        request_timeout: float | None = None,
+    ) -> str:
         readings: list[TokenUsage] = []
         backend = self.generate_backend
         tracking = self.usage_recorder is not None and self.usage_scope is not None
@@ -74,6 +143,16 @@ class ProviderPort:
             backend = partial(backend, usage_callback=readings.append)
         attempt = self.policy.begin(model) if self.policy is not None else None
         observed_model = attempt.selection if attempt is not None else model
+        callback_failed = False
+
+        def observe_stream(text: str) -> object:
+            nonlocal callback_failed
+            try:
+                return stream_callback(text) if stream_callback is not None else None
+            except Exception:
+                callback_failed = True
+                raise
+
         started = time.monotonic()
         status = "failed"
         try:
@@ -84,7 +163,9 @@ class ProviderPort:
                     messages,
                     session_id=session_id,
                     settings=settings,
-                    stream_callback=stream_callback,
+                    stream_callback=(
+                        observe_stream if self.policy is not None and stream_callback is not None else stream_callback
+                    ),
                     cancel_event=cancel_event,
                     force_non_stream=force_non_stream,
                     request_timeout=request_timeout,
@@ -99,6 +180,10 @@ class ProviderPort:
                     self.policy.succeed(attempt)
             return result
         except Exception as exc:
+            if (tracking or self.policy is not None) and cancel_event is not None and cancel_event.is_set():
+                status = "cancelled"
+            if callback_failed:
+                raise
             normalized = _normalize_provider_exception(exc, observed_model)
             if self.policy is not None and attempt is not None and normalized is not None:
                 if cancel_event is None or not cancel_event.is_set():

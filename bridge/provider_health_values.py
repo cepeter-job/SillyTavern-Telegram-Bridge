@@ -27,6 +27,7 @@ class HealthAttempt:
     token: int
     provider_revision: int
     model_revision: int
+    probe_keys: tuple[tuple[str, str], ...] = ()
 
     @property
     def selection(self) -> str:

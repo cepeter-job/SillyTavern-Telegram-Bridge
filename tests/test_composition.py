@@ -682,6 +682,60 @@ class WorkerInjectionTests(SettingsTestCase):
         self.assertNotIn("services", captured)
         self.assertEqual(captured["queued_session_id"], "failed-session")
 
+    def test_retry_reports_actionable_sanitized_provider_failure(self):
+        from bridge.provider_errors import ProviderRequestError
+
+        failed = (42, "private prompt", "stored::model", 1, "old failure", "failed-session")
+        notices = []
+        db = self._db_factory()
+        try:
+            with (
+                patch.object(_m_command_routes, "retry_failed_delivery", return_value=False),
+                patch.object(_m_command_routes, "latest_failed_turn", return_value=failed),
+                patch.object(_m_command_routes, "committed_assistant_for_message", return_value=None),
+                patch.object(
+                    self.services.conversation,
+                    "process_message",
+                    side_effect=ProviderRequestError("cline-paid::z-ai/glm-5.2", "timeout", 504),
+                ),
+                patch.object(_m_command_routes, "record_failed_turn"),
+                patch.object(_m_command_routes, "send_text", lambda *_args: notices.append(_args[-1])),
+            ):
+                handled = _m_command_routes._handle_basic(
+                    db,
+                    "token",
+                    "key",
+                    "model",
+                    {"name": "Mira"},
+                    "chat",
+                    "/retry",
+                    "/retry",
+                    {"session_id": "active-session"},
+                    "active-session",
+                    "model",
+                    "",
+                    "Mira",
+                    None,
+                    request_context=make_test_request_context(
+                        db, "active-session", app_settings=self.app_settings_builder.build()
+                    ),
+                    conversation_service=self.services.conversation,
+                    delivery_port=self.services.delivery,
+                    group_service=self.services.group,
+                    memory_service=self.services.memory,
+                    provider_port=self.services.provider,
+                )
+        finally:
+            db.close()
+
+        self.assertTrue(handled)
+        self.assertEqual(len(notices), 1)
+        self.assertIn("Retry attempt 2 failed.", notices[0])
+        self.assertIn("Model: cline-paid::z-ai/glm-5.2", notices[0])
+        self.assertIn("timed out (HTTP 504)", notices[0])
+        self.assertNotIn("private prompt", notices[0])
+        self.assertNotIn("old failure", notices[0])
+
     def test_recovered_model_override_wins_over_config_default(self):
         captured = {}
 

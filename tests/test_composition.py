@@ -683,6 +683,81 @@ class WorkerInjectionTests(SettingsTestCase):
         self.assertNotIn("services", captured)
         self.assertEqual(captured["queued_session_id"], "failed-session")
 
+    def test_repeated_light_novel_protocol_failure_opens_recovery_panel_instead_of_retrying(self):
+        failed = (
+            42,
+            "private prompt",
+            "stored::model",
+            2,
+            "Story response has no usable narrative",
+            "failed-session",
+        )
+        panels = []
+        calls = []
+        db = self._db_factory()
+        try:
+            with (
+                patch.object(_m_command_routes, "retry_failed_delivery", return_value=False),
+                patch.object(_m_command_routes, "latest_failed_turn", return_value=failed),
+                patch.object(_m_command_routes, "committed_assistant_for_message", return_value=None),
+                patch.object(
+                    self.services.conversation,
+                    "process_message",
+                    side_effect=lambda *a, **k: calls.append((a, k)),
+                ),
+                patch.object(
+                    _m_command_routes,
+                    "send_panel_request",
+                    side_effect=lambda _token, _method, payload, **_kw: (
+                        panels.append({**payload, "_request_context": _kw.get("request_context")}) or {"message_id": 91}
+                    ),
+                    create=True,
+                ),
+            ):
+                handled = _m_command_routes._handle_basic(
+                    db,
+                    "token",
+                    "key",
+                    "model",
+                    {"name": "Mira"},
+                    "chat",
+                    "/retry",
+                    "/retry",
+                    {"session_id": "active-session"},
+                    "active-session",
+                    "model",
+                    "",
+                    "Mira",
+                    None,
+                    request_context=make_test_request_context(
+                        db, "active-session", app_settings=self.app_settings_builder.build()
+                    ),
+                    conversation_service=self.services.conversation,
+                    delivery_port=self.services.delivery,
+                    group_service=self.services.group,
+                    memory_service=self.services.memory,
+                    provider_port=self.services.provider,
+                )
+        finally:
+            db.close()
+
+        self.assertTrue(handled)
+        self.assertEqual(calls, [])
+        self.assertEqual(panels[-1]["_request_context"].session_id, "failed-session")
+        callbacks = {button["callback_data"] for row in panels[-1]["reply_markup"]["inline_keyboard"] for button in row}
+        self.assertEqual(
+            callbacks,
+            {
+                "lnturnretry:42:same",
+                "lnturnretry:42:current",
+                "lnturnretry:42:utility",
+                "lnturnretry:42:b",
+                "lnturnretry:42:c",
+                "lnturnretry:42:close",
+            },
+        )
+        self.assertNotIn("private prompt", panels[-1]["text"])
+
     def test_retry_reports_actionable_sanitized_provider_failure(self):
         from bridge.provider_errors import ProviderRequestError
 

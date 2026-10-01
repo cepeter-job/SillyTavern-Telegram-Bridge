@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 
 from bridge.callback_tokens import resolve_dynamic_callback_token
 from bridge.callbacks import (
@@ -14,6 +15,7 @@ from bridge.callbacks import (
 from bridge.composition import BridgeServices
 from bridge.conversation_setup_callbacks import handle_setup_callback
 from bridge.enum_callbacks import handle_enum_callback
+from bridge.failed_turn_retry_callbacks import handle_failed_turn_retry_callback
 from bridge.group_callbacks import handle_group_panel_callback
 from bridge.light_novel_commands import handle_light_novel_mode_callback
 from bridge.panel_bindings import panel_owner_for_message, panel_session_for_message
@@ -32,6 +34,7 @@ def process_callback(
     *,
     actor_id: str = "",
     services: BridgeServices,
+    message_worker: Callable[..., None] | None = None,
 ) -> None:
     sender = str(actor_id or (callback.get("from") or {}).get("id", ""))
     message = callback.get("message") or {}
@@ -79,6 +82,18 @@ def process_callback(
     npc_service = services.npc
     persona_service = services.persona
     sync_service = services.sync
+
+    if handle_failed_turn_retry_callback(
+        services,
+        db,
+        callback,
+        chat_id,
+        session,
+        operation_id,
+        sender,
+        message_worker=message_worker,
+    ):
+        return
 
     if handle_setup_callback(
         db,

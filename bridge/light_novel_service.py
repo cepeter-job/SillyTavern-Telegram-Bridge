@@ -141,16 +141,19 @@ def prepare_turn(
         ).fetchone()
         if existing:
             return load_choice_set(db, str(existing[0]))
+        strategy = str(session.get("_light_novel_strategy_override") or state.strategy).casefold()
+        if strategy not in {"a", "b", "c"}:
+            strategy = state.strategy
         record = reserve_choice_set(
             db,
             chat_id,
             session["session_id"],
             state.epoch,
             turn_key,
-            state.strategy,
+            strategy,
             int(rng((2, 3, 4))),
             actor_id,
-            str(session.get("model_id") or ""),
+            str(session.get("_story_model_override") or session.get("model_id") or ""),
             time.time(),
         )
         invalidate_choice_sets(db, chat_id, session["session_id"], except_nonce=record.nonce)

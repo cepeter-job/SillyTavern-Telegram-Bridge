@@ -2,6 +2,28 @@
 
 All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
+## [0.2.053] - 2026-10-01
+
+### Changed
+
+- Rename the user-facing **Grounded User** setting to **I am not MC** mode while
+  preserving the existing `grounded_user` storage, callbacks, and grounding
+  semantics.
+- Light Novel choices now preserve the established scene's maturity, intensity,
+  genre, intimacy, danger, and subject matter instead of implicitly softening
+  mature scenes into safer menu options. Grounding continues to constrain
+  causality, agency, consent, knowledge, and probability of success rather than
+  imposing a safer content rating.
+- Choice generation still avoids introducing or escalating mature content beyond
+  what the current scene supports. The policy is shared by Strategy A inline
+  choices and Strategy B/C choice-only generation.
+
+### Validation and compatibility
+
+- Add regression coverage for maturity-preserving Light Novel prompts and the
+  renamed I am not MC settings surfaces.
+- No runtime dependency lockfiles or database migrations changed in this release.
+
 ## [0.2.052] - 2026-10-01
 
 ### Fixed

@@ -340,9 +340,9 @@ def test_generation_strips_envelope_reintroduced_by_language_renderer(novel_db, 
     def generate(*_args, **kwargs):
         if str(kwargs.get("session_id") or "").endswith(":language-render"):
             return (
-                "Rendered draft that must not leak.\n\n```json\n"
+                "<final>[ 🕰️ Time 8:05 PM ]\n\nCanonical rendered scene.\n\n"
                 + json.dumps({"story": "Canonical rendered scene.", "choices": rendered_choices})
-                + "\n```"
+                + "</final>"
             )
         return json.dumps({"story": "Original scene.", "choices": original_choices})
 
@@ -382,7 +382,7 @@ def test_generation_strips_envelope_reintroduced_by_language_renderer(novel_db, 
     )
 
     stored = db.execute("SELECT content FROM messages WHERE role='assistant'").fetchone()[0]
-    assert stored == "Canonical rendered scene."
+    assert stored == "[ 🕰️ Time 8:05 PM ]\n\nCanonical rendered scene."
     record = db.execute("SELECT choices_json FROM light_novel_choice_sets").fetchone()
     assert json.loads(record[0]) == original_choices
 

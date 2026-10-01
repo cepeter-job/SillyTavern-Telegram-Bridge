@@ -89,6 +89,20 @@ def _trailing_fenced_envelope(text: str) -> tuple[str, object | None] | None:
     return prefix, value
 
 
+def _trailing_unfenced_envelope(text: str) -> tuple[str, object] | None:
+    candidates = tuple(re.finditer(r"(?m)^[ \t]*(\{)", text))
+    for candidate in reversed(candidates):
+        prefix = text[: candidate.start()].strip()
+        if not prefix:
+            continue
+        try:
+            value = json.loads(text[candidate.start(1) :].strip())
+        except (ValueError, TypeError):
+            continue
+        return prefix, value
+    return None
+
+
 def parse_story_response_diagnostic(
     source: str, requested_count: int
 ) -> tuple[str, list[str] | None, str | None, int | None]:
@@ -121,6 +135,24 @@ def parse_story_response_diagnostic(
         trailing_choices = trailing_value.get("choices") if isinstance(trailing_value, dict) else None
         observed_count = len(trailing_choices) if isinstance(trailing_choices, list) else None
         return prefix, None, reason, observed_count
+    trailing = _trailing_unfenced_envelope(text)
+    if trailing is not None:
+        prefix, trailing_value = trailing
+        if isinstance(trailing_value, dict):
+            trailing_story = trailing_value.get("story")
+            if isinstance(trailing_story, str) and trailing_story.strip():
+                parsed_trailing = _parse_story_envelope_diagnostic(trailing_value, requested_count)
+                if parsed_trailing is not None:
+                    story, choices, reason, observed_count = parsed_trailing
+                    return (prefix if prefix.endswith(story) else story), choices, reason, observed_count
+            if set(trailing_value) == {"choices"}:
+                choices, reason, observed_count = _choice_validation_result(
+                    trailing_value.get("choices"), requested_count
+                )
+                return prefix, choices, reason, observed_count
+        trailing_choices = trailing_value.get("choices") if isinstance(trailing_value, dict) else None
+        observed_count = len(trailing_choices) if isinstance(trailing_choices, list) else None
+        return prefix, None, "invalid_inline_envelope", observed_count
     # A malformed choice tail must not discard an already complete JSON story string.
     if text.startswith("{"):
         match = re.match(r'\{\s*"story"\s*:\s*', text)

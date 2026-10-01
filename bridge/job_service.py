@@ -39,6 +39,7 @@ class JobService:
     submit_chat: ChatSubmit
     prepare_worker: Callable[..., Callable[..., None]] | None = None
     delivery_retry_backend: Callable[..., bool] | None = None
+    callback_enqueue_backend: Callable[..., int | None] | None = None
 
     def enqueue(
         self,
@@ -61,6 +62,27 @@ class JobService:
                 payload,
             )
         )
+
+    def enqueue_callback(
+        self,
+        db: sqlite3.Connection,
+        update_id: int,
+        chat_id: str,
+        session_id: str,
+        telegram_message_id: int,
+        payload: dict[str, object],
+    ) -> int | None:
+        if self.callback_enqueue_backend is None:
+            return self.enqueue(db, update_id, chat_id, session_id, telegram_message_id, "callback", payload)
+        result = self.callback_enqueue_backend(
+            db,
+            int(update_id),
+            str(chat_id),
+            str(session_id),
+            int(telegram_message_id),
+            payload,
+        )
+        return int(result) if result is not None else None
 
     def submit(
         self,

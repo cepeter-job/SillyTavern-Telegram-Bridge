@@ -133,8 +133,14 @@ def send_panel_request(
     panel_content = payload.get("reply_markup")
     if track_management and panel_content and method == "sendMessage" and request_context.actor_id:
         close_active_management_panel(token, scoped_chat_id, request_context=request_context)
-    result = telegram_request(token, method, payload)
-    if panel_content and method in {"sendMessage", "editMessageText"}:
+    try:
+        result = telegram_request(token, method, payload)
+    except RuntimeError as exc:
+        if method in {"editMessageText", "editMessageReplyMarkup"} and "message is not modified" in str(exc).casefold():
+            result = {}
+        else:
+            raise
+    if panel_content and method in {"sendMessage", "editMessageText", "editMessageReplyMarkup"}:
         bound_message_id = result.get("message_id") if isinstance(result, dict) else None
         bound_message_id = bound_message_id or payload.get("message_id")
         if request_context.session_id and bound_message_id:

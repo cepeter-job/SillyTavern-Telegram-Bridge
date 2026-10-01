@@ -6,7 +6,12 @@ import sqlite3
 import time
 
 from bridge.metadata import get_meta, set_meta
-from bridge.panel_repository import delete_panel_binding, load_panel_binding, store_panel_binding
+from bridge.panel_repository import (
+    delete_panel_binding,
+    load_panel_binding,
+    load_panel_binding_revision,
+    store_panel_binding,
+)
 from bridge.sqlite_store import write_transaction
 
 
@@ -31,6 +36,10 @@ def panel_session_for_message(db: sqlite3.Connection, chat_id: str, message_id: 
 def panel_owner_for_message(db: sqlite3.Connection, chat_id: str, message_id: int | str) -> str:
     row = load_panel_binding(db, str(chat_id), str(message_id), time.time())
     return row[1] if row else ""
+
+
+def panel_binding_revision(db: sqlite3.Connection, chat_id: str, message_id: int | str) -> float | None:
+    return load_panel_binding_revision(db, str(chat_id), str(message_id), time.time())
 
 
 def _management_panel_key(chat_id: str, owner_user_id: str) -> str:

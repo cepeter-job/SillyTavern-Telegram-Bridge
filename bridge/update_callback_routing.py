@@ -8,6 +8,12 @@ from bridge.composition import BridgeServices
 from bridge.help_details import handle_help_callback, is_help_callback
 from bridge.job_service import JobSubmission
 from bridge.light_novel_callbacks import route_light_novel_callback
+from bridge.panel_bindings import panel_owner_for_message, panel_session_for_message
+from bridge.panel_singleflight import (
+    BUSY_CALLBACK_DATA,
+    mark_panel_busy,
+    remember_panel_busy_state,
+)
 from bridge.request_types import RequestContext
 from bridge.telegram import answer_callback
 from bridge.topic_scope import topic_scope_from_message
@@ -36,6 +42,11 @@ def route_callback_update(
     if sender not in permitted or not callback_chat_id:
         return
 
+    data = str(callback.get("data") or "")
+    if data == BUSY_CALLBACK_DATA:
+        answer_callback(token, str(callback.get("id", "")), "Already processing…")
+        return
+
     if route_light_novel_callback(
         services, db, callback, update_id, callback_chat_id, sender, message_worker=process_message_job
     ):
@@ -60,22 +71,35 @@ def route_callback_update(
         )
         return
 
-    callback["_queued"] = True
-    callback_session = services.session.ensure(db, callback_chat_id, model)["session_id"]
     callback_message_id = int(callback_message.get("message_id") or 0)
-    job_id = services.jobs.enqueue(
+    if callback_message_id:
+        owner = panel_owner_for_message(db, callback_chat_id, callback_message_id)
+        if owner and owner != sender:
+            answer_callback(token, str(callback.get("id", "")), "This panel belongs to another user")
+            return
+
+    callback["_queued"] = True
+    bound_session = (
+        panel_session_for_message(db, callback_chat_id, callback_message_id) if callback_message_id else None
+    )
+    callback_session = bound_session or services.session.ensure(db, callback_chat_id, model)["session_id"]
+    remember_panel_busy_state(db, callback_chat_id, callback)
+    job_id = services.jobs.enqueue_callback(
         db,
         update_id,
         callback_chat_id,
         callback_session,
         callback_message_id,
-        "callback",
         {
             "callback": callback,
             "model": model,
             "actor_id": sender,
         },
     )
+    if job_id is None:
+        answer_callback(token, str(callback.get("id", "")), "Already processing…")
+        return
+    mark_panel_busy(services.telegram.request, token, callback_chat_id, callback)
     services.jobs.submit(
         db,
         job_id,
@@ -93,5 +117,5 @@ def route_callback_update(
     answer_callback(
         token,
         str(callback.get("id", "")),
-        "Queued",
+        "Processing…",
     )

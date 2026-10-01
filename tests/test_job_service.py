@@ -84,6 +84,19 @@ class JobServiceTests(SettingsTestCase):
             ),
         )
 
+    def test_enqueue_callback_uses_atomic_backend_when_configured(self):
+        calls = []
+        service = replace(
+            self.service,
+            callback_enqueue_backend=lambda db, update_id, chat_id, session_id, message_id, payload: (
+                calls.append((db, update_id, chat_id, session_id, message_id, payload)) or 88
+            ),
+        )
+        payload = {"callback": {"data": "character:menu"}, "actor_id": "100"}
+
+        self.assertEqual(service.enqueue_callback(self.db, 9, "chat", "s", 77, payload), 88)
+        self.assertEqual(calls, [(self.db, 9, "chat", "s", 77, payload)])
+
     def test_replace_payload_delegates(self):
         payload = {"text": "/status", "queue_notice_message_ids": [88]}
         self.assertTrue(self.service.replace_payload(self.db, 41, payload))
@@ -454,8 +467,11 @@ class JobServiceSourceBoundaryTests(SettingsTestCase):
         for source in (callback, message):
             self.assertNotIn("enqueue_job(", source)
             self.assertNotIn("submit_durable_chat_job(", source)
-            self.assertIn("services.jobs.enqueue(", source)
             self.assertIn("services.jobs.submit(", source)
+
+        self.assertIn("services.jobs.enqueue_callback(", callback)
+        self.assertNotIn("services.jobs.enqueue(", callback)
+        self.assertIn("services.jobs.enqueue(", message)
 
 
 if __name__ == "__main__":

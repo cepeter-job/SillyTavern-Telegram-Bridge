@@ -1181,6 +1181,17 @@ class RecordingJobs:
         )
         return job_id
 
+    def enqueue_callback(
+        self,
+        db,
+        update_id,
+        chat_id,
+        session_id,
+        message_id,
+        payload,
+    ):
+        return self.enqueue(db, update_id, chat_id, session_id, message_id, "callback", payload)
+
     def submit(self, db, job_id, submission):
         self.calls.append(("submit", job_id, submission))
         return self.submit_result

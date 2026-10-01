@@ -10,6 +10,7 @@ import time
 from bridge.job_repository import (
     finish_job_row,
     insert_job,
+    insert_panel_callback_job,
     load_job_payload,
     queued_job_rows,
     replace_job_payload,
@@ -33,6 +34,27 @@ def enqueue_job(
     encoded = json.dumps(payload, ensure_ascii=False)
     with write_transaction(db):
         return insert_job(db, update_id, chat_id, session_id, str(telegram_message_id), kind, encoded, time.time())
+
+
+def enqueue_panel_callback_job(
+    db: sqlite3.Connection,
+    update_id: int,
+    chat_id: str,
+    session_id: str,
+    telegram_message_id: int,
+    payload: dict,
+) -> int | None:
+    encoded = json.dumps(payload, ensure_ascii=False)
+    with write_transaction(db):
+        return insert_panel_callback_job(
+            db,
+            int(update_id),
+            str(chat_id),
+            str(session_id),
+            str(telegram_message_id),
+            encoded,
+            time.time(),
+        )
 
 
 def job_actor_id(db: sqlite3.Connection, job_id: int | None) -> str:

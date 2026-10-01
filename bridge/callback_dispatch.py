@@ -192,4 +192,5 @@ def process_callback(
         session_id,
         operation_id,
         request_context=request_context,
+        provider_policy=services.provider.policy,
     )

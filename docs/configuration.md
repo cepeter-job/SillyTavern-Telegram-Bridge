@@ -459,3 +459,29 @@ original timeout budget expires (240 seconds when no timeout was supplied).
 Each alternative resolves its own credentials; the primary key is never forwarded
 to a fallback. Usage is recorded against every model actually attempted, including
 failed attempts. The session's selected Story/Utility model is not rewritten.
+
+### Provider diagnostics and catalog maintenance
+
+Use `/providers` → **Story model** or **Utility model** to open the provider list.
+**Provider health** runs manual probes and displays their results separately from
+observed runtime health. A successful catalog response does not prove generation
+works. An inference probe opens a tiny streaming completion and may use quota;
+its first byte does not validate a completed answer. Codex reports local OAuth
+state without making an inference request. Probes never clear runtime cooldowns.
+
+Health results are paginated four providers at a time. **Next**, **Previous**, and
+**Update runtime status** reuse the same probe snapshot without network requests.
+**Run probes again** explicitly obtains a new snapshot. Open a provider to inspect
+configured/discovered model counts, catalog freshness, recent runtime errors and
+model-specific unavailability. **Refresh this provider** only discovers its models;
+**Test provider** only probes that provider. **Reset runtime** clears local blocks
+and allows a new request; it changes neither credentials nor the selected model.
+Actions and cached probe reports are bound to the current panel owner and session.
+
+Configured model IDs remain valid alongside opted-in discovered IDs. Stale or
+failed discovery keeps the last good catalog, not a declaration that inference is
+unavailable. Failed automatic discovery is retried after the configured catalog
+TTL, not on every panel redraw; a manual refresh bypasses that TTL. A broken
+provider configuration is reported individually and cannot abort the other
+checks. Discovery cache writes are bounded, private and atomic. Model pagination
+is no longer limited to the first 50 IDs.

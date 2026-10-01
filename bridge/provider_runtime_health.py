@@ -37,6 +37,24 @@ class ProviderRuntimeHealth:
             snapshot = self._get(provider_id, model_id)
             return replace(snapshot, state="half_open") if (provider_id, model_id) in self._probes else snapshot
 
+    def reset(self, provider_id: str) -> None:
+        """Clear local blocks only; invalidate pre-reset in-flight observations."""
+        with self._lock:
+            for attempt in tuple(self._active.values()):
+                if attempt.provider_id == provider_id:
+                    self._finish(attempt)
+            keys = {key for key in self._states if key[0] == provider_id} | {(provider_id, "")}
+            for key in keys:
+                previous = self._get(*key)
+                self._states[key] = replace(
+                    previous,
+                    state="unknown",
+                    consecutive_failures=0,
+                    cooldown_until=0,
+                    backoff_step=0,
+                    revision=previous.revision + 1,
+                )
+
     def begin(self, provider_id: str, model_id: str) -> HealthAttempt:
         with self._lock:
             now = self._clock()

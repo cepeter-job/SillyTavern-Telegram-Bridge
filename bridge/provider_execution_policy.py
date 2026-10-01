@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from bridge.model_router import ModelRouter, ModelRoutingError
 from bridge.provider_errors import ProviderRequestError
-from bridge.provider_health_values import HealthAttempt
+from bridge.provider_health_values import HealthAttempt, HealthSnapshot
 from bridge.provider_runtime_health import ProviderRuntimeHealth
 
 
@@ -14,6 +14,12 @@ from bridge.provider_runtime_health import ProviderRuntimeHealth
 class ProviderExecutionPolicy:
     model_router: ModelRouter
     health: ProviderRuntimeHealth
+
+    def snapshot(self, provider_id: str, model_id: str = "") -> HealthSnapshot:
+        return self.health.snapshot(provider_id, model_id)
+
+    def reset(self, provider_id: str) -> None:
+        self.health.reset(provider_id)
 
     def candidates(self, model: str, purpose: str) -> tuple[str, ...]:
         route = self.model_router.route(model)

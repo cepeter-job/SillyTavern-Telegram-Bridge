@@ -11,7 +11,7 @@ from pathlib import Path
 
 from bridge.callbacks import remove_inline_keyboard
 from bridge.network_security import EndpointPolicy, strict_urlopen
-from bridge.self_update import UpdateOutcome, UpdatePlan, UpdateStatus, apply_update, version_tuple
+from bridge.self_update import APPLICATION, MARKER, UpdateOutcome, UpdatePlan, UpdateStatus, apply_update, version_tuple
 from bridge.settings import AppSettings
 from bridge.telegram import answer_callback, send_panel_request, send_text
 from bridge.update_ack import arm_pending_update_ack
@@ -46,7 +46,30 @@ def _changelog_has_unreleased(path: Path) -> bool:
     return any(line.strip() and not line.lstrip().startswith("### ") for line in match.group(1).splitlines())
 
 
+def _managed_live_version(live_dir: Path) -> str:
+    marker = live_dir / MARKER
+    try:
+        if marker.is_symlink() or not marker.is_file() or marker.stat().st_size > 4096:
+            return "unknown"
+        metadata = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return "unknown"
+    version = str(metadata.get("version") or "") if isinstance(metadata, dict) else ""
+    if (
+        not isinstance(metadata, dict)
+        or metadata.get("application") != APPLICATION
+        or metadata.get("format") != 1
+        or not re.fullmatch(r"[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}", version)
+        or not re.fullmatch(r"[0-9a-f]{40}", str(metadata.get("commit") or ""))
+    ):
+        return "unknown"
+    return version
+
+
 def installed_bridge_version(*, app_settings: AppSettings) -> str:
+    managed_version = _managed_live_version(app_settings.update_live_dir)
+    if managed_version != "unknown":
+        return managed_version
     live_version = _changelog_version(app_settings.update_live_dir / "CHANGELOG.md")
     return (
         live_version if live_version != "unknown" else _changelog_version(app_settings.update_repo_dir / "CHANGELOG.md")

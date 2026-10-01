@@ -145,7 +145,11 @@ def test_settings_panel_exposes_single_grounded_user_toggle(context, monkeypatch
         for button in row
         if str(button.get("callback_data", "")).startswith("enum:grounded")
     ]
-    assert buttons == [{"text": "Grounded User: OFF", "callback_data": "enum:grounded:toggle"}]
+    assert buttons == [{"text": "I am not MC: OFF", "callback_data": "enum:grounded:toggle"}]
+    assert "I am not MC mode keeps user abilities and world reactions tied to established facts" in calls[-1]["text"]
+    assert "I am not MC=off" in calls[-1]["text"]
+    assert "Grounded User" not in calls[-1]["text"]
+    assert "grounded_user" not in calls[-1]["text"]
 
     update_session(db, "chat", session["session_id"], grounded_user="on")
     calls.clear()
@@ -156,7 +160,7 @@ def test_settings_panel_exposes_single_grounded_user_toggle(context, monkeypatch
         for button in row
         if str(button.get("callback_data", "")).startswith("enum:grounded")
     ]
-    assert buttons == [{"text": "Grounded User: ON", "callback_data": "enum:grounded:toggle"}]
+    assert buttons == [{"text": "I am not MC: ON", "callback_data": "enum:grounded:toggle"}]
 
 
 def test_grounded_user_toggle_and_settings_reset(context, monkeypatch):

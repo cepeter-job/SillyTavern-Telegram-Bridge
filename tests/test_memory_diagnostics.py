@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import os
+import stat
 import tracemalloc
 from pathlib import Path
 
@@ -11,9 +14,13 @@ import bridge.memory_diagnostics as memory_diagnostics
 from bridge.memory_diagnostics import DiagnosticState, MemoryDiagnostics, _resident_memory_kib, _smaps_rollup_kib
 
 
-def _diagnostics(tmp_path: Path, *, enabled: bool = True) -> MemoryDiagnostics:
+def _diagnostics(tmp_path: Path, *, enabled: bool = True, safe_counters=None) -> MemoryDiagnostics:
     environ = {"SILLYTAVERN_MEMORY_DIAGNOSTICS": "1"} if enabled else {}
-    return MemoryDiagnostics(tmp_path / "bridge-home", environ)
+    return MemoryDiagnostics(tmp_path / "bridge-home", environ, safe_counters=safe_counters)
+
+
+def _report_files(diagnostics: MemoryDiagnostics) -> list[Path]:
+    return sorted((diagnostics.bridge_home / "diagnostics" / "memory").glob("memory-*.json"))
 
 
 def test_memory_diagnostics_disabled_by_default(tmp_path):
@@ -246,3 +253,190 @@ def test_sampler_waits_before_first_sample(tmp_path, monkeypatch):
     diagnostics._run_sampler()
 
     assert waits == [memory_diagnostics.SAMPLE_INTERVAL_SECONDS]
+
+
+def test_report_privacy_contains_only_allocation_site_aggregates(tmp_path, monkeypatch):
+    diagnostics = _diagnostics(tmp_path)
+    samples = iter([320 * 1024, 384 * 1024])
+    monkeypatch.setattr(memory_diagnostics, "_resident_memory_kib", lambda: next(samples))
+    monkeypatch.setattr(
+        memory_diagnostics,
+        "_smaps_rollup_kib",
+        lambda: {"Rss": 384 * 1024, "Private_Dirty": 300 * 1024},
+    )
+    tracemalloc.stop()
+
+    try:
+        assert diagnostics.sample_once() is DiagnosticState.TRACING
+        private_value = "memory-diagnostics-must-not-serialize-object-values-7d9f"
+        retained = [f"{private_value}-{index}" for index in range(2000)]
+        assert diagnostics.sample_once() is DiagnosticState.CAPTURED
+
+        reports = _report_files(diagnostics)
+        assert len(reports) == 1
+        raw = reports[0].read_text()
+        report = json.loads(raw)
+        assert private_value not in raw
+        assert report["schema_version"] == 1
+        assert report["rss_kib"] == 384 * 1024
+        assert report["smaps_kib"]["Private_Dirty"] == 300 * 1024
+        assert report["top_sites"]
+        assert all(set(site) == {"file", "line", "size_bytes", "blocks"} for site in report["top_sites"])
+        assert retained[0].endswith("-0")
+    finally:
+        tracemalloc.stop()
+
+
+def test_safe_counters_allow_only_bounded_scalars(tmp_path, monkeypatch):
+    counters = {
+        "flag": True,
+        "signed_min": -(2**63),
+        "signed_max": 2**63 - 1,
+        "secret_text": "never serialize",
+        "float_value": 1.5,
+        "list_value": [1],
+        "bad key": 7,
+        "too_large": 2**63,
+        "too_small": -(2**63) - 1,
+    }
+    counters.update({f"counter_{index}": index for index in range(40)})
+    diagnostics = _diagnostics(tmp_path, safe_counters=lambda: counters)
+    monkeypatch.setattr(memory_diagnostics, "_resident_memory_kib", lambda: 384 * 1024)
+    tracemalloc.stop()
+
+    try:
+        assert diagnostics.sample_once() is DiagnosticState.CAPTURED
+        report = json.loads(_report_files(diagnostics)[0].read_text())
+        safe = report["safe_counters"]
+        assert len(safe) == 32
+        assert safe["flag"] is True
+        assert safe["signed_min"] == -(2**63)
+        assert safe["signed_max"] == 2**63 - 1
+        assert "secret_text" not in safe
+        assert "float_value" not in safe
+        assert "list_value" not in safe
+        assert "bad key" not in safe
+        assert "too_large" not in safe
+        assert "too_small" not in safe
+    finally:
+        tracemalloc.stop()
+
+
+def test_safe_counter_failure_is_redacted_and_nonfatal(tmp_path, monkeypatch, caplog):
+    calls = []
+
+    def broken_counters():
+        calls.append(True)
+        raise RuntimeError("PRIVATE_COUNTER_SECRET")
+
+    diagnostics = _diagnostics(tmp_path, safe_counters=broken_counters)
+    monkeypatch.setattr(memory_diagnostics, "_resident_memory_kib", lambda: 384 * 1024)
+    tracemalloc.stop()
+
+    try:
+        with caplog.at_level("WARNING"):
+            assert diagnostics.sample_once() is DiagnosticState.CAPTURED
+        report = json.loads(_report_files(diagnostics)[0].read_text())
+        assert calls == [True]
+        assert report["safe_counters"] == {}
+        assert "Memory diagnostics safe counters unavailable" in caplog.text
+        assert "PRIVATE_COUNTER_SECRET" not in caplog.text
+    finally:
+        tracemalloc.stop()
+
+
+def test_report_write_is_private_atomic_and_cleans_temp(tmp_path, monkeypatch):
+    diagnostics = _diagnostics(tmp_path)
+    path = diagnostics.bridge_home / "diagnostics" / "memory" / "memory-test.json"
+    real_replace = os.replace
+    replacements = []
+
+    def record_replace(source, destination):
+        replacements.append((Path(source), Path(destination)))
+        real_replace(source, destination)
+
+    monkeypatch.setattr(memory_diagnostics.os, "replace", record_replace)
+    diagnostics._write_report(path, {"schema_version": 1})
+
+    assert stat.S_IMODE(path.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert json.loads(path.read_text()) == {"schema_version": 1}
+    assert replacements == [(path.with_name(path.name + ".tmp"), path)]
+    assert not path.with_name(path.name + ".tmp").exists()
+
+
+def test_report_write_rejects_symlink_destination(tmp_path):
+    diagnostics = _diagnostics(tmp_path)
+    directory = diagnostics.bridge_home / "diagnostics" / "memory"
+    directory.mkdir(parents=True)
+    real = directory / "real.json"
+    real.write_text("original")
+    path = directory / "memory-test.json"
+    path.symlink_to(real)
+
+    with pytest.raises(RuntimeError, match=r"symlink|regular"):
+        diagnostics._write_report(path, {"schema_version": 1})
+
+    assert real.read_text() == "original"
+
+
+def test_report_write_rejects_symlink_temp_path(tmp_path):
+    diagnostics = _diagnostics(tmp_path)
+    directory = diagnostics.bridge_home / "diagnostics" / "memory"
+    directory.mkdir(parents=True)
+    path = directory / "memory-test.json"
+    temp = path.with_name(path.name + ".tmp")
+    real = directory / "real.tmp"
+    real.write_text("original")
+    temp.symlink_to(real)
+
+    with pytest.raises(RuntimeError, match=r"symlink|regular"):
+        diagnostics._write_report(path, {"schema_version": 1})
+
+    assert real.read_text() == "original"
+
+
+def test_report_write_rejects_non_regular_destination(tmp_path):
+    diagnostics = _diagnostics(tmp_path)
+    path = diagnostics.bridge_home / "diagnostics" / "memory" / "memory-test.json"
+    path.mkdir(parents=True)
+
+    with pytest.raises(RuntimeError, match="regular"):
+        diagnostics._write_report(path, {"schema_version": 1})
+
+
+def test_report_rotation_retains_newest_three(tmp_path):
+    diagnostics = _diagnostics(tmp_path)
+
+    paths = [diagnostics._capture_report(384 * 1024) for _ in range(4)]
+
+    reports = _report_files(diagnostics)
+    assert len(reports) == memory_diagnostics.REPORT_RETENTION
+    assert paths[0] not in reports
+    assert reports == paths[1:]
+
+
+def test_report_rotation_failure_preserves_new_capture(tmp_path, monkeypatch, caplog):
+    diagnostics = _diagnostics(tmp_path)
+    directory = diagnostics.bridge_home / "diagnostics" / "memory"
+    directory.mkdir(parents=True)
+    old_paths = []
+    for index in range(3):
+        path = directory / f"memory-20000101T00000{index}Z-1-000{index}.json"
+        diagnostics._write_report(path, {"schema_version": 1})
+        old_paths.append(path)
+
+    real_unlink = Path.unlink
+
+    def fail_oldest(path, *args, **kwargs):
+        if path == old_paths[0]:
+            raise OSError("PRIVATE_ROTATION_DETAIL")
+        return real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_oldest)
+    with caplog.at_level("WARNING"):
+        newest = diagnostics._capture_report(384 * 1024)
+
+    assert newest.exists()
+    assert "Memory diagnostics report rotation failed" in caplog.text
+    assert "PRIVATE_ROTATION_DETAIL" not in caplog.text

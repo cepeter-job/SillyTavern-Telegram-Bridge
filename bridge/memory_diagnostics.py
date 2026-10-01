@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import os
+import re
+import stat
 import threading
 import tracemalloc
 from collections.abc import Callable, Mapping
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 
@@ -99,6 +104,7 @@ class MemoryDiagnostics:
         self._thread: threading.Thread | None = None
         self._owns_tracemalloc = False
         self._recovery_samples = 0
+        self._incident_index = 0
 
     @property
     def state(self) -> DiagnosticState:
@@ -139,6 +145,116 @@ class MemoryDiagnostics:
                 tracemalloc.stop()
             self._owns_tracemalloc = False
 
+    def _safe_counter_values(self) -> dict[str, bool | int]:
+        if self.safe_counters is None:
+            return {}
+        try:
+            values = self.safe_counters()
+        except Exception:
+            logging.warning("Memory diagnostics safe counters unavailable")
+            return {}
+        if not isinstance(values, Mapping):
+            return {}
+        result: dict[str, bool | int] = {}
+        for key, value in values.items():
+            if len(result) >= 32:
+                break
+            if not isinstance(key, str) or re.fullmatch(r"[A-Za-z0-9_.:-]{1,64}", key) is None:
+                continue
+            if type(value) is bool:
+                result[key] = value
+            elif type(value) is int and -(2**63) <= value <= 2**63 - 1:
+                result[key] = value
+        return result
+
+    def _build_report(self, rss_kib: int, now: datetime) -> dict[str, object]:
+        traced_current: int | None = None
+        traced_peak: int | None = None
+        top_sites: list[dict[str, object]] = []
+        if tracemalloc.is_tracing():
+            traced_current, traced_peak = tracemalloc.get_traced_memory()
+            for statistic in tracemalloc.take_snapshot().statistics("lineno")[:30]:
+                frame = statistic.traceback[0]
+                top_sites.append(
+                    {
+                        "file": str(frame.filename),
+                        "line": int(frame.lineno),
+                        "size_bytes": int(statistic.size),
+                        "blocks": int(statistic.count),
+                    }
+                )
+        return {
+            "schema_version": 1,
+            "timestamp_utc": now.isoformat(timespec="seconds"),
+            "pid": os.getpid(),
+            "state": self._state.value,
+            "rss_kib": int(rss_kib),
+            "smaps_kib": _smaps_rollup_kib(),
+            "traced_current_bytes": traced_current,
+            "traced_peak_bytes": traced_peak,
+            "top_sites": top_sites,
+            "thread_count": threading.active_count(),
+            "safe_counters": self._safe_counter_values(),
+        }
+
+    @staticmethod
+    def _validate_regular_or_missing(path: Path) -> None:
+        if path.is_symlink():
+            raise RuntimeError("memory diagnostics report path must not be a symlink")
+        if path.exists() and not stat.S_ISREG(path.stat().st_mode):
+            raise RuntimeError("memory diagnostics report path must be a regular file")
+
+    def _write_report(self, path: Path, report: Mapping[str, object]) -> None:
+        directory = path.parent
+        if directory.is_symlink():
+            raise RuntimeError("memory diagnostics report directory must not be a symlink")
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if not directory.is_dir() or directory.is_symlink():
+            raise RuntimeError("memory diagnostics report directory must be a regular directory")
+        directory.chmod(0o700)
+
+        temporary = path.with_name(path.name + ".tmp")
+        self._validate_regular_or_missing(path)
+        self._validate_regular_or_missing(temporary)
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0),
+            0o600,
+        )
+        created = True
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+                json.dump(report, output, separators=(",", ":"), sort_keys=True)
+                output.write("\n")
+            os.replace(temporary, path)
+            created = False
+            path.chmod(0o600)
+        finally:
+            if created and temporary.exists() and not temporary.is_symlink():
+                try:
+                    temporary.unlink()
+                except OSError:
+                    pass
+
+    @staticmethod
+    def _rotate_reports(directory: Path) -> None:
+        reports = sorted(path for path in directory.glob("memory-*.json") if path.is_file() and not path.is_symlink())
+        for path in reports[: max(0, len(reports) - REPORT_RETENTION)]:
+            try:
+                path.unlink()
+            except OSError:
+                logging.warning("Memory diagnostics report rotation failed")
+
+    def _capture_report(self, rss_kib: int) -> Path:
+        self._incident_index += 1
+        now = datetime.now(timezone.utc)
+        stamp = now.strftime("%Y%m%dT%H%M%SZ")
+        directory = self.bridge_home / "diagnostics" / "memory"
+        path = directory / f"memory-{stamp}-{os.getpid()}-{self._incident_index:04d}.json"
+        self._write_report(path, self._build_report(rss_kib, now))
+        self._rotate_reports(directory)
+        return path
+
     def sample_once(self) -> DiagnosticState:
         with self._lock:
             if not self._enabled:
@@ -161,6 +277,7 @@ class MemoryDiagnostics:
             if rss_kib >= CAPTURE_THRESHOLD_KIB:
                 self._start_tracing_if_needed()
                 self._state = DiagnosticState.CAPTURED
+                self._capture_report(rss_kib)
                 self._stop_owned_tracing()
             elif rss_kib >= TRACING_THRESHOLD_KIB:
                 self._start_tracing_if_needed()

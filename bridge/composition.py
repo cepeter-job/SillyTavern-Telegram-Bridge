@@ -16,7 +16,7 @@ from bridge.memory_service import MemoryService
 from bridge.model_router import ModelRouter
 from bridge.npc_service import NpcService
 from bridge.persona_service import PersonaService
-from bridge.port_contracts import ChatSubmit, DownloadFile, SendText, TelegramRequest
+from bridge.port_contracts import ChatSubmit, DownloadFile, ProviderProbes, SendText, TelegramRequest
 from bridge.provider_port import ProviderPort
 from bridge.rag_service import RagService
 from bridge.runtime_health import RuntimeHealth
@@ -60,3 +60,4 @@ class BridgeServices:
     persona: PersonaService
     sync: SyncService
     health: RuntimeHealth | None = None
+    provider_probes: ProviderProbes | None = None

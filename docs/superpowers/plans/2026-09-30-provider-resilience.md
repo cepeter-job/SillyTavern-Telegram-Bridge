@@ -57,9 +57,12 @@ maintenance and compact paginated diagnostics without ambient runtime context.
 Files: new `provider_health_store.py`, monitor/diagnostics, startup, tests/docs.
 Consumes sanitized snapshots and history. Produces private atomic JSON snapshots
 and deterministic manual sweeps with at most three workers.
-- [ ] Test clean restore, TTL expiry, bounds, corruption, permissions, write failure
+- [x] Test clean restore, TTL expiry, bounds, corruption, permissions, write failure
   isolation, concurrent writes, one sweep at a time and stable result order.
-- [ ] Observe failures, implement store adapter and bounded probes.
+- [x] Observe failures, implement store adapter and bounded probes.
 - [ ] Verify all four waves end-to-end; push `feat/provider-health-diagnostics`;
   merge green PR and synchronize the main VPS checkout without touching live.
 - [ ] Update changelog/version, verify signed tag and ZIP checksums, publish release.
+
+Implementation verification: 2308 tests + 778 subtests passed; coverage 78.88%. Publication completion is recorded
+in the corresponding merged PR and signed GitHub release.

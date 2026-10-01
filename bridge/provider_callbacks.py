@@ -20,7 +20,7 @@ from bridge.model_selection import (
     set_utility_reasoning,
     task_model_for_session,
 )
-from bridge.port_contracts import ProviderPolicy
+from bridge.port_contracts import ProviderPolicy, ProviderProbes
 from bridge.provider_discovery import refresh_model_catalog
 from bridge.provider_panel_tokens import load_provider_report, resolve_provider_action
 from bridge.provider_panels import (
@@ -54,10 +54,12 @@ def handle_provider_model_callback(
     *,
     request_context,
     provider_policy: ProviderPolicy | None = None,
+    provider_probes: ProviderProbes | None = None,
 ):
     """Handle provider, model, and catalog-only callbacks."""
     message_id = message.get("message_id")
     send_models = partial(send_model_menu, provider_policy=provider_policy)
+    send_health = partial(send_provider_health_menu, provider_probes=provider_probes)
     if data.startswith("models:providers:"):
         page = int(data.rsplit(":", 1)[1])
         answer_callback(token, str(callback.get("id", "")), "Page")
@@ -192,9 +194,7 @@ def handle_provider_model_callback(
         return True
     if data == "provider:health":
         answer_callback(token, str(callback.get("id", "")), "Health")
-        send_provider_health_menu(
-            token, chat_id, message_id, request_context=request_context, provider_policy=provider_policy
-        )
+        send_health(token, chat_id, message_id, request_context=request_context, provider_policy=provider_policy)
         return True
     if data == "provider:refresh":
         answer_callback(token, str(callback.get("id", "")), "Refreshing")
@@ -228,7 +228,7 @@ def handle_provider_model_callback(
             answer_callback(token, str(callback.get("id", "")), "Panel expired; reopen /providers")
             return True
         answer_callback(token, str(callback.get("id", "")), "Status")
-        send_provider_health_menu(
+        send_health(
             token,
             chat_id,
             message_id,
@@ -252,7 +252,7 @@ def handle_provider_model_callback(
         action = parts[2]
         answer_callback(token, str(callback.get("id", "")), "Running provider action")
         if action == "test":
-            send_provider_health_menu(
+            send_health(
                 token,
                 chat_id,
                 message_id,

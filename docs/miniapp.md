@@ -79,6 +79,12 @@ healthy.
 
 ## System and verified updates
 
+The Home **Bridge health** panel shows Bridge, Telegram, Database and Memory. The Memory card uses only the lightweight `/status` summary: current RSS when sampled, the diagnostics state, the next fixed threshold, retained-report count after capture, and no raw incident payload. Opening Home never fetches detailed memory reports.
+
+System adds a read-only **Memory diagnostics** card. When diagnostics are enabled with the operator-controlled `SILLYTAVERN_MEMORY_DIAGNOSTICS=1` setting, it can show the newest three retained incidents: selected process-memory aggregates, Python traced current/peak bytes, thread count and at most ten sanitized allocation-site labels per incident. Repository paths stay relative; external paths are reduced to a basename label, so absolute host paths are not exposed to the Mini App. The interpretation text is a diagnostic hint only: tracing starts after the high-memory threshold, so memory not visible to `tracemalloc` can include pre-existing Python allocations as well as native allocations.
+
+Disabling diagnostics does not delete retained incident reports. Home reports monitoring as Disabled while preserving the latest incident/count, and System can still review retained sanitized reports. The Mini App cannot enable/disable diagnostics, change thresholds, force captures, start/stop `tracemalloc`, or delete reports; those controls remain outside the Mini App in process/service configuration.
+
 The dashboard distinguishes immutable running-version/commit evidence from the version of installed files. Telegram status comes from successful polling observations, not a guessed connected flag. Operations show actor-owned queued/running/succeeded/failed/interrupted outcomes. Release review produces a five-minute actor-bound confirmation; applying consumes it once and calls the canonical signed-release updater, not arbitrary commands. Dependency changes still require manual installation.
 
 Before restart is scheduled, a protected pending notification binds the target version and verified commit. The newly started process acknowledges only after its first successful Telegram poll. Invalid or older-than-one-day state is discarded; delivery failure can retry while polling. A process crash between send and marker deletion can duplicate a notification: this is best-effort one-shot delivery, not an exactly-once network guarantee. The Mini App similarly waits for a new boot, matching revision and resumed polling before claiming update completion.

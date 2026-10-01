@@ -171,10 +171,10 @@ if __name__ == "__main__":
     unittest.main()
 
 
-def _exercise_runtime_memory_diagnostics(monkeypatch, tmp_path, diagnostics_type):
+def _exercise_runtime_memory_diagnostics(monkeypatch, tmp_path, diagnostics_type, injected=None, events=None):
     import bridge.runtime_lifecycle as lifecycle
 
-    events = []
+    events = [] if events is None else events
     database = sqlite3.connect(":memory:")
     database.execute("CREATE TABLE light_novel_choice_sets(generation_status TEXT, lease_token TEXT, lease_until REAL)")
 
@@ -202,6 +202,7 @@ def _exercise_runtime_memory_diagnostics(monkeypatch, tmp_path, diagnostics_type
         jobs=SimpleNamespace(recover=lambda *_args, **_kwargs: None),
         sync=object(),
         health=None,
+        memory_diagnostics=injected,
     )
     monkeypatch.setattr(lifecycle, "MemoryDiagnostics", diagnostics_type(events), raising=False)
     monkeypatch.setattr(lifecycle, "install_bridge_signal_handlers", lambda *_args: None)
@@ -221,26 +222,33 @@ def _exercise_runtime_memory_diagnostics(monkeypatch, tmp_path, diagnostics_type
 
 
 def test_runtime_memory_diagnostics_start_before_poll_and_stop_after(monkeypatch, tmp_path):
-    def diagnostics_type(events):
-        class Recorder:
-            def __init__(self, bridge_home, environ):
-                assert bridge_home == tmp_path / "bridge-home"
-                assert environ == {}
-                events.append("construct")
+    events = []
 
-            def start(self):
-                events.append("start")
-                return True
+    class Recorder:
+        def start(self):
+            events.append("start")
+            return True
 
-            def stop(self, timeout=1.0):
-                events.append(("stop", timeout))
-                return True
+        def stop(self, timeout=1.0):
+            events.append(("stop", timeout))
+            return True
 
-        return Recorder
+    def diagnostics_type(_events):
+        class Forbidden:
+            def __init__(self, *_args, **_kwargs):
+                raise AssertionError("runtime must not construct a second MemoryDiagnostics")
 
-    events = _exercise_runtime_memory_diagnostics(monkeypatch, tmp_path, diagnostics_type)
+        return Forbidden
 
-    assert events.count("construct") == 1
+    result = _exercise_runtime_memory_diagnostics(
+        monkeypatch,
+        tmp_path,
+        diagnostics_type,
+        injected=Recorder(),
+        events=events,
+    )
+
+    assert result is events
     assert events.count("start") == 1
     assert events.count("poll") == 1
     assert events.count(("stop", 1.0)) == 1
@@ -248,22 +256,67 @@ def test_runtime_memory_diagnostics_start_before_poll_and_stop_after(monkeypatch
 
 
 def test_runtime_memory_diagnostics_start_stop_errors_do_not_escape(monkeypatch, tmp_path):
-    def diagnostics_type(events):
-        class Recorder:
-            def __init__(self, _bridge_home, _environ):
-                events.append("construct")
+    events = []
 
-            def start(self):
-                events.append("start")
-                raise RuntimeError("PRIVATE_START_DETAIL")
+    class Recorder:
+        def start(self):
+            events.append("start")
+            raise RuntimeError("PRIVATE_START_DETAIL")
 
-            def stop(self, timeout=1.0):
-                events.append(("stop", timeout))
-                raise RuntimeError("PRIVATE_STOP_DETAIL")
+        def stop(self, timeout=1.0):
+            events.append(("stop", timeout))
+            raise RuntimeError("PRIVATE_STOP_DETAIL")
 
-        return Recorder
+    def diagnostics_type(_events):
+        class Forbidden:
+            def __init__(self, *_args, **_kwargs):
+                raise AssertionError("runtime must not construct a second MemoryDiagnostics")
 
-    events = _exercise_runtime_memory_diagnostics(monkeypatch, tmp_path, diagnostics_type)
+        return Forbidden
 
+    result = _exercise_runtime_memory_diagnostics(
+        monkeypatch,
+        tmp_path,
+        diagnostics_type,
+        injected=Recorder(),
+        events=events,
+    )
+
+    assert result is events
     assert "poll" in events
     assert ("stop", 1.0) in events
+
+
+def test_runtime_reuses_injected_memory_diagnostics_without_constructing(monkeypatch, tmp_path):
+    events = []
+
+    class Recorder:
+        def start(self):
+            events.append("start")
+            return True
+
+        def stop(self, timeout=1.0):
+            events.append(("stop", timeout))
+            return True
+
+    def forbidden_type(_events):
+        class Forbidden:
+            def __init__(self, *_args, **_kwargs):
+                raise AssertionError("runtime must not construct a second MemoryDiagnostics")
+
+        return Forbidden
+
+    injected = Recorder()
+    result = _exercise_runtime_memory_diagnostics(
+        monkeypatch,
+        tmp_path,
+        forbidden_type,
+        injected=injected,
+        events=events,
+    )
+
+    assert result is events
+    assert events.count("start") == 1
+    assert events.count("poll") == 1
+    assert events.count(("stop", 1.0)) == 1
+    assert events.index("start") < events.index("poll") < events.index(("stop", 1.0))

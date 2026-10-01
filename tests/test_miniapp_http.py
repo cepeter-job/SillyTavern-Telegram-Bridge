@@ -187,6 +187,7 @@ def test_every_management_page_has_auth_and_no_secret_response(tmp_path, monkeyp
                 "memory",
                 "databank",
                 "status",
+                "memory-diagnostics",
                 "update",
                 "jobs",
             ]:

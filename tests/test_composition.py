@@ -46,6 +46,7 @@ import bridge.worker_orchestration as _m_workers
 from bridge.composition import BackgroundRuntime, BridgeServices, TelegramRuntime
 from bridge.group_director_service import GroupDirectorService
 from bridge.job_service import DurableJob, JobService, JobSubmission
+from bridge.memory_diagnostics import MemoryDiagnostics
 from bridge.memory_service import MemoryService
 from bridge.persona_service import PersonaService
 from bridge.sync_service import SyncService
@@ -1317,6 +1318,16 @@ class StartupCompositionTests(SettingsTestCase):
             services.memory,
             MemoryService,
         )
+
+    def test_startup_composes_one_memory_diagnostics_instance(self):
+        services = _m_main._build_startup_services(
+            self.config,
+            model_router=make_test_model_router(),
+        )
+
+        self.assertIsInstance(services.memory_diagnostics, MemoryDiagnostics)
+        self.assertEqual(services.memory_diagnostics.bridge_home, self.config.bridge_home)
+        self.assertIs(services.memory_diagnostics.environ, self.config.environ)
 
     def test_startup_builds_persona_service_from_final_runtime_collaborators(self):
         with (

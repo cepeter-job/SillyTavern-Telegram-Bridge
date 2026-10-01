@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+import threading
 import tracemalloc
 from pathlib import Path
 
@@ -502,3 +503,224 @@ def test_stop_timeout_does_not_wait_for_sampler_lock(tmp_path):
 
     assert diagnostics.stop(timeout=0.125) is False
     assert thread.join_timeout == 0.125
+
+
+def test_summary_disabled_shape_is_bounded_and_does_not_resample(tmp_path, monkeypatch):
+    diagnostics = _diagnostics(tmp_path, enabled=False)
+    monkeypatch.setattr(
+        memory_diagnostics, "_resident_memory_kib", lambda: pytest.fail("summary must not sample /proc")
+    )
+
+    assert diagnostics.summary() == {
+        "enabled": False,
+        "state": "disabled",
+        "rss_kib": None,
+        "thresholds_kib": {"warning": 262144, "tracing": 327680, "capture": 393216},
+        "report_count": 0,
+        "latest_incident": None,
+    }
+
+
+def test_summary_tracks_last_sampled_rss_without_resampling(tmp_path, monkeypatch):
+    diagnostics = _diagnostics(tmp_path)
+    monkeypatch.setattr(memory_diagnostics, "_resident_memory_kib", lambda: 300 * 1024)
+    assert diagnostics.sample_once() is DiagnosticState.WARNED
+    monkeypatch.setattr(
+        memory_diagnostics, "_resident_memory_kib", lambda: pytest.fail("summary must not sample /proc")
+    )
+
+    summary = diagnostics.summary()
+
+    assert summary["enabled"] is True
+    assert summary["state"] == "warned"
+    assert summary["rss_kib"] == 300 * 1024
+    assert summary["report_count"] == 0
+
+
+def test_summary_initializes_retained_incident_metadata_once(tmp_path, monkeypatch):
+    home = tmp_path / "bridge-home"
+    directory = home / "diagnostics" / "memory"
+    directory.mkdir(parents=True)
+    (directory / "memory-20261001T000001Z-1-0001.json").write_text(
+        json.dumps({"timestamp_utc": "2026-10-01T00:00:01+00:00", "rss_kib": 400000}), encoding="utf-8"
+    )
+    diagnostics = MemoryDiagnostics(home, {})
+    monkeypatch.setattr(Path, "read_text", lambda *_args, **_kwargs: pytest.fail("summary must not reread reports"))
+
+    summary = diagnostics.summary()
+
+    assert summary["report_count"] == 1
+    assert summary["latest_incident"] == {"timestamp_utc": "2026-10-01T00:00:01+00:00", "rss_kib": 400000}
+
+
+def test_report_index_scan_failure_is_nonfatal(tmp_path, monkeypatch, caplog):
+    home = tmp_path / "bridge-home"
+    directory = home / "diagnostics" / "memory"
+    directory.mkdir(parents=True)
+    original_glob = Path.glob
+
+    def failing_glob(path, pattern):
+        if path == directory:
+            raise PermissionError("PRIVATE_REPORT_SCAN_DETAIL")
+        return original_glob(path, pattern)
+
+    monkeypatch.setattr(Path, "glob", failing_glob)
+    with caplog.at_level("WARNING"):
+        diagnostics = MemoryDiagnostics(home, {})
+
+    assert diagnostics.summary()["report_count"] == 0
+    assert "Memory diagnostics retained report index unavailable" in caplog.text
+    assert "PRIVATE_REPORT_SCAN_DETAIL" not in caplog.text
+
+
+def test_summary_updates_incident_index_after_capture(tmp_path, monkeypatch):
+    diagnostics = _diagnostics(tmp_path)
+    monkeypatch.setattr(memory_diagnostics, "_resident_memory_kib", lambda: 384 * 1024)
+    monkeypatch.setattr(memory_diagnostics, "_smaps_rollup_kib", lambda: {"Rss": 384 * 1024})
+    tracemalloc.stop()
+    try:
+        assert diagnostics.sample_once() is DiagnosticState.CAPTURED
+        summary = diagnostics.summary()
+        assert summary["rss_kib"] == 384 * 1024
+        assert summary["report_count"] == 1
+        assert summary["latest_incident"]["rss_kib"] == 384 * 1024
+        assert isinstance(summary["latest_incident"]["timestamp_utc"], str)
+    finally:
+        tracemalloc.stop()
+
+
+def test_recent_reports_are_newest_first_bounded_and_sanitized(tmp_path):
+    home = tmp_path / "bridge-home"
+    directory = home / "diagnostics" / "memory"
+    directory.mkdir(parents=True)
+    for index in range(4):
+        sites = [
+            {
+                "file": str(Path(memory_diagnostics.__file__).resolve().parent / "generation.py"),
+                "line": n + 1,
+                "size_bytes": 100 + n,
+                "blocks": 2,
+            }
+            for n in range(12)
+        ]
+        payload = {
+            "schema_version": 1,
+            "timestamp_utc": f"2026-10-01T00:00:0{index}+00:00",
+            "rss_kib": 390000 + index,
+            "smaps_kib": {"Rss": 390000 + index, "Private_Dirty": 300000},
+            "traced_current_bytes": 123,
+            "traced_peak_bytes": 456,
+            "thread_count": 7,
+            "safe_counters": {"jobs": 2},
+            "top_sites": sites,
+            "pid": 999,
+            "state": "captured",
+            "unexpected_secret": "must-drop",
+        }
+        (directory / f"memory-20261001T00000{index}Z-1-000{index}.json").write_text(
+            json.dumps(payload), encoding="utf-8"
+        )
+
+    diagnostics = MemoryDiagnostics(home, {})
+    reports = diagnostics.recent_reports()
+
+    assert len(reports) == 3
+    assert [report["rss_kib"] for report in reports] == [390003, 390002, 390001]
+    assert all(
+        set(report)
+        == {
+            "timestamp_utc",
+            "rss_kib",
+            "smaps_kib",
+            "traced_current_bytes",
+            "traced_peak_bytes",
+            "thread_count",
+            "safe_counters",
+            "top_sites",
+        }
+        for report in reports
+    )
+    assert all(len(report["top_sites"]) == 10 for report in reports)
+    assert reports[0]["top_sites"][0]["file"] == "bridge/generation.py"
+    assert "unexpected_secret" not in json.dumps(reports)
+
+
+def test_recent_reports_skip_malformed_sibling_and_work_while_disabled(tmp_path):
+    home = tmp_path / "bridge-home"
+    directory = home / "diagnostics" / "memory"
+    directory.mkdir(parents=True)
+    (directory / "memory-20261001T000003Z-1-0003.json").write_text("not-json", encoding="utf-8")
+    (directory / "memory-20261001T000002Z-1-0002.json").write_text(
+        json.dumps({"timestamp_utc": "2026-10-01T00:00:02+00:00", "rss_kib": 401000, "top_sites": []}), encoding="utf-8"
+    )
+
+    diagnostics = MemoryDiagnostics(home, {})
+
+    assert diagnostics.state is DiagnosticState.DISABLED
+    assert diagnostics.summary()["report_count"] == 1
+    assert [report["rss_kib"] for report in diagnostics.recent_reports()] == [401000]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("/home/private/project/secret_module.py", "external:secret_module.py"),
+        ("vendor/private/secret_module.py", "external:secret_module.py"),
+        (r"C:\\Users\\Private\\secret_module.py", "external:secret_module.py"),
+    ],
+)
+def test_recent_reports_sanitize_external_allocation_paths(tmp_path, raw, expected):
+    home = tmp_path / "bridge-home"
+    directory = home / "diagnostics" / "memory"
+    directory.mkdir(parents=True)
+    (directory / "memory-20261001T000001Z-1-0001.json").write_text(
+        json.dumps(
+            {
+                "timestamp_utc": "2026-10-01T00:00:01+00:00",
+                "rss_kib": 400000,
+                "top_sites": [{"file": raw, "line": 9, "size_bytes": 10, "blocks": 1}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    report = MemoryDiagnostics(home, {}).recent_reports()[0]
+
+    assert report["top_sites"][0]["file"] == expected
+    assert "private" not in report["top_sites"][0]["file"].lower()
+
+
+def test_summary_is_coherent_during_concurrent_sampling_without_disk_rescan(tmp_path, monkeypatch):
+    diagnostics = _diagnostics(tmp_path)
+    values = iter([255 * 1024, 300 * 1024, 330 * 1024])
+    monkeypatch.setattr(memory_diagnostics, "_resident_memory_kib", lambda: next(values))
+    monkeypatch.setattr(Path, "read_text", lambda *_args, **_kwargs: pytest.fail("summary must not reread disk"))
+    snapshots = []
+    ready = threading.Barrier(2)
+
+    def reader():
+        ready.wait()
+        for _ in range(100):
+            snapshots.append(diagnostics.summary())
+
+    thread = threading.Thread(target=reader)
+    thread.start()
+    ready.wait()
+    diagnostics.sample_once()
+    diagnostics.sample_once()
+    diagnostics.sample_once()
+    thread.join(timeout=2)
+
+    assert not thread.is_alive()
+    assert snapshots
+    for snapshot in snapshots:
+        assert set(snapshot) == {
+            "enabled",
+            "state",
+            "rss_kib",
+            "thresholds_kib",
+            "report_count",
+            "latest_incident",
+        }
+        assert snapshot["thresholds_kib"] == {"warning": 262144, "tracing": 327680, "capture": 393216}
+        assert snapshot["state"] in {"armed", "warned", "tracing"}

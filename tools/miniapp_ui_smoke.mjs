@@ -22,7 +22,15 @@ assert.ok(initialDocument.querySelector('#content .skeleton-shell'),'Initial con
 assert.equal(initialDocument.querySelector('#more-menu'),null,'Management is a full page, not a navigation sheet');
 const context=dom.getInternalVMContext(),errors=[],expectedFailures=new Set(),observedFailures=[];
 let portraitMode='success',forcedFailure='',scrollResets=0;
-let summaryScenario=null;
+let summaryScenario=null,memoryStatusScenario=null,memoryDetailScenario=null,memoryDetailRequests=0;
+const memoryThresholds={warning:262144,tracing:327680,capture:393216};
+const memorySummaries={
+  disabled:{enabled:false,state:'disabled',rss_kib:null,thresholds_kib:memoryThresholds,report_count:0,latest_incident:null},
+  armed:{enabled:true,state:'armed',rss_kib:200*1024,thresholds_kib:memoryThresholds,report_count:0,latest_incident:null},
+  warned:{enabled:true,state:'warned',rss_kib:280*1024,thresholds_kib:memoryThresholds,report_count:0,latest_incident:null},
+  tracing:{enabled:true,state:'tracing',rss_kib:340*1024,thresholds_kib:memoryThresholds,report_count:0,latest_incident:null},
+  captured:{enabled:true,state:'captured',rss_kib:400*1024,thresholds_kib:memoryThresholds,report_count:2,latest_incident:{timestamp_utc:'2026-10-01T03:00:00+00:00',rss_kib:400*1024}},
+};
 dom.window.scrollTo=()=>{scrollResets++;};
 process.on('unhandledRejection',error=>errors.push(error));
 dom.window.Telegram={WebApp:{initData:ready.initData,initDataUnsafe:{start_param:'dashboard'},ready(){},expand(){},BackButton:{onClick(){},hide(){},show(){}}}};
@@ -35,6 +43,11 @@ dom.window.fetch=async (path,options)=>{
   if(/^\/api\/v1\/characters\/[^/]+\/portrait$/.test(String(path))) {
     return new Response(new Blob([portraitMode==='success'?'portrait':''],{type:'image/png'}),{status:200,headers:{'Content-Type':'image/png'}});
   }
+  if(String(path)==='/api/v1/memory-diagnostics') {
+    memoryDetailRequests++;
+    if(memoryDetailScenario==='failure')return new Response(JSON.stringify({error:{message:'forced memory detail failure'}}),{status:503,headers:{'Content-Type':'application/json'}});
+    if(memoryDetailScenario)return new Response(JSON.stringify(memoryDetailScenario),{status:200,headers:{'Content-Type':'application/json'}});
+  }
   if(summaryScenario&&String(path)==='/api/v1/memory/summary/generate') {
     assert.equal(options.method,'POST');
     const body=JSON.parse(options.body);
@@ -46,6 +59,10 @@ dom.window.fetch=async (path,options)=>{
     }}),{status:200,headers:{'Content-Type':'application/json'}});
   }
   const response=await fetch(ready.url+path,options);
+  if(memoryStatusScenario&&String(path)==='/api/v1/status'&&response.ok) {
+    const data=await response.json();data.memory_diagnostics=memoryStatusScenario;
+    return new Response(JSON.stringify(data),{status:200,headers:{'Content-Type':'application/json'}});
+  }
   if(summaryScenario&&String(path)==='/api/v1/memory'&&response.ok) {
     const data=await response.json();summaryScenario.reads++;
     summaryScenario.sessionId ||= data.session.session_id;
@@ -105,7 +122,10 @@ try {
       assert.equal(dom.window.getComputedStyle(statusCopy).minWidth,'0px','Status copy may shrink so long values cannot overlap adjacent columns');
       assert.equal(shellDocument.querySelectorAll('.dashboard-shortcuts button').length,4,'Dashboard exposes four quick actions');
       assert.ok(shellDocument.querySelector('.recent-stories'),'Home includes recent stories');
-      assert.deepEqual([...shellDocument.querySelectorAll('.dashboard-health [data-health-icon]')].map(node=>node.dataset.healthIcon),['system','telegram','database'],'Dashboard Bridge health labels all three status cards with local icons');
+      assert.deepEqual([...shellDocument.querySelectorAll('.dashboard-health [data-health-icon]')].map(node=>node.dataset.healthIcon),['system','telegram','database','memory'],'Dashboard Bridge health labels all four status cards with local icons');
+      assert.ok(shellDocument.querySelector('.dashboard-health').textContent.includes('Memory'),'Home Bridge health includes memory diagnostics');
+      assert.ok(shellDocument.querySelector('.dashboard-health').textContent.includes('Disabled'),'Disabled memory diagnostics are labeled');
+      assert.equal(memoryDetailRequests,0,'Home never fetches detailed memory diagnostics');
       portraitMode='empty';
     }
     if(page==='manage') {
@@ -130,7 +150,7 @@ try {
       assert.ok(body.includes('provider-reported'),'Usage describes its measurement source');
     }
     if(page==='system') {
-      assert.deepEqual([...shellDocument.querySelectorAll('main [data-health-icon]')].map(node=>node.dataset.healthIcon),['system','telegram','database'],'System status labels all three health cards with local icons');
+      assert.deepEqual([...shellDocument.querySelectorAll('main [data-health-icon]')].map(node=>node.dataset.healthIcon),['system','telegram','database','memory'],'System status labels all four health cards with local icons');
       const review=[...shellDocument.querySelectorAll('main button')].find(n=>n.textContent==='Review latest release');
       assert.ok(review,'System exposes release review');review.click();
       await until(()=>shellDocument.querySelector('main').textContent.includes('Already latest'),'already-latest review state');
@@ -163,6 +183,85 @@ try {
   assert.ok(shellDocument.querySelector('.story-card'),'An optional status failure cannot blank Home');
   assert.ok([...shellDocument.querySelectorAll('.story-status-item')].some(node=>node.textContent.includes('Unavailable')),'Unavailable optional status is labeled');
   forcedFailure='';
+  for(const [name,label,rssText] of [
+    ['disabled','Disabled','Not sampled'],
+    ['armed','Armed','200 MiB'],
+    ['warned','Warned','280 MiB'],
+    ['tracing','Tracing','340 MiB'],
+    ['captured','Captured','400 MiB'],
+  ]) {
+    memoryStatusScenario=memorySummaries[name];
+    const detailBefore=memoryDetailRequests;
+    await app.namespace.navigate('dashboard');
+    const healthText=shellDocument.querySelector('.dashboard-health').textContent;
+    assert.ok(healthText.includes(label),'Home renders '+name+' memory state');
+    assert.ok(healthText.includes(rssText),'Home renders '+name+' memory RSS');
+    if(name==='captured')assert.ok(healthText.includes('Last incident'),'Captured Home memory state shows latest incident time');
+    assert.equal(memoryDetailRequests,detailBefore,'Home '+name+' state does not request detailed diagnostics');
+  }
+  memoryStatusScenario={...memorySummaries.disabled,report_count:2,latest_incident:memorySummaries.captured.latest_incident};
+  let retainedDetailBefore=memoryDetailRequests;
+  await app.namespace.navigate('dashboard');
+  const disabledRetainedText=shellDocument.querySelector('.dashboard-health').textContent;
+  assert.ok(disabledRetainedText.includes('2 retained reports'),'Disabled Home memory state preserves retained report count');
+  assert.ok(disabledRetainedText.includes('Last incident'),'Disabled Home memory state preserves latest incident time');
+  assert.equal(memoryDetailRequests,retainedDetailBefore,'Disabled Home retained history still uses status summary only');
+  memoryStatusScenario=memorySummaries.disabled;
+  memoryDetailScenario={summary:memorySummaries.disabled,reports:[]};
+  let detailBefore=memoryDetailRequests;
+  await app.namespace.navigate('system');
+  await until(()=>memoryDetailRequests===detailBefore+1,'System fetches detailed memory diagnostics');
+  assert.ok(shellDocument.querySelector('main').textContent.includes('Memory diagnostics'),'System renders memory diagnostics detail card');
+  assert.ok(shellDocument.querySelector('main').textContent.includes('No memory incident reports'),'System renders zero-report memory state');
+
+  const makeReport=(ratio,path='/home/private/work/bridge/generation.py')=>({
+    timestamp_utc:'2026-10-01T03:00:00+00:00',rss_kib:400*1024,
+    smaps_kib:{Rss:400*1024,Private_Dirty:300*1024,Anonymous:280*1024},
+    traced_current_bytes:Math.round(400*1024*1024*ratio),traced_peak_bytes:300*1024*1024,
+    thread_count:11,safe_counters:{jobs:2},
+    top_sites:Array.from({length:12},(_,index)=>({file:index===0?path:'bridge/provider_port.py',line:100+index,size_bytes:1000-index,blocks:2})),
+  });
+  for(const [ratio,hint] of [
+    [0.70,'Python-traced allocations are a significant share of process memory.'],
+    [0.20,'Native or otherwise untraced memory appears significant.'],
+    [0.45,'The report is mixed; inspect allocation sites and process-memory totals.'],
+  ]) {
+    const report=makeReport(ratio);
+    memoryStatusScenario={...memorySummaries.captured,report_count:1};
+    memoryDetailScenario={summary:memoryStatusScenario,reports:[report]};
+    detailBefore=memoryDetailRequests;
+    await app.namespace.navigate('system');
+    await until(()=>memoryDetailRequests===detailBefore+1,'System refreshes detailed memory diagnostics');
+    const systemText=shellDocument.querySelector('main').textContent;
+    assert.ok(systemText.includes('400 MiB'),'System renders incident RSS');
+    assert.ok(systemText.includes('11 threads'),'System renders thread count');
+    assert.ok(systemText.includes(hint),'System renders the expected memory interpretation hint');
+    const allocationDetails=[...shellDocument.querySelectorAll('main details')].find(node=>node.textContent.includes('Top Python allocations'));
+    assert.ok(allocationDetails,'System exposes collapsed top Python allocations');
+    assert.ok(allocationDetails.querySelectorAll('li').length<=10,'System caps allocation sites at ten');
+    assert.ok(!systemText.includes('/home/private'),'System never renders an absolute private path');
+  }
+
+  const unavailableTraceReport=makeReport(0.45);
+  unavailableTraceReport.traced_current_bytes=null;
+  memoryStatusScenario={...memorySummaries.captured,report_count:1};
+  memoryDetailScenario={summary:memoryStatusScenario,reports:[unavailableTraceReport]};
+  detailBefore=memoryDetailRequests;
+  await app.namespace.navigate('system');
+  await until(()=>memoryDetailRequests===detailBefore+1,'System renders unavailable traced-memory diagnostics');
+  const unavailableTraceText=shellDocument.querySelector('main').textContent;
+  assert.ok(unavailableTraceText.includes('The report is mixed; inspect allocation sites and process-memory totals.'),'Missing traced-current memory yields a mixed interpretation');
+  assert.ok(!unavailableTraceText.includes('Native or otherwise untraced memory appears significant.'),'Missing traced-current memory is not misclassified as native/untraced');
+
+  memoryStatusScenario=memorySummaries.disabled;
+  memoryDetailScenario='failure';
+  detailBefore=memoryDetailRequests;
+  await app.namespace.navigate('system');
+  await until(()=>memoryDetailRequests===detailBefore+1,'System attempts optional detailed memory diagnostics');
+  assert.ok(shellDocument.querySelector('main').textContent.includes('System'),'Detail failure leaves System usable');
+  assert.ok(shellDocument.querySelector('main').textContent.includes('Memory diagnostics unavailable'),'Detail failure is labeled without blanking System');
+  memoryStatusScenario=null;memoryDetailScenario=null;
+
   const summaryResults=[];
   for(const scenario of [
     {name:'later-segment-failure',before:'Old complete continuity.',saved:'Completed prefix continuity.',covered:24,complete:false},

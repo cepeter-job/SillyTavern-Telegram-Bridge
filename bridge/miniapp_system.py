@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import secrets
 import sqlite3
 import time
 from typing import Any
 
+from bridge.memory_diagnostics import CAPTURE_THRESHOLD_KIB, TRACING_THRESHOLD_KIB, WARNING_THRESHOLD_KIB
 from bridge.metadata import get_meta, set_meta
 from bridge.miniapp_auth import MiniAppIdentity
 from bridge.miniapp_context import require_confirmation, session_scope, text
@@ -18,6 +20,33 @@ from bridge.self_update import UpdateStatus, version_tuple
 from bridge.sqlite_store import write_transaction
 from bridge.update import _run_update, format_update_outcome, installed_bridge_version, latest_bridge_release
 from bridge.update_ack import arm_pending_update_ack
+
+
+def _memory_diagnostics_fallback() -> dict[str, object]:
+    return {
+        "enabled": False,
+        "state": "disabled",
+        "rss_kib": None,
+        "thresholds_kib": {
+            "warning": WARNING_THRESHOLD_KIB,
+            "tracing": TRACING_THRESHOLD_KIB,
+            "capture": CAPTURE_THRESHOLD_KIB,
+        },
+        "report_count": 0,
+        "latest_incident": None,
+    }
+
+
+def _memory_diagnostics_summary(services: Any) -> dict[str, object]:
+    diagnostics = getattr(services, "memory_diagnostics", None)
+    if diagnostics is None:
+        return _memory_diagnostics_fallback()
+    try:
+        summary = diagnostics.summary()
+    except Exception:
+        logging.warning("Mini App memory diagnostics summary unavailable")
+        return _memory_diagnostics_fallback()
+    return summary if isinstance(summary, dict) else _memory_diagnostics_fallback()
 
 
 def system_status(services: Any, who: MiniAppIdentity, values: dict) -> dict:
@@ -41,6 +70,7 @@ def system_status(services: Any, who: MiniAppIdentity, values: dict) -> dict:
                     "state": "query_ok",
                 },
                 "session": scope.session,
+                "memory_diagnostics": _memory_diagnostics_summary(services),
                 "installed_version": installed_bridge_version(app_settings=services.config),
                 "automatic_update_trust_configured": bool(
                     services.config.update_allowed_signers and services.config.update_allowed_signers.is_file()
@@ -48,6 +78,23 @@ def system_status(services: Any, who: MiniAppIdentity, values: dict) -> dict:
             }
         )
         return data
+
+
+def memory_diagnostics_status(services: Any, who: MiniAppIdentity, values: dict) -> dict:
+    del who, values
+    summary = _memory_diagnostics_summary(services)
+    diagnostics = getattr(services, "memory_diagnostics", None)
+    if diagnostics is None:
+        return {"summary": summary, "reports": []}
+    try:
+        raw_reports = diagnostics.recent_reports()
+    except Exception:
+        logging.warning("Mini App memory diagnostics reports unavailable")
+        return {"summary": summary, "reports": []}
+    if not isinstance(raw_reports, (tuple, list)):
+        return {"summary": summary, "reports": []}
+    reports = [report for report in raw_reports if isinstance(report, dict)][:3]
+    return {"summary": summary, "reports": reports}
 
 
 def review_update(services: Any, who: MiniAppIdentity, values: dict) -> dict:
@@ -130,6 +177,7 @@ def perform_update(services: Any, who: MiniAppIdentity, values: dict) -> dict:
 def routes() -> list[ApiRoute]:
     return [
         ApiRoute("GET", "/status", system_status),
+        ApiRoute("GET", "/memory-diagnostics", memory_diagnostics_status),
         ApiRoute("GET", "/update", review_update),
         ApiRoute("POST", "/update", perform_update, "verified_update"),
     ]

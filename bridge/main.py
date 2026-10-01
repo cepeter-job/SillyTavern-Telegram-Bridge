@@ -50,6 +50,7 @@ from bridge.input_flows import handle_pending_input
 from bridge.job_service import JobService as _JobService
 from bridge.job_store import (
     enqueue_job,
+    enqueue_panel_callback_job,
     finish_job,
     job_actor_id,
     mark_job_running,
@@ -280,6 +281,7 @@ def _build_startup_services(
         submit_chat=background.submit_chat,
         prepare_worker=durable_worker_guard.prepare,
         delivery_retry_backend=retry_delivery_job,
+        callback_enqueue_backend=enqueue_panel_callback_job,
     )
 
     def dispatch(

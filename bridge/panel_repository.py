@@ -23,6 +23,14 @@ def store_panel_binding(
     )
 
 
+def load_panel_binding_revision(db: sqlite3.Connection, chat_id: str, message_id: str, now: float) -> float | None:
+    row = db.execute(
+        "SELECT expires_at FROM panel_sessions WHERE chat_id=? AND message_id=? AND expires_at>=?",
+        (str(chat_id), str(message_id), now),
+    ).fetchone()
+    return float(row[0]) if row else None
+
+
 def delete_panel_binding(db: sqlite3.Connection, chat_id: str, message_id: str) -> None:
     require_active_transaction(db)
     db.execute(

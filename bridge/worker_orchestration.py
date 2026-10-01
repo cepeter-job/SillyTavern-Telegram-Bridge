@@ -20,6 +20,7 @@ from bridge.job_service import DurableJob, JobSubmission
 from bridge.light_novel_jobs import process_light_novel_choices_job
 from bridge.limits import IMAGE_MAX_BYTES
 from bridge.operations import operation_phase, operation_was_applied, record_operation
+from bridge.panel_singleflight import restore_busy_panel_if_unchanged
 from bridge.provider_errors import ProviderRequestError
 from bridge.response_delivery import send_reply
 from bridge.sqlite_store import write_transaction
@@ -312,6 +313,10 @@ def process_callback_job(
                 jobs.fail(db, job_id, exc)
             services.telegram.send_text(token, chat_id, "Callback processing failed; try the command again.")
         finally:
+            try:
+                restore_busy_panel_if_unchanged(services.telegram.request, token, db, chat_id, callback)
+            except Exception:
+                logging.debug("Could not restore callback panel busy state", exc_info=True)
             db.close()
 
 

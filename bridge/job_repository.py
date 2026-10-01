@@ -36,6 +36,28 @@ def store_processed_update(db: sqlite3.Connection, update_id: int, now: float) -
     db.execute("INSERT OR IGNORE INTO processed_updates(update_id,processed_at) VALUES(?,?)", (update_id, now))
 
 
+def insert_panel_callback_job(
+    db: sqlite3.Connection,
+    update_id: int,
+    chat_id: str,
+    session_id: str,
+    message_id: str,
+    payload_json: str,
+    now: float,
+) -> int | None:
+    """Atomically admit at most one active callback job for a Telegram panel."""
+    require_active_transaction(db)
+    if message_id:
+        row = db.execute(
+            "SELECT job_id FROM jobs WHERE chat_id=? AND telegram_message_id=? AND kind='callback' "
+            "AND state IN ('queued','scheduled','running') ORDER BY job_id LIMIT 1",
+            (chat_id, message_id),
+        ).fetchone()
+        if row is not None:
+            return None
+    return insert_job(db, update_id, chat_id, session_id, message_id, "callback", payload_json, now)
+
+
 def load_job_payload(db: sqlite3.Connection, job_id: int) -> str:
     row = db.execute("SELECT payload_json FROM jobs WHERE job_id=?", (job_id,)).fetchone()
     return str(row[0] or "{}") if row else "{}"

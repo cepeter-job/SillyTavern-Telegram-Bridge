@@ -42,7 +42,7 @@ def send_settings_menu(
                 "callback_data": "enum:humanizer:toggle",
             },
             {
-                "text": f"Grounded User: {'ON' if grounded_on else 'OFF'}",
+                "text": f"I am not MC: {'ON' if grounded_on else 'OFF'}",
                 "callback_data": "enum:grounded:toggle",
             },
         ]
@@ -63,7 +63,7 @@ def send_settings_menu(
         f"top_p={settings['top_p']}, frequency_penalty={settings['frequency_penalty']}, "
         f"presence_penalty={settings['presence_penalty']}, stop_sequences={stop_label}, "
         f"humanizer={'on' if humanizer_on else 'off'}, "
-        f"grounded_user={'on' if grounded_on else 'off'}"
+        f"I am not MC={'on' if grounded_on else 'off'}"
     )
     send_panel_message(
         token,
@@ -74,7 +74,7 @@ def send_settings_menu(
             "\n\nTap a field to enter its value in the next message. Send /cancel to leave it unchanged.\nFields: "
             "temperature, max_tokens, top_p, frequency_penalty, presence_penalty, "
             "stop_sequences.\n\nHumanizer rewrites replies to remove AI-sounding "
-            "patterns. Grounded User keeps user abilities and world reactions tied to established "
+            "patterns. I am not MC mode keeps user abilities and world reactions tied to established "
             "facts instead of granting automatic success or attention. Both are off by default."
         ),
         {"inline_keyboard": rows},

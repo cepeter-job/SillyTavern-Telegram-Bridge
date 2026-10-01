@@ -89,7 +89,7 @@ HELP_CATEGORIES = {
             "/settings",
             (
                 "Open this session's generation panel — temperature, tokens, sampling, stop sequences, "
-                "Humanizer, and Grounded User. Reasoning is under /providers."
+                "Humanizer, and I am not MC mode. Reasoning is under /providers."
             ),
         ),
         (

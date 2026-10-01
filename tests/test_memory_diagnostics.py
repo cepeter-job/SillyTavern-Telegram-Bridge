@@ -440,3 +440,65 @@ def test_report_rotation_failure_preserves_new_capture(tmp_path, monkeypatch, ca
     assert newest.exists()
     assert "Memory diagnostics report rotation failed" in caplog.text
     assert "PRIVATE_ROTATION_DETAIL" not in caplog.text
+
+
+def test_capture_failure_is_nonfatal_and_stops_owned_tracing(tmp_path, monkeypatch, caplog):
+    diagnostics = _diagnostics(tmp_path)
+    monkeypatch.setattr(memory_diagnostics, "_resident_memory_kib", lambda: 384 * 1024)
+
+    def fail_capture(_rss_kib):
+        raise RuntimeError("PRIVATE_CAPTURE_DETAIL")
+
+    monkeypatch.setattr(diagnostics, "_capture_report", fail_capture)
+    tracemalloc.stop()
+    try:
+        with caplog.at_level("WARNING"):
+            assert diagnostics.sample_once() is DiagnosticState.CAPTURED
+        assert not tracemalloc.is_tracing()
+        assert "Memory diagnostics capture failed" in caplog.text
+        assert "PRIVATE_CAPTURE_DETAIL" not in caplog.text
+    finally:
+        tracemalloc.stop()
+
+
+def test_report_write_rejects_symlinked_diagnostics_ancestor(tmp_path):
+    diagnostics = _diagnostics(tmp_path)
+    diagnostics.bridge_home.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    diagnostics_dir = diagnostics.bridge_home / "diagnostics"
+    diagnostics_dir.symlink_to(outside, target_is_directory=True)
+    path = diagnostics_dir / "memory" / "memory-test.json"
+
+    with pytest.raises(RuntimeError, match=r"symlink|directory"):
+        diagnostics._write_report(path, {"schema_version": 1})
+
+    assert not (outside / "memory" / "memory-test.json").exists()
+
+
+def test_stop_timeout_does_not_wait_for_sampler_lock(tmp_path):
+    diagnostics = _diagnostics(tmp_path)
+
+    class AliveThread:
+        def __init__(self):
+            self.join_timeout = None
+
+        def join(self, timeout=None):
+            self.join_timeout = timeout
+
+        def is_alive(self):
+            return True
+
+    class ForbiddenLock:
+        def __enter__(self):
+            raise AssertionError("stop must not wait for sampler lock after timeout")
+
+        def __exit__(self, *_args):
+            return False
+
+    thread = AliveThread()
+    diagnostics._thread = thread
+    diagnostics._lock = ForbiddenLock()
+
+    assert diagnostics.stop(timeout=0.125) is False
+    assert thread.join_timeout == 0.125

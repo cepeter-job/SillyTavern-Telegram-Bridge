@@ -204,14 +204,21 @@ class MemoryDiagnostics:
         if path.exists() and not stat.S_ISREG(path.stat().st_mode):
             raise RuntimeError("memory diagnostics report path must be a regular file")
 
+    def _ensure_report_directory(self, directory: Path) -> None:
+        diagnostics = self.bridge_home / "diagnostics"
+        for current in (diagnostics, directory):
+            if current.is_symlink():
+                raise RuntimeError("memory diagnostics report directory must not be a symlink")
+            if current.exists() and not current.is_dir():
+                raise RuntimeError("memory diagnostics report directory must be a regular directory")
+            current.mkdir(parents=True, exist_ok=True, mode=0o700)
+            if current.is_symlink() or not current.is_dir():
+                raise RuntimeError("memory diagnostics report directory must be a regular directory")
+            current.chmod(0o700)
+
     def _write_report(self, path: Path, report: Mapping[str, object]) -> None:
         directory = path.parent
-        if directory.is_symlink():
-            raise RuntimeError("memory diagnostics report directory must not be a symlink")
-        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        if not directory.is_dir() or directory.is_symlink():
-            raise RuntimeError("memory diagnostics report directory must be a regular directory")
-        directory.chmod(0o700)
+        self._ensure_report_directory(directory)
 
         temporary = path.with_name(path.name + ".tmp")
         self._validate_regular_or_missing(path)
@@ -277,8 +284,12 @@ class MemoryDiagnostics:
             if rss_kib >= CAPTURE_THRESHOLD_KIB:
                 self._start_tracing_if_needed()
                 self._state = DiagnosticState.CAPTURED
-                self._capture_report(rss_kib)
-                self._stop_owned_tracing()
+                try:
+                    self._capture_report(rss_kib)
+                except Exception:
+                    logging.warning("Memory diagnostics capture failed")
+                finally:
+                    self._stop_owned_tracing()
             elif rss_kib >= TRACING_THRESHOLD_KIB:
                 self._start_tracing_if_needed()
                 self._state = DiagnosticState.TRACING
@@ -288,13 +299,12 @@ class MemoryDiagnostics:
 
     def stop(self, timeout: float = 1.0) -> bool:
         self._stop_event.set()
-        with self._lock:
-            thread = self._thread
+        thread = self._thread
         if thread is not None:
             thread.join(timeout=max(0.0, timeout))
-        stopped = thread is None or not thread.is_alive()
+            if thread.is_alive():
+                return False
         with self._lock:
-            if stopped:
-                self._thread = None
+            self._thread = None
             self._stop_owned_tracing()
-        return stopped
+        return True

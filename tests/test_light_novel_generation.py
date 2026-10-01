@@ -82,6 +82,24 @@ def test_inline_parser_recovers_trailing_story_when_its_choices_are_invalid():
     assert parse_story_response(source, 2) == ("Canonical narrative.", None)
 
 
+def test_inline_parser_recovers_unfenced_duplicate_envelope_and_preserves_header():
+    from bridge.light_novel_format import parse_story_response
+
+    header = "[ 🕰️ Time 8:05 PM | 📍 Living Room ]"
+    story = "Patricia lowers her glass and waits."
+    choices = ["Ask Patricia a question", "Open the case"]
+    source = f"{header}\n\n{story}\n\n" + json.dumps({"story": story, "choices": choices})
+
+    assert parse_story_response(source, 2) == (f"{header}\n\n{story}", choices)
+
+
+def test_inline_parser_preserves_unrelated_unfenced_json_as_prose():
+    from bridge.light_novel_format import parse_story_response
+
+    source = 'Narrative keeps this visible data.\n\n{"metadata":"part of the story"}'
+    assert parse_story_response(source, 2) == (source, None)
+
+
 def test_inline_parser_accepts_unambiguous_trailing_choices_only_envelope():
     from bridge.light_novel_format import parse_story_response
 

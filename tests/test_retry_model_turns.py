@@ -7,8 +7,10 @@ from pathlib import Path
 
 from settings_test_support import SettingsTestCase
 
+import bridge.command_routes as _owner_command_routes
 import bridge.failed_turns as _owner_failed_turns
 import bridge.sqlite_store as _sqlite_store
+from bridge.provider_errors import ProviderRequestError
 
 
 class RetryModelTurnOnlyTests(SettingsTestCase):
@@ -205,6 +207,53 @@ class RetryModelTurnOnlyTests(SettingsTestCase):
             "cline-pass::cline-pass/glm-5.2",
         )
         self.assertEqual(failed[3], 2)
+
+    def test_retry_failure_report_includes_safe_provider_details(self):
+        failed = (42, "private prompt", "stored::model", 1, "old failure", "session")
+        report = _owner_command_routes._retry_failure_report(
+            failed,
+            ProviderRequestError("cline-paid::z-ai/glm-5.2", "rate_limit", 429),
+        )
+
+        self.assertIn("Retry attempt 2 failed.", report)
+        self.assertIn("Turn: Telegram message 42", report)
+        self.assertIn("Model: cline-paid::z-ai/glm-5.2", report)
+        self.assertIn("rate-limited (HTTP 429)", report)
+        self.assertIn("remains queued for /retry", report)
+        self.assertIn("/providers", report)
+        self.assertNotIn("private prompt", report)
+        self.assertNotIn("old failure", report)
+
+    def test_retry_failure_report_redacts_unknown_exception_details(self):
+        failed = (43, "private prompt", "stored::model", 2, "old failure", "session")
+        report = _owner_command_routes._retry_failure_report(
+            failed,
+            RuntimeError("https://private.invalid?api_key=SECRET"),
+        )
+
+        self.assertIn("Retry attempt 3 failed.", report)
+        self.assertIn("Model: stored::model", report)
+        self.assertIn("character backend failed before producing a usable response", report)
+        self.assertNotIn("private.invalid", report)
+        self.assertNotIn("SECRET", report)
+
+    def test_retry_failure_report_explains_malformed_light_novel_response(self):
+        failed = (44, "prompt", "stored::model", 1, "old failure", "session")
+        report = _owner_command_routes._retry_failure_report(
+            failed,
+            ValueError("Story response has no usable narrative"),
+        )
+
+        self.assertIn("empty or malformed Light Novel response", report)
+
+    def test_retry_failure_report_survives_malformed_legacy_identifiers(self):
+        failed = ("not-an-id", "prompt", "bad model name", "not-a-count", "old failure", "session")
+        report = _owner_command_routes._retry_failure_report(failed, RuntimeError("SECRET"))
+
+        self.assertIn("Retry attempt 1 failed.", report)
+        self.assertIn("Turn: Telegram message unavailable", report)
+        self.assertIn("Model: the selected model", report)
+        self.assertNotIn("SECRET", report)
 
 
 if __name__ == "__main__":

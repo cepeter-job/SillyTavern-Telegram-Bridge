@@ -65,6 +65,7 @@ from bridge.memory import (
     session_summary_for_prompt,
 )
 from bridge.memory_backend import recall_memory_context
+from bridge.memory_diagnostics import MemoryDiagnostics
 from bridge.memory_service import MemoryService as _MemoryService
 from bridge.message_commands import generate_and_store_reply, prepare_message
 from bridge.miniapp_config import load_miniapp_config
@@ -372,6 +373,7 @@ def _build_startup_services(
         npc=npc,
         persona=persona,
         sync=sync,
+        memory_diagnostics=MemoryDiagnostics(config.bridge_home, config.environ),
         jobs=jobs,
         delivery=delivery,
         conversation=conversation,

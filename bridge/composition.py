@@ -12,6 +12,7 @@ from bridge.group_director_service import GroupDirectorService
 from bridge.group_service import GroupService
 from bridge.input_flow_service import InputFlowService
 from bridge.job_service import JobService
+from bridge.memory_diagnostics import MemoryDiagnostics
 from bridge.memory_service import MemoryService
 from bridge.model_router import ModelRouter
 from bridge.npc_service import NpcService
@@ -59,5 +60,6 @@ class BridgeServices:
     npc: NpcService
     persona: PersonaService
     sync: SyncService
+    memory_diagnostics: MemoryDiagnostics | None = None
     health: RuntimeHealth | None = None
     provider_probes: ProviderProbes | None = None

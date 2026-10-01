@@ -2,6 +2,23 @@
 
 All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
+## [0.2.052] - 2026-10-01
+
+### Fixed
+
+- Close Hindsight clients through the SDK public loop-aware lifecycle so repeated
+  timeout cleanup cannot strand aiohttp connector tasks and accumulate bridge
+  memory.
+- Add bridge systemd memory guardrails (`MemoryHigh=512M`, `MemoryMax=768M`,
+  `MemorySwapMax=256M`) with memory accounting so a future runaway is contained
+  to the bridge service instead of exhausting VPS RAM and swap.
+
+### Validation and compatibility
+
+- Add regression coverage for Hindsight client cleanup and generated installer
+  memory limits.
+- No runtime dependency lockfiles or database migrations changed in this release.
+
 ## [0.2.051] - 2026-10-01
 
 ### Added

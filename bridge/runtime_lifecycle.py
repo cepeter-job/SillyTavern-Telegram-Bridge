@@ -10,6 +10,7 @@ import urllib.error
 
 from bridge.background import shutdown_background_executors
 from bridge.composition import BridgeServices
+from bridge.memory_diagnostics import MemoryDiagnostics
 from bridge.metadata import get_meta
 from bridge.runtime_health import capture_deployment
 from bridge.sqlite_store import run_database_maintenance, write_transaction
@@ -56,6 +57,12 @@ def restore_poll_offset(db: sqlite3.Connection, fallback: int) -> int:
 
 def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
     config = services.config
+    memory_diagnostics = None
+    try:
+        memory_diagnostics = MemoryDiagnostics(config.bridge_home, config.environ)
+        memory_diagnostics.start()
+    except Exception:
+        logging.warning("Memory diagnostics startup failed")
     token = config.bot_token
     health = getattr(services, "health", None)
     if health is not None:
@@ -141,6 +148,11 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
     request_bridge_shutdown(services.background.begin_shutdown)
     if health is not None:
         health.stopping()
+    if memory_diagnostics is not None:
+        try:
+            memory_diagnostics.stop(timeout=1.0)
+        except Exception:
+            logging.warning("Memory diagnostics shutdown failed")
     sync_stopped = stop_live_sync_worker(timeout=5.0)
     drained = shutdown_background_executors(timeout=20.0)
     db.close()

@@ -12,6 +12,14 @@ providers:
     # streaming: true # Enable only when the endpoint returns SSE chunks.
     models: # Model IDs accepted by this provider.
       - provider-one/model-a
+    # Optional context metadata. Provider defaults apply to every listed model;
+    # per-model maps override only the named model.
+    # context_window_tokens: 131072
+    # model_context_window_tokens:
+    #   provider-one/model-a: 200000
+    # token_estimate_chars_per_token: 4.0
+    # model_token_estimate_chars_per_token:
+    #   provider-one/model-a: 3.5
 
   provider-two:
     name: Provider Two # Label shown in the provider panel.

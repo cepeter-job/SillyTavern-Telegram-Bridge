@@ -9,6 +9,7 @@ import sqlite3
 import time
 from typing import Any
 
+from bridge.context_diagnostics import context_diagnostics_snapshot
 from bridge.memory_diagnostics import CAPTURE_THRESHOLD_KIB, TRACING_THRESHOLD_KIB, WARNING_THRESHOLD_KIB
 from bridge.metadata import get_meta, set_meta
 from bridge.miniapp_auth import MiniAppIdentity
@@ -70,6 +71,9 @@ def system_status(services: Any, who: MiniAppIdentity, values: dict) -> dict:
                     "state": "query_ok",
                 },
                 "session": scope.session,
+                "context_diagnostics": context_diagnostics_snapshot(
+                    scope.db, scope.chat_id, scope.session, app_settings=services.config
+                ),
                 "memory_diagnostics": _memory_diagnostics_summary(services),
                 "installed_version": installed_bridge_version(app_settings=services.config),
                 "automatic_update_trust_configured": bool(

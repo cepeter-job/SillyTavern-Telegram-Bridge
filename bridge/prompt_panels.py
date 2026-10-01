@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from bridge.cards import send_panel_message
-from bridge.context_compaction import context_history_candidate_limit, context_input_budget_tokens
+from bridge.context_compaction import context_history_candidate_limit
+from bridge.context_diagnostics import context_diagnostics_snapshot
 from bridge.group_service import GroupService
 from bridge.memory import get_session_summary
 from bridge.memory_backend import memory_mode, memory_scope
@@ -25,9 +26,22 @@ def prompt_panel_text(
     app_settings: AppSettings,
 ):
     if section == "budget":
+        context = context_diagnostics_snapshot(db, chat_id, session, app_settings=app_settings)
+        last_prompt = (
+            "not recorded yet"
+            if context["final_tokens"] is None
+            else f"{context['final_tokens']} / {context['budget_tokens']} estimated tokens"
+        )
         return (
-            "Prompt budget\nContext input budget: ~"
-            f"{context_input_budget_tokens(session.get('model_id', ''), app_settings=app_settings)} tokens\n"
+            "Prompt budget\n"
+            f"Context window: {context['window_tokens']} tokens ({context['source']})\n"
+            f"Output reserve: {context['output_reserve_tokens']} tokens\n"
+            f"Safety margin: {context['safety_margin_tokens']} tokens\n"
+            f"Context input budget: ~{context['budget_tokens']} tokens\n"
+            f"Last assembled prompt: {last_prompt}\n"
+            f"History dropped last time: {context['dropped_history']}\n"
+            f"Trimmed: memory={context['memory_trimmed']}, rag={context['rag_trimmed']}, "
+            f"npc={context['npc_trimmed']}, summary={context['summary_trimmed']}\n"
             f"History candidates: {context_history_candidate_limit(app_settings=app_settings)} messages\n"
             f"Session summary: {len(get_session_summary(db, chat_id, session['session_id'])[0])} chars"
         )
@@ -41,11 +55,11 @@ def prompt_panel_text(
         group = group_service.state(db, chat_id, session["session_id"])
         return (
             "Prompt group context\nEnabled: "
-            f"""{("on" if group["enabled"] else "off")}"""
+            f"{('on' if group['enabled'] else 'off')}"
             "\nMode: "
-            f"""{group["mode"]}"""
+            f"{group['mode']}"
             "\nMembers: "
-            f"""{len(group["members"])}"""
+            f"{len(group['members'])}"
         )
     return prompt_diagnostics(
         db,

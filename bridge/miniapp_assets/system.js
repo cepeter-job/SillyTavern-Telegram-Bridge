@@ -29,10 +29,24 @@ function memoryHealthCard(memory={}) {
   else if(state==='captured')hint=retained||'0 retained reports';
   return healthCard('memory','Memory',el('span',{class:'badge'},memoryStateLabel(state)),el('p',{},'RSS: '+memoryMiB(memory.rss_kib)),el('p',{class:'muted'},hint));
 }
+function contextTokens(value) {
+  return Number.isFinite(value)?Math.round(value).toLocaleString()+' tokens':'Not recorded';
+}
+function contextHealthCard(context={}) {
+  const final=Number.isFinite(context.final_tokens)?contextTokens(context.final_tokens):'Not assembled yet';
+  const budget=contextTokens(context.budget_tokens),window=contextTokens(context.window_tokens);
+  const trimmed=['memory','rag','npc','summary'].filter(key=>context[key+'_trimmed']).join(', ')||'none';
+  return healthCard('models','Context',
+    el('span',{class:'badge'},String(context.source||'global-fallback').replaceAll('-',' ')),
+    el('p',{},final+' / '+budget),
+    el('p',{class:'muted'},'Window '+window+' · Safety '+contextTokens(context.safety_margin_tokens)),
+    el('p',{class:'muted'},'Dropped history '+(context.dropped_history||0)+' · Trimmed '+trimmed));
+}
 function details(data) {
   return el('div',{class:'grid'},healthCard('system','Bridge',el('p',{},'Running: v'+data.deployment.version),el('p',{class:'muted'},'Revision: '+(data.deployment.commit.slice(0,12)||'unverified')),el('p',{},'Uptime: '+Math.floor(data.uptime_seconds/60)+' minutes'),el('p',{class:'muted'},'Installed files: v'+data.installed_version)),
     healthCard('telegram','Telegram',el('span',{class:'badge'},data.telegram.state),el('p',{class:'muted'},data.telegram.last_success?'Last successful poll: '+new Date(data.telegram.last_success*1000).toLocaleTimeString():'No successful polling observation yet.')),
     healthCard('database','Database',el('p',{},'SQLite '+data.database.sqlite_version+' · '+data.database.state),el('p',{},data.database.sessions+' private sessions'),el('p',{},data.database.messages+' stored messages')),
+    contextHealthCard(data.context_diagnostics||{}),
     memoryHealthCard(data.memory_diagnostics||{}));
 }
 function memoryBytesMiB(value) {

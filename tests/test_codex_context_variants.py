@@ -8,7 +8,12 @@ from unittest import mock
 
 import bridge.generation as generation
 from bridge.codex_models import codex_wire_model
-from bridge.context_compaction import compact_chat_messages, context_input_budget_tokens, context_window_tokens
+from bridge.context_compaction import (
+    compact_chat_messages,
+    context_input_budget_tokens,
+    context_profile,
+    context_window_tokens,
+)
 
 
 class CodexContextVariantTests(SettingsTestCase):
@@ -18,11 +23,15 @@ class CodexContextVariantTests(SettingsTestCase):
     def test_verified_variants_use_900k_window(self):
         for family in ("sol", "terra", "luna"):
             model = f"openai-codex::gpt-5.6-{family}-900k"
-            self.assertEqual(context_input_budget_tokens(model=model, app_settings=self.settings), 895_904)
+            profile = context_profile(model=model, app_settings=self.settings)
+            self.assertEqual(profile.window_tokens, 900_000)
+            self.assertEqual(profile.input_budget_tokens, 887_712)
+            self.assertEqual(profile.safety_margin_tokens, 8_192)
             self.assertEqual(codex_wire_model(model.rsplit("::", 1)[1]), f"gpt-5.6-{family}")
 
     def test_other_models_keep_configured_window(self):
-        expected = self.settings.context_window_tokens - self.settings.context_output_reserve_tokens
+        profile = context_profile(app_settings=self.settings)
+        expected = profile.input_budget_tokens
         self.assertEqual(context_window_tokens(app_settings=self.settings), self.settings.context_window_tokens)
         self.assertEqual(context_input_budget_tokens(app_settings=self.settings), expected)
         models = (
@@ -64,9 +73,10 @@ class CodexContextVariantTests(SettingsTestCase):
     def test_chat_builder_passes_selected_model_budget_to_compactor(self):
         captured = {}
 
-        def compact(messages, budget_tokens=None, *, app_settings):
+        def compact(messages, budget_tokens=None, *, chars_per_token=4.0, app_settings):
             del app_settings
             captured["budget"] = budget_tokens
+            captured["chars_per_token"] = chars_per_token
             return messages, {
                 "budget_tokens": budget_tokens,
                 "original_tokens": 1,
@@ -105,7 +115,8 @@ class CodexContextVariantTests(SettingsTestCase):
                 persona_service=make_test_persona_service(),
                 app_settings=self.settings,
             )
-        self.assertEqual(captured["budget"], 895_904)
+        self.assertEqual(captured["budget"], 887_712)
+        self.assertEqual(captured["chars_per_token"], 4.0)
 
         session.pop("model_id")
         with mock.patch.object(generation, "compact_chat_messages", side_effect=compact):
@@ -119,7 +130,7 @@ class CodexContextVariantTests(SettingsTestCase):
             )
         self.assertEqual(
             captured["budget"],
-            self.settings.context_window_tokens - self.settings.context_output_reserve_tokens,
+            context_profile(app_settings=self.settings).input_budget_tokens,
         )
 
 

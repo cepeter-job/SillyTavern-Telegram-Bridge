@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import ast
 import builtins
+import sqlite3
 import subprocess
 import symtable
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from settings_test_support import SettingsTestCase
 
@@ -167,3 +169,101 @@ class RuntimeEntrypointInvariantTests(SettingsTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _exercise_runtime_memory_diagnostics(monkeypatch, tmp_path, diagnostics_type):
+    import bridge.runtime_lifecycle as lifecycle
+
+    events = []
+    database = sqlite3.connect(":memory:")
+    database.execute("CREATE TABLE light_novel_choice_sets(generation_status TEXT, lease_token TEXT, lease_until REAL)")
+
+    def request(_token, method, _payload=None):
+        if method == "getUpdates":
+            events.append("poll")
+            lifecycle._SHUTDOWN_EVENT.set()
+            return []
+        return {}
+
+    config = SimpleNamespace(
+        bot_token="token",
+        allowed_users=frozenset(),
+        bridge_home=tmp_path / "bridge-home",
+        environ={},
+    )
+    services = SimpleNamespace(
+        config=config,
+        db_factory=lambda: database,
+        telegram=SimpleNamespace(request=request),
+        background=SimpleNamespace(
+            begin_shutdown=lambda: None,
+            register_backlog_dispatcher=lambda _callback: None,
+        ),
+        jobs=SimpleNamespace(recover=lambda *_args, **_kwargs: None),
+        sync=object(),
+        health=None,
+    )
+    monkeypatch.setattr(lifecycle, "MemoryDiagnostics", diagnostics_type(events), raising=False)
+    monkeypatch.setattr(lifecycle, "install_bridge_signal_handlers", lambda *_args: None)
+    monkeypatch.setattr(lifecycle, "start_live_sync_worker", lambda **_kwargs: None)
+    monkeypatch.setattr(lifecycle, "stop_live_sync_worker", lambda **_kwargs: True)
+    monkeypatch.setattr(lifecycle, "shutdown_background_executors", lambda **_kwargs: True)
+    monkeypatch.setattr(lifecycle, "run_database_maintenance", lambda **_kwargs: None)
+    monkeypatch.setattr(lifecycle, "get_meta", lambda *_args, **_kwargs: "0")
+    monkeypatch.setattr(lifecycle, "pending_update_ack_path", lambda _config: tmp_path / "no-pending")
+    monkeypatch.setattr(lifecycle, "make_durable_backlog_dispatcher", lambda *_args, **_kwargs: lambda: None)
+
+    try:
+        assert lifecycle.run_bridge_runtime(services, {}) == 0
+    finally:
+        lifecycle._SHUTDOWN_EVENT.clear()
+    return events
+
+
+def test_runtime_memory_diagnostics_start_before_poll_and_stop_after(monkeypatch, tmp_path):
+    def diagnostics_type(events):
+        class Recorder:
+            def __init__(self, bridge_home, environ):
+                assert bridge_home == tmp_path / "bridge-home"
+                assert environ == {}
+                events.append("construct")
+
+            def start(self):
+                events.append("start")
+                return True
+
+            def stop(self, timeout=1.0):
+                events.append(("stop", timeout))
+                return True
+
+        return Recorder
+
+    events = _exercise_runtime_memory_diagnostics(monkeypatch, tmp_path, diagnostics_type)
+
+    assert events.count("construct") == 1
+    assert events.count("start") == 1
+    assert events.count("poll") == 1
+    assert events.count(("stop", 1.0)) == 1
+    assert events.index("start") < events.index("poll") < events.index(("stop", 1.0))
+
+
+def test_runtime_memory_diagnostics_start_stop_errors_do_not_escape(monkeypatch, tmp_path):
+    def diagnostics_type(events):
+        class Recorder:
+            def __init__(self, _bridge_home, _environ):
+                events.append("construct")
+
+            def start(self):
+                events.append("start")
+                raise RuntimeError("PRIVATE_START_DETAIL")
+
+            def stop(self, timeout=1.0):
+                events.append(("stop", timeout))
+                raise RuntimeError("PRIVATE_STOP_DETAIL")
+
+        return Recorder
+
+    events = _exercise_runtime_memory_diagnostics(monkeypatch, tmp_path, diagnostics_type)
+
+    assert "poll" in events
+    assert ("stop", 1.0) in events

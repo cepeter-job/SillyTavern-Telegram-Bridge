@@ -122,6 +122,33 @@ def test_provider_port_exposes_safe_inflight_metadata_and_logs_lifecycle(caplog)
     assert "PRIVATE_PROMPT" not in caplog.text
 
 
+def test_provider_activity_is_released_when_start_logging_raises(monkeypatch):
+    module = importlib.import_module("bridge.provider_port")
+    calls = 0
+    backend_called = False
+
+    def fail_first_log(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("logging failed")
+
+    def backend(*_args, **_kwargs):
+        nonlocal backend_called
+        backend_called = True
+        return "unreachable"
+
+    monkeypatch.setattr(module.logging, "info", fail_first_log)
+    port = module.ProviderPort(generate_backend=backend).for_usage("chat", "session", "choices")
+
+    with pytest.raises(RuntimeError, match="logging failed"):
+        port.generate("key", "nano-gpt::model", [{"role": "user", "content": "hello"}])
+
+    assert backend_called is False
+    assert calls == 2
+    assert module.active_provider_requests() == ()
+
+
 def test_provider_catalog_returns_empty_mapping_on_read_failure(tmp_path, app_settings_builder):
     module = importlib.import_module("bridge.provider_catalog")
     assert module.load_provider_catalog(tmp_path / "missing.yaml", app_settings=app_settings_builder.build()) == {}

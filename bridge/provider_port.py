@@ -186,13 +186,8 @@ class ProviderPort:
         attempt = self.policy.begin(model) if self.policy is not None else None
         observed_model = attempt.selection if attempt is not None else model
         purpose = self.usage_scope.purpose if self.usage_scope is not None else ""
-        activity_token, observed_provider, observed_model_id = _start_provider_activity(observed_model, purpose)
-        logging.info(
-            "provider_start purpose=%s provider=%s model=%s",
-            purpose,
-            observed_provider,
-            observed_model_id,
-        )
+        activity_token: int | None = None
+        observed_provider, observed_model_id = _provider_parts(observed_model)
         callback_failed = False
 
         def observe_stream(text: str) -> object:
@@ -206,6 +201,13 @@ class ProviderPort:
         started = time.monotonic()
         status = "failed"
         try:
+            activity_token, observed_provider, observed_model_id = _start_provider_activity(observed_model, purpose)
+            logging.info(
+                "provider_start purpose=%s provider=%s model=%s",
+                purpose,
+                observed_provider,
+                observed_model_id,
+            )
             result = str(
                 backend(
                     api_key,
@@ -243,7 +245,8 @@ class ProviderPort:
             raise
         finally:
             elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
-            _finish_provider_activity(activity_token)
+            if activity_token is not None:
+                _finish_provider_activity(activity_token)
             logging.info(
                 "provider_finish purpose=%s provider=%s model=%s status=%s elapsed_ms=%s",
                 purpose,

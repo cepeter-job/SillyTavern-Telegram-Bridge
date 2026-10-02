@@ -56,9 +56,9 @@ jobs:
           MINIAPP_JSDOM_ROOT: ${{ github.workspace }}/tests/miniapp-ui
           PYTHON: python
         run: node --experimental-vm-modules tools/miniapp_ui_smoke.mjs
-      - name: Run full test suite
+      - name: Run full test suite with resource warnings as errors
         run: >-
-          python -m pytest -q -n auto --maxprocesses=4 --dist=loadfile
+          python -X dev -W error::ResourceWarning -m pytest -q -n auto --maxprocesses=4 --dist=loadfile
           --cov --cov-report=term-missing:skip-covered
           --cov-report=json:coverage.json --cov-report=xml:coverage.xml
 
@@ -151,6 +151,18 @@ jobs:
 
       - name: Check dependency direction
         run: python tools/static_analysis.py
+
+      - name: Scan production tree for leak-shaped code
+        run: python tools/leakscan.py bridge/ --fail-on high --format markdown -o leakscan.md
+
+      - name: Publish leak scan
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: memory-leak-scan
+          path: leakscan.md
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Lint complete Python tree
         run: python -m ruff check .

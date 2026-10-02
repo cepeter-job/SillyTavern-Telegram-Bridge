@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import signal
 import sqlite3
 import threading
@@ -22,6 +23,19 @@ from bridge.worker_orchestration import make_durable_backlog_dispatcher, resolve
 _SHUTDOWN_EVENT = threading.Event()
 _ACK_RETRY_INITIAL_SECONDS = 60.0
 _ACK_RETRY_MAX_SECONDS = 300.0
+_FORCED_EXIT_GRACE_SECONDS = 15.0
+
+
+def _arm_forced_exit_watchdog(delay: float = _FORCED_EXIT_GRACE_SECONDS) -> threading.Thread:
+    """Bound interpreter shutdown when a non-daemon worker ignores cancellation."""
+
+    def force_exit() -> None:
+        time.sleep(max(0.0, float(delay)))
+        os._exit(0)
+
+    thread = threading.Thread(target=force_exit, name="st-forced-exit-watchdog", daemon=True)
+    thread.start()
+    return thread
 
 
 def request_bridge_shutdown(
@@ -167,12 +181,17 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
     sync_stopped = stop_live_sync_worker(timeout=5.0)
     drained = shutdown_background_executors(timeout=20.0)
     db.close()
-    # Explicit maintenance on a dedicated connection after executors drained:
-    # VACUUM never competes with durable job transitions on the live handle.
-    run_database_maintenance(app_settings=services.config)
+    if drained:
+        # Explicit maintenance on a dedicated connection after executors drained:
+        # VACUUM never competes with durable job transitions on the live handle.
+        run_database_maintenance(app_settings=services.config)
+    else:
+        logging.warning(
+            "Background jobs exceeded the graceful shutdown deadline; "
+            "skipping maintenance and arming the forced-exit watchdog"
+        )
+        _arm_forced_exit_watchdog()
     if not sync_stopped:
         logging.warning("Realtime sync worker did not stop before shutdown deadline")
-    if not drained:
-        logging.warning("Background jobs exceeded the graceful shutdown deadline")
     logging.info("Bridge stopped")
     return 0

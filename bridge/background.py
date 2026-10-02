@@ -44,6 +44,7 @@ _EXECUTOR_LOCK = threading.Lock()
 
 
 _BACKGROUND_FUTURES: set[concurrent.futures.Future] = set()
+_BACKGROUND_FUTURE_LABELS: dict[concurrent.futures.Future, str] = {}
 
 
 _BACKGROUND_ACCEPTING = True
@@ -96,10 +97,12 @@ def _submit_tracked_future(
             logging.info("Background executor is shutting down; rejected %s job", label)
             return None
         _BACKGROUND_FUTURES.add(future)
+        _BACKGROUND_FUTURE_LABELS[future] = label
 
     def forget(done: concurrent.futures.Future[T]) -> None:
         with _BACKGROUND_STATE_LOCK:
             _BACKGROUND_FUTURES.discard(done)
+            _BACKGROUND_FUTURE_LABELS.pop(done, None)
 
     future.add_done_callback(forget)
     return future
@@ -119,6 +122,15 @@ def drain_background_jobs(timeout: float = 20.0) -> bool:
         concurrent.futures.wait(futures, timeout=remaining)
 
 
+def active_background_job_labels() -> tuple[str, ...]:
+    """Return safe labels for work that is still running or queued."""
+    with _BACKGROUND_STATE_LOCK:
+        labels = [
+            _BACKGROUND_FUTURE_LABELS.get(future, "unlabeled") for future in _BACKGROUND_FUTURES if not future.done()
+        ]
+    return tuple(sorted(labels))
+
+
 def submit_background(label: str, function: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> bool:
     if not background_jobs_accepting():
         logging.info("Background shutdown in progress; rejected %s job", label)
@@ -134,7 +146,7 @@ def submit_background(label: str, function: Callable[P, T], *args: P.args, **kwa
 
     def complete(done: concurrent.futures.Future) -> None:
         slot.release()
-        error = done.exception()
+        error = None if done.cancelled() else done.exception()
         if error:
             logging.error(
                 "Background %s job failed: %s", label, error, exc_info=(type(error), error, error.__traceback__)
@@ -166,6 +178,13 @@ def shutdown_background_executors(timeout: float = 20.0) -> bool:
 
     begin_background_shutdown()
     drained = drain_background_jobs(timeout)
+    if not drained:
+        labels = active_background_job_labels()
+        logging.warning(
+            "Background shutdown deadline reached with %d unfinished job(s): %s",
+            len(labels),
+            ", ".join(labels) or "unknown",
+        )
 
     with _EXECUTOR_LOCK:
         generation = _GENERATION_EXECUTOR
@@ -232,7 +251,7 @@ def _start_next_chat_job(chat_id: str) -> None:
         slot.release()
         with _CHAT_LOCKS_GUARD:
             _CHAT_IN_FLIGHT.discard(chat_id)
-        error = done.exception()
+        error = None if done.cancelled() else done.exception()
         if error:
             logging.error(
                 "Ordered background %s job failed: %s", label, error, exc_info=(type(error), error, error.__traceback__)

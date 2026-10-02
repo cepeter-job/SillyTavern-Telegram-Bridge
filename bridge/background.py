@@ -9,6 +9,7 @@ import time
 import weakref
 from collections import deque
 from collections.abc import Callable
+from pathlib import Path
 from typing import ParamSpec, TypeVar
 
 import bridge.limits as _limits
@@ -55,6 +56,50 @@ _BACKGROUND_FUTURE_LABELS: dict[concurrent.futures.Future, str] = {}
 
 
 _BACKGROUND_ACCEPTING = True
+
+
+def _runtime_process_snapshot() -> tuple[int, int]:
+    rss_kib = 0
+    thread_count = threading.active_count()
+    try:
+        for line in Path("/proc/self/status").read_text(encoding="utf-8").splitlines():
+            key, separator, value = line.partition(":")
+            if not separator:
+                continue
+            if key == "VmRSS":
+                parts = value.split()
+                if len(parts) == 2 and parts[0].isdigit() and parts[1] == "kB":
+                    rss_kib = int(parts[0])
+            elif key == "Threads":
+                raw = value.strip()
+                if raw.isdigit():
+                    thread_count = int(raw)
+    except OSError:
+        pass
+    return rss_kib, thread_count
+
+
+def _run_observed_background(label: str, function: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
+    before_rss, before_threads = _runtime_process_snapshot()
+    started = time.monotonic()
+    logging.info("background_start label=%s rss_kib=%s threads=%s", label, before_rss, before_threads)
+    status = "failed"
+    try:
+        result = function(*args, **kwargs)
+        status = "succeeded"
+        return result
+    finally:
+        after_rss, after_threads = _runtime_process_snapshot()
+        duration_ms = max(0, int((time.monotonic() - started) * 1000))
+        logging.info(
+            "background_finish label=%s status=%s duration_ms=%s rss_kib=%s rss_delta_kib=%s threads=%s",
+            label,
+            status,
+            duration_ms,
+            after_rss,
+            after_rss - before_rss,
+            after_threads,
+        )
 
 
 def chat_job_lock(chat_id: str) -> threading.Lock:
@@ -110,8 +155,12 @@ def _submit_tracked_future(
     with _BACKGROUND_STATE_LOCK:
         if not _BACKGROUND_ACCEPTING:
             return None
+
+        def observed() -> T:
+            return _run_observed_background(label, function, *args, **kwargs)
+
         try:
-            future = _executor_for(label).submit(function, *args, **kwargs)
+            future = _executor_for(label).submit(observed)
         except RuntimeError:
             logging.info("Background executor is shutting down; rejected %s job", label)
             return None
@@ -148,6 +197,30 @@ def active_background_job_labels() -> tuple[str, ...]:
             _BACKGROUND_FUTURE_LABELS.get(future, "unlabeled") for future in _BACKGROUND_FUTURES if not future.done()
         ]
     return tuple(sorted(labels))
+
+
+def background_observability_counters() -> dict[str, int]:
+    with _BACKGROUND_STATE_LOCK:
+        active = [
+            (future, _BACKGROUND_FUTURE_LABELS.get(future, "unlabeled"))
+            for future in _BACKGROUND_FUTURES
+            if not future.done()
+        ]
+    running = sum(1 for future, _label in active if future.running())
+    result: dict[str, int] = {
+        "background.active_total": len(active),
+        "background.running_total": running,
+        "background.queued_total": len(active) - running,
+    }
+    labels = sorted({label for _future, label in active if label.replace("_", "").isalnum()})[:12]
+    for label in labels:
+        label_running = sum(1 for future, current in active if current == label and future.running())
+        label_total = sum(1 for _future, current in active if current == label)
+        if label_running:
+            result[f"background.{label}.running"] = label_running
+        if label_total - label_running:
+            result[f"background.{label}.queued"] = label_total - label_running
+    return result
 
 
 def submit_background(label: str, function: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> bool:

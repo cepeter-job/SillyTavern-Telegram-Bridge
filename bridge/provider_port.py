@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import socket
+import threading
 import time
 import urllib.error
 from collections.abc import Callable, Mapping
@@ -18,6 +19,47 @@ from bridge.provider_errors import (
     provider_category_for_status,
 )
 from bridge.token_usage_values import TokenUsage, UsageEvent, UsageRecorder, UsageScope
+
+_PROVIDER_ACTIVITY_LOCK = threading.Lock()
+_PROVIDER_ACTIVITY: dict[int, tuple[str, str, str, float]] = {}
+_PROVIDER_ACTIVITY_NEXT = 0
+
+
+def _provider_parts(selection: str) -> tuple[str, str]:
+    provider, separator, model = str(selection or "").partition("::")
+    if not separator:
+        return "unqualified", str(selection or "")[:160]
+    return provider[:80], model[:160]
+
+
+def _start_provider_activity(selection: str, purpose: str) -> tuple[int, str, str]:
+    global _PROVIDER_ACTIVITY_NEXT
+    provider, model = _provider_parts(selection)
+    with _PROVIDER_ACTIVITY_LOCK:
+        _PROVIDER_ACTIVITY_NEXT += 1
+        token = _PROVIDER_ACTIVITY_NEXT
+        _PROVIDER_ACTIVITY[token] = (provider, model, str(purpose or "")[:64], time.monotonic())
+    return token, provider, model
+
+
+def _finish_provider_activity(token: int) -> None:
+    with _PROVIDER_ACTIVITY_LOCK:
+        _PROVIDER_ACTIVITY.pop(token, None)
+
+
+def active_provider_requests() -> tuple[dict[str, object], ...]:
+    now = time.monotonic()
+    with _PROVIDER_ACTIVITY_LOCK:
+        active = tuple(sorted(_PROVIDER_ACTIVITY.items()))[:8]
+    return tuple(
+        {
+            "provider": provider,
+            "model": model,
+            "purpose": purpose,
+            "elapsed_ms": max(0, int((now - started) * 1000)),
+        }
+        for _token, (provider, model, purpose, started) in active
+    )
 
 
 def _normalize_provider_exception(error: BaseException, model: str) -> ProviderRequestError | None:
@@ -143,6 +185,14 @@ class ProviderPort:
             backend = partial(backend, usage_callback=readings.append)
         attempt = self.policy.begin(model) if self.policy is not None else None
         observed_model = attempt.selection if attempt is not None else model
+        purpose = self.usage_scope.purpose if self.usage_scope is not None else ""
+        activity_token, observed_provider, observed_model_id = _start_provider_activity(observed_model, purpose)
+        logging.info(
+            "provider_start purpose=%s provider=%s model=%s",
+            purpose,
+            observed_provider,
+            observed_model_id,
+        )
         callback_failed = False
 
         def observe_stream(text: str) -> object:
@@ -192,6 +242,16 @@ class ProviderPort:
                 raise normalized from None
             raise
         finally:
+            elapsed_ms = max(0, int((time.monotonic() - started) * 1000))
+            _finish_provider_activity(activity_token)
+            logging.info(
+                "provider_finish purpose=%s provider=%s model=%s status=%s elapsed_ms=%s",
+                purpose,
+                observed_provider,
+                observed_model_id,
+                status,
+                elapsed_ms,
+            )
             if self.policy is not None and attempt is not None:
                 self.policy.cancel(attempt)
             if tracking and self.usage_recorder is not None and self.usage_scope is not None:
@@ -199,7 +259,7 @@ class ProviderPort:
                     self.usage_scope,
                     observed_model,
                     tuple(readings),
-                    max(0, int((time.monotonic() - started) * 1000)),
+                    elapsed_ms,
                     status,
                 )
                 try:

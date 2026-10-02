@@ -129,6 +129,50 @@ class BackgroundLifecycleTests(SettingsTestCase):
             if hasattr(_background, "_MEMORY_EXECUTOR"):
                 _background._MEMORY_EXECUTOR = old_memory
 
+    def test_background_task_telemetry_logs_rss_delta_without_payload(self):
+        samples = iter([(100, 5), (112, 6)])
+        secret = "PRIVATE_BACKGROUND_PAYLOAD"
+        with (
+            patch.object(_background, "_runtime_process_snapshot", side_effect=lambda: next(samples), create=True),
+            patch.object(_background.time, "monotonic", side_effect=[10.0, 10.025]),
+            self.assertLogs(level="INFO") as captured,
+        ):
+            result = _background._run_observed_background("memory_curator", lambda value: value, secret)
+
+        log = "\n".join(captured.output)
+        self.assertEqual(result, secret)
+        self.assertIn("background_start label=memory_curator rss_kib=100 threads=5", log)
+        self.assertIn(
+            "background_finish label=memory_curator status=succeeded duration_ms=25 "
+            "rss_kib=112 rss_delta_kib=12 threads=6",
+            log,
+        )
+        self.assertNotIn(secret, log)
+
+    def test_background_observability_counters_distinguish_running_and_queued(self):
+        running = concurrent.futures.Future()
+        queued = concurrent.futures.Future()
+        running.set_running_or_notify_cancel()
+        with _background._BACKGROUND_STATE_LOCK:
+            _background._BACKGROUND_FUTURES.update({running, queued})
+            _background._BACKGROUND_FUTURE_LABELS[running] = "hindsight_retain"
+            _background._BACKGROUND_FUTURE_LABELS[queued] = "memory_curator"
+        try:
+            counters = _background.background_observability_counters()
+            self.assertEqual(counters["background.active_total"], 2)
+            self.assertEqual(counters["background.running_total"], 1)
+            self.assertEqual(counters["background.queued_total"], 1)
+            self.assertEqual(counters["background.hindsight_retain.running"], 1)
+            self.assertEqual(counters["background.memory_curator.queued"], 1)
+        finally:
+            running.cancel()
+            queued.cancel()
+            with _background._BACKGROUND_STATE_LOCK:
+                _background._BACKGROUND_FUTURES.discard(running)
+                _background._BACKGROUND_FUTURES.discard(queued)
+                _background._BACKGROUND_FUTURE_LABELS.pop(running, None)
+                _background._BACKGROUND_FUTURE_LABELS.pop(queued, None)
+
     def test_shutdown_timeout_logs_active_labels_and_does_not_wait_forever(self):
         old_generation = _background._GENERATION_EXECUTOR
         old_utility = _background._UTILITY_EXECUTOR

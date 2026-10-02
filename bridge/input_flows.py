@@ -6,6 +6,7 @@ import sqlite3
 
 from bridge.card_content import card_fields_from_file
 from bridge.character_optimizer_input import handle_character_optimizer_suggestion_input, optimizer_suggestion_key
+from bridge.conversation_lifecycle import is_command_text
 from bridge.conversation_setup import setup_key
 from bridge.conversation_setup_callbacks import handle_setup_name_input
 from bridge.group_service import GroupService
@@ -55,6 +56,8 @@ def handle_pending_input(
     optimizer = _pending_state(
         db, optimizer_suggestion_key(chat_id, request_context.actor_id), session_id, token, chat_id
     )
+    if optimizer and is_command_text(stripped) and stripped.strip().casefold() != "/cancel":
+        return False
     if optimizer and handle_character_optimizer_suggestion_input(
         db,
         token,

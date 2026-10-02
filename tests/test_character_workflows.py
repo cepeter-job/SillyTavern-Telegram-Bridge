@@ -65,11 +65,19 @@ def test_document_job_and_recovery_keep_queued_session_and_actor(card_context, m
     recovered = resolve_recovered_job_submission(
         services,
         {},
-        DurableJob(job_id, "chat", "queued-session", 55, "document", {"document": document, "resolve_active": True}),
+        DurableJob(
+            job_id,
+            "chat",
+            "queued-session",
+            55,
+            "document",
+            {"document": document, "resolve_active": True, "character_upload": True},
+        ),
     )
     assert recovered is not None
     assert recovered.worker is document_jobs.process_document_job
     assert recovered.args[4] == "queued-session"
+    assert recovered.args[6] is True
 
 
 @pytest.mark.parametrize("rank_fails", [False, True])
@@ -326,6 +334,97 @@ def test_manual_optimizer_suggestion_preserves_safe_fallback_on_provider_failure
     assert "upstream secret body" not in delivered[-1]
     assert get_meta(db, key)
     assert target.read_bytes() == original
+
+
+def test_pending_optimizer_does_not_consume_bot_command(card_context, monkeypatch):
+    from bridge import character_optimizer_input, input_flows
+    from bridge.metadata import get_meta, set_meta
+
+    db, ctx, _ = card_context
+    original = _card_png("Alice", "original")
+    target = ctx.app_settings.character_dir / "Alice.png"
+    target.write_bytes(original)
+    services = make_test_application_services(
+        app_settings=ctx.app_settings,
+        provider=ProviderPort(lambda *a, **k: pytest.fail("bot commands must bypass pending optimizer input")),
+    )
+    session = services.session.create(db, "chat", ctx.app_settings.default_model, session_id="session")
+    key = character_optimizer_input.optimizer_suggestion_key("chat", "actor")
+    state = {
+        "session_id": session["session_id"],
+        "actor_id": "actor",
+        "character_file": "Alice.png",
+        "expected_digest": __import__("hashlib").sha256(original).hexdigest(),
+        "expires_at": __import__("time").time() + 600,
+        "prompt_message_ids": [],
+    }
+    set_meta(db, key, json.dumps(state))
+
+    handled = input_flows.handle_pending_input(
+        db,
+        "token",
+        "chat",
+        session,
+        "/providers",
+        fields={"name": "Alice"},
+        handle_session_name=lambda *a, **k: False,
+        group_service=services.group,
+        provider_port=services.provider,
+        memory_service=services.memory,
+        npc_service=services.npc,
+        persona_service=services.persona,
+        request_context=RequestContext(db, session["session_id"], "actor", app_settings=ctx.app_settings),
+        rag_service=services.rag,
+    )
+
+    assert handled is False
+    assert get_meta(db, key)
+    assert target.read_bytes() == original
+
+
+def test_pending_optimizer_still_consumes_cancel_command(card_context, monkeypatch):
+    from bridge import character_optimizer_input, input_flows
+    from bridge.metadata import get_meta, set_meta
+
+    db, ctx, _ = card_context
+    original = _card_png("Alice", "original")
+    (ctx.app_settings.character_dir / "Alice.png").write_bytes(original)
+    services = make_test_application_services(
+        app_settings=ctx.app_settings,
+        provider=ProviderPort(lambda *a, **k: pytest.fail("cancel must not call provider")),
+    )
+    session = services.session.create(db, "chat", ctx.app_settings.default_model, session_id="session")
+    key = character_optimizer_input.optimizer_suggestion_key("chat", "actor")
+    state = {
+        "session_id": session["session_id"],
+        "actor_id": "actor",
+        "character_file": "Alice.png",
+        "expected_digest": __import__("hashlib").sha256(original).hexdigest(),
+        "expires_at": __import__("time").time() + 600,
+        "prompt_message_ids": [],
+    }
+    set_meta(db, key, json.dumps(state))
+    monkeypatch.setattr(character_optimizer_input, "send_text", lambda *_a, **_k: [77])
+
+    handled = input_flows.handle_pending_input(
+        db,
+        "token",
+        "chat",
+        session,
+        "/cancel",
+        fields={"name": "Alice"},
+        handle_session_name=lambda *a, **k: False,
+        group_service=services.group,
+        provider_port=services.provider,
+        memory_service=services.memory,
+        npc_service=services.npc,
+        persona_service=services.persona,
+        request_context=RequestContext(db, session["session_id"], "actor", app_settings=ctx.app_settings),
+        rag_service=services.rag,
+    )
+
+    assert handled is True
+    assert get_meta(db, key, "") == ""
 
 
 def test_manual_optimizer_option_starts_actor_session_digest_bound_pending_state(card_context, monkeypatch):

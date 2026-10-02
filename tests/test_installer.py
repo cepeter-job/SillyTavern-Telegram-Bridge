@@ -31,6 +31,7 @@ def test_fresh_install_has_private_config_starters_service_and_idempotency(tmp_p
     assert "NoNewPrivileges=true" in unit.read_text()
     assert "SILLYTAVERN_ENV_FILE" in unit.read_text()
     assert "MemoryAccounting=yes" in unit.read_text()
+    assert "Environment=MALLOC_ARENA_MAX=2" in unit.read_text()
     assert "MemoryHigh=512M" in unit.read_text()
     assert "MemoryMax=768M" in unit.read_text()
     assert "MemorySwapMax=256M" in unit.read_text()

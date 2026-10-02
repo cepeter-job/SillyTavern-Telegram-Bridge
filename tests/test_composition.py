@@ -427,6 +427,7 @@ class WorkerInjectionTests(SettingsTestCase):
                 "message_id",
                 "queued_session_id",
                 "model_override",
+                "character_upload",
                 "job_id",
             ),
         }

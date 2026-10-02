@@ -327,6 +327,32 @@ def import_character_card(
     return target
 
 
+def _consume_character_upload(db: sqlite3.Connection, chat_id: str, request_context: RequestContext) -> bool:
+    """Consume a live Character → Upload prompt owned by this actor/session."""
+    with write_transaction(db):
+        key = f"character_upload:{chat_id}:{request_context.actor_id}"
+        raw_state = get_meta(db, key)
+        if not raw_state:
+            return False
+        try:
+            state = json.loads(raw_state)
+            valid = (
+                isinstance(state, dict)
+                and bool(state.get("actor_id"))
+                and bool(state.get("session_id"))
+                and float(state.get("expires_at", 0)) >= time.time()
+            )
+        except (ValueError, TypeError):
+            valid = False
+        if not valid:
+            set_meta(db, key, "")
+            return False
+        if state["actor_id"] != request_context.actor_id or state["session_id"] != request_context.session_id:
+            return False
+        set_meta(db, key, "")
+        return True
+
+
 def _consume_world_upload(db: sqlite3.Connection, chat_id: str, request_context: RequestContext) -> bool:
     with write_transaction(db):
         key = f"world_upload:{chat_id}"
@@ -384,6 +410,7 @@ def import_telegram_document(
     rag_service: RagService,
     provider_port: ProviderPort,
     request_context: RequestContext,
+    character_upload: bool = False,
 ) -> None:
     if db.in_transaction:
         raise RuntimeError("document import cannot run inside an active transaction")
@@ -399,6 +426,45 @@ def import_telegram_document(
             return
         raw = download_telegram_file(token, str(document.get("file_id") or ""), RAG_MAX_FILE_BYTES)
         import_world_info_document(db, token, chat_id, filename, raw, app_settings=app_settings)
+        return
+    if character_upload:
+        _consume_character_upload(db, chat_id, request_context)
+        if suffix != ".png":
+            send_text(token, chat_id, "Character upload expects a PNG document. Open /character and try again.")
+            return
+        if file_size > RAG_MAX_FILE_BYTES:
+            send_text(token, chat_id, "Character card is too large. The limit is 10 MB.")
+            return
+        raw = download_telegram_file(token, str(document.get("file_id") or ""), RAG_MAX_FILE_BYTES)
+        try:
+            parse_png_chara_bytes(raw)
+        except Exception:
+            send_text(
+                token,
+                chat_id,
+                "This PNG is not a valid SillyTavern character card; chara metadata was not found.",
+            )
+            return
+        installed = import_character_card(
+            db,
+            token,
+            chat_id,
+            filename,
+            raw,
+            app_settings=app_settings,
+            request_context=request_context,
+        )
+        if installed is not None:
+            session = load_session(db, chat_id, request_context.session_id, default_model, app_settings=app_settings)
+            rank_character(
+                db,
+                chat_id,
+                session,
+                card_fields_from_file(installed.name, app_settings=app_settings),
+                installed.name,
+                provider_port=provider_port,
+                app_settings=app_settings,
+            )
         return
     if suffix == ".png":
         raw = download_telegram_file(token, str(document.get("file_id") or ""), RAG_MAX_FILE_BYTES)

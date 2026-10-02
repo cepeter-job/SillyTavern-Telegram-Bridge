@@ -96,6 +96,111 @@ def test_smaps_rollup_reader_returns_empty_when_unavailable(tmp_path):
     assert _smaps_rollup_kib(tmp_path / "missing") == {}
 
 
+def test_native_allocator_summary_counts_arena_shaped_anonymous_mappings(tmp_path):
+    smaps = tmp_path / "smaps"
+    smaps.write_text(
+        "10000000-11000000 rw-p 00000000 00:00 0\n"
+        "Rss: 8192 kB\n"
+        "Anonymous: 8192 kB\n"
+        "11000000-14000000 ---p 00000000 00:00 0\n"
+        "Rss: 0 kB\n"
+        "Anonymous: 0 kB\n"
+        "20000000-21000000 rw-p 00000000 00:00 0 /tmp/not-an-arena\n"
+        "Rss: 4096 kB\n"
+        "Anonymous: 4096 kB\n"
+    )
+    summarize = getattr(memory_diagnostics, "_native_allocator_summary", lambda _path: {})
+
+    assert summarize(smaps) == {"arena_groups": 1, "arena_rss_kib": 8192}
+
+
+def test_cgroup_memory_snapshot_is_bounded_and_numeric(tmp_path):
+    proc_cgroup = tmp_path / "proc-self-cgroup"
+    proc_cgroup.write_text("0::/user.slice/test.service\n")
+    root = tmp_path / "cgroup"
+    group = root / "user.slice/test.service"
+    group.mkdir(parents=True)
+    (group / "memory.current").write_text("123456\n")
+    (group / "memory.peak").write_text("234567\n")
+    (group / "memory.swap.current").write_text("4096\n")
+    (group / "memory.events").write_text("low 0\nhigh 7\nmax 0\noom 1\noom_kill 0\n")
+    (group / "memory.pressure").write_text(
+        "some avg10=1.25 avg60=0.50 avg300=0.10 total=100\nfull avg10=0.75 avg60=0.25 avg300=0.05 total=50\n"
+    )
+    snapshot = getattr(memory_diagnostics, "_cgroup_memory_snapshot", lambda *_args, **_kwargs: {})
+
+    assert snapshot(proc_cgroup, root) == {
+        "memory_current_bytes": 123456,
+        "memory_peak_bytes": 234567,
+        "memory_swap_current_bytes": 4096,
+        "memory_high_events": 7,
+        "memory_oom_events": 1,
+        "memory_oom_kill_events": 0,
+        "psi_some_avg10_x100": 125,
+        "psi_full_avg10_x100": 75,
+    }
+
+
+def test_memory_incident_report_includes_runtime_and_native_context(tmp_path, monkeypatch, caplog):
+    diagnostics = _diagnostics(tmp_path, safe_counters=lambda: {"background.active_total": 2})
+    diagnostics.provider_activity = lambda: (
+        {
+            "provider": "nano-gpt",
+            "model": "z-ai/glm-5.3-flash-uncensored",
+            "purpose": "choices",
+            "elapsed_ms": 1234,
+        },
+    )
+    monkeypatch.setattr(memory_diagnostics, "_resident_memory_kib", lambda: 384 * 1024)
+    monkeypatch.setattr(
+        memory_diagnostics,
+        "_smaps_rollup_kib",
+        lambda: {"Rss": 384 * 1024, "Anonymous": 350 * 1024, "Swap": 32 * 1024},
+    )
+    monkeypatch.setattr(
+        memory_diagnostics,
+        "_native_allocator_summary",
+        lambda: {"arena_groups": 7, "arena_rss_kib": 300 * 1024},
+        raising=False,
+    )
+    monkeypatch.setattr(
+        memory_diagnostics,
+        "_cgroup_memory_snapshot",
+        lambda: {
+            "memory_current_bytes": 400_000_000,
+            "memory_peak_bytes": 420_000_000,
+            "memory_swap_current_bytes": 33_554_432,
+            "memory_high_events": 42,
+            "memory_oom_events": 0,
+            "memory_oom_kill_events": 0,
+            "psi_some_avg10_x100": 7823,
+            "psi_full_avg10_x100": 7723,
+        },
+        raising=False,
+    )
+    tracemalloc.stop()
+    try:
+        with caplog.at_level("WARNING"):
+            assert diagnostics.sample_once() is DiagnosticState.CAPTURED
+        report = json.loads(_report_files(diagnostics)[0].read_text())
+        assert report["native_allocator"] == {"arena_groups": 7, "arena_rss_kib": 300 * 1024}
+        assert report["cgroup"]["memory_high_events"] == 42
+        assert report["provider_inflight"] == [
+            {
+                "provider": "nano-gpt",
+                "model": "z-ai/glm-5.3-flash-uncensored",
+                "purpose": "choices",
+                "elapsed_ms": 1234,
+            }
+        ]
+        assert report["safe_counters"]["background.active_total"] == 2
+        assert "memory_incident rss_kib=393216 anonymous_kib=358400 swap_kib=32768" in caplog.text
+        assert "arena_groups=7 arena_rss_kib=307200" in caplog.text
+        assert "background_active=2 provider_inflight=1 cgroup_high_events=42" in caplog.text
+    finally:
+        tracemalloc.stop()
+
+
 def test_threshold_transition_255_mib_stays_armed(tmp_path, monkeypatch):
     diagnostics = _diagnostics(tmp_path)
     monkeypatch.setattr(memory_diagnostics, "_resident_memory_kib", lambda: 255 * 1024)
@@ -658,6 +763,9 @@ def test_recent_reports_are_newest_first_bounded_and_sanitized(tmp_path):
             "traced_peak_bytes",
             "thread_count",
             "safe_counters",
+            "native_allocator",
+            "cgroup",
+            "provider_inflight",
             "top_sites",
         }
         for report in reports

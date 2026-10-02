@@ -147,7 +147,7 @@ def invoke(c, kind, jid):
             77,
             "s1",
             None,
-            jid,
+            job_id=jid,
         )
 
 

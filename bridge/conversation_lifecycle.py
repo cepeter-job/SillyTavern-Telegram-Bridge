@@ -107,7 +107,7 @@ def is_command_text(text: str) -> bool:
 def has_pending_character_upload(db: sqlite3.Connection, chat_id: str, session_id: str, actor_id: str) -> bool:
     """Return whether this actor/session owns a live Character → Upload prompt."""
     try:
-        state = json.loads(load_meta_value(db, f"character_upload:{chat_id}", "") or "{}")
+        state = json.loads(load_meta_value(db, f"character_upload:{chat_id}:{actor_id}", "") or "{}")
         return (
             isinstance(state, dict)
             and state.get("actor_id") == actor_id

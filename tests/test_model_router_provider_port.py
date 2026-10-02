@@ -91,6 +91,35 @@ def test_provider_port_is_pure_and_delegates_exact_call_shape():
     ]
 
 
+
+def test_provider_port_exposes_safe_inflight_metadata_and_logs_lifecycle(caplog):
+    module = importlib.import_module("bridge.provider_port")
+    snapshots = []
+
+    def backend(*_args, **_kwargs):
+        snapshots.extend(module.active_provider_requests())
+        return "visible"
+
+    port = module.ProviderPort(generate_backend=backend).for_usage("chat", "session", "choices")
+    with caplog.at_level("INFO"):
+        result = port.generate(
+            "PRIVATE_API_KEY",
+            "nano-gpt::z-ai/glm-5.3-flash-uncensored",
+            [{"role": "user", "content": "PRIVATE_PROMPT"}],
+        )
+
+    assert result == "visible"
+    assert len(snapshots) == 1
+    assert snapshots[0]["provider"] == "nano-gpt"
+    assert snapshots[0]["model"] == "z-ai/glm-5.3-flash-uncensored"
+    assert snapshots[0]["purpose"] == "choices"
+    assert type(snapshots[0]["elapsed_ms"]) is int and snapshots[0]["elapsed_ms"] >= 0
+    assert module.active_provider_requests() == ()
+    assert "provider_start purpose=choices provider=nano-gpt model=z-ai/glm-5.3-flash-uncensored" in caplog.text
+    assert "provider_finish purpose=choices provider=nano-gpt model=z-ai/glm-5.3-flash-uncensored status=succeeded" in caplog.text
+    assert "PRIVATE_API_KEY" not in caplog.text
+    assert "PRIVATE_PROMPT" not in caplog.text
+
 def test_provider_catalog_returns_empty_mapping_on_read_failure(tmp_path, app_settings_builder):
     module = importlib.import_module("bridge.provider_catalog")
     assert module.load_provider_catalog(tmp_path / "missing.yaml", app_settings=app_settings_builder.build()) == {}

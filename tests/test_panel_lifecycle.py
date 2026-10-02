@@ -291,7 +291,7 @@ class PanelLifecycleTests(SettingsTestCase):
         self.assertEqual(calls[0][1]["message_id"], 105)
         buttons = calls[0][1]["reply_markup"]["inline_keyboard"]
         self.assertEqual(buttons[-1][1]["callback_data"], "character:cancel")
-        pending = json.loads(_m_session_naming.get_meta(self.db, "character_upload:chat", "{}"))
+        pending = json.loads(_m_session_naming.get_meta(self.db, "character_upload:chat:user-1", "{}"))
         self.assertEqual(pending["session_id"], session["session_id"])
         self.assertEqual(pending["actor_id"], "user-1")
         self.assertGreater(pending["expires_at"], time.time())

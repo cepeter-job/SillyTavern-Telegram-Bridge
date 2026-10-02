@@ -427,8 +427,8 @@ def import_telegram_document(
         raw = download_telegram_file(token, str(document.get("file_id") or ""), RAG_MAX_FILE_BYTES)
         import_world_info_document(db, token, chat_id, filename, raw, app_settings=app_settings)
         return
-    pending_character_upload = _consume_character_upload(db, chat_id, request_context)
-    if character_upload or pending_character_upload:
+    if character_upload:
+        _consume_character_upload(db, chat_id, request_context)
         if suffix != ".png":
             send_text(token, chat_id, "Character upload expects a PNG document. Open /character and try again.")
             return

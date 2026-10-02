@@ -173,6 +173,47 @@ class ImageGenerationTests(SettingsTestCase):
         with self.assertRaisesRegex(ValueError, "No image provider"):
             _m_image_generation.generate_image("", "a prompt", app_settings=self.app_settings_builder.build())
 
+    def test_imagine_delivery_sends_image_only_and_removes_progress_message(self):
+        events = []
+
+        def fake_send_text(_token, _chat_id, text):
+            events.append(("progress", text))
+            return [321]
+
+        def fake_photo(_token, _chat_id, _raw, caption):
+            events.append(("photo", caption))
+
+        def fake_telegram_request(_token, method, payload):
+            events.append(("delete", method, payload))
+            return {}
+
+        with (
+            patch.object(_m_image_generation, "send_text", side_effect=fake_send_text),
+            patch.object(
+                _m_image_generation,
+                "generate_image",
+                return_value=(b"PNG-DATA", "revised provider prompt", "test-image::test-model"),
+            ),
+            patch.object(_m_image_generation, "_multipart_photo", side_effect=fake_photo),
+            patch.object(_m_image_generation, "telegram_request", side_effect=fake_telegram_request, create=True),
+        ):
+            _m_image_generation.handle_imagine_prompt(
+                "token",
+                "chat",
+                "a small moon",
+                selection="test-image::test-model",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(
+            events,
+            [
+                ("progress", "🎨 Generating image…"),
+                ("photo", ""),
+                ("delete", "deleteMessage", {"chat_id": "chat", "message_id": 321}),
+            ],
+        )
+
     def test_command_is_registered(self):
         source = Path(_m_image_generation.__file__).parent / "bot_commands.py"
         self.assertIn('"command": "imagine"', source.read_text(encoding="utf-8"))

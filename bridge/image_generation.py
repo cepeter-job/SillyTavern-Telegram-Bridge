@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import logging
 import re
 import time
 import urllib.error
@@ -19,7 +20,7 @@ from bridge.network_security import strict_urlopen, validate_provider_endpoint
 from bridge.provider_port import ProviderPort
 from bridge.scene_state import scene_state_text
 from bridge.settings import AppSettings
-from bridge.telegram import send_text
+from bridge.telegram import send_text, telegram_request
 from bridge.topic_scope import parse_topic_scope
 
 IMAGE_PROMPT_MAX_CHARS = 4000
@@ -418,9 +419,13 @@ def handle_imagine_prompt(
     prompt_max_chars = _model_prompt_max_chars(model)
     if not prompt or len(prompt) > prompt_max_chars:
         raise ValueError(f"Image prompt for {model} must contain 1–{prompt_max_chars:,} characters")
-    send_text(token, chat_id, "🎨 Generating image…")
-    raw, revised, used = generate_image(selection, prompt, size, app_settings=app_settings)
-    caption = f"🎨 {prompt[:700]}\nModel: {used}"
-    if revised and revised != prompt:
-        caption += f"\nRevised: {revised[:250]}"
-    _multipart_photo(token, chat_id, raw, caption)
+    progress_ids = send_text(token, chat_id, "🎨 Generating image…")
+    raw, _revised, _used = generate_image(selection, prompt, size, app_settings=app_settings)
+    _multipart_photo(token, chat_id, raw, "")
+
+    real_chat_id, _thread_id = parse_topic_scope(chat_id)
+    for message_id in progress_ids:
+        try:
+            telegram_request(token, "deleteMessage", {"chat_id": real_chat_id, "message_id": int(message_id)})
+        except Exception:
+            logging.info("Could not delete image-generation progress message %s", message_id, exc_info=True)

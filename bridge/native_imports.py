@@ -353,7 +353,6 @@ def _consume_character_upload(db: sqlite3.Connection, chat_id: str, request_cont
         return True
 
 
-
 def _consume_world_upload(db: sqlite3.Connection, chat_id: str, request_context: RequestContext) -> bool:
     with write_transaction(db):
         key = f"world_upload:{chat_id}"
@@ -411,6 +410,7 @@ def import_telegram_document(
     rag_service: RagService,
     provider_port: ProviderPort,
     request_context: RequestContext,
+    character_upload: bool = False,
 ) -> None:
     if db.in_transaction:
         raise RuntimeError("document import cannot run inside an active transaction")
@@ -427,7 +427,8 @@ def import_telegram_document(
         raw = download_telegram_file(token, str(document.get("file_id") or ""), RAG_MAX_FILE_BYTES)
         import_world_info_document(db, token, chat_id, filename, raw, app_settings=app_settings)
         return
-    if _consume_character_upload(db, chat_id, request_context):
+    pending_character_upload = _consume_character_upload(db, chat_id, request_context)
+    if character_upload or pending_character_upload:
         if suffix != ".png":
             send_text(token, chat_id, "Character upload expects a PNG document. Open /character and try again.")
             return

@@ -1,3 +1,7 @@
+> ## uncencored roleplaying models api subcribtion with generous token usage
+>
+> [Join NanoGPT with my invitation link](https://nano-gpt.com/r/UqUJAyNQ)
+
 # 🌉 SillyTavern Telegram Bridge
 
 [![CI](https://github.com/cepeter/SillyTavern-Telegram-Bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/cepeter/SillyTavern-Telegram-Bridge/actions/workflows/ci.yml)

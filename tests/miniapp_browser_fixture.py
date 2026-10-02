@@ -13,12 +13,11 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
-from persisted_state_test_support import seed_character_rank
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from aiohttp import web
 from application_test_setup import make_native_test_persona_service
 from miniapp_test_support import make_services, signed_data
+from persisted_state_test_support import seed_character_rank
 
 import bridge.miniapp_system as system
 from bridge.memory_diagnostics import MemoryDiagnostics

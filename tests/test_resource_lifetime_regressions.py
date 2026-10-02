@@ -210,3 +210,25 @@ def test_polling_http_error_closes_response_before_retry_wait(monkeypatch, tmp_p
     finally:
         error.close()
         lifecycle._SHUTDOWN_EVENT.clear()
+
+
+def test_miniapp_fixture_bootstraps_imports_without_pytest_paths(tmp_path):
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    fixture = Path(__file__).with_name("miniapp_browser_fixture.py").resolve()
+    probe = (
+        "import runpy, sys; from pathlib import Path; "
+        "sys.path.insert(0, str(Path(sys.argv[1]).parent)); "
+        "runpy.run_path(sys.argv[1], run_name='fixture_import_check')"
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", probe, str(fixture)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

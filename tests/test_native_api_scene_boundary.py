@@ -7,28 +7,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from application_test_setup import make_test_delivery_port
+from source_test_support import imported_modules, top_level_functions
 
 ROOT = Path(__file__).parents[1]
 BRIDGE = ROOT / "bridge"
 
 
-def imported_modules(filename: str) -> set[str]:
-    tree = ast.parse((BRIDGE / filename).read_text(encoding="utf-8"))
-    result: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            result.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            result.add(node.module)
-    return result
-
-
-def top_level_functions(filename: str) -> set[str]:
-    tree = ast.parse((BRIDGE / filename).read_text(encoding="utf-8"))
-    return {node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
-
-
 def top_level_classes(filename: str) -> set[str]:
+    """Return class names defined directly in the named bridge source file."""
     tree = ast.parse((BRIDGE / filename).read_text(encoding="utf-8"))
     return {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
 

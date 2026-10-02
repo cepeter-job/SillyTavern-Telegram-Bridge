@@ -207,6 +207,7 @@ class DurableWorkerGuardTests(SettingsTestCase):
         self.assertEqual(opens, [])
 
     def test_requeue_retries_are_bounded(self):
+        """Verify persistent locks exhaust two retry delays and close all three connections."""
         attempts = []
 
         class FailingConnection:
@@ -232,9 +233,52 @@ class DurableWorkerGuardTests(SettingsTestCase):
         self.assertEqual(self.sleeps, [0.25, 1.0])
         self.assertEqual(attempts, ["closed", "closed", "closed"])
 
+    def test_requeue_recovers_when_a_later_retry_succeeds(self):
+        """The loop-back retry path must not depend on real SQLite lock timing."""
+        attempts = []
+
+        class FlakyConnection:
+            def __init__(self, fail: bool) -> None:
+                """Configure whether this connection simulates a locked database."""
+                self._fail = fail
+
+            def execute(self, *_args, **_kwargs):
+                """Raise a lock error for a failing connection; otherwise accept the statement."""
+                if self._fail:
+                    raise sqlite3.OperationalError("database is locked")
+                return None
+
+            def commit(self):
+                """Record that the successful requeue transaction was committed."""
+                attempts.append("committed")
+
+            def close(self):
+                """Record connection cleanup after each requeue attempt."""
+                attempts.append("closed")
+
+        opens = iter([FlakyConnection(fail=True), FlakyConnection(fail=False)])
+        guard = DurableWorkerGuard(
+            lambda _path, timeout=10.0: next(opens),
+            sleep=self.sleeps.append,
+        )
+        wrapped = guard.prepare(
+            self.db,
+            6,
+            lambda: self._raise(sqlite3.OperationalError("database is locked")),
+        )
+
+        # A successful requeue is terminal: the guard re-raises the original
+        # worker failure without retrying the remaining delays.
+        with self.assertRaises(sqlite3.OperationalError):
+            wrapped()
+
+        self.assertEqual(attempts, ["closed", "committed", "closed"])
+        self.assertEqual(self.sleeps, [0.25])
+
 
 class CanonicalDatabaseConnectionTests(SettingsTestCase):
     def setUp(self):
+        """Create an isolated temporary database path for canonical connection tests."""
         self.tmp = tempfile.TemporaryDirectory()
         self.path = Path(self.tmp.name) / "canonical.sqlite3"
 

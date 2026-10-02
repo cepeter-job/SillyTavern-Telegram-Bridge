@@ -7,23 +7,14 @@ from dataclasses import MISSING
 from pathlib import Path
 
 import pytest
+from source_test_support import imported_modules
 
 ROOT = Path(__file__).parents[1]
 BRIDGE = ROOT / "bridge"
 
 
-def imported_modules(filename: str) -> set[str]:
-    tree = ast.parse((BRIDGE / filename).read_text(encoding="utf-8"))
-    result: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            result.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            result.add(node.module)
-    return result
-
-
 def test_model_router_is_pure_and_routes_qualified_and_unique_exact_models():
+    """Verify independent model routing accepts exact matches and rejects unknown names."""
     path = BRIDGE / "model_router.py"
     assert path.is_file(), "ModelRouter module is missing"
     module = importlib.import_module("bridge.model_router")

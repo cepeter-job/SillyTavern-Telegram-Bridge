@@ -11,7 +11,8 @@ from bridge.databank_panels import send_databank_menu
 from bridge.director_goal_panel import director_goal_panel
 from bridge.director_goals import set_director_goal
 from bridge.edit_messages import edit_last_user
-from bridge.image_generation import handle_imagine_prompt, session_image_settings
+from bridge.image_generation import handle_imagine_prompt
+from bridge.image_routing import session_image_settings
 from bridge.limits import PENDING_SETTINGS_TTL_SECONDS
 from bridge.macro_commands import handle_macro_command
 from bridge.memory import handle_memory_command

@@ -13,8 +13,26 @@ import urllib.parse
 import urllib.request
 
 from bridge.generation_settings import get_generation_settings
+from bridge.image_routing import (
+    IMAGE_DEFAULT_SIZE,
+    IMAGE_MODEL_PROMPT_MAX_CHARS,
+    IMAGE_PROMPT_MAX_CHARS,
+    image_provider_specs,
+    resolve_image_route,
+)
+from bridge.image_routing import (
+    reset_session_image_settings as reset_session_image_settings,
+)
+from bridge.image_routing import (
+    session_image_settings as session_image_settings,
+)
+from bridge.image_routing import (
+    set_session_image_model as set_session_image_model,
+)
+from bridge.image_routing import (
+    set_session_image_size as set_session_image_size,
+)
 from bridge.limits import IMAGE_MAX_BYTES
-from bridge.metadata import get_meta, set_meta
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.network_security import strict_urlopen, validate_provider_endpoint
 from bridge.provider_port import ProviderPort
@@ -23,112 +41,19 @@ from bridge.settings import AppSettings
 from bridge.telegram import send_text, telegram_request
 from bridge.topic_scope import parse_topic_scope
 
-IMAGE_PROMPT_MAX_CHARS = 4000
-IMAGE_MODEL_PROMPT_MAX_CHARS = {
-    "z-image-turbo": 1200,
-}
-IMAGE_DEFAULT_SIZE = "1024x1024"
 IMAGE_RESPONSE_FORMAT = "b64_json"
 IMAGE_JSON_MAX_BYTES = 4 * ((IMAGE_MAX_BYTES + 2) // 3) + 65536
 IMAGE_CONTENT_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
-IMAGE_SIZE_PRESETS = (
-    ("Square", "1024x1024"),
-    ("Landscape", "1536x1024"),
-    ("Portrait", "1024x1536"),
-)
-
-
-def _image_model_key(chat_id: str, session_id: str) -> str:
-    return f"image_model:{chat_id}:{session_id}"
-
-
-def _image_size_key(chat_id: str, session_id: str) -> str:
-    return f"image_size:{chat_id}:{session_id}"
-
-
-def _image_provider_specs(*, app_settings: AppSettings) -> list[tuple[str, dict, str]]:
-    import yaml
-
-    if not app_settings.provider_config_file.exists():
-        return []
-    config = yaml.safe_load(app_settings.provider_config_file.read_text(encoding="utf-8")) or {}
-    result = []
-    for provider_id, raw in (config.get("providers") or {}).items():
-        if not isinstance(raw, dict) or not raw.get("image_enabled"):
-            continue
-        models = [str(item) for item in raw.get("image_models") or [] if str(item)]
-        if models:
-            result.append((str(provider_id), raw, models[0]))
-    return result
-
-
-def image_model_options(*, app_settings: AppSettings) -> tuple[tuple[str, str], ...]:
-    options: list[tuple[str, str]] = []
-    for provider_id, spec, _default_model in _image_provider_specs(app_settings=app_settings):
-        provider_name = str(spec.get("name") or provider_id).strip() or provider_id
-        for model in [str(item) for item in spec.get("image_models") or [] if str(item)]:
-            selection = f"{provider_id}::{model}"
-            label = f"{provider_name} · {model}"
-            options.append((selection, label[:64]))
-    return tuple(options)
-
-
-def session_image_settings(
-    db,
-    chat_id: str,
-    session_id: str,
-    *,
-    app_settings: AppSettings,
-) -> tuple[str, str]:
-    configured = {selection for selection, _label in image_model_options(app_settings=app_settings)}
-    requested = get_meta(db, _image_model_key(chat_id, session_id), "").strip()
-    if requested not in configured:
-        requested = ""
-    provider_id, _spec, model = _resolve_image_provider(requested, app_settings=app_settings)
-    selection = f"{provider_id}::{model}"
-
-    allowed_sizes = {size for _label, size in IMAGE_SIZE_PRESETS}
-    size = get_meta(db, _image_size_key(chat_id, session_id), "").strip()
-    if size not in allowed_sizes:
-        size = IMAGE_DEFAULT_SIZE
-    return selection, size
-
-
-def set_session_image_model(
-    db,
-    chat_id: str,
-    session_id: str,
-    selection: str,
-    *,
-    app_settings: AppSettings,
-) -> str:
-    value = str(selection or "").strip()
-    allowed = {item for item, _label in image_model_options(app_settings=app_settings)}
-    if value not in allowed:
-        raise ValueError("Selected image model is no longer available")
-    set_meta(db, _image_model_key(chat_id, session_id), value)
-    return value
-
-
-def set_session_image_size(db, chat_id: str, session_id: str, size: str) -> str:
-    value = str(size or "").strip()
-    allowed = {item for _label, item in IMAGE_SIZE_PRESETS}
-    if value not in allowed:
-        raise ValueError("Unsupported image size preset")
-    set_meta(db, _image_size_key(chat_id, session_id), value)
-    return value
-
-
-def reset_session_image_settings(db, chat_id: str, session_id: str) -> None:
-    set_meta(db, _image_model_key(chat_id, session_id), "")
-    set_meta(db, _image_size_key(chat_id, session_id), "")
 
 
 def _resolve_image_provider(selection: str = "", *, app_settings: AppSettings) -> tuple[str, dict, str]:
+    if str(selection or "").strip() == "auto":
+        route = resolve_image_route("auto", reference_available=False, app_settings=app_settings)
+        return route.provider_id, route.spec, route.model
     requested_provider, requested_model = (
         ([*selection.split("::", 1), ""])[:2] if "::" in selection else ("", selection)
     )
-    for provider_id, spec, default_model in _image_provider_specs(app_settings=app_settings):
+    for provider_id, spec, default_model in image_provider_specs(app_settings=app_settings):
         models = [str(item) for item in spec.get("image_models") or []]
         if requested_provider and provider_id != requested_provider:
             continue
@@ -148,7 +73,6 @@ def _model_prompt_max_chars(model: str) -> int:
 
 
 def image_prompt_max_chars(selection: str = "", *, app_settings: AppSettings) -> int:
-    """Return the bridge prompt ceiling for the selected image model."""
     _provider_id, _spec, model = _resolve_image_provider(selection, app_settings=app_settings)
     return _model_prompt_max_chars(model)
 

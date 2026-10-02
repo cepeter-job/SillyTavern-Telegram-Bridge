@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from bridge.callback_tokens import dynamic_callback_token
 from bridge.cards import send_panel_message
-from bridge.image_generation import IMAGE_SIZE_PRESETS, image_model_options, session_image_settings
+from bridge.image_routing import IMAGE_SIZE_PRESETS, image_model_options, session_image_settings
 
 
 def _short_model(selection: str) -> str:

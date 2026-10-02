@@ -16,16 +16,18 @@ from bridge.image_generation import (
     IMAGE_PROMPT_MAX_CHARS,
     handle_imagine_scene,
     image_prompt_max_chars,
-    reset_session_image_settings,
-    session_image_settings,
-    set_session_image_model,
-    set_session_image_size,
 )
 from bridge.image_panels import (
     send_imagine_menu,
     send_imagine_model_menu,
     send_imagine_options_menu,
     send_imagine_size_menu,
+)
+from bridge.image_routing import (
+    reset_session_image_settings,
+    session_image_settings,
+    set_session_image_model,
+    set_session_image_size,
 )
 from bridge.memory_backend import memory_mode
 from bridge.memory_curator import curate_memory_now, send_curated_memory_menu

@@ -147,6 +147,144 @@ def handle_swipe_callback(
     return False
 
 
+def _greeting_cancel(db, token, callback, answer_callback, chat_id, message_id):
+    answer_callback(token, str(callback.get("id", "")), "Cancelled")
+    discard_panel_binding(db, chat_id, message_id)
+    close_panel_message(db, token, chat_id, callback)
+    return True
+
+
+def _resolve_greeting_operation(db, token, chat_id, session_id, operation_id, action, parts):
+    if not is_group_conversation(db, chat_id, session_id):
+        state = conversation_state(db, chat_id, session_id)
+        try:
+            supplied_epoch = int(parts[-1]) if len(parts) >= (5 if action == "page" else 4) else -1
+        except ValueError:
+            supplied_epoch = -1
+        if get_meta(db, f"active_session:{chat_id}", "default") != session_id or supplied_epoch != state.epoch:
+            send_text(token, chat_id, "Opening choice expired; use /start again.")
+            return (False, operation_id)
+        if state.started:
+            from_opening = get_meta(db, f"conversation_opening:{chat_id}:{session_id}", "")
+            try:
+                opening = json.loads(from_opening or "{}")
+                opening_operation = opening.get("operation_id")
+                pending = db.execute(
+                    "SELECT rowid,telegram_message_ids FROM messages WHERE chat_id=? "
+                    "AND session_id=? ORDER BY rowid DESC LIMIT 1",
+                    (chat_id, session_id),
+                ).fetchone()
+                undelivered = bool(
+                    pending and pending[0] == opening.get("rowid") and (not delivery_complete(db, int(pending[0])))
+                )
+            except (ValueError, TypeError, AttributeError):
+                opening_operation, undelivered = (None, False)
+            if action != "use" or operation_id is None or opening_operation is None:
+                send_text(token, chat_id, ALREADY_STARTED)
+                return (False, operation_id)
+            if str(opening_operation) != str(operation_id):
+                if not undelivered:
+                    send_text(token, chat_id, ALREADY_STARTED)
+                    return (False, operation_id)
+                operation_id = opening_operation
+    return True, operation_id
+
+
+def _greeting_unavailable(db, token, callback, answer_callback, chat_id, message_id):
+    answer_callback(token, str(callback.get("id", "")), "Greeting unavailable")
+    discard_panel_binding(db, chat_id, message_id)
+    close_panel_message(db, token, chat_id, callback)
+    send_text(token, chat_id, "This character has no opening greeting.")
+    return True
+
+
+def _greeting_page(
+    token, callback, answer_callback, chat_id, request_context, parts, message_id, fields, options, user_name
+):
+    try:
+        page = max(0, int(parts[2]))
+        selected_index = int(parts[3]) if len(parts) > 3 else 0
+    except (ValueError, IndexError):
+        answer_callback(token, str(callback.get("id", "")), "Greeting panel expired")
+        return True
+    if selected_index < 0 or selected_index >= len(options):
+        selected_index = 0
+    answer_callback(token, str(callback.get("id", "")), "Page")
+    send_greeting_menu(
+        token,
+        chat_id,
+        fields,
+        user_name,
+        message_id=message_id,
+        selected_index=selected_index,
+        page=page,
+        request_context=request_context,
+    )
+    return True
+
+
+def _greeting_choice(
+    db,
+    token,
+    callback,
+    answer_callback,
+    chat_id,
+    session_id,
+    operation_id,
+    request_context,
+    action,
+    parts,
+    message_id,
+    fields,
+    options,
+    user_name,
+):
+    try:
+        selected_index = int(parts[2])
+    except (ValueError, IndexError):
+        answer_callback(token, str(callback.get("id", "")), "Greeting choice expired")
+        return True
+    if selected_index < 0 or selected_index >= len(options):
+        answer_callback(token, str(callback.get("id", "")), "Greeting choice expired")
+        return True
+    label = greeting_choice_label(selected_index)
+    if action == "preview":
+        answer_callback(token, str(callback.get("id", "")), label)
+        send_greeting_menu(
+            token,
+            chat_id,
+            fields,
+            user_name,
+            message_id=message_id,
+            selected_index=selected_index,
+            request_context=request_context,
+        )
+        return True
+
+    started = send_character_greeting(
+        db,
+        token,
+        chat_id,
+        fields,
+        session_id,
+        user_name,
+        selected_index,
+        operation_id,
+        "start_greeting",
+        app_settings=request_context.app_settings,
+        expected_epoch=conversation_state(db, chat_id, session_id).epoch,
+        actor_id=request_context.actor_id,
+    )
+    answer_callback(
+        token,
+        str(callback.get("id", "")),
+        f"Started with {label}" if started else "Greeting already processed",
+    )
+    discard_panel_binding(db, chat_id, message_id)
+    close_panel_message(db, token, chat_id, callback)
+    return True
+
+
 def handle_greeting_callback(
     db,
     token,
@@ -175,121 +313,52 @@ def handle_greeting_callback(
     user_name = (
         persona_service.name(persona_id) if persona_id else ""
     ) or request_context.app_settings.default_user_name
-
     if action == "cancel":
-        answer_callback(token, str(callback.get("id", "")), "Cancelled")
-        discard_panel_binding(db, chat_id, message_id)
-        close_panel_message(db, token, chat_id, callback)
+        return _greeting_cancel(db, token, callback, answer_callback, chat_id, message_id)
+    allowed, operation_id = _resolve_greeting_operation(db, token, chat_id, session_id, operation_id, action, parts)
+    if not allowed:
         return True
-
-    if not is_group_conversation(db, chat_id, session_id):
-        state = conversation_state(db, chat_id, session_id)
-        try:
-            supplied_epoch = int(parts[-1]) if len(parts) >= (5 if action == "page" else 4) else -1
-        except ValueError:
-            supplied_epoch = -1
-        if get_meta(db, f"active_session:{chat_id}", "default") != session_id or supplied_epoch != state.epoch:
-            send_text(token, chat_id, "Opening choice expired; use /start again.")
-            return True
-        if state.started:
-            from_opening = get_meta(db, f"conversation_opening:{chat_id}:{session_id}", "")
-            try:
-                opening = json.loads(from_opening or "{}")
-                opening_operation = opening.get("operation_id")
-                pending = db.execute(
-                    "SELECT rowid,telegram_message_ids FROM messages WHERE chat_id=? "
-                    "AND session_id=? ORDER BY rowid DESC LIMIT 1",
-                    (chat_id, session_id),
-                ).fetchone()
-                undelivered = bool(
-                    pending and pending[0] == opening.get("rowid") and not delivery_complete(db, int(pending[0]))
-                )
-            except (ValueError, TypeError, AttributeError):
-                opening_operation, undelivered = None, False
-            if action != "use" or operation_id is None or opening_operation is None:
-                send_text(token, chat_id, ALREADY_STARTED)
-                return True
-            if str(opening_operation) != str(operation_id):
-                if not undelivered:
-                    send_text(token, chat_id, ALREADY_STARTED)
-                    return True
-                # Re-deliver the durable original, even if the card has since changed.
-                operation_id = opening_operation
-
     if not options:
-        answer_callback(token, str(callback.get("id", "")), "Greeting unavailable")
-        discard_panel_binding(db, chat_id, message_id)
-        close_panel_message(db, token, chat_id, callback)
-        send_text(token, chat_id, "This character has no opening greeting.")
-        return True
-
-    if action == "page":
-        try:
-            page = max(0, int(parts[2]))
-            selected_index = int(parts[3]) if len(parts) > 3 else 0
-        except (ValueError, IndexError):
-            answer_callback(token, str(callback.get("id", "")), "Greeting panel expired")
-            return True
-        if selected_index < 0 or selected_index >= len(options):
-            selected_index = 0
-        answer_callback(token, str(callback.get("id", "")), "Page")
-        send_greeting_menu(
-            token,
-            chat_id,
-            fields,
-            user_name,
-            message_id=message_id,
-            selected_index=selected_index,
-            page=page,
-            request_context=request_context,
-        )
-        return True
-
-    if action in {"preview", "use"}:
-        try:
-            selected_index = int(parts[2])
-        except (ValueError, IndexError):
-            answer_callback(token, str(callback.get("id", "")), "Greeting choice expired")
-            return True
-        if selected_index < 0 or selected_index >= len(options):
-            answer_callback(token, str(callback.get("id", "")), "Greeting choice expired")
-            return True
-        label = greeting_choice_label(selected_index)
-        if action == "preview":
-            answer_callback(token, str(callback.get("id", "")), label)
-            send_greeting_menu(
-                token,
-                chat_id,
-                fields,
-                user_name,
-                message_id=message_id,
-                selected_index=selected_index,
-                request_context=request_context,
-            )
-            return True
-
-        started = send_character_greeting(
+        return _greeting_unavailable(db, token, callback, answer_callback, chat_id, message_id)
+    routes = {
+        "page": lambda: _greeting_page(
+            token, callback, answer_callback, chat_id, request_context, parts, message_id, fields, options, user_name
+        ),
+        "preview": lambda: _greeting_choice(
             db,
             token,
+            callback,
+            answer_callback,
             chat_id,
-            fields,
             session_id,
-            user_name,
-            selected_index,
             operation_id,
-            "start_greeting",
-            app_settings=request_context.app_settings,
-            expected_epoch=conversation_state(db, chat_id, session_id).epoch,
-            actor_id=request_context.actor_id,
-        )
-        answer_callback(
+            request_context,
+            action,
+            parts,
+            message_id,
+            fields,
+            options,
+            user_name,
+        ),
+        "use": lambda: _greeting_choice(
+            db,
             token,
-            str(callback.get("id", "")),
-            f"Started with {label}" if started else "Greeting already processed",
-        )
-        discard_panel_binding(db, chat_id, message_id)
-        close_panel_message(db, token, chat_id, callback)
-        return True
-
+            callback,
+            answer_callback,
+            chat_id,
+            session_id,
+            operation_id,
+            request_context,
+            action,
+            parts,
+            message_id,
+            fields,
+            options,
+            user_name,
+        ),
+    }
+    handler = routes.get(action)
+    if handler is not None:
+        return handler()
     answer_callback(token, str(callback.get("id", "")), "Unknown greeting action")
     return True

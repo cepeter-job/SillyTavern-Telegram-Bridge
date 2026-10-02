@@ -73,25 +73,29 @@ The routing implementation must make those defaults configurable rather than emb
 
 Keep the existing `image_models: [string, ...]` format unchanged for backward compatibility.
 
-Add optional provider-level capability metadata keyed by exact model ID:
+Add optional provider-level capability metadata keyed by exact model ID, plus one catalog-level Auto routing block whose targets are fully-qualified selections:
 
 ```yaml
-image_enabled: true
-image_models:
-  - chroma
-  - step-image-edit-2
-
-image_model_capabilities:
-  chroma:
-    mode: text
-  step-image-edit-2:
-    mode: reference
-    edit_route: openai
-
 image_auto:
-  text_model: chroma
-  reference_model: step-image-edit-2
+  text_model: nano-gpt::chroma
+  reference_model: nano-gpt::step-image-edit-2
+
+providers:
+  nano-gpt:
+    image_enabled: true
+    image_models:
+      - chroma
+      - step-image-edit-2
+
+    image_model_capabilities:
+      chroma:
+        mode: text
+      step-image-edit-2:
+        mode: reference
+        edit_route: openai
 ```
+
+The catalog-level placement is intentional: the bridge can expose image models from multiple providers, so Auto targets must not be ambiguous when two providers publish the same model ID.
 
 ### Capability values
 
@@ -143,11 +147,12 @@ Rules:
 1. New sessions/default-reset state resolve to Auto when both Auto targets are valid.
 2. A manually selected concrete model always wins.
 3. Auto checks whether a usable active character reference exists.
-4. If a reference exists, Auto resolves `image_auto.reference_model`.
-5. If no reference exists, Auto resolves `image_auto.text_model`.
-6. If the configured Auto reference target is unavailable, Auto may fall back to the configured Auto text target.
-7. Auto must never select a provider/model not declared in the provider's enabled `image_models` list.
-8. Manual model failures must not silently route to another model.
+4. If a reference exists, Auto resolves the fully-qualified `image_auto.reference_model` selection.
+5. If no reference exists, Auto resolves the fully-qualified `image_auto.text_model` selection.
+6. If the configured Auto reference target is unavailable, Auto may fall back only to the configured Auto text target.
+7. Auto must never select a provider/model not declared in that provider's enabled `image_models` list.
+8. If either Auto target omits the `provider::model` qualifier, configuration validation fails for Auto rather than guessing a provider.
+9. Manual model failures must not silently route to another model.
 
 The UI may show the resolved model in explanatory text, but persistence remains either `auto` or the user's explicit concrete selection.
 
@@ -209,9 +214,11 @@ POST /api/v1/images/edits
 
 with standard multipart image-edit fields including model, prompt, and image upload. The bridge should support this as the first reference transport.
 
+Add an optional provider field `image_edit_endpoint`. Its default is `<api_endpoint>/images/edits`; unlike `image_endpoint`, it is never derived by rewriting an explicitly configured custom generation endpoint.
+
 The reference request must:
 
-- use the provider's validated endpoint/base URL;
+- use the provider's validated `image_edit_endpoint` / API base URL;
 - reuse the provider credential/header policy;
 - send exactly one active-character reference image in this feature;
 - enforce the provider/reference upload byte ceiling before the request;
@@ -322,7 +329,7 @@ This feature must not reintroduce prompt/caption output alongside the final imag
 At startup or provider-catalog load time, capability metadata should be validated conservatively:
 
 - every `image_model_capabilities` key should correspond to a declared `image_models` entry;
-- Auto model targets must point to declared models;
+- Auto model targets must use fully-qualified `provider::model` selections and point to declared models;
 - Auto reference target must advertise `reference` or `both`;
 - Auto text target must advertise `text` or `both`;
 - invalid optional metadata should not make unrelated non-image Story/Utility providers unusable, but the affected image route must fail closed with an actionable configuration error.

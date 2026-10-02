@@ -706,18 +706,39 @@ normal text turn.
 
 ### Images
 
-`/imagine` stays disabled until you explicitly configure an image provider with
-an endpoint, model, and output size. The command always opens a session-scoped
-panel: **Current Scene** builds a bounded visual prompt from the latest committed
-assistant turn plus structured scene state using the session Utility-model route,
-while **Custom Prompt** asks for a 1–4,000 character prompt after you select it.
-**Options** stores an image-model override plus Square (`1024x1024`), Landscape
-(`1536x1024`), or Portrait (`1024x1536`) output size for the active session; both
-Current Scene and Custom Prompt use the same setting, and Reset defaults returns
-to the provider's first configured image model and `1024x1024`. Typing
-`/imagine <text>` no longer sends that text directly to an image provider; it
-opens the same panel. Image generation never appends or rewrites roleplay
-transcript rows. Chat-only models are never silently reused for image generation.
+`/imagine` stays disabled until you explicitly configure an image provider.
+The command always opens a session-scoped panel: **Current Scene** builds a
+bounded visual prompt from the latest committed assistant turn plus structured
+scene state using the session Utility-model route, while **Custom Prompt** asks
+for a bounded one-off prompt after you select it.
+
+When the provider catalog defines valid `image_auto.text_model` and
+`image_auto.reference_model` targets, **Auto** becomes the session default.
+If the active character has a usable native SillyTavern PNG card, Auto reads that
+PNG in memory and sends it as the single visual-identity reference to the
+configured reference-capable model. If no usable character image is available,
+Auto uses only the configured text model. Switching characters changes the
+reference on the next generation. The bridge does not create a persistent copy of
+the portrait.
+
+A manually selected image model always overrides Auto: text-only models stay
+text-only even when a character portrait exists, while a manually selected
+reference model requires a usable active character PNG. A provider failure never
+silently triggers a second paid request on another model.
+
+**Options** also stores Square (`1024x1024`), Landscape (`1536x1024`), or
+Portrait (`1024x1536`) as the session output-size preference. Text routes use
+the existing size setting; a reference/edit model may show provider-controlled
+Auto sizing when it cannot honor the selected exact preset. Reset returns to Auto
+when both Auto targets are valid, otherwise to the provider's first concrete
+image model, plus `1024x1024`.
+
+Typing `/imagine <text>` does not send that text directly to an image provider;
+it opens the same panel. Image generation never appends or rewrites roleplay
+transcript rows, and Current Scene never advances the story. Successful Telegram
+delivery remains image-only: source prompts and provider-revised prompts are not
+added as captions. Chat-only models are never silently reused for image
+generation.
 
 Telegram photos with captions are queued for vision analysis when the active
 model supports vision. If it doesn't, the bridge fails closed — no changes to

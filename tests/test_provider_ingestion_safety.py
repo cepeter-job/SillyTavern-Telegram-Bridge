@@ -16,8 +16,11 @@ from concurrent.futures import ThreadPoolExecutor
 import pytest
 
 from bridge import callback_dispatch, callbacks, document_extraction, image_generation, native_imports, world_callbacks
+from bridge.image_reference import ImageReference
+from bridge.image_routing import ImageRoute
 from bridge.limits import IMAGE_MAX_BYTES
 from bridge.metadata import get_meta, set_meta
+from bridge.network_security import EndpointPolicyError
 from bridge.panel_bindings import bind_panel_session
 from bridge.request_types import RequestContext
 from bridge.sqlite_store import db_connect, write_transaction
@@ -112,6 +115,106 @@ def test_decoded_image_limit_remains_independent(tmp_path, monkeypatch):
     monkeypatch.setattr(image_generation, "strict_urlopen", lambda *a, **k: response)
     with pytest.raises(ValueError, match=r"Generated image.*limit"):
         image_generation.generate_image("image::draw", "a moon", app_settings=settings)
+
+
+def _reference_route(*, api_key_env: str = "IMAGE_KEY", endpoint: str = "https://images.example/v1"):
+    return ImageRoute(
+        selection="image::step-image-edit-2",
+        provider_id="image",
+        model="step-image-edit-2",
+        transport="reference",
+        edit_route="openai",
+        spec={
+            "api_endpoint": endpoint,
+            "api_key_env": api_key_env,
+            "image_enabled": True,
+            "image_models": ["step-image-edit-2"],
+        },
+    )
+
+
+def test_edit_missing_explicit_key_never_uses_default(tmp_path, monkeypatch):
+    settings = image_settings(tmp_path, {"LLM_API_KEY": "text-secret"})
+    calls = []
+    monkeypatch.setattr(image_generation, "strict_urlopen", lambda *a, **k: calls.append(a))
+    with pytest.raises(ValueError, match=r"credential is missing.*IMAGE_KEY"):
+        image_generation.edit_image(
+            _reference_route(),
+            "portrait",
+            ImageReference(b"PNG", "image/png", "Mira.png"),
+            app_settings=settings,
+        )
+    assert calls == []
+
+
+def test_edit_endpoint_host_is_subject_to_provider_allowlist(tmp_path, monkeypatch):
+    settings = image_settings(tmp_path, {"IMAGE_KEY": "image-secret"})
+    calls = []
+    monkeypatch.setattr(image_generation, "strict_urlopen", lambda *a, **k: calls.append(a))
+    route = _reference_route(endpoint="https://untrusted.example/v1")
+    with pytest.raises(EndpointPolicyError, match="explicitly listed"):
+        image_generation.edit_image(
+            route,
+            "portrait",
+            ImageReference(b"PNG", "image/png", "Mira.png"),
+            app_settings=settings,
+        )
+    assert calls == []
+
+
+def test_edit_oversized_reference_fails_before_network(tmp_path, monkeypatch):
+    settings = image_settings(tmp_path, {"IMAGE_KEY": "image-secret"})
+    calls = []
+    monkeypatch.setattr(image_generation, "strict_urlopen", lambda *a, **k: calls.append(a))
+    with pytest.raises(ValueError, match=r"reference image.*limit"):
+        image_generation.edit_image(
+            _reference_route(),
+            "portrait",
+            ImageReference(b"x" * (IMAGE_MAX_BYTES + 1), "image/png", "Mira.png"),
+            app_settings=settings,
+        )
+    assert calls == []
+
+
+def test_edit_json_response_over_limit_is_rejected_before_decode(tmp_path, monkeypatch):
+    settings = image_settings(tmp_path, {"IMAGE_KEY": "image-secret"})
+    limit = 4 * ((IMAGE_MAX_BYTES + 2) // 3) + 65536
+    response = RecordingResponse(b" " * (limit + 2))
+    monkeypatch.setattr(image_generation, "strict_urlopen", lambda *a, **k: response)
+    with pytest.raises(ValueError, match=r"Image provider response.*limit"):
+        image_generation.edit_image(
+            _reference_route(),
+            "portrait",
+            ImageReference(b"PNG", "image/png", "Mira.png"),
+            app_settings=settings,
+        )
+    assert response.read_sizes == [limit + 1]
+
+
+def test_edit_decoded_output_limit_remains_independent(tmp_path, monkeypatch):
+    settings = image_settings(tmp_path, {"IMAGE_KEY": "image-secret"})
+    response = RecordingResponse(
+        json.dumps({"data": [{"b64_json": base64.b64encode(b"a" * (IMAGE_MAX_BYTES + 1)).decode()}]}).encode()
+    )
+    monkeypatch.setattr(image_generation, "strict_urlopen", lambda *a, **k: response)
+    with pytest.raises(ValueError, match=r"Generated image.*limit"):
+        image_generation.edit_image(
+            _reference_route(),
+            "portrait",
+            ImageReference(b"PNG", "image/png", "Mira.png"),
+            app_settings=settings,
+        )
+
+
+def test_edit_errors_do_not_expose_credentials_or_reference_bytes(tmp_path):
+    settings = image_settings(tmp_path, {"IMAGE_KEY": "super-secret"})
+    route = _reference_route(endpoint="https://untrusted.example/v1")
+    reference = ImageReference(b"sensitive-reference", "image/png", "Mira.png")
+    with pytest.raises(EndpointPolicyError) as caught:
+        image_generation.edit_image(route, "portrait", reference, app_settings=settings)
+    message = str(caught.value)
+    assert "super-secret" not in message
+    assert "sensitive-reference" not in message
 
 
 def test_unterminated_markup_has_bounded_processing(tmp_path):

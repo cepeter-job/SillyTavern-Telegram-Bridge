@@ -16,16 +16,19 @@ from bridge.image_generation import (
     IMAGE_PROMPT_MAX_CHARS,
     handle_imagine_scene,
     image_prompt_max_chars,
-    reset_session_image_settings,
-    session_image_settings,
-    set_session_image_model,
-    set_session_image_size,
+    imagine_prompt_input_max_chars,
 )
 from bridge.image_panels import (
     send_imagine_menu,
     send_imagine_model_menu,
     send_imagine_options_menu,
     send_imagine_size_menu,
+)
+from bridge.image_routing import (
+    reset_session_image_settings,
+    session_image_settings,
+    set_session_image_model,
+    set_session_image_size,
 )
 from bridge.memory_backend import memory_mode
 from bridge.memory_curator import curate_memory_now, send_curated_memory_menu
@@ -144,8 +147,9 @@ def _imagine_close(db, token, callback, answer_callback, chat_id):
     return True
 
 
-def _imagine_custom(db, token, callback, answer_callback, chat_id, session_id, request_context):
+def _imagine_custom(db, token, callback, answer_callback, chat_id, session, request_context):
     answer_callback(token, str(callback.get("id", "")), "Send prompt")
+    session_id = str(session["session_id"])
     prompt_max_chars = IMAGE_PROMPT_MAX_CHARS
     try:
         selection, _size = session_image_settings(
@@ -154,9 +158,16 @@ def _imagine_custom(db, token, callback, answer_callback, chat_id, session_id, r
             session_id,
             app_settings=request_context.app_settings,
         )
-        prompt_max_chars = image_prompt_max_chars(selection, app_settings=request_context.app_settings)
+        prompt_max_chars = imagine_prompt_input_max_chars(
+            selection,
+            str(session.get("character_file") or ""),
+            app_settings=request_context.app_settings,
+        )
     except ValueError:
-        pass
+        try:
+            prompt_max_chars = image_prompt_max_chars(selection, app_settings=request_context.app_settings)
+        except (ValueError, UnboundLocalError):
+            pass
     start_text_action_input(
         db,
         token,
@@ -178,7 +189,6 @@ def _imagine_scene(db, token, callback, answer_callback, chat_id, session, provi
             token,
             chat_id,
             session,
-            card_fields_from_file(session["character_file"], app_settings=request_context.app_settings),
             provider_port=provider_port,
             app_settings=request_context.app_settings,
         )
@@ -339,7 +349,7 @@ def _handle_imagine(
     action = data.split(":", 1)[1]
     exact = {
         "close": lambda: _imagine_close(db, token, callback, answer_callback, chat_id),
-        "custom": lambda: _imagine_custom(db, token, callback, answer_callback, chat_id, session_id, request_context),
+        "custom": lambda: _imagine_custom(db, token, callback, answer_callback, chat_id, session, request_context),
         "scene": lambda: _imagine_scene(
             db, token, callback, answer_callback, chat_id, session, provider_port, request_context
         ),

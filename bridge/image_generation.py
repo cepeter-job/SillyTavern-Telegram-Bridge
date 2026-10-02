@@ -11,10 +11,32 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
+from bridge.card_content import card_fields_from_file, safe_character_path
 from bridge.generation_settings import get_generation_settings
+from bridge.image_reference import ImageReference, load_character_reference
+from bridge.image_routing import (
+    IMAGE_DEFAULT_SIZE,
+    IMAGE_MODEL_PROMPT_MAX_CHARS,
+    IMAGE_PROMPT_MAX_CHARS,
+    ImageRoute,
+    image_provider_specs,
+    resolve_image_route,
+)
+from bridge.image_routing import (
+    reset_session_image_settings as reset_session_image_settings,
+)
+from bridge.image_routing import (
+    session_image_settings as session_image_settings,
+)
+from bridge.image_routing import (
+    set_session_image_model as set_session_image_model,
+)
+from bridge.image_routing import (
+    set_session_image_size as set_session_image_size,
+)
 from bridge.limits import IMAGE_MAX_BYTES
-from bridge.metadata import get_meta, set_meta
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.network_security import strict_urlopen, validate_provider_endpoint
 from bridge.provider_port import ProviderPort
@@ -23,112 +45,25 @@ from bridge.settings import AppSettings
 from bridge.telegram import send_text, telegram_request
 from bridge.topic_scope import parse_topic_scope
 
-IMAGE_PROMPT_MAX_CHARS = 4000
-IMAGE_MODEL_PROMPT_MAX_CHARS = {
-    "z-image-turbo": 1200,
-}
-IMAGE_DEFAULT_SIZE = "1024x1024"
 IMAGE_RESPONSE_FORMAT = "b64_json"
 IMAGE_JSON_MAX_BYTES = 4 * ((IMAGE_MAX_BYTES + 2) // 3) + 65536
 IMAGE_CONTENT_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
-IMAGE_SIZE_PRESETS = (
-    ("Square", "1024x1024"),
-    ("Landscape", "1536x1024"),
-    ("Portrait", "1024x1536"),
+_REFERENCE_PROMPT_PREFIX = (
+    "Use the supplied image as the primary character's identity reference. "
+    "Preserve facial identity, hairstyle, distinctive physical traits, apparent age, and established design. "
+    "Follow the scene for pose, expression, clothing, environment, lighting, framing, and camera angle; "
+    "do not merely recreate the portrait. Scene: "
 )
 
 
-def _image_model_key(chat_id: str, session_id: str) -> str:
-    return f"image_model:{chat_id}:{session_id}"
-
-
-def _image_size_key(chat_id: str, session_id: str) -> str:
-    return f"image_size:{chat_id}:{session_id}"
-
-
-def _image_provider_specs(*, app_settings: AppSettings) -> list[tuple[str, dict, str]]:
-    import yaml
-
-    if not app_settings.provider_config_file.exists():
-        return []
-    config = yaml.safe_load(app_settings.provider_config_file.read_text(encoding="utf-8")) or {}
-    result = []
-    for provider_id, raw in (config.get("providers") or {}).items():
-        if not isinstance(raw, dict) or not raw.get("image_enabled"):
-            continue
-        models = [str(item) for item in raw.get("image_models") or [] if str(item)]
-        if models:
-            result.append((str(provider_id), raw, models[0]))
-    return result
-
-
-def image_model_options(*, app_settings: AppSettings) -> tuple[tuple[str, str], ...]:
-    options: list[tuple[str, str]] = []
-    for provider_id, spec, _default_model in _image_provider_specs(app_settings=app_settings):
-        provider_name = str(spec.get("name") or provider_id).strip() or provider_id
-        for model in [str(item) for item in spec.get("image_models") or [] if str(item)]:
-            selection = f"{provider_id}::{model}"
-            label = f"{provider_name} · {model}"
-            options.append((selection, label[:64]))
-    return tuple(options)
-
-
-def session_image_settings(
-    db,
-    chat_id: str,
-    session_id: str,
-    *,
-    app_settings: AppSettings,
-) -> tuple[str, str]:
-    configured = {selection for selection, _label in image_model_options(app_settings=app_settings)}
-    requested = get_meta(db, _image_model_key(chat_id, session_id), "").strip()
-    if requested not in configured:
-        requested = ""
-    provider_id, _spec, model = _resolve_image_provider(requested, app_settings=app_settings)
-    selection = f"{provider_id}::{model}"
-
-    allowed_sizes = {size for _label, size in IMAGE_SIZE_PRESETS}
-    size = get_meta(db, _image_size_key(chat_id, session_id), "").strip()
-    if size not in allowed_sizes:
-        size = IMAGE_DEFAULT_SIZE
-    return selection, size
-
-
-def set_session_image_model(
-    db,
-    chat_id: str,
-    session_id: str,
-    selection: str,
-    *,
-    app_settings: AppSettings,
-) -> str:
-    value = str(selection or "").strip()
-    allowed = {item for item, _label in image_model_options(app_settings=app_settings)}
-    if value not in allowed:
-        raise ValueError("Selected image model is no longer available")
-    set_meta(db, _image_model_key(chat_id, session_id), value)
-    return value
-
-
-def set_session_image_size(db, chat_id: str, session_id: str, size: str) -> str:
-    value = str(size or "").strip()
-    allowed = {item for _label, item in IMAGE_SIZE_PRESETS}
-    if value not in allowed:
-        raise ValueError("Unsupported image size preset")
-    set_meta(db, _image_size_key(chat_id, session_id), value)
-    return value
-
-
-def reset_session_image_settings(db, chat_id: str, session_id: str) -> None:
-    set_meta(db, _image_model_key(chat_id, session_id), "")
-    set_meta(db, _image_size_key(chat_id, session_id), "")
-
-
 def _resolve_image_provider(selection: str = "", *, app_settings: AppSettings) -> tuple[str, dict, str]:
+    if str(selection or "").strip() == "auto":
+        route = resolve_image_route("auto", reference_available=False, app_settings=app_settings)
+        return route.provider_id, route.spec, route.model
     requested_provider, requested_model = (
         ([*selection.split("::", 1), ""])[:2] if "::" in selection else ("", selection)
     )
-    for provider_id, spec, default_model in _image_provider_specs(app_settings=app_settings):
+    for provider_id, spec, default_model in image_provider_specs(app_settings=app_settings):
         models = [str(item) for item in spec.get("image_models") or []]
         if requested_provider and provider_id != requested_provider:
             continue
@@ -148,7 +83,6 @@ def _model_prompt_max_chars(model: str) -> int:
 
 
 def image_prompt_max_chars(selection: str = "", *, app_settings: AppSettings) -> int:
-    """Return the bridge prompt ceiling for the selected image model."""
     _provider_id, _spec, model = _resolve_image_provider(selection, app_settings=app_settings)
     return _model_prompt_max_chars(model)
 
@@ -161,6 +95,19 @@ def _image_endpoint(spec: dict, *, app_settings: AppSettings) -> str:
         base += "/images/generations"
     validate_provider_endpoint(base.rsplit("/images/generations", 1)[0], environ=app_settings.environ)
     return base
+
+
+def _image_edit_endpoint(spec: dict, *, app_settings: AppSettings) -> str:
+    explicit = str(spec.get("image_edit_endpoint") or "").strip()
+    if explicit:
+        endpoint = explicit
+    else:
+        base = str(spec.get("api_endpoint") or spec.get("api") or "").rstrip("/")
+        if not base:
+            raise ValueError("Image provider edit endpoint is missing")
+        endpoint = base + "/images/edits"
+    validate_provider_endpoint(endpoint, environ=app_settings.environ)
+    return endpoint
 
 
 def _image_headers(spec: dict, *, app_settings: AppSettings) -> dict[str, str]:
@@ -225,6 +172,76 @@ def _image_bytes_from_response(payload: dict, spec: dict, *, app_settings: AppSe
     with strict_urlopen(image_request, timeout=120, environ=app_settings.environ) as response:
         raw = response.read(IMAGE_MAX_BYTES + 1)
     return raw, str(item.get("revised_prompt") or "")
+
+
+def _multipart_edit_body(
+    route: ImageRoute,
+    prompt: str,
+    reference: ImageReference,
+    size: str,
+) -> tuple[bytes, str]:
+    boundary = f"----BridgeImageEdit{int(time.time() * 1000000)}"
+    fields = [("model", route.model), ("prompt", prompt), ("n", "1")]
+    if route.model.casefold() != "step-image-edit-2" or size == "1024x1024":
+        fields.append(("size", size))
+    chunks: list[bytes] = []
+    for name, value in fields:
+        chunks.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
+    filename = re.sub(r"[^A-Za-z0-9._-]+", "_", reference.filename)[:128] or "reference.png"
+    chunks.append(
+        (
+            f'--{boundary}\r\nContent-Disposition: form-data; name="image"; filename="{filename}"\r\n'
+            f"Content-Type: {reference.mime_type}\r\n\r\n"
+        ).encode()
+        + reference.data
+        + b"\r\n"
+    )
+    chunks.append(f"--{boundary}--\r\n".encode())
+    return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
+
+
+def edit_image(
+    route: ImageRoute,
+    prompt: str,
+    reference: ImageReference,
+    size: str = IMAGE_DEFAULT_SIZE,
+    *,
+    app_settings: AppSettings,
+) -> tuple[bytes, str, str]:
+    prompt = " ".join(str(prompt or "").split())
+    if route.transport != "reference" or route.edit_route not in {None, "openai"}:
+        raise ValueError(f"Image model {route.selection} does not use the supported reference edit route")
+    prompt_max_chars = _model_prompt_max_chars(route.model)
+    if not prompt or len(prompt) > prompt_max_chars:
+        raise ValueError(f"Image prompt for {route.model} must contain 1–{prompt_max_chars:,} characters")
+    if not re.fullmatch(r"(?:256|512|1024|1536)x(?:256|512|1024|1536)", size):
+        raise ValueError("Image size must use WIDTHxHEIGHT with supported dimensions")
+    if not reference.data or len(reference.data) > IMAGE_MAX_BYTES:
+        raise ValueError("Character reference image is empty or exceeds the image upload limit")
+
+    endpoint = _image_edit_endpoint(route.spec, app_settings=app_settings)
+    body, content_type = _multipart_edit_body(route, prompt, reference, size)
+    headers = _image_headers(route.spec, app_settings=app_settings)
+    headers["Content-Type"] = content_type
+    request = urllib.request.Request(  # noqa: S310 -- strict_urlopen validates scheme and host
+        endpoint, data=body, headers=headers, method="POST"
+    )
+    try:
+        with strict_urlopen(request, timeout=180, environ=app_settings.environ) as response:
+            raw_response = response.read(IMAGE_JSON_MAX_BYTES + 1)
+    except urllib.error.HTTPError as exc:
+        if _provider_prompt_too_long(exc):
+            raise ValueError(
+                f"Image prompt for {route.model} is too long for the provider; shorten it and retry"
+            ) from None
+        raise
+    if len(raw_response) > IMAGE_JSON_MAX_BYTES:
+        raise ValueError("Image provider response exceeds the JSON size limit")
+    payload = json.loads(raw_response.decode("utf-8"))
+    raw, revised = _image_bytes_from_response(payload, route.spec, app_settings=app_settings)
+    if not raw or len(raw) > IMAGE_MAX_BYTES:
+        raise ValueError("Generated image is empty or exceeds the Telegram image limit")
+    return raw, revised, route.selection
 
 
 def generate_image(
@@ -377,12 +394,95 @@ def build_scene_image_prompt(
     return prompt[:prompt_max_chars]
 
 
+def _reference_scene_max_chars(route: ImageRoute) -> int:
+    limit = _model_prompt_max_chars(route.model)
+    if route.transport != "reference":
+        return limit
+    available = limit - len(_REFERENCE_PROMPT_PREFIX)
+    if available < 1:
+        raise ValueError(f"Image prompt for {route.model} has no room for scene content")
+    return available
+
+
+def _reference_prompt(scene_prompt: str, *, route: ImageRoute) -> str:
+    scene = " ".join(str(scene_prompt or "").split())
+    limit = _model_prompt_max_chars(route.model)
+    prompt = _REFERENCE_PROMPT_PREFIX + scene
+    if not scene or len(prompt) > limit:
+        raise ValueError(
+            f"Image prompt for {route.model} exceeds the {limit:,}-character limit "
+            "after adding the character identity reference"
+        )
+    return prompt
+
+
+def _visual_card_fields(session: dict[str, str], *, app_settings: AppSettings) -> dict[str, str]:
+    character_file = str(session.get("character_file") or "")
+    fallback = {
+        "name": Path(character_file).stem[:200] or "character",
+        "description": "",
+    }
+    if safe_character_path(character_file, app_settings=app_settings) is None:
+        return fallback
+    try:
+        return card_fields_from_file(character_file, app_settings=app_settings)
+    except (OSError, ValueError, UnicodeError):
+        logging.info("Could not read character-card metadata for image prompting", exc_info=True)
+        return fallback
+
+
+def imagine_prompt_input_max_chars(
+    selection: str,
+    character_file: str,
+    *,
+    app_settings: AppSettings,
+) -> int:
+    reference = load_character_reference(character_file, app_settings=app_settings)
+    route = resolve_image_route(
+        selection,
+        reference_available=reference is not None,
+        app_settings=app_settings,
+    )
+    return _reference_scene_max_chars(route)
+
+
+def _cleanup_image_progress(token: str, chat_id: str, progress_ids: list[int]) -> None:
+    real_chat_id, _thread_id = parse_topic_scope(chat_id)
+    for message_id in progress_ids:
+        try:
+            telegram_request(token, "deleteMessage", {"chat_id": real_chat_id, "message_id": int(message_id)})
+        except Exception:
+            logging.info("Could not delete image-generation progress message %s", message_id, exc_info=True)
+
+
+def _deliver_resolved_image(
+    token: str,
+    chat_id: str,
+    prompt: str,
+    route: ImageRoute,
+    reference: ImageReference | None,
+    size: str,
+    *,
+    app_settings: AppSettings,
+) -> None:
+    progress_ids = send_text(token, chat_id, "🎨 Generating image…")
+    try:
+        if route.transport == "reference":
+            if reference is None:
+                raise ValueError(f"Image model {route.selection} requires a usable character reference")
+            raw, _revised, _used = edit_image(route, prompt, reference, size, app_settings=app_settings)
+        else:
+            raw, _revised, _used = generate_image(route.selection, prompt, size, app_settings=app_settings)
+        _multipart_photo(token, chat_id, raw, "")
+    finally:
+        _cleanup_image_progress(token, chat_id, progress_ids)
+
+
 def handle_imagine_scene(
     db,
     token: str,
     chat_id: str,
     session: dict[str, str],
-    fields: dict[str, str],
     *,
     provider_port: ProviderPort,
     app_settings: AppSettings,
@@ -393,16 +493,58 @@ def handle_imagine_scene(
         str(session["session_id"]),
         app_settings=app_settings,
     )
+    reference = load_character_reference(str(session.get("character_file") or ""), app_settings=app_settings)
+    route = resolve_image_route(
+        selection,
+        reference_available=reference is not None,
+        app_settings=app_settings,
+    )
     prompt = build_scene_image_prompt(
         db,
         chat_id,
         session,
-        fields,
+        _visual_card_fields(session, app_settings=app_settings),
         provider_port=provider_port,
         app_settings=app_settings,
-        max_chars=image_prompt_max_chars(selection, app_settings=app_settings),
+        max_chars=_reference_scene_max_chars(route),
     )
-    handle_imagine_prompt(token, chat_id, prompt, selection=selection, size=size, app_settings=app_settings)
+    if route.transport == "reference":
+        prompt = _reference_prompt(prompt, route=route)
+    _deliver_resolved_image(token, chat_id, prompt, route, reference, size, app_settings=app_settings)
+
+
+def handle_imagine_custom_prompt(
+    db,
+    token: str,
+    chat_id: str,
+    session: dict[str, str],
+    prompt: str,
+    *,
+    app_settings: AppSettings,
+) -> None:
+    selection, size = session_image_settings(
+        db,
+        chat_id,
+        str(session["session_id"]),
+        app_settings=app_settings,
+    )
+    reference = load_character_reference(str(session.get("character_file") or ""), app_settings=app_settings)
+    route = resolve_image_route(
+        selection,
+        reference_available=reference is not None,
+        app_settings=app_settings,
+    )
+    normalized = " ".join(str(prompt or "").split())
+    max_input = _reference_scene_max_chars(route)
+    if not normalized or len(normalized) > max_input:
+        model_limit = _model_prompt_max_chars(route.model)
+        raise ValueError(
+            f"Image prompt for {route.model} must fit the {model_limit:,}-character model limit; "
+            f"with the character identity reference, scene text must contain 1–{max_input:,} characters"
+        )
+    if route.transport == "reference":
+        normalized = _reference_prompt(normalized, route=route)
+    _deliver_resolved_image(token, chat_id, normalized, route, reference, size, app_settings=app_settings)
 
 
 def handle_imagine_prompt(
@@ -420,12 +562,8 @@ def handle_imagine_prompt(
     if not prompt or len(prompt) > prompt_max_chars:
         raise ValueError(f"Image prompt for {model} must contain 1–{prompt_max_chars:,} characters")
     progress_ids = send_text(token, chat_id, "🎨 Generating image…")
-    raw, _revised, _used = generate_image(selection, prompt, size, app_settings=app_settings)
-    _multipart_photo(token, chat_id, raw, "")
-
-    real_chat_id, _thread_id = parse_topic_scope(chat_id)
-    for message_id in progress_ids:
-        try:
-            telegram_request(token, "deleteMessage", {"chat_id": real_chat_id, "message_id": int(message_id)})
-        except Exception:
-            logging.info("Could not delete image-generation progress message %s", message_id, exc_info=True)
+    try:
+        raw, _revised, _used = generate_image(selection, prompt, size, app_settings=app_settings)
+        _multipart_photo(token, chat_id, raw, "")
+    finally:
+        _cleanup_image_progress(token, chat_id, progress_ids)

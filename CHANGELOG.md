@@ -4,7 +4,24 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [0.2.058] - 2026-10-02
 
+### Added
+
+- Add capability-aware `/imagine` Auto routing. With valid catalog-level text
+  and reference targets, the bridge uses the active native SillyTavern character
+  PNG as a single in-memory identity reference for reference-capable image models
+  and falls back to the configured text target when no usable reference exists.
+- Add bounded OpenAI-compatible `/images/edits` transport with explicit
+  `image_edit_endpoint`, per-model `image_model_capabilities`, and manual model
+  selection that always overrides Auto.
+
 ### Changed
+
+- Treat image output size as a preference for reference/edit models that cannot
+  honor an exact bridge preset, while preserving existing text-to-image sizing.
+- Remove the temporary image-generation progress message on both success and
+  failure without masking a successful image delivery if progress cleanup fails.
+- Keep final Telegram `/imagine` delivery image-only and avoid a second paid
+  generation request after a provider failure.
 
 - Deliver `/imagine` results as image-only Telegram photos, without echoing the
   source prompt, selected model, or provider-revised prompt in the photo caption.

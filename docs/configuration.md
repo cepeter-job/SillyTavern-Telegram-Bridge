@@ -392,8 +392,25 @@ configuration error before any network request or credential attachment.
 | `extra_headers` | `{}` | Additional HTTP headers merged into provider requests. Do not put secrets here if the YAML might be shared. |
 | `anthropic_version` | `2023-06-01` | Anthropic `anthropic-version` header for `anthropic_messages`. |
 | `image_enabled` | false | Opt this provider into `/imagine`. |
-| `image_endpoint` | `<api_endpoint>/images/generations` | Explicit OpenAI-compatible Images endpoint override. |
-| `image_models` | empty | Image model IDs; first item is the provider default for image selection. |
+| `image_endpoint` | `<api_endpoint>/images/generations` | Explicit OpenAI-compatible text-to-image endpoint override. |
+| `image_edit_endpoint` | `<api_endpoint>/images/edits` | OpenAI-compatible multipart reference/edit endpoint. It is derived from `api_endpoint`, never by rewriting a custom `image_endpoint`. |
+| `image_models` | empty | Image model IDs; first item remains the legacy/default concrete selection when Auto is not configured. |
+| `image_model_capabilities` | empty | Optional per-model map. `mode` is `text`, `reference`, or `both`; reference-capable entries may set `edit_route: openai`. |
+| `edit_route` | `openai` | Nested reference-model capability field selecting the supported image-edit transport. |
+| `image_auto` | absent | Catalog-level map with fully-qualified `text_model` and `reference_model` selections used by the session Auto option. |
+
+`image_auto` is catalog-level rather than provider-level so duplicate model IDs
+across providers stay unambiguous. Existing catalogs with only `image_models`
+remain valid and keep their first concrete image model as the default. When both
+Auto targets are valid, Reset/default state selects Auto: a usable active native
+character PNG routes to the configured reference model; otherwise the configured
+text model is used. Manual model selection always overrides Auto.
+
+Reference capability metadata is optional. Models without
+`image_model_capabilities` are treated as text-only. A reference target must be
+declared by its provider and advertise `mode: reference` or `mode: both`.
+Reference image bytes are read from the active native SillyTavern character PNG
+at generation time and are not copied into bridge-owned persistent storage.
 
 `config/providers.example.yaml` contains normal Chat Completions, Anthropic,
 native OpenAI Codex OAuth, OpenCode Muse, and image-provider examples. Only

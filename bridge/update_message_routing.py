@@ -170,11 +170,14 @@ def route_message_update(
 
     if sender not in permitted:
         logging.warning("Rejected Telegram user %s", sender)
-        services.telegram.send_text(
-            token,
-            chat_id,
-            "This bot is private.",
-        )
+        try:
+            services.telegram.send_text(
+                token,
+                chat_id,
+                "This bot is private.",
+            )
+        except Exception:
+            logging.info("Could not notify rejected Telegram user", exc_info=True)
         return True
 
     conversational_media = bool(voice or photos or (document and conversational_document(document)))

@@ -319,7 +319,7 @@ class MemoryDiagnostics:
         traced_current: int | None = None
         traced_peak: int | None = None
         top_sites: list[dict[str, object]] = []
-        if tracemalloc.is_tracing():
+        if self._owns_tracemalloc and tracemalloc.is_tracing():
             traced_current, traced_peak = tracemalloc.get_traced_memory()
             for statistic in tracemalloc.take_snapshot().statistics("lineno")[:30]:
                 frame = statistic.traceback[0]

@@ -95,6 +95,7 @@ def is_session_scoped_panel_callback(data: str) -> bool:
             "enum:memoryscope:",
             "setup:",
             "novelmode:",
+            "lnturnretry:",
             "enum:preset",
             "enum:rag",
             "enum:stt",

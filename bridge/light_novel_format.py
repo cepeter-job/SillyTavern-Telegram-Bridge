@@ -50,6 +50,51 @@ def _unfence(source: str) -> str:
     return fenced.group(1).strip() if fenced else text
 
 
+def _json_response_shape(value: object) -> str:
+    if isinstance(value, dict):
+        return "json_object"
+    if isinstance(value, list):
+        return "json_array"
+    if isinstance(value, str):
+        return "json_string"
+    return "json_scalar"
+
+
+def light_novel_response_shape(source: str) -> str:
+    """Classify response structure without retaining or logging its content."""
+    text = str(source or "").strip()
+    if not text:
+        return "empty"
+    if len(text) > MAX_RESPONSE_CHARS:
+        return "oversized"
+    fenced = re.fullmatch(r"```([A-Za-z0-9_-]*)\s*([\s\S]*?)\s*```", text)
+    if fenced is not None:
+        try:
+            return "fenced_" + _json_response_shape(json.loads(fenced.group(2).strip()))
+        except (ValueError, TypeError):
+            return "fenced_non_json"
+    try:
+        return _json_response_shape(json.loads(text))
+    except (ValueError, TypeError):
+        if text.startswith("{"):
+            return "malformed_json_object"
+        if text.startswith("["):
+            return "malformed_json_array"
+        if text.startswith("```"):
+            return "malformed_fence"
+        return "prose"
+
+
+def _single_fenced_json_value(text: str) -> object | None:
+    fenced = re.fullmatch(r"```[A-Za-z0-9_-]+\s*([\s\S]*?)\s*```", text)
+    if fenced is None:
+        return None
+    try:
+        return json.loads(fenced.group(1).strip())
+    except (ValueError, TypeError):
+        return None
+
+
 def _choice_validation_result(value: object, requested_count: int) -> tuple[list[str] | None, str | None, int | None]:
     observed_count = len(value) if isinstance(value, list) else None
     try:
@@ -127,7 +172,9 @@ def parse_story_response_diagnostic(
     try:
         result = json.loads(text)
     except (ValueError, TypeError):
-        result = None
+        result = _single_fenced_json_value(text)
+    if isinstance(result, list) and len(result) == 1 and isinstance(result[0], dict):
+        result = result[0]
     parsed = _parse_story_envelope_diagnostic(result, requested_count)
     if parsed is not None:
         return parsed

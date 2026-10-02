@@ -36,6 +36,22 @@ def test_requested_count_sampled_once_and_preserved(novel_db, count):
     assert seen == [(2, 3, 4)]
 
 
+def test_retry_strategy_override_is_scoped_to_one_choice_reservation(novel_db):
+    from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
+    from bridge.light_novel_service import prepare_turn
+
+    db, session, _settings = novel_db
+    configure_conversation(db, "chat", "story", "lightnovel", "a")
+    mark_started(db, "chat", "story", conversation_state(db, "chat", "story").epoch)
+    retry_session = dict(session)
+    retry_session["_light_novel_strategy_override"] = "b"
+
+    record = prepare_turn(db, "chat", retry_session, "message:-265", "owner", rng=lambda _: 2)
+
+    assert record.strategy == "b"
+    assert conversation_state(db, "chat", "story").strategy == "a"
+
+
 def test_normal_turn_does_not_create_choice_records(novel_db):
     from bridge.light_novel_service import prepare_turn
 
@@ -153,6 +169,28 @@ example
     assert parse_story_response(source, 2) == (expected, None)
 
 
+def test_inline_parser_recovers_single_envelope_wrapped_in_top_level_array():
+    from bridge.light_novel_format import parse_story_response
+
+    source = json.dumps([{"story": "Canonical narrative.", "choices": ["Open the door", "Wait outside"]}])
+    assert parse_story_response(source, 2) == (
+        "Canonical narrative.",
+        ["Open the door", "Wait outside"],
+    )
+
+
+def test_inline_parser_recovers_single_full_response_fence_with_wrong_language_label():
+    from bridge.light_novel_format import parse_story_response
+
+    source = """```javascript
+{"story":"Canonical narrative.","choices":["Open the door","Wait outside"]}
+```"""
+    assert parse_story_response(source, 2) == (
+        "Canonical narrative.",
+        ["Open the door", "Wait outside"],
+    )
+
+
 def test_inline_parser_never_leaks_envelope():
     from bridge.light_novel_format import parse_story_response
 
@@ -197,6 +235,27 @@ def test_mode_a_inline_rejection_logs_reason_and_counts_without_content(novel_db
     assert f"observed_count={wrong_count}" in caplog.text
     assert private_story not in caplog.text
     assert private_choice not in caplog.text
+
+
+def test_mode_a_protocol_rejection_logs_only_shape_and_size(novel_db, caplog):
+    from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
+    from bridge.light_novel_turn import begin_novel_turn
+
+    db, session, _settings = novel_db
+    configure_conversation(db, "chat", "story", "lightnovel", "a")
+    mark_started(db, "chat", "story", conversation_state(db, "chat", "story").epoch)
+    turn = begin_novel_turn(db, "chat", session, "message", 241)
+    private_content = "PRIVATE_MODEL_OUTPUT"
+    source = json.dumps([private_content])
+
+    with caplog.at_level("WARNING"):
+        with pytest.raises(ValueError, match="Story response has no usable narrative"):
+            turn.extract(source)
+
+    assert "Light Novel story protocol rejected" in caplog.text
+    assert "shape=json_array" in caplog.text
+    assert f"chars={len(source)}" in caplog.text
+    assert private_content not in caplog.text
 
 
 def test_mode_a_finalizes_post_render_envelope_without_replacing_original_choices(novel_db):

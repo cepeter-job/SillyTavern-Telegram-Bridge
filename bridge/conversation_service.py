@@ -34,6 +34,8 @@ class ConversationService:
         operation_id: int | None = None,
         *,
         actor_id: str = "",
+        story_model_override: str | None = None,
+        light_novel_strategy_override: str | None = None,
     ) -> None:
         prepared = self.prepare_message(
             db,
@@ -72,6 +74,16 @@ class ConversationService:
         ):
             return
 
+        generation_model = str(story_model_override or "").strip() or prepared.current_model
+        strategy_override = str(light_novel_strategy_override or "").casefold()
+        generation_session = prepared.session
+        if strategy_override in {"a", "b", "c"} or story_model_override:
+            generation_session = dict(prepared.session)
+        if strategy_override in {"a", "b", "c"}:
+            generation_session["_light_novel_strategy_override"] = strategy_override
+        if story_model_override:
+            generation_session["_story_model_override"] = generation_model
+
         self.generate_reply(
             db,
             token,
@@ -79,9 +91,9 @@ class ConversationService:
             prepared.fields,
             chat_id,
             text,
-            prepared.session,
+            generation_session,
             prepared.session_id,
-            prepared.current_model,
+            generation_model,
             prepared.group_turn,
             prepared.group_context,
             telegram_message_id,

@@ -147,6 +147,46 @@ class RetryModelTurnOnlyTests(SettingsTestCase):
             "cline-pass::cline-pass/glm-5.2",
         )
 
+    def test_failed_turn_can_preserve_explicit_per_turn_model(self):
+        now = time.time()
+        self.db.execute(
+            "INSERT INTO sessions("
+            "chat_id,session_id,title,character_file,model_id,persona_id,"
+            "world_file,author_note,system_prompt,response_language,"
+            "created_at,updated_at"
+            ") VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                "chat",
+                "session-override",
+                "Override session",
+                "character.png",
+                "story::model",
+                "",
+                "",
+                "",
+                "",
+                "auto",
+                now,
+                now,
+            ),
+        )
+        self.db.commit()
+
+        _owner_failed_turns.record_failed_turn(
+            self.db,
+            "chat",
+            63,
+            "normal prompt",
+            "utility::model",
+            "protocol failure",
+            "session-override",
+            preserve_model=True,
+        )
+
+        failed = _owner_failed_turns.latest_failed_turn(self.db, "chat")
+        self.assertIsNotNone(failed)
+        self.assertEqual(failed[2], "utility::model")
+
     def test_failed_turn_upsert_refreshes_resolved_session_model(self):
         now = time.time()
         self.db.execute(
@@ -244,7 +284,8 @@ class RetryModelTurnOnlyTests(SettingsTestCase):
             ValueError("Story response has no usable narrative"),
         )
 
-        self.assertIn("empty or malformed Light Novel response", report)
+        self.assertIn("Light Novel response shape", report)
+        self.assertNotIn("empty or malformed", report)
 
     def test_retry_failure_report_survives_malformed_legacy_identifiers(self):
         failed = ("not-an-id", "prompt", "bad model name", "not-a-count", "old failure", "session")

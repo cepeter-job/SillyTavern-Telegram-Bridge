@@ -141,6 +141,32 @@ def test_handled_command_never_generates():
     assert "services" not in events[1][2]
 
 
+def test_retry_generation_overrides_story_model_and_strategy_without_mutating_session():
+    service, _services, events, prepared = make_service()
+    service.process_message(
+        "db",
+        "token",
+        "key",
+        "queue-default",
+        {},
+        "chat",
+        "hello",
+        123,
+        queued_session_id="queued-session",
+        operation_id=456,
+        actor_id="actor",
+        story_model_override="utility::model",
+        light_novel_strategy_override="b",
+    )
+
+    args, _kwargs = events[2][1:]
+    assert args[8] == "utility::model"
+    assert args[6]["_light_novel_strategy_override"] == "b"
+    assert args[6]["_story_model_override"] == "utility::model"
+    assert "_light_novel_strategy_override" not in prepared.session
+    assert "_story_model_override" not in prepared.session
+
+
 def test_pending_input_or_recovery_short_circuits_both_ports():
     service, services, events, _ = make_service(prepare_handled=True)
     run_message(service, services)

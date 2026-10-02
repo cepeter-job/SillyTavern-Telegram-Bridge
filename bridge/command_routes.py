@@ -23,19 +23,69 @@ from bridge.provider_errors import ProviderRequestError
 from bridge.provider_panels import send_model_target_menu
 from bridge.rag_service import RagService
 from bridge.regeneration import regenerate_last
+from bridge.request_types import RequestContext
 from bridge.response_delivery import send_reply
 from bridge.session_core import list_sessions
 from bridge.session_naming import start_session_name_input
 from bridge.status_panels import status_text
 from bridge.swipe_panels import send_swipe_menu
 from bridge.system_prompt_panels import send_system_prompt_menu
-from bridge.telegram import send_text
+from bridge.telegram import send_panel_request, send_text
 from bridge.text_action_input import handle_inline_text_action, start_text_action_input
 from bridge.transcript_repository import committed_assistant_for_message
 from bridge.world_panels import send_world_menu
 
 if TYPE_CHECKING:
     pass
+
+
+_LIGHT_NOVEL_PROTOCOL_ERRORS = {
+    "Story response has no usable narrative",
+    "Malformed story envelope; no complete narrative to recover",
+}
+
+
+def _repeated_light_novel_protocol_failure(failed: tuple) -> bool:
+    try:
+        attempts = int(failed[3] or 0)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return attempts >= 2 and str(failed[4] or "") in _LIGHT_NOVEL_PROTOCOL_ERRORS
+
+
+def _send_retry_recovery_panel(token: str, chat_id: str, failed: tuple, *, request_context) -> None:
+    message_id = str(int(failed[0]))
+    attempts = max(2, int(failed[3] or 0))
+    text = (
+        "Light Novel retry recovery\n\n"
+        f"Turn: Telegram message {message_id}\n"
+        f"Protocol failures: {attempts}\n\n"
+        "The provider returned content, but Strategy A could not safely recover its response shape. "
+        "Choose how to retry this turn."
+    )
+    rows = [
+        [{"text": "↻ Same model · Strategy A", "callback_data": f"lnturnretry:{message_id}:same"}],
+        [{"text": "⟳ Current Story model · A", "callback_data": f"lnturnretry:{message_id}:current"}],
+        [{"text": "🛠 Utility model · A", "callback_data": f"lnturnretry:{message_id}:utility"}],
+        [
+            {"text": "B · Utility choices", "callback_data": f"lnturnretry:{message_id}:b"},
+            {"text": "C · Story choices", "callback_data": f"lnturnretry:{message_id}:c"},
+        ],
+        [{"text": "Close", "callback_data": f"lnturnretry:{message_id}:close"}],
+    ]
+    failed_session_id = str(failed[5] or "") or request_context.session_id
+    panel_context = RequestContext(
+        request_context.db,
+        failed_session_id,
+        request_context.actor_id,
+        app_settings=request_context.app_settings,
+    )
+    send_panel_request(
+        token,
+        "sendMessage",
+        {"chat_id": chat_id, "text": text, "reply_markup": {"inline_keyboard": rows}},
+        request_context=panel_context,
+    )
 
 
 def _retry_failure_report(failed: tuple, error: BaseException) -> str:
@@ -54,19 +104,22 @@ def _retry_failure_report(failed: tuple, error: BaseException) -> str:
         reason = str(error)
     elif isinstance(error, TimeoutError):
         reason = "The retry timed out before producing a usable response."
-    elif isinstance(error, ValueError) and str(error) == "Story response has no usable narrative":
-        reason = "The model returned an empty or malformed Light Novel response."
-    elif isinstance(error, ValueError) and str(error) == "Malformed story envelope; no complete narrative to recover":
-        reason = "The model returned malformed Light Novel JSON without a complete story."
+    elif isinstance(error, ValueError) and str(error) in _LIGHT_NOVEL_PROTOCOL_ERRORS:
+        reason = "The model returned a Light Novel response shape the bridge could not safely recover."
     else:
         reason = "The character backend failed before producing a usable response."
+    next_step = (
+        "Run /retry to choose Same model, Current Story model, Utility model, Strategy B, or Strategy C."
+        if isinstance(error, ValueError) and str(error) in _LIGHT_NOVEL_PROTOCOL_ERRORS and attempt >= 2
+        else "Try /retry again later, or open /providers to inspect health and choose another model."
+    )
     return (
         f"Retry attempt {attempt} failed.\n"
         f"Turn: Telegram message {turn_id}\n"
         f"Model: {model}\n"
         f"Reason: {reason}\n"
         "Status: The turn remains queued for /retry.\n"
-        "Next: Try /retry again later, or open /providers to inspect health and choose another model."
+        f"Next: {next_step}"
     )
 
 
@@ -183,6 +236,9 @@ def _handle_basic(
                 send_text(token, chat_id, "Retry delivery failed; the turn remains queued for /retry.")
             return True
         failed_session_id = str(failed[5] or "") or session_id
+        if _repeated_light_novel_protocol_failure(failed):
+            _send_retry_recovery_panel(token, chat_id, failed, request_context=request_context)
+            return True
         try:
             conversation_service.process_message(
                 db,

@@ -357,11 +357,11 @@ try {
   await until(()=>document.getElementById('page-title').textContent==='Home'&&document.querySelector('main .story-card')?.textContent.includes('Default session'),'Opening active session still returns Home');
   opened=await app.namespace.api('/sessions');assert.equal(opened.session.title,'Default session');
   const info=await app.namespace.api('/characters/Alice.png');
-  let job=await app.namespace.api('/characters/Alice.png/optimize',{method:'POST',body:app.namespace.sessionBody({digest:info.digest,suggestion:'Clarify motivation.',operation_id:'dom-optimizer'})});
-  for(let i=0;i<50&&['queued','running'].includes(job.state);i++) {
-    await new Promise(r=>setTimeout(r,50));job=await app.namespace.api('/jobs/'+job.id);
-  }
-  assert.equal(job.state,'succeeded',JSON.stringify(job));
+  const optimization=await app.namespace.runJob(
+    '/characters/Alice.png/optimize',
+    app.namespace.sessionBody({digest:info.digest,suggestion:'Clarify motivation.'}),
+  );
+  assert.equal(optimization.kind,'optimize');
   await app.namespace.navigate('system');
   const resume=[...document.querySelectorAll('main button')].find(n=>n.textContent==='Review saved preview');
   assert.ok(resume,'Completed optimization must be resumable without another model call');

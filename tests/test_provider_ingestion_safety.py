@@ -246,7 +246,6 @@ def test_character_upload_rejects_png_without_chara_metadata(interaction, monkey
     assert get_meta(db, "character_upload:chat") == ""
 
 
-
 def test_world_upload_requires_initiating_actor_and_session(interaction):
     db, settings, services, session, raw = interaction
     open_world_upload(db, settings, services, session)

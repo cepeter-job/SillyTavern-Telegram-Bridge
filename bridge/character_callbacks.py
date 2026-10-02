@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 
 from bridge.callback_tokens import resolve_dynamic_callback_token
 from bridge.callbacks import close_panel_message, discard_panel_binding
@@ -23,6 +24,7 @@ from bridge.conversation_setup import begin_setup
 from bridge.conversation_setup_panels import send_setup_panel
 from bridge.group_service import GroupService
 from bridge.group_setup import apply_group_setup_character
+from bridge.limits import PENDING_SETTINGS_TTL_SECONDS
 from bridge.metadata import get_meta, set_meta
 from bridge.native_imports import (
     character_card_digest,
@@ -94,8 +96,19 @@ def _handle_delete_menu(token, callback, answer_callback, chat_id, message, sess
     return True
 
 
-def _handle_upload_menu(token, callback, answer_callback, chat_id, message, *, request_context) -> bool:
+def _handle_upload_menu(db, token, callback, answer_callback, chat_id, message, *, request_context) -> bool:
     """Handle upload menu callbacks."""
+    set_meta(
+        db,
+        f"character_upload:{chat_id}:{request_context.actor_id}",
+        json.dumps(
+            {
+                "session_id": request_context.session_id,
+                "actor_id": request_context.actor_id,
+                "expires_at": time.time() + PENDING_SETTINGS_TTL_SECONDS,
+            }
+        ),
+    )
     answer_callback(token, str(callback.get("id", "")), "Upload")
     send_panel_request(
         token,
@@ -379,6 +392,7 @@ def _handle_selection(
         return True
     if value == "cancel":
         answer_callback(token, str(callback.get("id", "")), "Cancelled")
+        set_meta(db, f"character_upload:{chat_id}:{request_context.actor_id}", "")
         if group_service.setup_state(db, chat_id, session_id):
             set_meta(db, f"group_setup:{chat_id}", "")
         if get_meta(db, f"character_session_input:{chat_id}", ""):
@@ -446,7 +460,7 @@ def _bind_routes(
                 token, callback, answer_callback, chat_id, message, session, request_context=request_context
             ),
             "character:upload": lambda: _handle_upload_menu(
-                token, callback, answer_callback, chat_id, message, request_context=request_context
+                db, token, callback, answer_callback, chat_id, message, request_context=request_context
             ),
             "character:restore": lambda: _handle_restore_menu(
                 token, callback, answer_callback, chat_id, message, request_context=request_context

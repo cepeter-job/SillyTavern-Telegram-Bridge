@@ -206,6 +206,47 @@ def upload_document(db, settings, services, session_id, actor, filename):
     )
 
 
+def test_character_upload_rejects_png_without_chara_metadata(interaction, monkeypatch):
+    db, settings, services, session, _raw = interaction
+    set_meta(
+        db,
+        "character_upload:chat:owner",
+        json.dumps(
+            {
+                "session_id": session["session_id"],
+                "actor_id": "owner",
+                "expires_at": time.time() + 900,
+            }
+        ),
+    )
+    monkeypatch.setattr(native_imports, "download_telegram_file", lambda *_args, **_kwargs: b"not-a-card")
+    delivered = []
+    image_calls = []
+    monkeypatch.setattr(native_imports, "send_text", lambda _token, _chat, text: delivered.append(text) or [])
+
+    native_imports.import_telegram_document(
+        db,
+        "token",
+        "chat",
+        {"file_name": "invalid.png", "file_id": "synthetic", "file_size": 10},
+        settings.default_model,
+        api_key="",
+        process_image=lambda *args, **kwargs: image_calls.append((args, kwargs)),
+        memory_service=services.memory,
+        persona_service=services.persona,
+        group_director_service=services.group_director,
+        app_settings=settings,
+        rag_service=services.rag,
+        provider_port=services.provider,
+        request_context=RequestContext(db, session["session_id"], "owner", app_settings=settings),
+        character_upload=True,
+    )
+
+    assert image_calls == []
+    assert delivered == ["This PNG is not a valid SillyTavern character card; chara metadata was not found."]
+    assert get_meta(db, "character_upload:chat:owner") == ""
+
+
 def test_world_upload_requires_initiating_actor_and_session(interaction):
     db, settings, services, session, raw = interaction
     open_world_upload(db, settings, services, session)

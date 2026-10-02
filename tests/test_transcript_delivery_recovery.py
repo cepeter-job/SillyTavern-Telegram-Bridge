@@ -277,7 +277,7 @@ def test_transient_claim_reaches_guard_then_business_executes_once(tmp_path, mon
         "voice": (voice_jobs.process_voice_job, (services, {}, "chat", {}, 77, "s1", None, job_id)),
         "edit": (worker_orchestration.process_edit_job, (services, "chat", 77, "edited", None, job_id)),
         "callback": (worker_orchestration.process_callback_job, (services, "chat", {}, job_id)),
-        "document": (document_jobs.process_document_job, (services, "chat", {}, 77, "s1", None, job_id)),
+        "document": (document_jobs.process_document_job, (services, "chat", {}, 77, "s1", None, False, job_id)),
         "choices": (light_novel_jobs.process_light_novel_choices_job, (services, "chat", "nonce", False, job_id)),
     }[kind]
     wrapped = DurableWorkerGuard(lambda path, timeout: sqlite3.connect(path), sleep=lambda _: None).prepare(

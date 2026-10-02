@@ -520,6 +520,7 @@ def resolve_recovered_job_submission(
                 job.telegram_message_id,
                 job.session_id,
                 model_override,
+                bool(payload.get("character_upload")),
             ),
         )
     return None

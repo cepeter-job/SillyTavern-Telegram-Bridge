@@ -78,6 +78,28 @@ def test_version_mismatch_never_claims_update_success(tmp_path):
     assert pending_update_ack_path(settings).exists()
 
 
+def test_revision_mismatch_has_explicit_non_retryable_process_status(tmp_path):
+    from bridge.update_ack import (
+        UpdateAckStatus,
+        arm_pending_update_ack,
+        attempt_pending_update_ack,
+        pending_update_ack_path,
+    )
+
+    settings = _settings(tmp_path)
+    arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=settings)
+    status = attempt_pending_update_ack(
+        "token",
+        app_settings=settings,
+        commit_backend=lambda **_kwargs: "b" * 40,
+        version_backend=lambda **_kwargs: "0.2.033",
+        send_text_backend=lambda *_args: (_ for _ in ()).throw(AssertionError("must not send")),
+    )
+
+    assert status is UpdateAckStatus.REVISION_MISMATCH
+    assert pending_update_ack_path(settings).exists()
+
+
 def test_malformed_pending_ack_never_blocks_startup(tmp_path):
     from bridge.update_ack import acknowledge_pending_update, pending_update_ack_path
 
@@ -272,6 +294,89 @@ def test_completion_notification_is_sent_only_after_successful_poll(tmp_path, mo
     try:
         assert lifecycle.run_bridge_runtime(services, {}) == 0
         assert events == ["poll", "ack", "poll"]
+    finally:
+        lifecycle._SHUTDOWN_EVENT.clear()
+
+
+def test_revision_mismatch_is_attempted_only_once_per_process(tmp_path, monkeypatch):
+    from miniapp_test_support import make_services
+
+    import bridge.runtime_lifecycle as lifecycle
+    from bridge.runtime_health import DeploymentIdentity
+    from bridge.update_ack import UpdateAckStatus, arm_pending_update_ack
+
+    services = make_services(tmp_path)
+    polls = 0
+    attempts = []
+
+    def request(_token, _method, _body):
+        nonlocal polls
+        polls += 1
+        if polls > 3:
+            raise KeyboardInterrupt()
+        return []
+
+    services.telegram = SimpleNamespace(request=request, send_text=lambda *_args: None)
+    services.background = SimpleNamespace(begin_shutdown=lambda: None, register_backlog_dispatcher=lambda _x: None)
+    services.jobs = SimpleNamespace(recover=lambda *args, **kwargs: None)
+    monkeypatch.setattr(lifecycle, "capture_deployment", lambda _config: DeploymentIdentity("0.2.033", "a" * 40))
+    monkeypatch.setattr(lifecycle, "install_bridge_signal_handlers", lambda *args: None)
+    monkeypatch.setattr(lifecycle, "start_live_sync_worker", lambda **kwargs: None)
+    monkeypatch.setattr(lifecycle, "stop_live_sync_worker", lambda **kwargs: True)
+    monkeypatch.setattr(lifecycle, "shutdown_background_executors", lambda **kwargs: True)
+    monkeypatch.setattr(lifecycle, "run_database_maintenance", lambda **kwargs: None)
+    monkeypatch.setattr(
+        lifecycle,
+        "attempt_pending_update_ack",
+        lambda *_args, **_kwargs: attempts.append(polls) or UpdateAckStatus.REVISION_MISMATCH,
+    )
+    arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=services.config)
+    try:
+        assert lifecycle.run_bridge_runtime(services, {}) == 0
+        assert attempts == [1]
+    finally:
+        lifecycle._SHUTDOWN_EVENT.clear()
+
+
+def test_retryable_ack_uses_bounded_exponential_backoff(tmp_path, monkeypatch):
+    from miniapp_test_support import make_services
+
+    import bridge.runtime_lifecycle as lifecycle
+    from bridge.runtime_health import DeploymentIdentity
+    from bridge.update_ack import UpdateAckStatus, arm_pending_update_ack
+
+    services = make_services(tmp_path)
+    polls = 0
+    clock = [0.0]
+    attempts = []
+
+    def request(_token, _method, _body):
+        nonlocal polls
+        polls += 1
+        if polls > 7:
+            raise KeyboardInterrupt()
+        clock[0] += 50.0
+        return []
+
+    services.telegram = SimpleNamespace(request=request, send_text=lambda *_args: None)
+    services.background = SimpleNamespace(begin_shutdown=lambda: None, register_backlog_dispatcher=lambda _x: None)
+    services.jobs = SimpleNamespace(recover=lambda *args, **kwargs: None)
+    monkeypatch.setattr(lifecycle, "capture_deployment", lambda _config: DeploymentIdentity("0.2.033", "a" * 40))
+    monkeypatch.setattr(lifecycle, "install_bridge_signal_handlers", lambda *args: None)
+    monkeypatch.setattr(lifecycle, "start_live_sync_worker", lambda **kwargs: None)
+    monkeypatch.setattr(lifecycle, "stop_live_sync_worker", lambda **kwargs: True)
+    monkeypatch.setattr(lifecycle, "shutdown_background_executors", lambda **kwargs: True)
+    monkeypatch.setattr(lifecycle, "run_database_maintenance", lambda **kwargs: None)
+    monkeypatch.setattr(lifecycle.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(
+        lifecycle,
+        "attempt_pending_update_ack",
+        lambda *_args, **_kwargs: attempts.append(clock[0]) or UpdateAckStatus.RETRYABLE_ERROR,
+    )
+    arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=services.config)
+    try:
+        assert lifecycle.run_bridge_runtime(services, {}) == 0
+        assert attempts == [50.0, 150.0, 300.0]
     finally:
         lifecycle._SHUTDOWN_EVENT.clear()
 

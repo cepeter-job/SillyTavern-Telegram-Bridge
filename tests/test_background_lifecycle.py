@@ -33,12 +33,15 @@ class BackgroundLifecycleTests(SettingsTestCase):
     def setUp(self):
         with _background._BACKGROUND_STATE_LOCK:
             self._background_futures_before = _background._BACKGROUND_FUTURES
+            self._background_labels_before = _background._BACKGROUND_FUTURE_LABELS
             _background._BACKGROUND_FUTURES = set()
+            _background._BACKGROUND_FUTURE_LABELS = {}
         self.addCleanup(self._restore_background_futures)
 
     def _restore_background_futures(self):
         with _background._BACKGROUND_STATE_LOCK:
             _background._BACKGROUND_FUTURES = self._background_futures_before
+            _background._BACKGROUND_FUTURE_LABELS = self._background_labels_before
 
     def test_drain_background_jobs_observes_tracked_futures(self):
         future = concurrent.futures.Future()
@@ -90,6 +93,32 @@ class BackgroundLifecycleTests(SettingsTestCase):
         finally:
             _background._GENERATION_EXECUTOR = old_generation
             _background._UTILITY_EXECUTOR = old_utility
+
+    def test_shutdown_timeout_logs_active_labels_and_does_not_wait_forever(self):
+        old_generation = _background._GENERATION_EXECUTOR
+        old_utility = _background._UTILITY_EXECUTOR
+        old_accepting = _background._BACKGROUND_ACCEPTING
+        generation = Mock()
+        future = concurrent.futures.Future()
+        try:
+            _background._GENERATION_EXECUTOR = generation
+            _background._UTILITY_EXECUTOR = None
+            _background._BACKGROUND_ACCEPTING = True
+            with _background._BACKGROUND_STATE_LOCK:
+                _background._BACKGROUND_FUTURES.add(future)
+                _background._BACKGROUND_FUTURE_LABELS[future] = "generation"
+
+            with self.assertLogs(level="WARNING") as captured:
+                self.assertFalse(_background.shutdown_background_executors(timeout=0.0))
+
+            generation.shutdown.assert_called_once_with(wait=False, cancel_futures=True)
+            self.assertIn("generation", "\n".join(captured.output))
+        finally:
+            if not future.done():
+                future.set_result(None)
+            _background._GENERATION_EXECUTOR = old_generation
+            _background._UTILITY_EXECUTOR = old_utility
+            _background._BACKGROUND_ACCEPTING = old_accepting
 
     def test_shutdown_clears_instantiated_executors_and_is_repeatable(self):
         old_generation = _background._GENERATION_EXECUTOR

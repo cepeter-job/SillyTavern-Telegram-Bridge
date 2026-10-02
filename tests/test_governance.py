@@ -186,11 +186,20 @@ def test_user_configuration_guide_documents_provider_catalog_controls():
         "anthropic_version",
         "image_enabled",
         "image_endpoint",
+        "image_edit_endpoint",
         "image_models",
+        "image_model_capabilities",
+        "image_auto",
+        "edit_route",
     ):
         assert f"`{field}`" in readme, field
     provider_example = (ROOT / "config/providers.example.yaml").read_text()
     assert "image_default_size" not in provider_example
+    assert "image_auto:" in provider_example
+    assert "text_model: nano-gpt::chroma" in provider_example
+    assert "reference_model: nano-gpt::step-image-edit-2" in provider_example
+    assert "image_model_capabilities:" in provider_example
+    assert "edit_route: openai" in provider_example
 
 
 def test_user_facing_docs_keep_reasoning_under_providers():

@@ -3,6 +3,12 @@
 # Each provider entry tells the bridge how to call one model service.
 # Live API Sync is configured separately with SILLYTAVERN_SYNC_API_* in the
 # private environment file; it does not use provider entries or chat files.
+
+# Optional catalog-level Auto routing for /imagine. Targets must be fully qualified.
+# image_auto:
+#   text_model: nano-gpt::chroma
+#   reference_model: nano-gpt::step-image-edit-2
+
 providers:
   provider-one:
     name: Provider One # Label shown in the provider panel.
@@ -31,15 +37,23 @@ providers:
       - provider-two/model-a
 
 # Optional OpenAI-compatible Images provider for /imagine.
-# Enable only when the provider exposes POST /images/generations.
-#  openai-images:
-#    name: OpenAI Images # Label shown for /imagine.
-#    api_endpoint: https://api.openai.com/v1 # API base URL.
-#    api_key_env: OPENAI_API_KEY # Environment variable containing the API key.
+# This NanoGPT-shaped example shows text + one-reference image routing.
+#  nano-gpt:
+#    name: NanoGPT Images # Label shown for /imagine.
+#    api_endpoint: https://nano-gpt.com/api/v1 # API base URL.
+#    api_key_env: NANOGPT_API_KEY # Environment variable containing the API key.
 #    image_enabled: true # Opt in to image generation for this provider.
-#    image_endpoint: https://api.openai.com/v1/images/generations # Image request URL.
+#    image_endpoint: https://nano-gpt.com/api/v1/images/generations # Text-to-image request URL.
+#    image_edit_endpoint: https://nano-gpt.com/api/v1/images/edits # Reference/edit request URL.
 #    image_models: # Image model IDs; chat-only models are not used here.
-#      - gpt-image-2.5-sunburst
+#      - chroma
+#      - step-image-edit-2
+#    image_model_capabilities:
+#      chroma:
+#        mode: text
+#      step-image-edit-2:
+#        mode: reference
+#        edit_route: openai
 
 # Optional Anthropic Messages provider.
 # Uncomment and configure ANTHROPIC_API_KEY to enable it.

@@ -57,7 +57,7 @@ def test_prestart_pending_character_upload_allows_png_document_enqueue(novel_db,
     )
     set_meta(
         db,
-        "character_upload:chat",
+        "character_upload:chat:owner",
         json.dumps(
             {
                 "session_id": session["session_id"],

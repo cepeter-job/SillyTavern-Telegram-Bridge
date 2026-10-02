@@ -11,8 +11,7 @@ from bridge.databank_panels import send_databank_menu
 from bridge.director_goal_panel import director_goal_panel
 from bridge.director_goals import set_director_goal
 from bridge.edit_messages import edit_last_user
-from bridge.image_generation import handle_imagine_prompt
-from bridge.image_routing import session_image_settings
+from bridge.image_generation import handle_imagine_custom_prompt
 from bridge.limits import PENDING_SETTINGS_TTL_SECONDS
 from bridge.macro_commands import handle_macro_command
 from bridge.memory import handle_memory_command
@@ -144,18 +143,12 @@ def _handle_text_action_input(
                 db, token, chat_id, session, fields, "/macro " + value, request_context=request_context
             )
         elif action == "imagine":
-            selection, size = session_image_settings(
+            handle_imagine_custom_prompt(
                 db,
-                chat_id,
-                str(session["session_id"]),
-                app_settings=request_context.app_settings,
-            )
-            handle_imagine_prompt(
                 token,
                 chat_id,
+                session,
                 value,
-                selection=selection,
-                size=size,
                 app_settings=request_context.app_settings,
             )
         elif action == "memory_search":

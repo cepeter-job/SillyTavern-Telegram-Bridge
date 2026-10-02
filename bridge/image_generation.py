@@ -11,9 +11,11 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
+from bridge.card_content import card_fields_from_file
 from bridge.generation_settings import get_generation_settings
-from bridge.image_reference import ImageReference
+from bridge.image_reference import ImageReference, load_character_reference
 from bridge.image_routing import (
     IMAGE_DEFAULT_SIZE,
     IMAGE_MODEL_PROMPT_MAX_CHARS,
@@ -46,6 +48,12 @@ from bridge.topic_scope import parse_topic_scope
 IMAGE_RESPONSE_FORMAT = "b64_json"
 IMAGE_JSON_MAX_BYTES = 4 * ((IMAGE_MAX_BYTES + 2) // 3) + 65536
 IMAGE_CONTENT_TYPES = {"image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp"}
+_REFERENCE_PROMPT_PREFIX = (
+    "Use the supplied image as the primary character's identity reference. "
+    "Preserve facial identity, hairstyle, distinctive physical traits, apparent age, and established design. "
+    "Follow the scene for pose, expression, clothing, environment, lighting, framing, and camera angle; "
+    "do not merely recreate the portrait. Scene: "
+)
 
 
 def _resolve_image_provider(selection: str = "", *, app_settings: AppSettings) -> tuple[str, dict, str]:
@@ -386,12 +394,87 @@ def build_scene_image_prompt(
     return prompt[:prompt_max_chars]
 
 
+def _reference_scene_max_chars(route: ImageRoute) -> int:
+    limit = _model_prompt_max_chars(route.model)
+    if route.transport != "reference":
+        return limit
+    available = limit - len(_REFERENCE_PROMPT_PREFIX)
+    if available < 1:
+        raise ValueError(f"Image prompt for {route.model} has no room for scene content")
+    return available
+
+
+def _reference_prompt(scene_prompt: str, *, route: ImageRoute) -> str:
+    scene = " ".join(str(scene_prompt or "").split())
+    limit = _model_prompt_max_chars(route.model)
+    prompt = _REFERENCE_PROMPT_PREFIX + scene
+    if not scene or len(prompt) > limit:
+        raise ValueError(
+            f"Image prompt for {route.model} exceeds the {limit:,}-character limit "
+            "after adding the character identity reference"
+        )
+    return prompt
+
+
+def _visual_card_fields(session: dict[str, str], *, app_settings: AppSettings) -> dict[str, str]:
+    character_file = str(session.get("character_file") or "")
+    try:
+        return card_fields_from_file(character_file, app_settings=app_settings)
+    except (OSError, ValueError, UnicodeError):
+        logging.info("Could not read character-card metadata for image prompting", exc_info=True)
+        return {
+            "name": Path(character_file).stem[:200] or "character",
+            "description": "",
+        }
+
+
+def imagine_prompt_input_max_chars(
+    selection: str,
+    character_file: str,
+    *,
+    app_settings: AppSettings,
+) -> int:
+    reference = load_character_reference(character_file, app_settings=app_settings)
+    route = resolve_image_route(
+        selection,
+        reference_available=reference is not None,
+        app_settings=app_settings,
+    )
+    return _reference_scene_max_chars(route)
+
+
+def _deliver_resolved_image(
+    token: str,
+    chat_id: str,
+    prompt: str,
+    route: ImageRoute,
+    reference: ImageReference | None,
+    size: str,
+    *,
+    app_settings: AppSettings,
+) -> None:
+    progress_ids = send_text(token, chat_id, "🎨 Generating image…")
+    if route.transport == "reference":
+        if reference is None:
+            raise ValueError(f"Image model {route.selection} requires a usable character reference")
+        raw, _revised, _used = edit_image(route, prompt, reference, size, app_settings=app_settings)
+    else:
+        raw, _revised, _used = generate_image(route.selection, prompt, size, app_settings=app_settings)
+    _multipart_photo(token, chat_id, raw, "")
+
+    real_chat_id, _thread_id = parse_topic_scope(chat_id)
+    for message_id in progress_ids:
+        try:
+            telegram_request(token, "deleteMessage", {"chat_id": real_chat_id, "message_id": int(message_id)})
+        except Exception:
+            logging.info("Could not delete image-generation progress message %s", message_id, exc_info=True)
+
+
 def handle_imagine_scene(
     db,
     token: str,
     chat_id: str,
     session: dict[str, str],
-    fields: dict[str, str],
     *,
     provider_port: ProviderPort,
     app_settings: AppSettings,
@@ -402,16 +485,58 @@ def handle_imagine_scene(
         str(session["session_id"]),
         app_settings=app_settings,
     )
+    reference = load_character_reference(str(session.get("character_file") or ""), app_settings=app_settings)
+    route = resolve_image_route(
+        selection,
+        reference_available=reference is not None,
+        app_settings=app_settings,
+    )
     prompt = build_scene_image_prompt(
         db,
         chat_id,
         session,
-        fields,
+        _visual_card_fields(session, app_settings=app_settings),
         provider_port=provider_port,
         app_settings=app_settings,
-        max_chars=image_prompt_max_chars(selection, app_settings=app_settings),
+        max_chars=_reference_scene_max_chars(route),
     )
-    handle_imagine_prompt(token, chat_id, prompt, selection=selection, size=size, app_settings=app_settings)
+    if route.transport == "reference":
+        prompt = _reference_prompt(prompt, route=route)
+    _deliver_resolved_image(token, chat_id, prompt, route, reference, size, app_settings=app_settings)
+
+
+def handle_imagine_custom_prompt(
+    db,
+    token: str,
+    chat_id: str,
+    session: dict[str, str],
+    prompt: str,
+    *,
+    app_settings: AppSettings,
+) -> None:
+    selection, size = session_image_settings(
+        db,
+        chat_id,
+        str(session["session_id"]),
+        app_settings=app_settings,
+    )
+    reference = load_character_reference(str(session.get("character_file") or ""), app_settings=app_settings)
+    route = resolve_image_route(
+        selection,
+        reference_available=reference is not None,
+        app_settings=app_settings,
+    )
+    normalized = " ".join(str(prompt or "").split())
+    max_input = _reference_scene_max_chars(route)
+    if not normalized or len(normalized) > max_input:
+        model_limit = _model_prompt_max_chars(route.model)
+        raise ValueError(
+            f"Image prompt for {route.model} must fit the {model_limit:,}-character model limit; "
+            f"with the character identity reference, scene text must contain 1–{max_input:,} characters"
+        )
+    if route.transport == "reference":
+        normalized = _reference_prompt(normalized, route=route)
+    _deliver_resolved_image(token, chat_id, normalized, route, reference, size, app_settings=app_settings)
 
 
 def handle_imagine_prompt(

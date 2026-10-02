@@ -7,9 +7,11 @@ import base64
 import io
 import json
 import os
+import struct
 import tempfile
 import unittest
 import urllib.error
+import zlib
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -41,6 +43,26 @@ class _Response:
         if isinstance(self.payload, bytes):
             return self.payload
         return json.dumps(self.payload).encode()
+
+
+def _png_chunk(kind: bytes, data: bytes) -> bytes:
+    crc = zlib.crc32(kind)
+    crc = zlib.crc32(data, crc) & 0xFFFFFFFF
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", crc)
+
+
+def _character_png(
+    name: str = "Mira", description: str = "Mira has dark hair.", *, valid_metadata: bool = True
+) -> bytes:
+    signature = b"\x89PNG\r\n\x1a\n"
+    ihdr = _png_chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0))
+    if valid_metadata:
+        payload = base64.b64encode(json.dumps({"name": name, "description": description}).encode())
+    else:
+        payload = b"not-valid-base64-or-json"
+    metadata = _png_chunk(b"tEXt", b"chara\x00" + payload)
+    idat = _png_chunk(b"IDAT", zlib.compress(b"\x00\x00\x00\x00"))
+    return signature + ihdr + metadata + idat + _png_chunk(b"IEND", b"")
 
 
 class ImageGenerationTests(SettingsTestCase):
@@ -334,6 +356,13 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.old_db = self.app_settings_builder.db_file
         self.old_catalog = self.app_settings_builder.provider_config_file
+        self.old_character_dir = self.app_settings_builder.character_dir
+        self.old_default_character_file = self.app_settings_builder.default_character_file
+        self.character_dir = Path(self.temp.name) / "characters"
+        self.character_dir.mkdir()
+        self.app_settings_builder.character_dir = self.character_dir
+        self.app_settings_builder.default_character_file = "Mira.png"
+        (self.character_dir / "Mira.png").write_bytes(_character_png())
         self.catalog = Path(self.temp.name) / "providers.yaml"
         self.catalog.write_text(
             "providers:\n"
@@ -366,6 +395,8 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         self.db.close()
         self.app_settings_builder.db_file = self.old_db
         self.app_settings_builder.provider_config_file = self.old_catalog
+        self.app_settings_builder.character_dir = self.old_character_dir
+        self.app_settings_builder.default_character_file = self.old_default_character_file
         self.temp.cleanup()
 
     def _add_scene(self):
@@ -396,6 +427,26 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
             ),
         )
         self.db.commit()
+
+    def _configure_auto_catalog(self):
+        self.catalog.write_text(
+            "image_auto:\n"
+            "  text_model: test-image::chroma\n"
+            "  reference_model: test-image::step-image-edit-2\n"
+            "providers:\n"
+            "  test-image:\n"
+            "    name: Test Image\n"
+            "    api_endpoint: https://images.example/v1\n"
+            "    image_enabled: true\n"
+            "    image_models: [chroma, step-image-edit-2]\n"
+            "    image_model_capabilities:\n"
+            "      chroma:\n"
+            "        mode: text\n"
+            "      step-image-edit-2:\n"
+            "        mode: reference\n"
+            "        edit_route: openai\n",
+            encoding="utf-8",
+        )
 
     def test_current_scene_prompt_uses_committed_state_without_mutating_transcript(self):
         self._add_scene()
@@ -451,20 +502,27 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         self._add_scene()
         provider = make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "x" * 1702)
         settings = self.app_settings_builder.build()
-        with patch.object(_m_image_generation, "handle_imagine_prompt") as deliver:
+        with (
+            patch.object(_m_image_generation, "send_text", return_value=[]),
+            patch.object(
+                _m_image_generation,
+                "generate_image",
+                return_value=(b"TEXT", "", "test-image::z-image-turbo"),
+            ) as generate,
+            patch.object(_m_image_generation, "_multipart_photo"),
+        ):
             _m_image_generation.handle_imagine_scene(
                 self.db,
                 "token",
                 "chat",
                 self.session,
-                {"name": "Mira", "description": "Mira has dark hair."},
                 provider_port=provider,
                 app_settings=settings,
             )
-        deliver.assert_called_once()
-        _token, _chat, prompt = deliver.call_args.args[:3]
+        generate.assert_called_once()
+        selection, prompt, _size = generate.call_args.args[:3]
         self.assertEqual(len(prompt), 1200)
-        self.assertEqual(deliver.call_args.kwargs["selection"], "test-image::z-image-turbo")
+        self.assertEqual(selection, "test-image::z-image-turbo")
 
     def test_current_scene_requires_existing_committed_context(self):
         called = []
@@ -479,6 +537,287 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
                 app_settings=self.app_settings_builder.build(),
             )
         self.assertEqual(called, [])
+
+    def test_auto_scene_with_valid_character_png_uses_reference_edit_model(self):
+        self._configure_auto_catalog()
+        self._add_scene()
+        provider = make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "Mira at the rainy station")
+        with (
+            patch.object(_m_image_generation, "send_text", return_value=[]),
+            patch.object(
+                _m_image_generation,
+                "edit_image",
+                return_value=(b"EDITED", "", "test-image::step-image-edit-2"),
+            ) as edit,
+            patch.object(_m_image_generation, "generate_image") as text_generate,
+            patch.object(_m_image_generation, "_multipart_photo"),
+        ):
+            _m_image_generation.handle_imagine_scene(
+                self.db,
+                "token",
+                "chat",
+                self.session,
+                provider_port=provider,
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        edit.assert_called_once()
+        route, prompt, reference, size = edit.call_args.args[:4]
+        self.assertEqual(route.selection, "test-image::step-image-edit-2")
+        self.assertEqual(route.transport, "reference")
+        self.assertEqual(reference.data, (self.character_dir / "Mira.png").read_bytes())
+        self.assertIn("identity reference", prompt)
+        self.assertIn("Mira at the rainy station", prompt)
+        self.assertLessEqual(len(prompt), 512)
+        self.assertEqual(size, "1024x1024")
+        text_generate.assert_not_called()
+
+    def test_auto_scene_without_character_png_uses_configured_text_model(self):
+        self._configure_auto_catalog()
+        self._add_scene()
+        (self.character_dir / "Mira.png").unlink()
+        provider = make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "rainy station")
+        with (
+            patch.object(_m_image_generation, "send_text", return_value=[]),
+            patch.object(_m_image_generation, "edit_image") as edit,
+            patch.object(
+                _m_image_generation,
+                "generate_image",
+                return_value=(b"TEXT", "", "test-image::chroma"),
+            ) as text_generate,
+            patch.object(_m_image_generation, "_multipart_photo"),
+        ):
+            _m_image_generation.handle_imagine_scene(
+                self.db,
+                "token",
+                "chat",
+                self.session,
+                provider_port=provider,
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        edit.assert_not_called()
+        text_generate.assert_called_once()
+        self.assertEqual(text_generate.call_args.args[0], "test-image::chroma")
+
+    def test_auto_scene_with_corrupt_png_uses_text_model(self):
+        self._configure_auto_catalog()
+        self._add_scene()
+        (self.character_dir / "Mira.png").write_bytes(b"broken png")
+        provider = make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "rainy station")
+        with (
+            patch.object(_m_image_generation, "send_text", return_value=[]),
+            patch.object(_m_image_generation, "edit_image") as edit,
+            patch.object(
+                _m_image_generation,
+                "generate_image",
+                return_value=(b"TEXT", "", "test-image::chroma"),
+            ) as text_generate,
+            patch.object(_m_image_generation, "_multipart_photo"),
+        ):
+            _m_image_generation.handle_imagine_scene(
+                self.db,
+                "token",
+                "chat",
+                self.session,
+                provider_port=provider,
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        edit.assert_not_called()
+        text_generate.assert_called_once()
+        self.assertEqual(text_generate.call_args.args[0], "test-image::chroma")
+
+    def test_manual_text_scene_ignores_available_reference(self):
+        self._configure_auto_catalog()
+        self._add_scene()
+        settings = self.app_settings_builder.build()
+        _m_image_generation.set_session_image_model(
+            self.db,
+            "chat",
+            self.session["session_id"],
+            "test-image::chroma",
+            app_settings=settings,
+        )
+        provider = make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "rainy station")
+        with (
+            patch.object(_m_image_generation, "send_text", return_value=[]),
+            patch.object(_m_image_generation, "edit_image") as edit,
+            patch.object(
+                _m_image_generation,
+                "generate_image",
+                return_value=(b"TEXT", "", "test-image::chroma"),
+            ) as text_generate,
+            patch.object(_m_image_generation, "_multipart_photo"),
+        ):
+            _m_image_generation.handle_imagine_scene(
+                self.db,
+                "token",
+                "chat",
+                self.session,
+                provider_port=provider,
+                app_settings=settings,
+            )
+
+        edit.assert_not_called()
+        text_generate.assert_called_once()
+        self.assertEqual(text_generate.call_args.args[0], "test-image::chroma")
+
+    def test_manual_reference_scene_without_reference_fails_before_network(self):
+        self._configure_auto_catalog()
+        self._add_scene()
+        settings = self.app_settings_builder.build()
+        _m_image_generation.set_session_image_model(
+            self.db,
+            "chat",
+            self.session["session_id"],
+            "test-image::step-image-edit-2",
+            app_settings=settings,
+        )
+        (self.character_dir / "Mira.png").unlink()
+        provider = make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "unused")
+        with (
+            patch.object(_m_image_generation, "edit_image") as edit,
+            patch.object(_m_image_generation, "generate_image") as text_generate,
+            self.assertRaisesRegex(ValueError, r"requires.*reference"),
+        ):
+            _m_image_generation.handle_imagine_scene(
+                self.db,
+                "token",
+                "chat",
+                self.session,
+                provider_port=provider,
+                app_settings=settings,
+            )
+        edit.assert_not_called()
+        text_generate.assert_not_called()
+
+    def test_valid_png_with_invalid_card_metadata_still_uses_reference(self):
+        self._configure_auto_catalog()
+        self._add_scene()
+        (self.character_dir / "Mira.png").write_bytes(_character_png(valid_metadata=False))
+        provider = make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "rainy station")
+        with (
+            patch.object(_m_image_generation, "send_text", return_value=[]),
+            patch.object(
+                _m_image_generation,
+                "edit_image",
+                return_value=(b"EDITED", "", "test-image::step-image-edit-2"),
+            ) as edit,
+            patch.object(_m_image_generation, "_multipart_photo"),
+        ):
+            _m_image_generation.handle_imagine_scene(
+                self.db,
+                "token",
+                "chat",
+                self.session,
+                provider_port=provider,
+                app_settings=self.app_settings_builder.build(),
+            )
+        edit.assert_called_once()
+
+    def test_character_switch_changes_reference_on_next_imagine(self):
+        self._configure_auto_catalog()
+        self._add_scene()
+        nora = _character_png("Nora", "Nora has silver hair.")
+        (self.character_dir / "Nora.png").write_bytes(nora)
+        provider = make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "station portrait")
+        with (
+            patch.object(_m_image_generation, "send_text", return_value=[]),
+            patch.object(
+                _m_image_generation,
+                "edit_image",
+                return_value=(b"EDITED", "", "test-image::step-image-edit-2"),
+            ) as edit,
+            patch.object(_m_image_generation, "_multipart_photo"),
+        ):
+            _m_image_generation.handle_imagine_scene(
+                self.db,
+                "token",
+                "chat",
+                self.session,
+                provider_port=provider,
+                app_settings=self.app_settings_builder.build(),
+            )
+            switched = dict(self.session)
+            switched["character_file"] = "Nora.png"
+            _m_image_generation.handle_imagine_scene(
+                self.db,
+                "token",
+                "chat",
+                switched,
+                provider_port=provider,
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(edit.call_count, 2)
+        self.assertEqual(edit.call_args_list[0].args[2].data, (self.character_dir / "Mira.png").read_bytes())
+        self.assertEqual(edit.call_args_list[1].args[2].data, nora)
+
+    def test_reference_provider_failure_does_not_call_auto_text_fallback(self):
+        self._configure_auto_catalog()
+        self._add_scene()
+        provider = make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "rainy station")
+        with (
+            patch.object(_m_image_generation, "send_text", return_value=[]),
+            patch.object(_m_image_generation, "edit_image", side_effect=RuntimeError("upstream failed")) as edit,
+            patch.object(_m_image_generation, "generate_image") as text_generate,
+            self.assertRaisesRegex(RuntimeError, "upstream failed"),
+        ):
+            _m_image_generation.handle_imagine_scene(
+                self.db,
+                "token",
+                "chat",
+                self.session,
+                provider_port=provider,
+                app_settings=self.app_settings_builder.build(),
+            )
+        edit.assert_called_once()
+        text_generate.assert_not_called()
+
+    def test_custom_prompt_auto_reference_uses_edit_route(self):
+        self._configure_auto_catalog()
+        with (
+            patch.object(_m_image_generation, "send_text", return_value=[]),
+            patch.object(
+                _m_image_generation,
+                "edit_image",
+                return_value=(b"EDITED", "", "test-image::step-image-edit-2"),
+            ) as edit,
+            patch.object(_m_image_generation, "generate_image") as text_generate,
+            patch.object(_m_image_generation, "_multipart_photo"),
+        ):
+            _m_image_generation.handle_imagine_custom_prompt(
+                self.db,
+                "token",
+                "chat",
+                self.session,
+                "sitting in a garden",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        edit.assert_called_once()
+        self.assertIn("identity reference", edit.call_args.args[1])
+        self.assertIn("sitting in a garden", edit.call_args.args[1])
+        text_generate.assert_not_called()
+
+    def test_custom_prompt_over_reference_budget_fails_before_provider_call(self):
+        self._configure_auto_catalog()
+        with (
+            patch.object(_m_image_generation, "edit_image") as edit,
+            patch.object(_m_image_generation, "generate_image") as text_generate,
+            self.assertRaisesRegex(ValueError, "prompt.*512"),
+        ):
+            _m_image_generation.handle_imagine_custom_prompt(
+                self.db,
+                "token",
+                "chat",
+                self.session,
+                "x" * 512,
+                app_settings=self.app_settings_builder.build(),
+            )
+        edit.assert_not_called()
+        text_generate.assert_not_called()
 
     def test_imagine_panel_exposes_scene_custom_and_options_modes(self):
         text, markup = _m_image_panels.imagine_panel(
@@ -633,7 +972,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         )
         request_context = SimpleNamespace(app_settings=settings)
         with (
-            patch.object(_m_text_action_input, "handle_imagine_prompt") as generate,
+            patch.object(_m_text_action_input, "handle_imagine_custom_prompt") as generate,
             patch.object(_m_text_action_input, "_cancel_pending"),
         ):
             handled = _m_text_action_input._handle_text_action_input(
@@ -655,11 +994,11 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
             )
         self.assertTrue(handled)
         generate.assert_called_once_with(
+            self.db,
             "token",
             "chat",
+            self.session,
             "custom visual prompt",
-            selection="test-image::model-b",
-            size="1536x1024",
             app_settings=settings,
         )
 
@@ -725,6 +1064,32 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
             "Send a custom image prompt (1–1,200 characters).",
         )
 
+    def test_custom_prompt_button_auto_reference_uses_reduced_input_limit(self):
+        self._configure_auto_catalog()
+        callback = {"id": "cb", "message": {"message_id": 77}}
+        request_context = SimpleNamespace(app_settings=self.app_settings_builder.build())
+        with patch.object(_m_feature_callbacks, "start_text_action_input") as start_input:
+            _m_feature_callbacks.handle_feature_panel_callback(
+                self.db,
+                "token",
+                callback,
+                lambda *_args: None,
+                "imagine:custom",
+                "chat",
+                callback["message"],
+                self.session,
+                self.session["session_id"],
+                None,
+                group_service=None,
+                provider_port=make_test_provider_port(),
+                request_context=request_context,
+                delivery_port=make_test_delivery_port(),
+            )
+        prompt = start_input.call_args.args[5]
+        limit = int(prompt.split("1–", 1)[1].split(" ", 1)[0].replace(",", ""))
+        self.assertGreater(limit, 0)
+        self.assertLess(limit, 512)
+
     def test_custom_prompt_button_starts_scoped_text_input(self):
         callback = {"id": "cb", "message": {"message_id": 77}}
         request_context = SimpleNamespace(app_settings=self.app_settings_builder.build())
@@ -762,10 +1127,8 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         callback = {"id": "cb", "message": {"message_id": 77}}
         request_context = SimpleNamespace(app_settings=self.app_settings_builder.build())
         answers = []
-        fields = {"name": "Mira", "description": "dark hair"}
         with (
             patch.object(_m_feature_callbacks, "send_typing"),
-            patch.object(_m_feature_callbacks, "card_fields_from_file", return_value=fields),
             patch.object(_m_feature_callbacks, "handle_imagine_scene") as generate_scene,
         ):
             handled = _m_feature_callbacks.handle_feature_panel_callback(
@@ -788,7 +1151,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         self.assertEqual(answers, ["Generating current scene"])
         generate_scene.assert_called_once()
         args, kwargs = generate_scene.call_args
-        self.assertEqual(args[:5], (self.db, "token", "chat", self.session, fields))
+        self.assertEqual(args[:4], (self.db, "token", "chat", self.session))
         self.assertIs(kwargs["app_settings"], request_context.app_settings)
 
 

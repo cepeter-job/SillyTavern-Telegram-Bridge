@@ -44,3 +44,29 @@ def test_production_host_allows_two_explicit_workers(tmp_path, monkeypatch):
 
     assert hook is not None
     hook(config)
+
+
+def test_production_host_rejects_large_full_suite_collection(tmp_path, monkeypatch):
+    _mark_production_host(tmp_path, monkeypatch)
+    hook = getattr(test_config, "pytest_collection_modifyitems", None)
+
+    assert hook is not None
+    with pytest.raises(pytest.UsageError, match="production host.*512"):
+        hook(SimpleNamespace(), [object()] * 513)
+
+
+def test_production_host_allows_targeted_collection_within_limit(tmp_path, monkeypatch):
+    _mark_production_host(tmp_path, monkeypatch)
+    hook = getattr(test_config, "pytest_collection_modifyitems", None)
+
+    assert hook is not None
+    hook(SimpleNamespace(), [object()] * 100)
+
+
+def test_production_host_large_collection_requires_explicit_override(tmp_path, monkeypatch):
+    _mark_production_host(tmp_path, monkeypatch)
+    monkeypatch.setenv("SILLYTAVERN_ALLOW_PRODUCTION_FULL_TESTS", "1")
+    hook = getattr(test_config, "pytest_collection_modifyitems", None)
+
+    assert hook is not None
+    hook(SimpleNamespace(), [object()] * 513)

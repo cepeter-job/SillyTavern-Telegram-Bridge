@@ -8,6 +8,7 @@ from bridge.card_content import card_fields_from_file
 from bridge.character_optimizer_input import handle_character_optimizer_suggestion_input, optimizer_suggestion_key
 from bridge.conversation_setup import setup_key
 from bridge.conversation_setup_callbacks import handle_setup_name_input
+from bridge.conversation_lifecycle import is_command_text
 from bridge.group_service import GroupService
 from bridge.memory_service import MemoryService
 from bridge.metadata import set_meta
@@ -42,6 +43,9 @@ def handle_pending_input(
     rag_service: RagService,
 ) -> bool:
     """Consume one scoped pending-input message, including cancel and validation."""
+    value = stripped.strip()
+    if is_command_text(value) and value.casefold() != "/cancel":
+        return False
     session_id = session["session_id"]
     setup = _pending_state(db, setup_key(chat_id, request_context.actor_id), session_id, token, chat_id)
     if (

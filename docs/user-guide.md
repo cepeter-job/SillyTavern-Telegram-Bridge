@@ -334,15 +334,18 @@ uses that context differently:
 - **B — Utility Model** and **C — Story Second Pass** generate choices after the
   narrative is committed. Both receive the same bounded snapshot: Persona name
   and description, Character name/description/personality/scenario, relevant
-  World Info, the selected session System Prompt, the six most recent messages,
-  and the current story. B sends that snapshot to the Utility model; C sends it
-  to the Story model.
-- The B/C snapshot limits each Persona field to 4,000 characters, each Character
-  field to 2,000, World Info to 6,000, the System Prompt to 4,000, each recent
-  message to 1,600, and the current story to its final 10,000 characters. It does
-  not separately resend Author's Note, post-history instructions, memory, RAG, or
-  the session summary; those can still influence choices indirectly through the
-  already-generated current story.
+  World Info, the macro-expanded selected System Prompt and Author's Note, the
+  continuity summary, relevant NPC state, the six most recent messages, and the
+  current story. B sends that snapshot to the Utility model; C sends it to the
+  Story model. Strategy A uses the same snapshot when its inline choices need the
+  durable choice-only recovery pass.
+- The choice snapshot limits each Persona field to 4,000 characters, each
+  Character field to 2,000, World Info to 6,000, the System Prompt to 4,000,
+  Author's Note to 2,000, continuity summary and NPC state to 6,000 each, each
+  recent message to 1,600, and the current story to its final 10,000 characters.
+  World Info activation considers the current story, recent messages, Persona
+  name and Character name. The separate choice pass does not resend post-history
+  instructions, Hindsight recall, episodic memory, or Data Bank/RAG context.
 
 Every strategy asks the model to propose actions for the **user**, not actions
 for the assistant Character. The dedicated B/C choice prompt additionally treats

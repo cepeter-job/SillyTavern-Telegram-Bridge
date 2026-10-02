@@ -508,6 +508,7 @@ Type=simple
 WorkingDirectory={_unit_value(str(source))}
 Environment={_unit_value("SILLYTAVERN_ENV_FILE=" + str(env_path))}
 Environment={_unit_value("SILLYTAVERN_BRIDGE_SOURCE_DIR=" + str(source))}
+Environment=MALLOC_ARENA_MAX=2
 ExecStart={executable} {launcher}
 Restart=on-failure
 RestartSec=5

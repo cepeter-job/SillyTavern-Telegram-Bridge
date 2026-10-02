@@ -239,6 +239,7 @@ def test_character_upload_rejects_png_without_chara_metadata(interaction, monkey
         rag_service=services.rag,
         provider_port=services.provider,
         request_context=RequestContext(db, session["session_id"], "owner", app_settings=settings),
+        character_upload=True,
     )
 
     assert image_calls == []

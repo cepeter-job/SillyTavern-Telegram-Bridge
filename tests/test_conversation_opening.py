@@ -1,6 +1,6 @@
-from dataclasses import replace
 import json
 import time
+from dataclasses import replace
 from unittest.mock import Mock
 
 import pytest

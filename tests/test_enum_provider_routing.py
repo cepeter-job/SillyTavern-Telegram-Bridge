@@ -158,3 +158,68 @@ def test_enum_provider_dispatches_each_known_route_once(name, monkeypatch):
     result = getattr(module, EXPECTED[name][0])(*values, **kwargs)
     assert result is None if name == "enum_callbacks" else result is False
     assert calls == []
+
+
+def provider_call(monkeypatch, data):
+    from bridge import provider_callbacks
+
+    feedback = []
+    messages = []
+    closed = []
+    monkeypatch.setattr(provider_callbacks, "send_text", lambda *a: messages.append(a))
+    monkeypatch.setattr(provider_callbacks, "remove_inline_keyboard", lambda *a: closed.append(a))
+    handled = provider_callbacks.handle_provider_model_callback(
+        "db",
+        "token",
+        {"id": "callback"},
+        lambda *a: feedback.append(a),
+        data,
+        "chat",
+        {"message_id": 91},
+        {},
+        "session",
+        7,
+        request_context=object(),
+    )
+    return handled, feedback, messages, closed
+
+
+def test_model_cancel_removes_keyboard_without_generating(monkeypatch):
+    handled, feedback, messages, closed = provider_call(monkeypatch, "models:cancel")
+    assert handled is True
+    assert feedback == [("token", "callback", "Cancelled")]
+    assert closed == [("db", "token", {"id": "callback"})]
+    assert messages == []
+
+
+def test_catalog_only_provider_reports_limitation_without_selection(monkeypatch):
+    from bridge import provider_callbacks
+
+    monkeypatch.setattr(provider_callbacks, "resolve_dynamic_callback_token", lambda *a, **kw: "catalog-provider")
+    monkeypatch.setattr(
+        provider_callbacks, "update_session", lambda *a, **kw: pytest.fail("Catalog entry changed selection")
+    )
+    handled, feedback, messages, closed = provider_call(monkeypatch, "unsupported:opaque-token")
+    assert handled is True and closed == []
+    assert feedback == [("token", "callback", "Catalog only: adapter not enabled")]
+    assert messages == [
+        (
+            "token",
+            "chat",
+            "Provider 'catalog-provider' is visible in the bridge catalog, but its adapter is not enabled yet.",
+        )
+    ]
+
+
+@pytest.mark.parametrize("data", ("storyreasoning:not-a-level", "utilityreasoning:not-a-level"))
+def test_invalid_reasoning_selection_does_not_write_settings(monkeypatch, data):
+    from bridge import provider_callbacks
+
+    for name in ("set_meta", "update_generation_settings", "set_utility_reasoning"):
+        monkeypatch.setattr(
+            provider_callbacks, name, lambda *a, **kw: pytest.fail("Invalid reasoning selection wrote state")
+        )
+    handled, feedback, messages, closed = provider_call(monkeypatch, data)
+    assert handled is True
+    assert feedback == [("token", "callback", "Reasoning choice invalid")]
+    assert messages == closed == []

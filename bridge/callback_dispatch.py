@@ -26,17 +26,18 @@ from bridge.request_types import RequestContext
 from bridge.telegram import answer_callback, send_text
 from bridge.topic_scope import parse_topic_scope
 
+_CallbackScope = tuple[Callable[..., None], str, str, dict, dict, RequestContext]
 
-def process_callback(
+
+def _prepare_callback_scope(
     db: sqlite3.Connection,
     token: str,
     callback: dict,
-    operation_id: int | None = None,
     *,
-    actor_id: str = "",
+    actor_id: str,
     services: BridgeServices,
-    message_worker: Callable[..., None] | None = None,
-) -> None:
+) -> _CallbackScope | None:
+    """Validate ownership before resolving the panel-bound session and request context."""
     sender = str(actor_id or (callback.get("from") or {}).get("id", ""))
     message = callback.get("message") or {}
     chat_id = str((message.get("chat") or {}).get("id", ""))
@@ -79,83 +80,124 @@ def process_callback(
     )
     session_id = session["session_id"]
     request_context = RequestContext(db, session_id, sender, app_settings=services.config)
-    memory_service = services.memory
-    npc_service = services.npc
-    persona_service = services.persona
-    sync_service = services.sync
+    return callback_answer, data, chat_id, message, session, request_context
 
-    if data.startswith("lnturnretry:") and handle_failed_turn_retry_callback(
-        db,
-        callback,
-        chat_id,
-        session,
-        operation_id,
-        sender,
-        jobs=services.jobs,
-        telegram_request=services.telegram.request,
-        request_context=request_context,
-        message_worker=partial(message_worker, services) if message_worker is not None else None,
-    ):
+
+def _route_group_callback(
+    db: sqlite3.Connection,
+    token: str,
+    callback: dict,
+    callback_answer: Callable[..., None],
+    data: str,
+    chat_id: str,
+    message: dict,
+    session: dict,
+    operation_id: int | None,
+    *,
+    services: BridgeServices,
+    request_context: RequestContext,
+) -> None:
+    """Keep Forum Topic validation and dynamic group-token resolution in the root router."""
+    sender = request_context.actor_id
+    if parse_topic_scope(chat_id)[1] is None:
+        callback_answer(
+            token,
+            str(callback.get("id", "")),
+            "Forum Topic required",
+        )
+        remove_inline_keyboard(db, token, callback)
         return
-
-    if handle_setup_callback(
-        db,
-        token,
-        callback,
-        callback_answer,
-        data,
-        chat_id,
-        message,
-        session,
-        persona_service=persona_service,
-        request_context=request_context,
-    ):
-        return
-
-    if handle_light_novel_mode_callback(
-        db, token, callback, callback_answer, data, chat_id, session, request_context=request_context
-    ):
-        return
-
-    if handle_primary_panel_callback(
+    if data.startswith("groupchars:") and not data.startswith("groupchars:page:"):
+        parts = data.split(":", 2)
+        if len(parts) == 3:
+            resolved = resolve_dynamic_callback_token(parts[2], "group_character", chat_id, db=db)
+            data = f"groupchars:{parts[1]}:{resolved or ''}"
+    handle_group_panel_callback(
         db,
         token,
-        callback,
-        callback_answer,
-        data,
         chat_id,
-        message,
         session,
-        session_id,
+        data,
+        message,
         operation_id,
+        sender_id=sender,
         group_service=services.group,
-        provider_port=services.provider,
-        delivery_port=services.delivery,
-        memory_service=memory_service,
-        npc_service=npc_service,
-        persona_service=persona_service,
-        sync_service=sync_service,
+        input_flow_service=services.input_flow,
         request_context=request_context,
-    ):
-        return
-    if handle_entity_panel_callback(
-        db,
-        token,
-        callback,
-        callback_answer,
-        data,
-        chat_id,
-        message,
-        session,
-        session_id,
-        operation_id,
-        group_service=services.group,
-        memory_service=memory_service,
-        persona_service=persona_service,
-        provider_port=services.provider,
-        request_context=request_context,
-    ):
-        return
+    )
+    return
+
+
+def _route_callback(
+    db: sqlite3.Connection,
+    token: str,
+    callback: dict,
+    scope: _CallbackScope,
+    operation_id: int | None,
+    *,
+    services: BridgeServices,
+    message_worker: Callable[..., None] | None,
+) -> None:
+    """Run ordered handlers only after the common authorization and scope checks."""
+    callback_answer, data, chat_id, message, session, request_context = scope
+    session_id, sender = request_context.session_id, request_context.actor_id
+    memory_service, npc_service = services.memory, services.npc
+    persona_service, sync_service = services.persona, services.sync
+    args = (db, token, callback, callback_answer, data, chat_id, message, session, session_id, operation_id)
+    routes = (
+        lambda: (
+            data.startswith("lnturnretry:")
+            and handle_failed_turn_retry_callback(
+                db,
+                callback,
+                chat_id,
+                session,
+                operation_id,
+                sender,
+                jobs=services.jobs,
+                telegram_request=services.telegram.request,
+                request_context=request_context,
+                message_worker=partial(message_worker, services) if message_worker is not None else None,
+            )
+        ),
+        lambda: handle_setup_callback(
+            db,
+            token,
+            callback,
+            callback_answer,
+            data,
+            chat_id,
+            message,
+            session,
+            persona_service=persona_service,
+            request_context=request_context,
+        ),
+        lambda: handle_light_novel_mode_callback(
+            db, token, callback, callback_answer, data, chat_id, session, request_context=request_context
+        ),
+        lambda: handle_primary_panel_callback(
+            *args,
+            group_service=services.group,
+            provider_port=services.provider,
+            delivery_port=services.delivery,
+            memory_service=memory_service,
+            npc_service=npc_service,
+            persona_service=persona_service,
+            sync_service=sync_service,
+            request_context=request_context,
+        ),
+        lambda: handle_entity_panel_callback(
+            *args,
+            group_service=services.group,
+            memory_service=memory_service,
+            persona_service=persona_service,
+            provider_port=services.provider,
+            request_context=request_context,
+        ),
+    )
+    for handler in routes:
+        if handler():
+            return
     if data.startswith("enum:"):
         handle_enum_callback(
             db,
@@ -169,47 +211,39 @@ def process_callback(
             rag_service=services.rag,
         )
         return
-    if data.startswith("group:") or data.startswith("groupchars:") or data.startswith("groupmode:"):
-        if parse_topic_scope(chat_id)[1] is None:
-            callback_answer(
-                token,
-                str(callback.get("id", "")),
-                "Forum Topic required",
-            )
-            remove_inline_keyboard(db, token, callback)
-            return
-        if data.startswith("groupchars:") and not data.startswith("groupchars:page:"):
-            parts = data.split(":", 2)
-            if len(parts) == 3:
-                resolved = resolve_dynamic_callback_token(parts[2], "group_character", chat_id, db=db)
-                data = f"groupchars:{parts[1]}:{resolved or ''}"
-        handle_group_panel_callback(
+    if data.startswith(("group:", "groupchars:", "groupmode:")):
+        _route_group_callback(
             db,
             token,
-            chat_id,
-            session,
+            callback,
+            callback_answer,
             data,
+            chat_id,
             message,
+            session,
             operation_id,
-            sender_id=sender,
-            group_service=services.group,
-            input_flow_service=services.input_flow,
+            services=services,
             request_context=request_context,
         )
         return
-
     handle_provider_model_callback(
-        db,
-        token,
-        callback,
-        callback_answer,
-        data,
-        chat_id,
-        message,
-        session,
-        session_id,
-        operation_id,
+        *args,
         request_context=request_context,
         provider_policy=services.provider.policy,
         provider_probes=services.provider_probes,
     )
+
+
+def process_callback(
+    db: sqlite3.Connection,
+    token: str,
+    callback: dict,
+    operation_id: int | None = None,
+    *,
+    actor_id: str = "",
+    services: BridgeServices,
+    message_worker: Callable[..., None] | None = None,
+) -> None:
+    scope = _prepare_callback_scope(db, token, callback, actor_id=actor_id, services=services)
+    if scope is not None:
+        _route_callback(db, token, callback, scope, operation_id, services=services, message_worker=message_worker)

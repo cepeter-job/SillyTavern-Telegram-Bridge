@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import struct
 import tempfile
 import time
@@ -25,6 +26,64 @@ from bridge.self_update import _parse_public_signer_policy
 from bridge.settings import AppSettings, load_app_settings, validate_app_settings
 
 _MANAGED = "# Managed by SillyTavern Bridge install.sh"
+_SOURCE_SKIP_DIRS = {".git", ".venv", "node_modules", "__pycache__", ".pytest_cache"}
+
+
+def _harden_source_tree(source: Path) -> None:
+    if os.name != "posix":
+        return
+    for root, directories, files in os.walk(source, followlinks=False):
+        base = Path(root)
+        directories[:] = [
+            name for name in directories if name not in _SOURCE_SKIP_DIRS and not (base / name).is_symlink()
+        ]
+        for name in files:
+            path = base / name
+            if path.is_symlink():
+                continue
+            try:
+                info = path.stat()
+            except FileNotFoundError:
+                continue
+            if not stat.S_ISREG(info.st_mode):
+                continue
+            mode = stat.S_IMODE(info.st_mode)
+            hardened = mode & ~0o022
+            if hardened != mode:
+                path.chmod(hardened)
+
+
+def _relocate_legacy_env_backups(source: Path, bridge_home: Path) -> None:
+    candidates = sorted({*source.glob(".env.bak*"), *source.glob(".env.backup*")})
+    if not candidates:
+        return
+    backup_dir = bridge_home / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if os.name == "posix":
+        backup_dir.chmod(0o700)
+    for path in candidates:
+        if path.is_symlink():
+            raise ValueError("Refusing a symbolic-link environment backup")
+        if not path.is_file():
+            continue
+        destination = backup_dir / path.name
+        if destination.exists():
+            destination = backup_dir / f"{path.name}-{time.time_ns()}"
+        path.replace(destination)
+        if os.name == "posix":
+            destination.chmod(0o600)
+
+
+def _remove_zero_length_legacy_db(settings: AppSettings) -> None:
+    legacy = settings.bridge_home / "sillytavern_telegram.sqlite3"
+    if legacy.absolute() == settings.db_file.absolute() or legacy.is_symlink():
+        return
+    try:
+        info = legacy.stat()
+    except FileNotFoundError:
+        return
+    if stat.S_ISREG(info.st_mode) and info.st_size == 0:
+        legacy.unlink()
 
 
 def _new_file(path: Path, raw: bytes) -> bool:
@@ -513,6 +572,7 @@ def _provider_document(settings: AppSettings) -> bytes | None:
 
 def prepare_install(source: Path, home: Path, env_path: Path, unit_dir: Path, *, replace_unit: bool = False) -> dict:
     source, home, env_path, unit_dir = (Path(p).absolute() for p in (source, home, env_path, unit_dir))
+    _harden_source_tree(source)
     if env_path.is_symlink():
         raise ValueError("Environment file must not be a symbolic link")
     template = (source / ".env.example").read_text(encoding="utf-8")
@@ -545,6 +605,8 @@ def prepare_install(source: Path, home: Path, env_path: Path, unit_dir: Path, *,
         if path.is_symlink():
             raise ValueError("Installation directories must not be symbolic links")
         path.mkdir(parents=True, exist_ok=True, mode=0o700)
+    _relocate_legacy_env_backups(source, settings.bridge_home)
+    _remove_zero_length_legacy_db(settings)
     starter = _starter_png()
     _new_file(settings.character_dir / "starter.png", starter)
     _new_file(settings.native_persona_avatar_dir / "user-default.png", starter)

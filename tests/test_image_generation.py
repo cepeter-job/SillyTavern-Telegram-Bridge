@@ -1,4 +1,4 @@
-from application_test_setup import ensure_application_extensions, make_test_provider_port
+from application_test_setup import ensure_application_extensions, make_test_delivery_port, make_test_provider_port
 from settings_test_support import SettingsTestCase
 
 ensure_application_extensions()
@@ -420,6 +420,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
                 group_service=None,
                 provider_port=make_test_provider_port(),
                 request_context=request_context,
+                delivery_port=make_test_delivery_port(),
             )
         self.assertTrue(handled)
         self.assertEqual(
@@ -451,6 +452,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
                 group_service=None,
                 provider_port=make_test_provider_port(),
                 request_context=request_context,
+                delivery_port=make_test_delivery_port(),
             )
         self.assertTrue(handled)
         self.assertEqual(
@@ -565,6 +567,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
                 group_service=None,
                 provider_port=make_test_provider_port(),
                 request_context=request_context,
+                delivery_port=make_test_delivery_port(),
             )
         self.assertEqual(
             start_input.call_args.args[5],
@@ -590,6 +593,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
                 group_service=None,
                 provider_port=make_test_provider_port(),
                 request_context=request_context,
+                delivery_port=make_test_delivery_port(),
             )
         self.assertTrue(handled)
         self.assertEqual(answers, ["Send prompt"])
@@ -627,6 +631,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
                 group_service=None,
                 provider_port=make_test_provider_port(),
                 request_context=request_context,
+                delivery_port=make_test_delivery_port(),
             )
         self.assertTrue(handled)
         self.assertEqual(answers, ["Generating current scene"])

@@ -234,6 +234,11 @@ Settings parsing/formatting lives separately in `generation_settings_values.py`.
 
 ### UI and generation workflow ownership
 
+Scene, Director-goal and curated-memory panels have one sender in their domain
+owners (`scene_state`, `director_goals`, `memory_curator`). Commands and callbacks
+use that same sender with an explicit `DeliveryPort`; `feature_panels` owns only
+the session-summary confirmation. Do not restore duplicate panel senders.
+
 Keep panel rendering, callbacks, pending input and generation use cases in their
 canonical feature modules rather than adding another umbrella utility file.
 `settings_panels`, `voice_panels`, `preset_panels`, `databank_panels`,

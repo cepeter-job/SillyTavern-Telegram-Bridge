@@ -8,8 +8,8 @@ from bridge.callback_tokens import resolve_dynamic_callback_token
 from bridge.callbacks import close_panel_message
 from bridge.card_content import card_fields_from_file
 from bridge.cards import send_panel_message
-from bridge.director_goals import set_director_goal
-from bridge.feature_panels import send_curated_memory_menu, send_director_goal_menu, send_scene_menu
+from bridge.delivery_port import DeliveryPort
+from bridge.director_goals import send_director_goal_menu, set_director_goal
 from bridge.group_commands import handle_summary_command
 from bridge.group_service import GroupService
 from bridge.image_generation import (
@@ -28,11 +28,11 @@ from bridge.image_panels import (
     send_imagine_size_menu,
 )
 from bridge.memory_backend import memory_mode
-from bridge.memory_curator import curate_memory_now
+from bridge.memory_curator import curate_memory_now, send_curated_memory_menu
 from bridge.memory_panels import send_memory_menu
 from bridge.prompt_panels import send_prompt_menu
 from bridge.provider_port import ProviderPort
-from bridge.scene_state import clear_scene_state, refresh_scene_state_now
+from bridge.scene_state import clear_scene_state, refresh_scene_state_now, send_scene_menu
 from bridge.status_panels import status_text
 from bridge.telegram import send_text, send_typing
 from bridge.text_action_input import start_text_action_input
@@ -52,6 +52,7 @@ def handle_prompt_and_feature_callback(
     *,
     group_service: GroupService,
     provider_port: ProviderPort,
+    delivery_port: DeliveryPort,
     request_context,
     memory_service,
 ):
@@ -118,6 +119,7 @@ def handle_prompt_and_feature_callback(
             operation_id,
             group_service=group_service,
             provider_port=provider_port,
+            delivery_port=delivery_port,
             request_context=request_context,
         )
     return False
@@ -137,6 +139,7 @@ def handle_feature_panel_callback(
     *,
     group_service: GroupService,
     provider_port: ProviderPort,
+    delivery_port: DeliveryPort,
     request_context,
 ):
     message_id = message.get("message_id")
@@ -350,7 +353,9 @@ def handle_feature_panel_callback(
                 provider_port=provider_port,
                 app_settings=request_context.app_settings,
             )
-            send_scene_menu(token, chat_id, db, session, message_id, request_context=request_context)
+            send_scene_menu(
+                token, chat_id, db, session, message_id, delivery_port=delivery_port, request_context=request_context
+            )
         elif action == "clear":
             send_panel_message(
                 token,
@@ -371,7 +376,9 @@ def handle_feature_panel_callback(
         elif action == "clear_confirm":
             clear_scene_state(db, chat_id, session_id)
             answer_callback(token, str(callback.get("id", "")), "Scene cleared")
-            send_scene_menu(token, chat_id, db, session, message_id, request_context=request_context)
+            send_scene_menu(
+                token, chat_id, db, session, message_id, delivery_port=delivery_port, request_context=request_context
+            )
         return True
     if data.startswith("goal:"):
         action = data.split(":", 1)[1]
@@ -391,7 +398,9 @@ def handle_feature_panel_callback(
         elif action == "clear":
             set_director_goal(db, chat_id, session_id, "")
             answer_callback(token, str(callback.get("id", "")), "Objective cleared")
-            send_director_goal_menu(token, chat_id, db, session, message_id, request_context=request_context)
+            send_director_goal_menu(
+                token, chat_id, db, session, message_id, delivery_port=delivery_port, request_context=request_context
+            )
         return True
     if data.startswith("curated:"):
         action = data.split(":", 1)[1]
@@ -417,7 +426,15 @@ def handle_feature_panel_callback(
                     provider_port=provider_port,
                     app_settings=request_context.app_settings,
                 )
-                send_curated_memory_menu(token, chat_id, db, session, message_id, request_context=request_context)
+                send_curated_memory_menu(
+                    token,
+                    chat_id,
+                    db,
+                    session,
+                    message_id,
+                    delivery_port=delivery_port,
+                    request_context=request_context,
+                )
         elif action == "back":
             send_memory_menu(token, chat_id, db, message_id, request_context=request_context)
         return True

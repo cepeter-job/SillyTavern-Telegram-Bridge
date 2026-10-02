@@ -9,8 +9,8 @@ from application_test_setup import (
 from settings_test_support import SettingsTestCase
 
 import bridge.bot_commands as _owner_bot_commands
-import bridge.feature_panels as _owner_feature_panels
 import bridge.help_details as _owner_help_details
+import bridge.memory_curator as _owner_memory_curator
 import bridge.provider_discovery as _owner_provider_discovery
 import bridge.sync_panels as _owner_sync_panels
 import bridge.telegram as _owner_telegram
@@ -441,11 +441,8 @@ class HelpDrilldownTests(SettingsTestCase):
         )
         calls = []
         original_prompt_panel = prompt_panels.send_panel_message
-        original_panel = _owner_feature_panels.send_panel_message
         original_groups = _owner_provider_discovery.get_model_groups
-        _owner_feature_panels.send_panel_message = prompt_panels.send_panel_message = lambda *args, **kwargs: (
-            calls.append((args, kwargs))
-        )
+        prompt_panels.send_panel_message = lambda *args, **kwargs: calls.append((args, kwargs))
         _owner_provider_discovery.get_model_groups = lambda *, app_settings=None: {}
         try:
             _m_command_routes.send_prompt_menu(
@@ -476,7 +473,7 @@ class HelpDrilldownTests(SettingsTestCase):
             )
             self.assertIn("scene:refresh", str(scene_calls[-1]))
             _m_director_goals.set_director_goal(self.db, "chat", session["session_id"], "Reveal the door")
-            _owner_feature_panels.send_director_goal_menu(
+            _m_director_goals.send_director_goal_menu(
                 "token",
                 "chat",
                 self.db,
@@ -484,20 +481,25 @@ class HelpDrilldownTests(SettingsTestCase):
                 request_context=make_test_request_context(
                     self.db, session["session_id"], app_settings=self.app_settings_builder.build()
                 ),
+                delivery_port=make_test_delivery_port(
+                    send_panel_request=lambda *args, **kwargs: calls.append((args, kwargs)) or {}
+                ),
             )
             self.assertIn("goal:set", str(calls[-1]))
-            _owner_feature_panels.send_curated_memory_menu(
+            _owner_memory_curator.send_curated_memory_menu(
                 "token",
                 "chat",
                 self.db,
                 session,
                 request_context=make_test_request_context(
                     self.db, session["session_id"], app_settings=self.app_settings_builder.build()
+                ),
+                delivery_port=make_test_delivery_port(
+                    send_panel_request=lambda *args, **kwargs: calls.append((args, kwargs)) or {}
                 ),
             )
             self.assertIn("curated:refresh", str(calls[-1]))
         finally:
-            _owner_feature_panels.send_panel_message = original_panel
             prompt_panels.send_panel_message = original_prompt_panel
             _owner_provider_discovery.get_model_groups = original_groups
 

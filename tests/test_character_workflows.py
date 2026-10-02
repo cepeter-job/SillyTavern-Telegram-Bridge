@@ -328,7 +328,6 @@ def test_manual_optimizer_suggestion_preserves_safe_fallback_on_provider_failure
     assert target.read_bytes() == original
 
 
-
 def test_pending_optimizer_does_not_consume_bot_command(card_context, monkeypatch):
     from bridge import character_optimizer_input, input_flows
     from bridge.metadata import get_meta, set_meta

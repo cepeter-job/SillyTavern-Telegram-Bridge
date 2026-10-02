@@ -118,6 +118,33 @@ def test_prestart_character_upload_state_is_actor_scoped(novel_db, monkeypatch):
     assert sent == ["Please use /start command."]
 
 
+def test_prestart_non_image_document_keeps_management_route(novel_db, monkeypatch):
+    db, _session, settings = novel_db
+    sent = []
+    from bridge.main import _build_startup_services
+    from bridge.model_router import ModelRouter
+
+    services = _build_startup_services(settings, model_router=ModelRouter(load_catalog=lambda: {}))
+    jobs = Mock()
+    jobs.enqueue.return_value = 32
+    jobs.submit.return_value = True
+    services = replace(
+        services, jobs=jobs, telegram=replace(services.telegram, send_text=lambda *a: sent.append(a[2]) or [1])
+    )
+    message = {
+        "chat": {"id": "chat"},
+        "from": {"id": "owner"},
+        "message_id": 11,
+        "document": {"file_id": "pdf", "file_name": "notes.pdf", "mime_type": "application/pdf"},
+    }
+
+    assert update_message_routing.route_message_update(services, db, {}, message, 11, frozenset({"owner"}))
+    jobs.enqueue.assert_called_once()
+    assert jobs.enqueue.call_args.args[5] == "document"
+    assert jobs.enqueue.call_args.args[6]["character_upload"] is False
+    assert sent == ["📄 Document queued for character-card processing or Data Bank indexing."]
+
+
 def run_start(db, session, settings, command="/start"):
     services = make_test_application_services(app_settings=settings)
     return command_routes._handle_basic(

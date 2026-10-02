@@ -11,6 +11,7 @@ import stat
 import tempfile
 import time
 from collections.abc import Callable
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,13 @@ from bridge.topic_scope import parse_topic_scope, topic_scope_id
 
 VersionBackend = Callable[..., str]
 SendTextBackend = Callable[[str, str, str], Any]
+
+
+class UpdateAckStatus(str, Enum):
+    ABSENT = "absent"
+    DELIVERED = "delivered"
+    REVISION_MISMATCH = "revision_mismatch"
+    RETRYABLE_ERROR = "retryable_error"
 
 
 def pending_update_ack_path(app_settings: AppSettings) -> Path:
@@ -110,6 +118,37 @@ def _read(path: Path) -> dict | None:
         return None
 
 
+def attempt_pending_update_ack(
+    token: str,
+    *,
+    app_settings: AppSettings,
+    send_text_backend: SendTextBackend,
+    version_backend: VersionBackend | None = None,
+    commit_backend: VersionBackend | None = None,
+) -> UpdateAckStatus:
+    path = pending_update_ack_path(app_settings)
+    pending = _read(path)
+    if pending is None:
+        return UpdateAckStatus.ABSENT
+    try:
+        current = capture_deployment(app_settings) if version_backend is None or commit_backend is None else None
+        version = version_backend(app_settings=app_settings) if version_backend else current.version
+        commit = commit_backend(app_settings=app_settings) if commit_backend else current.commit
+    except Exception:
+        logging.warning("Post-restart update acknowledgement identity could not be resolved")
+        return UpdateAckStatus.RETRYABLE_ERROR
+    if version != pending["version"] or commit != pending["commit"]:
+        logging.warning("Update acknowledgement does not match the loaded process revision")
+        return UpdateAckStatus.REVISION_MISMATCH
+    try:
+        send_text_backend(token, pending["chat_id"], f"✅ Update complete — Running v{version} successfully.")
+    except Exception:
+        logging.warning("Post-restart update acknowledgement could not be delivered")
+        return UpdateAckStatus.RETRYABLE_ERROR
+    _discard(path)
+    return UpdateAckStatus.DELIVERED
+
+
 def acknowledge_pending_update(
     token: str,
     *,
@@ -118,20 +157,13 @@ def acknowledge_pending_update(
     version_backend: VersionBackend | None = None,
     commit_backend: VersionBackend | None = None,
 ) -> bool:
-    path = pending_update_ack_path(app_settings)
-    pending = _read(path)
-    if pending is None:
-        return False
-    try:
-        current = capture_deployment(app_settings) if version_backend is None or commit_backend is None else None
-        version = version_backend(app_settings=app_settings) if version_backend else current.version
-        commit = commit_backend(app_settings=app_settings) if commit_backend else current.commit
-        if version != pending["version"] or commit != pending["commit"]:
-            logging.warning("Update acknowledgement does not match the loaded process revision")
-            return False
-        send_text_backend(token, pending["chat_id"], f"✅ Update complete — Running v{version} successfully.")
-    except Exception:
-        logging.warning("Post-restart update acknowledgement could not be delivered")
-        return False
-    _discard(path)
-    return True
+    return (
+        attempt_pending_update_ack(
+            token,
+            app_settings=app_settings,
+            send_text_backend=send_text_backend,
+            version_backend=version_backend,
+            commit_backend=commit_backend,
+        )
+        is UpdateAckStatus.DELIVERED
+    )

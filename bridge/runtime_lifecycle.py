@@ -6,6 +6,7 @@ import logging
 import signal
 import sqlite3
 import threading
+import time
 import urllib.error
 
 from bridge.background import shutdown_background_executors
@@ -14,11 +15,13 @@ from bridge.metadata import get_meta
 from bridge.runtime_health import capture_deployment
 from bridge.sqlite_store import run_database_maintenance, write_transaction
 from bridge.sync_api import start_live_sync_worker, stop_live_sync_worker
-from bridge.update_ack import acknowledge_pending_update, pending_update_ack_path
+from bridge.update_ack import UpdateAckStatus, attempt_pending_update_ack, pending_update_ack_path
 from bridge.update_routing import route_update
 from bridge.worker_orchestration import make_durable_backlog_dispatcher, resolve_recovered_job_submission
 
 _SHUTDOWN_EVENT = threading.Event()
+_ACK_RETRY_INITIAL_SECONDS = 60.0
+_ACK_RETRY_MAX_SECONDS = 300.0
 
 
 def request_bridge_shutdown(
@@ -68,7 +71,9 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
         health.begin(config)
     deployment = health.deployment if health is not None else capture_deployment(config)
     pending_at_boot = pending_update_ack_path(config).exists()
-    ack_done = False
+    ack_terminal = False
+    ack_retry_at = 0.0
+    ack_retry_delay = _ACK_RETRY_INITIAL_SECONDS
     first_poll = True
     _SHUTDOWN_EVENT.clear()
     install_bridge_signal_handlers(services.background.begin_shutdown)
@@ -109,14 +114,21 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
             first_poll = False
             if health is not None:
                 health.poll_succeeded()
-            if pending_at_boot and not ack_done:
-                ack_done = acknowledge_pending_update(
+            now = time.monotonic()
+            if pending_at_boot and not ack_terminal and now >= ack_retry_at:
+                ack_status = attempt_pending_update_ack(
                     token,
                     app_settings=config,
                     send_text_backend=services.telegram.send_text,
                     version_backend=lambda **kwargs: deployment.version,
                     commit_backend=lambda **kwargs: deployment.commit,
                 )
+                if ack_status is UpdateAckStatus.RETRYABLE_ERROR:
+                    ack_retry_at = now + ack_retry_delay
+                    logging.info("Update acknowledgement retry deferred for %.0fs", ack_retry_delay)
+                    ack_retry_delay = min(_ACK_RETRY_MAX_SECONDS, ack_retry_delay * 2)
+                else:
+                    ack_terminal = True
             for update in updates:
                 last_safe_offset = offset
                 offset = route_update(

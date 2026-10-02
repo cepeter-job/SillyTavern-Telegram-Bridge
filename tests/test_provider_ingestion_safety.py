@@ -210,7 +210,7 @@ def test_character_upload_rejects_png_without_chara_metadata(interaction, monkey
     db, settings, services, session, _raw = interaction
     set_meta(
         db,
-        "character_upload:chat",
+        "character_upload:chat:owner",
         json.dumps(
             {
                 "session_id": session["session_id"],
@@ -243,7 +243,7 @@ def test_character_upload_rejects_png_without_chara_metadata(interaction, monkey
 
     assert image_calls == []
     assert delivered == ["This PNG is not a valid SillyTavern character card; chara metadata was not found."]
-    assert get_meta(db, "character_upload:chat") == ""
+    assert get_meta(db, "character_upload:chat:owner") == ""
 
 
 def test_world_upload_requires_initiating_actor_and_session(interaction):

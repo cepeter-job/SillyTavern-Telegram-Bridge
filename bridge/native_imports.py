@@ -330,7 +330,7 @@ def import_character_card(
 def _consume_character_upload(db: sqlite3.Connection, chat_id: str, request_context: RequestContext) -> bool:
     """Consume a live Character → Upload prompt owned by this actor/session."""
     with write_transaction(db):
-        key = f"character_upload:{chat_id}"
+        key = f"character_upload:{chat_id}:{request_context.actor_id}"
         raw_state = get_meta(db, key)
         if not raw_state:
             return False

@@ -378,6 +378,7 @@ def route_message_update(
                 "model": model,
                 "resolve_active": False,
                 "actor_id": sender,
+                "character_upload": pending_character_upload,
             },
         )
         queued = services.jobs.submit(
@@ -394,6 +395,7 @@ def route_message_update(
                     message_id,
                     queued_session_id,
                     None,
+                    pending_character_upload,
                 ),
             ),
         )

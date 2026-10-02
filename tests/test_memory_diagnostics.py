@@ -193,6 +193,28 @@ def test_preexisting_tracemalloc_is_never_stopped(tmp_path, monkeypatch):
         tracemalloc.stop()
 
 
+def test_preexisting_tracemalloc_capture_does_not_take_snapshot(tmp_path, monkeypatch):
+    diagnostics = _diagnostics(tmp_path)
+    monkeypatch.setattr(memory_diagnostics, "_resident_memory_kib", lambda: 384 * 1024)
+    monkeypatch.setattr(
+        memory_diagnostics.tracemalloc,
+        "take_snapshot",
+        lambda: pytest.fail("diagnostics must not snapshot a tracer it does not own"),
+    )
+    tracemalloc.stop()
+    tracemalloc.start(1)
+
+    try:
+        assert diagnostics.sample_once() is DiagnosticState.CAPTURED
+        report = json.loads(_report_files(diagnostics)[0].read_text())
+        assert report["traced_current_bytes"] is None
+        assert report["traced_peak_bytes"] is None
+        assert report["top_sites"] == []
+        assert tracemalloc.is_tracing()
+    finally:
+        tracemalloc.stop()
+
+
 class _FakeThread:
     def __init__(self, *, target, name, daemon):
         self.target = target

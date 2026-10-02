@@ -35,7 +35,6 @@ from bridge.memory_backend import (
     recall_memory_results,
 )
 from bridge.memory_backend import _retain_with_client as _retain_with_client
-from bridge.memory_backend import close_hindsight_client as close_hindsight_client
 from bridge.memory_backend import hindsight_client as hindsight_client
 from bridge.memory_backend import hindsight_conversation_document_id as hindsight_conversation_document_id
 from bridge.memory_backend import hindsight_explicit_document_id as hindsight_explicit_document_id

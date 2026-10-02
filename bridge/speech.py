@@ -159,13 +159,14 @@ def transcribe_audio_bytes(
     from faster_whisper import WhisperModel
 
     model_name = model_name or app_settings.environ.get("SILLYTAVERN_STT_MODEL", STT_DEFAULT_MODEL)
-    model = _STT_MODEL_CACHE.get(model_name)
-    if model is None:
-        with _STT_MODEL_LOCK:
-            model = _STT_MODEL_CACHE.get(model_name)
-            if model is None:
-                model = WhisperModel(model_name, device="cpu", compute_type="int8")
-                _STT_MODEL_CACHE[model_name] = model
+    with _STT_MODEL_LOCK:
+        model = _STT_MODEL_CACHE.get(model_name)
+        if model is None:
+            # Retain one idle model. In-flight callers keep their own reference;
+            # evict before loading so idle weights do not inflate the load peak.
+            _STT_MODEL_CACHE.clear()
+            model = WhisperModel(model_name, device="cpu", compute_type="int8")
+            _STT_MODEL_CACHE[model_name] = model
     with tempfile.NamedTemporaryFile(prefix="st-stt-", suffix=suffix, delete=True) as audio_file:
         audio_file.write(raw)
         audio_file.flush()

@@ -234,13 +234,6 @@ def live_sync_toggle_realtime(
     return "realtime API sync enabled; " + result
 
 
-def live_sync_status_line(db: sqlite3.Connection, chat_id: str, session_id: str, *, app_settings: AppSettings) -> str:
-    binding = sync_binding(db, chat_id, session_id)
-    enabled = "on" if binding.get("realtime_enabled") else "off"
-    configured = "configured" if _st_api.live_sync_api_configured(app_settings=app_settings) else "not configured"
-    return f"Live API sync: {enabled} ({configured})"
-
-
 def _make_sync_poll_safety(*, app_settings: AppSettings, retain_memory: RetainSessionMemory):
     return _SyncPollSafetyAdapter(
         sync_now=(

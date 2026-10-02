@@ -6,6 +6,7 @@ import concurrent.futures
 import logging
 import threading
 import time
+import weakref
 from collections import deque
 from collections.abc import Callable
 from typing import ParamSpec, TypeVar
@@ -30,7 +31,7 @@ _UTILITY_EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
 _GENERATION_LABELS = {"generation", "command", "retry", "regen", "continue", "edit", "summarize"}
 
 
-_CHAT_LOCKS: dict[str, threading.Lock] = {}
+_CHAT_LOCKS: weakref.WeakValueDictionary[str, threading.Lock] = weakref.WeakValueDictionary()
 
 
 _CHAT_LOCKS_GUARD = threading.Lock()
@@ -49,6 +50,7 @@ _BACKGROUND_ACCEPTING = True
 
 
 def chat_job_lock(chat_id: str) -> threading.Lock:
+    """Share a lock while a holder or waiter owns it; do not retain idle scopes."""
     with _CHAT_LOCKS_GUARD:
         return _CHAT_LOCKS.setdefault(str(chat_id), threading.Lock())
 

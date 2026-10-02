@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import inspect
 import ipaddress
 import json
 import logging
@@ -13,6 +12,7 @@ import re
 import sqlite3
 import threading
 import time
+import weakref
 from urllib.parse import urlsplit
 
 from bridge.limits import (
@@ -86,76 +86,22 @@ def hindsight_client(*, app_settings: AppSettings):
     return Hindsight(base_url=base_url, api_key=api_key, timeout=30.0, user_agent="SillyTavernTelegramBridge/1.0")
 
 
-_HINDSIGHT_SESSION_LOCKS: dict[tuple[str, str], threading.RLock] = {}
+_HINDSIGHT_SESSION_LOCKS: weakref.WeakValueDictionary[tuple[str, str], threading.RLock] = weakref.WeakValueDictionary()
 _HINDSIGHT_SESSION_LOCKS_GUARD = threading.Lock()
 
 
-async def _close_hindsight_client_async(client) -> None:
-    """Close a Hindsight client on the caller's active event loop."""
-    aclose = getattr(client, "aclose", None)
-    if callable(aclose):
-        result = aclose()
-        if inspect.isawaitable(result):
-            await result
-        return
-
-    # Compatibility fallback for older SDKs and narrow test doubles.
-    seen = set()
-    candidates = [
-        getattr(client, "_memory_api", None),
-        getattr(client, "documents", None),
-        getattr(client, "api_client", None),
-    ]
-    for candidate in candidates:
-        api_client = getattr(candidate, "api_client", candidate)
-        if api_client is None or id(api_client) in seen:
-            continue
-        seen.add(id(api_client))
-        close = getattr(api_client, "close", None)
-        if close is None:
-            continue
-        result = close()
-        if inspect.isawaitable(result):
-            await result
-
-
 def close_hindsight_client(client) -> None:
-    """Close a synchronous Hindsight wrapper on its SDK-owned event loop."""
+    """Close the supported SDK wrapper on its own synchronous lifecycle."""
     if client is None:
         return
     try:
-        close = getattr(client, "close", None)
-        if callable(close):
-            result = close()
-            if inspect.isawaitable(result):
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                if loop.is_running():
-                    raise RuntimeError("async Hindsight close returned on a running event loop")
-                loop.run_until_complete(result)
-            return
-
-        # Compatibility fallback: reuse the thread-local loop instead of
-        # creating a new loop with asyncio.run().
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        if loop.is_closed():
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        if loop.is_running():
-            raise RuntimeError("cannot synchronously close Hindsight client on a running event loop")
-        loop.run_until_complete(_close_hindsight_client_async(client))
+        client.close()
     except Exception:
         logging.debug("Could not close Hindsight client cleanly", exc_info=True)
 
 
 def hindsight_session_lock(chat_id: str, session_id: str) -> threading.RLock:
+    """Keep one reentrant lock per live scope without retaining past sessions."""
     key = (str(chat_id), str(session_id))
     with _HINDSIGHT_SESSION_LOCKS_GUARD:
         return _HINDSIGHT_SESSION_LOCKS.setdefault(key, threading.RLock())
@@ -260,7 +206,7 @@ async def _delete_hindsight_session_documents_and_close(
     try:
         return await _delete_hindsight_session_documents(client, bank_id, session_id, mapped_ids)
     finally:
-        await _close_hindsight_client_async(client)
+        await client.aclose()
 
 
 def _purge_hindsight_session_backend(

@@ -733,6 +733,9 @@ class AuditRegressionTests(SettingsTestCase):
         calls = []
 
         class FakeClient:
+            def close(self):
+                pass
+
             def recall(self, **kwargs):
                 calls.append(kwargs)
                 return type("Result", (), {"results": []})()

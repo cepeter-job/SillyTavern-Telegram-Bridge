@@ -4,11 +4,46 @@ from __future__ import annotations
 
 from bridge.callback_tokens import dynamic_callback_token
 from bridge.cards import send_panel_message
-from bridge.image_routing import IMAGE_SIZE_PRESETS, image_model_options, session_image_settings
+from bridge.image_reference import load_character_reference
+from bridge.image_routing import (
+    AUTO_IMAGE_SELECTION,
+    IMAGE_SIZE_PRESETS,
+    image_model_options,
+    resolve_image_route,
+    session_image_settings,
+)
 
 
 def _short_model(selection: str) -> str:
     return selection.split("::", 1)[-1] if selection else "Not configured"
+
+
+def _display_settings(
+    selection: str,
+    size: str,
+    character_file: str,
+    *,
+    app_settings,
+) -> tuple[str, str]:
+    model_label = _short_model(selection)
+    size_label = size
+    try:
+        reference = load_character_reference(character_file, app_settings=app_settings)
+        route = resolve_image_route(
+            selection,
+            reference_available=reference is not None,
+            app_settings=app_settings,
+        )
+    except ValueError:
+        return model_label, size_label
+
+    if selection == AUTO_IMAGE_SELECTION:
+        model_label = f"Auto → {route.model}"
+        if route.transport == "reference":
+            model_label += " · character reference"
+    if route.transport == "reference" and route.model.casefold() == "step-image-edit-2" and size != "1024x1024":
+        size_label = "Auto (reference model)"
+    return model_label, size_label
 
 
 def imagine_panel(
@@ -16,6 +51,7 @@ def imagine_panel(
     chat_id: str,
     session_id: str,
     *,
+    character_file: str = "",
     app_settings,
 ) -> tuple[str, dict]:
     try:
@@ -25,7 +61,13 @@ def imagine_panel(
             session_id,
             app_settings=app_settings,
         )
-        settings_line = f"Model: {_short_model(selection)}\nSize: {size}"
+        model_label, size_label = _display_settings(
+            selection,
+            size,
+            character_file,
+            app_settings=app_settings,
+        )
+        settings_line = f"Model: {model_label}\nSize: {size_label}"
     except ValueError:
         settings_line = "Model: Not configured\nSize: 1024x1024"
 
@@ -53,6 +95,7 @@ def imagine_options_panel(
     chat_id: str,
     session_id: str,
     *,
+    character_file: str = "",
     app_settings,
 ) -> tuple[str, dict]:
     try:
@@ -62,7 +105,12 @@ def imagine_options_panel(
             session_id,
             app_settings=app_settings,
         )
-        model = _short_model(selection)
+        model, size = _display_settings(
+            selection,
+            size,
+            character_file,
+            app_settings=app_settings,
+        )
     except ValueError:
         model, size = "Not configured", "1024x1024"
 
@@ -183,6 +231,7 @@ def send_imagine_menu(token, chat_id, db, session, message_id=None, *, request_c
         db,
         chat_id,
         str(session["session_id"]),
+        character_file=str(session.get("character_file") or ""),
         app_settings=request_context.app_settings,
     )
     _send(token, chat_id, text, markup, message_id, request_context=request_context)

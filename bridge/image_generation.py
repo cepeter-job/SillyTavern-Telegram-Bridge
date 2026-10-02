@@ -443,6 +443,15 @@ def imagine_prompt_input_max_chars(
     return _reference_scene_max_chars(route)
 
 
+def _cleanup_image_progress(token: str, chat_id: str, progress_ids: list[int]) -> None:
+    real_chat_id, _thread_id = parse_topic_scope(chat_id)
+    for message_id in progress_ids:
+        try:
+            telegram_request(token, "deleteMessage", {"chat_id": real_chat_id, "message_id": int(message_id)})
+        except Exception:
+            logging.info("Could not delete image-generation progress message %s", message_id, exc_info=True)
+
+
 def _deliver_resolved_image(
     token: str,
     chat_id: str,
@@ -454,20 +463,16 @@ def _deliver_resolved_image(
     app_settings: AppSettings,
 ) -> None:
     progress_ids = send_text(token, chat_id, "🎨 Generating image…")
-    if route.transport == "reference":
-        if reference is None:
-            raise ValueError(f"Image model {route.selection} requires a usable character reference")
-        raw, _revised, _used = edit_image(route, prompt, reference, size, app_settings=app_settings)
-    else:
-        raw, _revised, _used = generate_image(route.selection, prompt, size, app_settings=app_settings)
-    _multipart_photo(token, chat_id, raw, "")
-
-    real_chat_id, _thread_id = parse_topic_scope(chat_id)
-    for message_id in progress_ids:
-        try:
-            telegram_request(token, "deleteMessage", {"chat_id": real_chat_id, "message_id": int(message_id)})
-        except Exception:
-            logging.info("Could not delete image-generation progress message %s", message_id, exc_info=True)
+    try:
+        if route.transport == "reference":
+            if reference is None:
+                raise ValueError(f"Image model {route.selection} requires a usable character reference")
+            raw, _revised, _used = edit_image(route, prompt, reference, size, app_settings=app_settings)
+        else:
+            raw, _revised, _used = generate_image(route.selection, prompt, size, app_settings=app_settings)
+        _multipart_photo(token, chat_id, raw, "")
+    finally:
+        _cleanup_image_progress(token, chat_id, progress_ids)
 
 
 def handle_imagine_scene(
@@ -554,12 +559,8 @@ def handle_imagine_prompt(
     if not prompt or len(prompt) > prompt_max_chars:
         raise ValueError(f"Image prompt for {model} must contain 1–{prompt_max_chars:,} characters")
     progress_ids = send_text(token, chat_id, "🎨 Generating image…")
-    raw, _revised, _used = generate_image(selection, prompt, size, app_settings=app_settings)
-    _multipart_photo(token, chat_id, raw, "")
-
-    real_chat_id, _thread_id = parse_topic_scope(chat_id)
-    for message_id in progress_ids:
-        try:
-            telegram_request(token, "deleteMessage", {"chat_id": real_chat_id, "message_id": int(message_id)})
-        except Exception:
-            logging.info("Could not delete image-generation progress message %s", message_id, exc_info=True)
+    try:
+        raw, _revised, _used = generate_image(selection, prompt, size, app_settings=app_settings)
+        _multipart_photo(token, chat_id, raw, "")
+    finally:
+        _cleanup_image_progress(token, chat_id, progress_ids)

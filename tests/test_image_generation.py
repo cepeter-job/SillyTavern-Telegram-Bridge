@@ -346,6 +346,84 @@ class ImageGenerationTests(SettingsTestCase):
             )
         self.assertNotIn(b'name="size"', captured[0])
 
+    def test_imagine_provider_failure_removes_progress_message(self):
+        events = []
+
+        with (
+            patch.object(_m_image_generation, "send_text", return_value=[321]),
+            patch.object(_m_image_generation, "generate_image", side_effect=RuntimeError("provider failed")),
+            patch.object(
+                _m_image_generation,
+                "telegram_request",
+                side_effect=lambda _token, method, payload: events.append((method, payload)) or {},
+            ),
+            self.assertRaisesRegex(RuntimeError, "provider failed"),
+        ):
+            _m_image_generation.handle_imagine_prompt(
+                "token",
+                "chat",
+                "a small moon",
+                selection="test-image::test-model",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(events, [("deleteMessage", {"chat_id": "chat", "message_id": 321})])
+
+    def test_imagine_delivery_failure_removes_progress_message(self):
+        events = []
+
+        with (
+            patch.object(_m_image_generation, "send_text", return_value=[322]),
+            patch.object(
+                _m_image_generation,
+                "generate_image",
+                return_value=(b"PNG-DATA", "", "test-image::test-model"),
+            ),
+            patch.object(_m_image_generation, "_multipart_photo", side_effect=RuntimeError("delivery failed")),
+            patch.object(
+                _m_image_generation,
+                "telegram_request",
+                side_effect=lambda _token, method, payload: events.append((method, payload)) or {},
+            ),
+            self.assertRaisesRegex(RuntimeError, "delivery failed"),
+        ):
+            _m_image_generation.handle_imagine_prompt(
+                "token",
+                "chat",
+                "a small moon",
+                selection="test-image::test-model",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(events, [("deleteMessage", {"chat_id": "chat", "message_id": 322})])
+
+    def test_progress_delete_failure_does_not_mask_successful_image_delivery(self):
+        delivered = []
+
+        with (
+            patch.object(_m_image_generation, "send_text", return_value=[323]),
+            patch.object(
+                _m_image_generation,
+                "generate_image",
+                return_value=(b"PNG-DATA", "", "test-image::test-model"),
+            ),
+            patch.object(
+                _m_image_generation,
+                "_multipart_photo",
+                side_effect=lambda _token, _chat, _raw, caption: delivered.append(caption),
+            ),
+            patch.object(_m_image_generation, "telegram_request", side_effect=RuntimeError("delete failed")),
+        ):
+            _m_image_generation.handle_imagine_prompt(
+                "token",
+                "chat",
+                "a small moon",
+                selection="test-image::test-model",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(delivered, [""])
+
     def test_command_is_registered(self):
         source = Path(_m_image_generation.__file__).parent / "bot_commands.py"
         self.assertIn('"command": "imagine"', source.read_text(encoding="utf-8"))
@@ -834,6 +912,79 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
             callbacks,
             {"imagine:scene", "imagine:custom", "imagine:options", "imagine:close"},
         )
+
+    def test_auto_model_panel_shows_auto_selected(self):
+        self._configure_auto_catalog()
+        _text, markup = _m_image_panels.imagine_model_panel(
+            self.db,
+            "chat",
+            self.session["session_id"],
+            app_settings=self.app_settings_builder.build(),
+        )
+        labels = [button["text"] for row in markup["inline_keyboard"] for button in row]
+        self.assertIn("✅ Auto", labels)
+
+    def test_auto_panel_shows_resolved_reference_model(self):
+        self._configure_auto_catalog()
+        text, _markup = _m_image_panels.imagine_panel(
+            self.db,
+            "chat",
+            self.session["session_id"],
+            character_file="Mira.png",
+            app_settings=self.app_settings_builder.build(),
+        )
+        self.assertIn("Auto → step-image-edit-2", text)
+        self.assertIn("character reference", text)
+
+    def test_manual_text_panel_remains_visibly_manual(self):
+        self._configure_auto_catalog()
+        settings = self.app_settings_builder.build()
+        _m_image_generation.set_session_image_model(
+            self.db,
+            "chat",
+            self.session["session_id"],
+            "test-image::chroma",
+            app_settings=settings,
+        )
+        text, _markup = _m_image_panels.imagine_panel(
+            self.db,
+            "chat",
+            self.session["session_id"],
+            character_file="Mira.png",
+            app_settings=settings,
+        )
+        self.assertIn("Model: chroma", text)
+        self.assertNotIn("Auto →", text)
+
+    def test_reference_route_with_unsupported_size_shows_provider_controlled_sizing(self):
+        self._configure_auto_catalog()
+        settings = self.app_settings_builder.build()
+        _m_image_generation.set_session_image_size(
+            self.db,
+            "chat",
+            self.session["session_id"],
+            "1536x1024",
+        )
+        text, _markup = _m_image_panels.imagine_options_panel(
+            self.db,
+            "chat",
+            self.session["session_id"],
+            character_file="Mira.png",
+            app_settings=settings,
+        )
+        self.assertIn("Size: Auto (reference model)", text)
+        self.assertNotIn("Size: 1536x1024", text)
+
+    def test_model_panel_without_image_models_keeps_setup_guidance(self):
+        self.catalog.write_text("providers: {}\n", encoding="utf-8")
+        _text, markup = _m_image_panels.imagine_model_panel(
+            self.db,
+            "chat",
+            self.session["session_id"],
+            app_settings=self.app_settings_builder.build(),
+        )
+        labels = [button["text"] for row in markup["inline_keyboard"] for button in row]
+        self.assertIn("No image models configured", labels)
 
     def test_image_options_are_session_scoped_and_resettable(self):
         settings = self.app_settings_builder.build()

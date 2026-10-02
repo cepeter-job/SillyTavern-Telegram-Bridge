@@ -198,7 +198,7 @@ class GenerationContinuationTests(SettingsTestCase):
         ]
         _m_provider_transport.strict_urlopen = lambda _request, **_kwargs: responses.pop(0)
 
-        with self.assertLogs("bridge.provider_transport", level="WARNING"):
+        with self.assertLogs(level="WARNING"):
             result = _m_provider_transport.generate_provider_text(
                 self.router,
                 "",

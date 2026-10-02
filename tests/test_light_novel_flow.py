@@ -252,6 +252,7 @@ def test_failed_turn_recovery_callback_queues_strategy_b_for_only_that_turn(nove
     sent = []
     services = bridge_services(settings, sent)
     submissions = []
+    worker = Mock()
 
     def submit_chat(label, chat_id, worker, *args):
         submissions.append((label, chat_id, worker, args))
@@ -284,7 +285,7 @@ def test_failed_turn_recovery_callback_queues_strategy_b_for_only_that_turn(nove
         operation_id=700,
         actor_id="owner",
         services=services,
-        message_worker=lambda *args: None,
+        message_worker=worker,
     )
 
     row = db.execute(
@@ -298,6 +299,13 @@ def test_failed_turn_recovery_callback_queues_strategy_b_for_only_that_turn(nove
     assert payload["light_novel_strategy_override"] == "b"
     assert submissions[-1][0:2] == ("generation", "chat")
     assert conversation_state(db, "chat", "story").strategy == "a"
+
+    submission = submissions[-1]
+    assert not any(arg is services for arg in submission[3]), "Leaf job arguments must not include root services"
+    submission[2](*submission[3])
+    worker.assert_called_once_with(
+        services, {}, "chat", "Try a different response", -265, None, "story", "story::test", submission[3][-1]
+    )
 
 
 def test_opening_light_novel_commit_creates_first_choice_job(novel_db, monkeypatch):

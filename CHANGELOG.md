@@ -2,6 +2,39 @@
 
 All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
+## [0.2.056] - 2026-10-02
+
+### Fixed
+
+- Recover complete Light Novel story envelopes wrapped in a singleton JSON array
+  or a nonstandard full-response code fence, without logging private story text.
+- Offer explicit, session- and owner-scoped recovery routes after repeated Light
+  Novel protocol failures. Persist per-turn model and strategy overrides across
+  durable job recovery without changing session defaults.
+- Remove stale invalidated Light Novel choice panels when editing a manual reply.
+- Apply the selected image model's prompt ceiling to Current Scene and Custom
+  Prompt generation; use a 1,200-character ceiling for `z-image-turbo` and preserve
+  the generic 4,000-character fallback. Report provider prompt-limit errors safely.
+
+### Maintenance
+
+- Bound native/text caches with entry and byte budgets, release idle chat/session
+  lock identities, and retain only the latest idle speech model while preserving
+  active callers. Byte budgets do not promise an exact process-memory ceiling.
+- Use the pinned Hindsight SDK's public cleanup lifecycle and remove verified
+  unused helpers and retired private-client compatibility paths.
+- Consolidate read-only source-inspection test helpers, document maintainability
+  findings, and restore configuration-example and documentation-table consistency.
+- Exercise production Mini App job polling in the smoke test instead of a
+  test-only request burst; preserve the production rate limit.
+- Add the requested NanoGPT invitation panel to the README.
+
+### Compatibility
+
+- No dependency-lock or database-schema changes. Existing sessions, queued work,
+  public examples, callback isolation, and recovery boundaries are preserved.
+- Publishing this release does not deploy or restart a running bridge.
+
 ## [0.2.055] - 2026-10-01
 
 ### Fixed

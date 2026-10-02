@@ -6,12 +6,13 @@ import logging
 import sqlite3
 from collections.abc import Callable
 
-from bridge.composition import BridgeServices
 from bridge.conversation_lifecycle import conversation_state
 from bridge.failed_turns import latest_failed_turn
-from bridge.job_service import JobSubmission
+from bridge.job_service import JobService, JobSubmission
 from bridge.model_selection import task_model_for_session
 from bridge.panel_bindings import discard_panel_session
+from bridge.port_contracts import TelegramRequest
+from bridge.request_types import RequestContext
 
 _PROTOCOL_ERRORS = {
     "Story response has no usable narrative",
@@ -27,15 +28,16 @@ def _generation_update_id(operation_id: int | None) -> int:
 
 
 def _close_panel(
-    services: BridgeServices,
+    telegram_request: TelegramRequest,
+    token: str,
     db: sqlite3.Connection,
     chat_id: str,
     message_id: int,
     text: str,
 ) -> None:
     try:
-        services.telegram.request(
-            services.config.bot_token,
+        telegram_request(
+            token,
             "editMessageText",
             {
                 "chat_id": chat_id,
@@ -51,7 +53,6 @@ def _close_panel(
 
 
 def handle_failed_turn_retry_callback(
-    services: BridgeServices,
     db: sqlite3.Connection,
     callback: dict,
     chat_id: str,
@@ -59,12 +60,16 @@ def handle_failed_turn_retry_callback(
     operation_id: int | None,
     actor_id: str,
     *,
+    jobs: JobService,
+    telegram_request: TelegramRequest,
+    request_context: RequestContext,
     message_worker: Callable[..., None] | None,
 ) -> bool:
     data = str(callback.get("data") or "")
     if not data.startswith("lnturnretry:"):
         return False
 
+    app_settings = request_context.app_settings
     message_id = int((callback.get("message") or {}).get("message_id") or 0)
     try:
         parts = data.split(":")
@@ -87,18 +92,18 @@ def handle_failed_turn_retry_callback(
         if not state.started or state.mode != "lightnovel":
             raise ValueError("Retry panel expired")
         if route == "close":
-            _close_panel(services, db, chat_id, message_id, "Retry panel closed.")
+            _close_panel(telegram_request, app_settings.bot_token, db, chat_id, message_id, "Retry panel closed.")
             return True
         if route not in {"same", "current", "utility", "b", "c"} or message_worker is None:
             raise ValueError("Retry panel expired")
 
-        current_model = str(session.get("model_id") or services.config.default_model)
+        current_model = str(session.get("model_id") or app_settings.default_model)
         if route == "same":
             retry_model, retry_strategy = str(failed[2] or "") or current_model, "a"
         elif route == "current":
             retry_model, retry_strategy = current_model, "a"
         elif route == "utility":
-            retry_model = task_model_for_session(db, chat_id, session, "utility", app_settings=services.config)
+            retry_model = task_model_for_session(db, chat_id, session, "utility", app_settings=app_settings)
             retry_strategy = "a"
         else:
             retry_model, retry_strategy = current_model, route
@@ -111,7 +116,7 @@ def handle_failed_turn_retry_callback(
             "resolve_active": False,
             "epoch": state.epoch,
         }
-        job_id = services.jobs.enqueue(
+        job_id = jobs.enqueue(
             db,
             _generation_update_id(operation_id),
             chat_id,
@@ -120,7 +125,7 @@ def handle_failed_turn_retry_callback(
             "generation",
             payload,
         )
-        services.jobs.submit(
+        jobs.submit(
             db,
             job_id,
             JobSubmission(
@@ -128,7 +133,6 @@ def handle_failed_turn_retry_callback(
                 chat_id,
                 message_worker,
                 (
-                    services,
                     {},
                     chat_id,
                     str(failed[1]),
@@ -140,7 +144,9 @@ def handle_failed_turn_retry_callback(
             ),
         )
         label = f"Strategy {retry_strategy.upper()}" if retry_strategy != "a" else "Strategy A"
-        _close_panel(services, db, chat_id, message_id, f"Retry queued · {label}")
+        _close_panel(telegram_request, app_settings.bot_token, db, chat_id, message_id, f"Retry queued · {label}")
     except (ValueError, TypeError, IndexError):
-        _close_panel(services, db, chat_id, message_id, "Retry panel expired. Run /retry again.")
+        _close_panel(
+            telegram_request, app_settings.bot_token, db, chat_id, message_id, "Retry panel expired. Run /retry again."
+        )
     return True

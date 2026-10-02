@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
+from functools import partial
 
 from bridge.callback_tokens import resolve_dynamic_callback_token
 from bridge.callbacks import (
@@ -83,15 +84,17 @@ def process_callback(
     persona_service = services.persona
     sync_service = services.sync
 
-    if handle_failed_turn_retry_callback(
-        services,
+    if data.startswith("lnturnretry:") and handle_failed_turn_retry_callback(
         db,
         callback,
         chat_id,
         session,
         operation_id,
         sender,
-        message_worker=message_worker,
+        jobs=services.jobs,
+        telegram_request=services.telegram.request,
+        request_context=request_context,
+        message_worker=partial(message_worker, services) if message_worker is not None else None,
     ):
         return
 

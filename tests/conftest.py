@@ -10,11 +10,7 @@ _PRODUCTION_MAX_XDIST_WORKERS = 2
 
 def _production_host_marker() -> Path:
     configured_home = os.environ.get("SILLYTAVERN_BRIDGE_HOME", "").strip()
-    bridge_home = (
-        Path(configured_home).expanduser()
-        if configured_home
-        else Path.home() / ".local/share/sillytavern-telegram"
-    )
+    bridge_home = Path(configured_home).expanduser() if configured_home else Path.home() / ".local/share/sillytavern-telegram"
     return bridge_home / "PRODUCTION_HOST"
 
 

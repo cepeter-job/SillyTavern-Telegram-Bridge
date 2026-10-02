@@ -242,6 +242,7 @@ def send_imagine_options_menu(token, chat_id, db, session, message_id=None, *, r
         db,
         chat_id,
         str(session["session_id"]),
+        character_file=str(session.get("character_file") or ""),
         app_settings=request_context.app_settings,
     )
     _send(token, chat_id, text, markup, message_id, request_context=request_context)

@@ -975,6 +975,43 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         self.assertIn("Size: Auto (reference model)", text)
         self.assertNotIn("Size: 1536x1024", text)
 
+    def test_send_imagine_options_menu_uses_active_character_for_auto_resolution(self):
+        self._configure_auto_catalog()
+        settings = self.app_settings_builder.build()
+        _m_image_generation.set_session_image_size(
+            self.db,
+            "chat",
+            self.session["session_id"],
+            "1536x1024",
+        )
+        request_context = SimpleNamespace(app_settings=settings)
+        with patch.object(_m_image_panels, "_send") as send:
+            _m_image_panels.send_imagine_options_menu(
+                "token",
+                "chat",
+                self.db,
+                self.session,
+                request_context=request_context,
+            )
+        text = send.call_args.args[2]
+        self.assertIn("Auto → step-image-edit-2", text)
+        self.assertIn("character reference", text)
+        self.assertIn("Size: Auto (reference model)", text)
+
+    def test_missing_active_character_does_not_substitute_default_card_metadata(self):
+        (self.character_dir / "Default.png").write_bytes(_character_png("Default", "WRONG DEFAULT DESCRIPTION"))
+        self.app_settings_builder.default_character_file = "Default.png"
+        missing = dict(self.session)
+        missing["character_file"] = "Missing.png"
+
+        fields = _m_image_generation._visual_card_fields(
+            missing,
+            app_settings=self.app_settings_builder.build(),
+        )
+
+        self.assertEqual(fields["name"], "Missing")
+        self.assertEqual(fields["description"], "")
+
     def test_model_panel_without_image_models_keeps_setup_guidance(self):
         self.catalog.write_text("providers: {}\n", encoding="utf-8")
         _text, markup = _m_image_panels.imagine_model_panel(

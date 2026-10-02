@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from bridge.card_content import card_fields_from_file
+from bridge.card_content import card_fields_from_file, safe_character_path
 from bridge.generation_settings import get_generation_settings
 from bridge.image_reference import ImageReference, load_character_reference
 from bridge.image_routing import (
@@ -418,14 +418,17 @@ def _reference_prompt(scene_prompt: str, *, route: ImageRoute) -> str:
 
 def _visual_card_fields(session: dict[str, str], *, app_settings: AppSettings) -> dict[str, str]:
     character_file = str(session.get("character_file") or "")
+    fallback = {
+        "name": Path(character_file).stem[:200] or "character",
+        "description": "",
+    }
+    if safe_character_path(character_file, app_settings=app_settings) is None:
+        return fallback
     try:
         return card_fields_from_file(character_file, app_settings=app_settings)
     except (OSError, ValueError, UnicodeError):
         logging.info("Could not read character-card metadata for image prompting", exc_info=True)
-        return {
-            "name": Path(character_file).stem[:200] or "character",
-            "description": "",
-        }
+        return fallback
 
 
 def imagine_prompt_input_max_chars(

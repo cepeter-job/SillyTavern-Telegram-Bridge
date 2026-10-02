@@ -121,20 +121,33 @@ def _native_allocator_summary(smaps_file: Path = Path("/proc/self/smaps")) -> di
     rss_kib = 0
     for index, region in enumerate(regions[:-1]):
         following = regions[index + 1]
+        region_start = region.get("start")
+        region_end = region.get("end")
+        following_start = following.get("start")
+        following_end = following.get("end")
+        region_rss = region.get("rss_kib")
         if (
             region.get("name")
             or not str(region.get("perms") or "").startswith("rw")
             or following.get("name")
             or not str(following.get("perms") or "").startswith("---")
-            or int(following.get("start") or 0) != int(region.get("end") or -1)
+            or type(region_start) is not int
+            or type(region_end) is not int
+            or type(following_start) is not int
+            or type(following_end) is not int
+            or following_start != region_end
         ):
             continue
-        total_kib = (int(following["end"]) - int(region["start"])) // 1024
+        total_kib = (following_end - region_start) // 1024
         if total_kib < 32 * 1024:
             continue
         groups += 1
-        rss_kib += int(region.get("rss_kib") or 0)
+        rss_kib += region_rss if type(region_rss) is int and region_rss >= 0 else 0
     return {"arena_groups": groups, "arena_rss_kib": rss_kib}
+
+
+def _nonnegative_int(value: object) -> int:
+    return value if type(value) is int and value >= 0 else 0
 
 
 def _read_integer_file(path: Path) -> int:
@@ -597,10 +610,14 @@ class MemoryDiagnostics:
         report = self._build_report(rss_kib, now)
         self._write_report(path, report)
         self._rotate_reports(directory)
-        smaps = report.get("smaps_kib") if isinstance(report.get("smaps_kib"), Mapping) else {}
-        native = report.get("native_allocator") if isinstance(report.get("native_allocator"), Mapping) else {}
-        cgroup = report.get("cgroup") if isinstance(report.get("cgroup"), Mapping) else {}
-        counters = report.get("safe_counters") if isinstance(report.get("safe_counters"), Mapping) else {}
+        raw_smaps = report.get("smaps_kib")
+        raw_native = report.get("native_allocator")
+        raw_cgroup = report.get("cgroup")
+        raw_counters = report.get("safe_counters")
+        smaps: Mapping[str, object] = raw_smaps if isinstance(raw_smaps, Mapping) else {}
+        native: Mapping[str, object] = raw_native if isinstance(raw_native, Mapping) else {}
+        cgroup: Mapping[str, object] = raw_cgroup if isinstance(raw_cgroup, Mapping) else {}
+        counters: Mapping[str, object] = raw_counters if isinstance(raw_counters, Mapping) else {}
         providers = self._safe_provider_activity(report.get("provider_inflight"))
         provider_calls = (
             ",".join(
@@ -612,17 +629,17 @@ class MemoryDiagnostics:
             "memory_incident rss_kib=%s anonymous_kib=%s swap_kib=%s threads=%s "
             "arena_groups=%s arena_rss_kib=%s background_active=%s provider_inflight=%s "
             "cgroup_high_events=%s psi_some_avg10_x100=%s psi_full_avg10_x100=%s provider_calls=%s report=%s",
-            int(rss_kib),
-            int(smaps.get("Anonymous") or 0),
-            int(smaps.get("Swap") or 0),
-            int(report.get("thread_count") or 0),
-            int(native.get("arena_groups") or 0),
-            int(native.get("arena_rss_kib") or 0),
-            int(counters.get("background.active_total") or 0),
+            rss_kib,
+            _nonnegative_int(smaps.get("Anonymous")),
+            _nonnegative_int(smaps.get("Swap")),
+            _nonnegative_int(report.get("thread_count")),
+            _nonnegative_int(native.get("arena_groups")),
+            _nonnegative_int(native.get("arena_rss_kib")),
+            _nonnegative_int(counters.get("background.active_total")),
             len(providers),
-            int(cgroup.get("memory_high_events") or 0),
-            int(cgroup.get("psi_some_avg10_x100") or 0),
-            int(cgroup.get("psi_full_avg10_x100") or 0),
+            _nonnegative_int(cgroup.get("memory_high_events")),
+            _nonnegative_int(cgroup.get("psi_some_avg10_x100")),
+            _nonnegative_int(cgroup.get("psi_full_avg10_x100")),
             provider_calls,
             path.name,
         )

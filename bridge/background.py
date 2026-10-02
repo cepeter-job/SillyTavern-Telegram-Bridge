@@ -155,8 +155,12 @@ def _submit_tracked_future(
     with _BACKGROUND_STATE_LOCK:
         if not _BACKGROUND_ACCEPTING:
             return None
+
+        def observed() -> T:
+            return _run_observed_background(label, function, *args, **kwargs)
+
         try:
-            future = _executor_for(label).submit(_run_observed_background, label, function, *args, **kwargs)
+            future = _executor_for(label).submit(observed)
         except RuntimeError:
             logging.info("Background executor is shutting down; rejected %s job", label)
             return None

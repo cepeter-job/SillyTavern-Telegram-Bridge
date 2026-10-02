@@ -100,7 +100,7 @@ def _handle_upload_menu(db, token, callback, answer_callback, chat_id, message, 
     """Handle upload menu callbacks."""
     set_meta(
         db,
-        f"character_upload:{chat_id}",
+        f"character_upload:{chat_id}:{request_context.actor_id}",
         json.dumps(
             {
                 "session_id": request_context.session_id,
@@ -392,7 +392,7 @@ def _handle_selection(
         return True
     if value == "cancel":
         answer_callback(token, str(callback.get("id", "")), "Cancelled")
-        set_meta(db, f"character_upload:{chat_id}", "")
+        set_meta(db, f"character_upload:{chat_id}:{request_context.actor_id}", "")
         if group_service.setup_state(db, chat_id, session_id):
             set_meta(db, f"group_setup:{chat_id}", "")
         if get_meta(db, f"character_session_input:{chat_id}", ""):

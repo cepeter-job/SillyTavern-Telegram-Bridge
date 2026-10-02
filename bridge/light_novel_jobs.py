@@ -55,6 +55,8 @@ def process_light_novel_choices_job(
                     render_choices(db, services.config.bot_token, record, app_settings=services.config)
                 except Exception:
                     logging.info("Could not show pending Mode A choice recovery panel")
+            memory = getattr(services, "memory", None)
+            npc = getattr(services, "npc", None)
             record = ensure_choices(
                 db,
                 nonce,
@@ -64,6 +66,8 @@ def process_light_novel_choices_job(
                 app_settings=services.config,
                 retry=retry,
                 persona_service=services.persona,
+                summary_state=getattr(memory, "summary_status", None),
+                npc_context_for_prompt=getattr(npc, "context_for_prompt", None),
             )
             render_choices(db, services.config.bot_token, record, app_settings=services.config)
             if job_id is not None:

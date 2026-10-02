@@ -23,9 +23,33 @@ class ChoiceTelegram(Protocol):
     def send_text(self) -> SendText: ...
 
 
+class ChoiceMemory(Protocol):
+    def summary_status(self, db: sqlite3.Connection, chat_id: str, session_id: str) -> tuple[str, int]: ...
+
+
+class ChoiceNpc(Protocol):
+    def context_for_prompt(
+        self,
+        db: sqlite3.Connection,
+        chat_id: str,
+        session: dict[str, str],
+        fields: dict[str, str],
+        query: str,
+        history_rows: list[tuple[str, str]],
+        *,
+        through_rowid: int | None = None,
+    ) -> str: ...
+
+
 class LightNovelRuntime(Protocol):
     @property
     def persona(self) -> PersonaService: ...
+
+    @property
+    def memory(self) -> ChoiceMemory: ...
+
+    @property
+    def npc(self) -> ChoiceNpc: ...
 
     @property
     def config(self) -> AppSettings: ...

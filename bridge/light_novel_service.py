@@ -10,7 +10,7 @@ import sqlite3
 import time
 from collections.abc import Callable, Sequence
 
-from bridge.card_content import build_world_info
+from bridge.card_content import build_world_info, replace_macros
 from bridge.conversation_lifecycle import conversation_state
 from bridge.job_store import enqueue_job
 from bridge.light_novel_format import CHOICE_MATURITY_POLICY, parse_choice_response, validate_choices
@@ -211,6 +211,69 @@ def current_choice_story(db: sqlite3.Connection, record: ChoiceSet) -> str | Non
     return str(row[1])
 
 
+def build_choice_context_snapshot(
+    db: sqlite3.Connection,
+    record: ChoiceSet,
+    session: dict,
+    fields: dict,
+    story: str,
+    *,
+    app_settings: AppSettings,
+    persona_service: PersonaService | None = None,
+    summary_state: Callable[[sqlite3.Connection, str, str], tuple[str, int]] | None = None,
+    npc_context_for_prompt: Callable[..., str] | None = None,
+) -> dict[str, object]:
+    history = db.execute(
+        "SELECT role,content FROM messages WHERE chat_id=? AND session_id=? ORDER BY rowid DESC LIMIT 6",
+        (record.chat_id, record.session_id),
+    ).fetchall()
+    history_rows = [(str(role), str(text)) for role, text in reversed(history)]
+    persona_id = str(session.get("persona_id") or "")
+    persona = persona_service.get(persona_id) if persona_service is not None and persona_id else None
+    user_name = str((persona or {}).get("name") or app_settings.default_user_name)
+    story_context = story[-10000:]
+    world_context = "\n".join(
+        [story_context, *(text for _role, text in history_rows), user_name, str(fields.get("name") or "")]
+    )[-24000:]
+    world = build_world_info(
+        session.get("world_file") or "", world_context, fields, user_name, app_settings=app_settings
+    )
+    system_prompt = str(session.get("system_prompt") or "").strip()
+    author_note = str(session.get("author_note") or "").strip()
+    summary = summary_state(db, record.chat_id, record.session_id)[0] if summary_state is not None else ""
+    npc_context = (
+        npc_context_for_prompt(
+            db,
+            record.chat_id,
+            session,
+            fields,
+            story_context,
+            history_rows,
+            through_rowid=record.assistant_rowid,
+        )
+        if npc_context_for_prompt is not None
+        else ""
+    )
+    return {
+        "user_persona": {key: str((persona or {}).get(key) or "")[:4000] for key in ("name", "description")},
+        "world_info": world[:6000],
+        "system_prompt": (
+            replace_macros(system_prompt, fields, user_name, app_settings=app_settings)[:4000] if system_prompt else ""
+        ),
+        "author_note": (
+            replace_macros(author_note, fields, user_name, app_settings=app_settings)[:2000] if author_note else ""
+        ),
+        "continuity_summary": summary[:6000],
+        "npc_state": npc_context[:6000],
+        "character": {
+            key: str(fields.get(key) or "")[:2000] for key in ("name", "description", "personality", "scenario")
+        },
+        "persona_id": persona_id,
+        "recent_history": [{"role": role, "text": text[:1600]} for role, text in history_rows],
+        "current_story": story_context,
+    }
+
+
 def ensure_choices(
     db: sqlite3.Connection,
     nonce: str,
@@ -221,6 +284,8 @@ def ensure_choices(
     app_settings: AppSettings,
     retry: bool = False,
     persona_service: PersonaService | None = None,
+    summary_state: Callable[[sqlite3.Connection, str, str], tuple[str, int]] | None = None,
+    npc_context_for_prompt: Callable[..., str] | None = None,
 ) -> ChoiceSet:
     if db.in_transaction:
         raise ValueError("Choice provider work cannot run inside a write transaction")
@@ -244,27 +309,17 @@ def ensure_choices(
         if record.strategy == "b":
             model = task_model_for_session(db, record.chat_id, session, "utility", app_settings=app_settings)
             choice_reasoning = utility_reasoning_for_session(db, record.chat_id, record.session_id)
-        history = db.execute(
-            "SELECT role,content FROM messages WHERE chat_id=? AND session_id=? ORDER BY rowid DESC LIMIT 6",
-            (record.chat_id, record.session_id),
-        ).fetchall()
-        persona_id = str(session.get("persona_id") or "")
-        persona = persona_service.get(persona_id) if persona_service is not None and persona_id else None
-        user_name = str((persona or {}).get("name") or app_settings.default_user_name)
-        world = build_world_info(
-            session.get("world_file") or "", story[-10000:], fields, user_name, app_settings=app_settings
+        context = build_choice_context_snapshot(
+            db,
+            record,
+            session,
+            fields,
+            story,
+            app_settings=app_settings,
+            persona_service=persona_service,
+            summary_state=summary_state,
+            npc_context_for_prompt=npc_context_for_prompt,
         )
-        context = {
-            "user_persona": {key: str((persona or {}).get(key) or "")[:4000] for key in ("name", "description")},
-            "world_info": world[:6000],
-            "system_prompt": str(session.get("system_prompt") or "")[:4000],
-            "character": {
-                key: str(fields.get(key) or "")[:2000] for key in ("name", "description", "personality", "scenario")
-            },
-            "persona_id": str(session.get("persona_id") or ""),
-            "recent_history": [{"role": role, "text": str(text)[:1600]} for role, text in reversed(history)],
-            "current_story": story[-10000:],
-        }
         grounding = _GROUNDED_CHOICE_POLICY if str(session.get("grounded_user") or "").casefold() == "on" else ""
         messages = [
             {

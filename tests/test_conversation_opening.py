@@ -1,4 +1,6 @@
 from dataclasses import replace
+import json
+import time
 from unittest.mock import Mock
 
 import pytest
@@ -8,6 +10,7 @@ from test_light_novel_storage import novel_db as novel_db
 import bridge.response_delivery as greeting_delivery
 from bridge import command_routes, greetings, update_message_routing
 from bridge.conversation_lifecycle import conversation_state, reset_conversation
+from bridge.metadata import set_meta
 from bridge.request_types import RequestContext
 
 
@@ -37,6 +40,82 @@ def test_prestart_input_rejected_before_enqueue(novel_db, monkeypatch, message):
     assert update_message_routing.route_message_update(services, db, {}, message, 4, frozenset({"owner"}))
     assert sent == ["Please use /start command."]
     assert db.execute("SELECT count(*) FROM messages").fetchone()[0] == 0
+
+
+def test_prestart_pending_character_upload_allows_png_document_enqueue(novel_db, monkeypatch):
+    db, session, settings = novel_db
+    sent = []
+    from bridge.main import _build_startup_services
+    from bridge.model_router import ModelRouter
+
+    services = _build_startup_services(settings, model_router=ModelRouter(load_catalog=lambda: {}))
+    jobs = Mock()
+    jobs.enqueue.return_value = 31
+    jobs.submit.return_value = True
+    services = replace(
+        services, jobs=jobs, telegram=replace(services.telegram, send_text=lambda *a: sent.append(a[2]) or [1])
+    )
+    set_meta(
+        db,
+        "character_upload:chat",
+        json.dumps(
+            {
+                "session_id": session["session_id"],
+                "actor_id": "owner",
+                "expires_at": time.time() + 600,
+            }
+        ),
+    )
+    message = {
+        "chat": {"id": "chat"},
+        "from": {"id": "owner"},
+        "message_id": 9,
+        "document": {
+            "file_id": "card",
+            "file_name": "Alice.png",
+            "mime_type": "image/png",
+            "file_size": 800,
+        },
+    }
+
+    assert update_message_routing.route_message_update(services, db, {}, message, 9, frozenset({"owner"}))
+    jobs.enqueue.assert_called_once()
+    assert jobs.enqueue.call_args.args[5] == "document"
+    assert sent == ["📄 Document queued for character-card processing or Data Bank indexing."]
+
+
+def test_prestart_character_upload_state_is_actor_scoped(novel_db, monkeypatch):
+    db, session, settings = novel_db
+    sent = []
+    from bridge.main import _build_startup_services
+    from bridge.model_router import ModelRouter
+
+    services = _build_startup_services(settings, model_router=ModelRouter(load_catalog=lambda: {}))
+    jobs = Mock()
+    jobs.enqueue.side_effect = AssertionError("another actor must not use pending character upload")
+    services = replace(
+        services, jobs=jobs, telegram=replace(services.telegram, send_text=lambda *a: sent.append(a[2]) or [1])
+    )
+    set_meta(
+        db,
+        "character_upload:chat",
+        json.dumps(
+            {
+                "session_id": session["session_id"],
+                "actor_id": "owner",
+                "expires_at": time.time() + 600,
+            }
+        ),
+    )
+    message = {
+        "chat": {"id": "chat"},
+        "from": {"id": "other"},
+        "message_id": 10,
+        "document": {"file_id": "card", "file_name": "Alice.png", "mime_type": "image/png"},
+    }
+
+    assert update_message_routing.route_message_update(services, db, {}, message, 10, frozenset({"owner", "other"}))
+    assert sent == ["Please use /start command."]
 
 
 def run_start(db, session, settings, command="/start"):

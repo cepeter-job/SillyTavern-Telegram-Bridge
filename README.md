@@ -1,4 +1,4 @@
-> ## uncencored roleplaying models api subcribtion with generous token usage
+> ## Uncensored roleplaying models API subscription with generous token usage
 >
 > [Join NanoGPT with my invitation link](https://nano-gpt.com/r/UqUJAyNQ)
 

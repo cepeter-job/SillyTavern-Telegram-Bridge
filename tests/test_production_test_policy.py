@@ -1,8 +1,7 @@
 from types import SimpleNamespace
 
-import pytest
-
 import conftest as test_config
+import pytest
 
 
 def _mark_production_host(tmp_path, monkeypatch):

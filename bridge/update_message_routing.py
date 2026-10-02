@@ -197,8 +197,10 @@ def route_message_update(
             and Path(str(document.get("file_name") or "")).suffix.casefold() == ".png"
             and has_pending_character_upload(db, chat_id, gate_session["session_id"], sender)
         )
-        if not pending_input and not pending_character_upload and not require_started(
-            db, chat_id, gate_session["session_id"]
+        if (
+            not pending_input
+            and not pending_character_upload
+            and not require_started(db, chat_id, gate_session["session_id"])
         ):
             services.telegram.send_text(token, chat_id, START_REQUIRED)
             return True

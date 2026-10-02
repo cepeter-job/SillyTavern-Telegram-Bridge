@@ -22,6 +22,8 @@ import bridge.model_selection as _m_model_selection
 import bridge.session_naming as _m_session_naming
 import bridge.sqlite_store as _m_sqlite_store
 import bridge.text_action_input as _m_text_action_input
+from bridge.image_reference import ImageReference
+from bridge.image_routing import ImageRoute
 
 
 class _Response:
@@ -213,6 +215,114 @@ class ImageGenerationTests(SettingsTestCase):
                 ("delete", "deleteMessage", {"chat_id": "chat", "message_id": 321}),
             ],
         )
+
+    def _step_route(self, **spec_overrides):
+        spec = {
+            "api_endpoint": "https://images.example/v1",
+            "api_key_env": "TEST_IMAGE_KEY",
+            "image_enabled": True,
+            "image_models": ["step-image-edit-2"],
+            **spec_overrides,
+        }
+        return ImageRoute(
+            selection="test-image::step-image-edit-2",
+            provider_id="test-image",
+            model="step-image-edit-2",
+            transport="reference",
+            edit_route="openai",
+            spec=spec,
+        )
+
+    def test_edit_image_sends_openai_multipart_contract_and_uses_default_edit_endpoint(self):
+        captured = []
+
+        def fake_urlopen(request, timeout, *, environ=None):
+            captured.append((request, timeout))
+            return _Response(
+                {"data": [{"b64_json": base64.b64encode(b"EDITED").decode(), "revised_prompt": "revised"}]}
+            )
+
+        reference = ImageReference(b"PNG-REFERENCE", "image/png", "Mira.png")
+        _m_image_generation.strict_urlopen = fake_urlopen
+        with patch.dict(os.environ, {"SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": "images.example"}):
+            result = _m_image_generation.edit_image(
+                self._step_route(),
+                "same character in a garden",
+                reference,
+                "1024x1024",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        request, timeout = captured[0]
+        body = request.data
+        self.assertEqual(request.full_url, "https://images.example/v1/images/edits")
+        self.assertEqual(request.get_header("Authorization"), "Bearer test-key")
+        self.assertIn("multipart/form-data; boundary=", request.get_header("Content-type"))
+        self.assertIn(b'name="model"\r\n\r\nstep-image-edit-2', body)
+        self.assertIn(b'name="prompt"\r\n\r\nsame character in a garden', body)
+        self.assertIn(b'name="n"\r\n\r\n1', body)
+        self.assertIn(b'name="image"; filename="Mira.png"', body)
+        self.assertIn(b"Content-Type: image/png", body)
+        self.assertIn(b"PNG-REFERENCE", body)
+        self.assertIn(b'name="size"\r\n\r\n1024x1024', body)
+        self.assertEqual(timeout, 180)
+        self.assertEqual(result, (b"EDITED", "revised", "test-image::step-image-edit-2"))
+
+    def test_edit_image_uses_explicit_edit_endpoint_without_rewriting_generation_endpoint(self):
+        captured = []
+
+        def fake_urlopen(request, timeout, *, environ=None):
+            captured.append(request.full_url)
+            return _Response({"data": [{"b64_json": base64.b64encode(b"EDITED").decode()}]})
+
+        _m_image_generation.strict_urlopen = fake_urlopen
+        route = self._step_route(
+            image_endpoint="https://images.example/custom-generation",
+            image_edit_endpoint="https://edits.example/custom-edit",
+        )
+        with patch.dict(
+            os.environ,
+            {"SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": "images.example,edits.example"},
+        ):
+            _m_image_generation.edit_image(
+                route,
+                "portrait",
+                ImageReference(b"PNG", "image/png", "Mira.png"),
+                "1024x1024",
+                app_settings=self.app_settings_builder.build(),
+            )
+        self.assertEqual(captured, ["https://edits.example/custom-edit"])
+
+    def test_step_image_edit_2_rejects_prompt_over_512_before_request(self):
+        calls = []
+        _m_image_generation.strict_urlopen = lambda *args, **kwargs: calls.append(args)
+        with self.assertRaisesRegex(ValueError, "step-image-edit-2.*512"):
+            _m_image_generation.edit_image(
+                self._step_route(),
+                "x" * 513,
+                ImageReference(b"PNG", "image/png", "Mira.png"),
+                "1024x1024",
+                app_settings=self.app_settings_builder.build(),
+            )
+        self.assertEqual(calls, [])
+
+    def test_step_edit_unsupported_bridge_landscape_omits_size(self):
+        captured = []
+
+        def fake_urlopen(request, timeout, *, environ=None):
+            captured.append(request.data)
+            return _Response({"data": [{"b64_json": base64.b64encode(b"EDITED").decode()}]})
+
+        _m_image_generation.strict_urlopen = fake_urlopen
+        with patch.dict(os.environ, {"SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": "images.example"}):
+            _m_image_generation.edit_image(
+                self._step_route(),
+                "portrait",
+                ImageReference(b"PNG", "image/png", "Mira.png"),
+                "1536x1024",
+                app_settings=self.app_settings_builder.build(),
+            )
+        self.assertNotIn(b'name="size"', captured[0])
 
     def test_command_is_registered(self):
         source = Path(_m_image_generation.__file__).parent / "bot_commands.py"

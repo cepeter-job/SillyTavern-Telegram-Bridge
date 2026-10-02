@@ -13,10 +13,12 @@ import urllib.parse
 import urllib.request
 
 from bridge.generation_settings import get_generation_settings
+from bridge.image_reference import ImageReference
 from bridge.image_routing import (
     IMAGE_DEFAULT_SIZE,
     IMAGE_MODEL_PROMPT_MAX_CHARS,
     IMAGE_PROMPT_MAX_CHARS,
+    ImageRoute,
     image_provider_specs,
     resolve_image_route,
 )
@@ -87,6 +89,19 @@ def _image_endpoint(spec: dict, *, app_settings: AppSettings) -> str:
     return base
 
 
+def _image_edit_endpoint(spec: dict, *, app_settings: AppSettings) -> str:
+    explicit = str(spec.get("image_edit_endpoint") or "").strip()
+    if explicit:
+        endpoint = explicit
+    else:
+        base = str(spec.get("api_endpoint") or spec.get("api") or "").rstrip("/")
+        if not base:
+            raise ValueError("Image provider edit endpoint is missing")
+        endpoint = base + "/images/edits"
+    validate_provider_endpoint(endpoint, environ=app_settings.environ)
+    return endpoint
+
+
 def _image_headers(spec: dict, *, app_settings: AppSettings) -> dict[str, str]:
     key_env = str(spec.get("api_key_env") or "LLM_API_KEY")
     key = app_settings.environ.get(key_env, "")
@@ -149,6 +164,76 @@ def _image_bytes_from_response(payload: dict, spec: dict, *, app_settings: AppSe
     with strict_urlopen(image_request, timeout=120, environ=app_settings.environ) as response:
         raw = response.read(IMAGE_MAX_BYTES + 1)
     return raw, str(item.get("revised_prompt") or "")
+
+
+def _multipart_edit_body(
+    route: ImageRoute,
+    prompt: str,
+    reference: ImageReference,
+    size: str,
+) -> tuple[bytes, str]:
+    boundary = f"----BridgeImageEdit{int(time.time() * 1000000)}"
+    fields = [("model", route.model), ("prompt", prompt), ("n", "1")]
+    if route.model.casefold() != "step-image-edit-2" or size == "1024x1024":
+        fields.append(("size", size))
+    chunks: list[bytes] = []
+    for name, value in fields:
+        chunks.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
+    filename = re.sub(r"[^A-Za-z0-9._-]+", "_", reference.filename)[:128] or "reference.png"
+    chunks.append(
+        (
+            f'--{boundary}\r\nContent-Disposition: form-data; name="image"; filename="{filename}"\r\n'
+            f"Content-Type: {reference.mime_type}\r\n\r\n"
+        ).encode()
+        + reference.data
+        + b"\r\n"
+    )
+    chunks.append(f"--{boundary}--\r\n".encode())
+    return b"".join(chunks), f"multipart/form-data; boundary={boundary}"
+
+
+def edit_image(
+    route: ImageRoute,
+    prompt: str,
+    reference: ImageReference,
+    size: str = IMAGE_DEFAULT_SIZE,
+    *,
+    app_settings: AppSettings,
+) -> tuple[bytes, str, str]:
+    prompt = " ".join(str(prompt or "").split())
+    if route.transport != "reference" or route.edit_route not in {None, "openai"}:
+        raise ValueError(f"Image model {route.selection} does not use the supported reference edit route")
+    prompt_max_chars = _model_prompt_max_chars(route.model)
+    if not prompt or len(prompt) > prompt_max_chars:
+        raise ValueError(f"Image prompt for {route.model} must contain 1–{prompt_max_chars:,} characters")
+    if not re.fullmatch(r"(?:256|512|1024|1536)x(?:256|512|1024|1536)", size):
+        raise ValueError("Image size must use WIDTHxHEIGHT with supported dimensions")
+    if not reference.data or len(reference.data) > IMAGE_MAX_BYTES:
+        raise ValueError("Character reference image is empty or exceeds the image upload limit")
+
+    endpoint = _image_edit_endpoint(route.spec, app_settings=app_settings)
+    body, content_type = _multipart_edit_body(route, prompt, reference, size)
+    headers = _image_headers(route.spec, app_settings=app_settings)
+    headers["Content-Type"] = content_type
+    request = urllib.request.Request(  # noqa: S310 -- strict_urlopen validates scheme and host
+        endpoint, data=body, headers=headers, method="POST"
+    )
+    try:
+        with strict_urlopen(request, timeout=180, environ=app_settings.environ) as response:
+            raw_response = response.read(IMAGE_JSON_MAX_BYTES + 1)
+    except urllib.error.HTTPError as exc:
+        if _provider_prompt_too_long(exc):
+            raise ValueError(
+                f"Image prompt for {route.model} is too long for the provider; shorten it and retry"
+            ) from None
+        raise
+    if len(raw_response) > IMAGE_JSON_MAX_BYTES:
+        raise ValueError("Image provider response exceeds the JSON size limit")
+    payload = json.loads(raw_response.decode("utf-8"))
+    raw, revised = _image_bytes_from_response(payload, route.spec, app_settings=app_settings)
+    if not raw or len(raw) > IMAGE_MAX_BYTES:
+        raise ValueError("Generated image is empty or exceeds the Telegram image limit")
+    return raw, revised, route.selection
 
 
 def generate_image(

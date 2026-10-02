@@ -14,9 +14,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 from bridge.config import STT_DEFAULT_MODEL
-from bridge.limits import STT_MAX_BYTES, TTS_MAX_CHARS
+from bridge.limits import STT_IDLE_RELEASE_SECONDS, STT_MAX_BYTES, TTS_MAX_CHARS
 from bridge.operations import begin_operation, operation_was_applied, record_operation
 from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect
@@ -140,10 +141,41 @@ def send_tts(
             operation_db.close()
 
 
-_STT_MODEL_CACHE = {}
+_STT_MODEL_CACHE: dict[str, tuple[Any, float]] = {}
 
 
 _STT_MODEL_LOCK = threading.Lock()
+
+# At most one timer exists at a time; every mutation happens under the lock.
+_STT_IDLE_TIMER: threading.Timer | None = None
+
+
+def _arm_idle_release(delay: float) -> None:
+    global _STT_IDLE_TIMER
+    timer = threading.Timer(delay, _release_idle_model)
+    timer.daemon = True
+    _STT_IDLE_TIMER = timer
+    timer.start()
+
+
+def _release_idle_model(now: float | None = None) -> None:
+    """Free weights that have been idle for a full window, else re-arm for the rest.
+
+    Dropping the cache entry never interrupts a transcription: that caller already
+    holds the reference returned by :func:`transcribe_audio_bytes`, so the model is
+    reclaimed only once both references are gone.
+    """
+    global _STT_IDLE_TIMER
+    with _STT_MODEL_LOCK:
+        _STT_IDLE_TIMER = None
+        if not _STT_MODEL_CACHE:
+            return
+        _name, (_model, last_used) = next(iter(_STT_MODEL_CACHE.items()))
+        remaining = STT_IDLE_RELEASE_SECONDS - ((time.monotonic() if now is None else now) - last_used)
+        if remaining > 0:
+            _arm_idle_release(remaining)
+            return
+        _STT_MODEL_CACHE.clear()
 
 
 def transcribe_audio_bytes(
@@ -160,13 +192,20 @@ def transcribe_audio_bytes(
 
     model_name = model_name or app_settings.environ.get("SILLYTAVERN_STT_MODEL", STT_DEFAULT_MODEL)
     with _STT_MODEL_LOCK:
-        model = _STT_MODEL_CACHE.get(model_name)
-        if model is None:
+        cached = _STT_MODEL_CACHE.get(model_name)
+        if cached is None:
             # Retain one idle model. In-flight callers keep their own reference;
             # evict before loading so idle weights do not inflate the load peak.
             _STT_MODEL_CACHE.clear()
-            model = WhisperModel(model_name, device="cpu", compute_type="int8")
-            _STT_MODEL_CACHE[model_name] = model
+            cached = (WhisperModel(model_name, device="cpu", compute_type="int8"), time.monotonic())
+            _STT_MODEL_CACHE[model_name] = cached
+            if _STT_IDLE_TIMER is None:
+                _arm_idle_release(STT_IDLE_RELEASE_SECONDS)
+        else:
+            # Keep the window sliding so an active caller is never evicted.
+            cached = (cached[0], time.monotonic())
+            _STT_MODEL_CACHE[model_name] = cached
+        model = cached[0]
     with tempfile.NamedTemporaryFile(prefix="st-stt-", suffix=suffix, delete=True) as audio_file:
         audio_file.write(raw)
         audio_file.flush()

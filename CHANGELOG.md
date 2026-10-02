@@ -2,7 +2,7 @@
 
 All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
-## [Unreleased]
+## [0.2.058] - 2026-10-02
 
 ### Added
 
@@ -22,10 +22,6 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
   failure without masking a successful image delivery if progress cleanup fails.
 - Keep final Telegram `/imagine` delivery image-only and avoid a second paid
   generation request after a provider failure.
-
-## [0.2.058] - 2026-10-02
-
-### Changed
 
 - Deliver `/imagine` results as image-only Telegram photos, without echoing the
   source prompt, selected model, or provider-revised prompt in the photo caption.

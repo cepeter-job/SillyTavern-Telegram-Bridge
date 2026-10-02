@@ -2,6 +2,22 @@
 
 All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
+## [0.2.058] - 2026-10-02
+
+### Changed
+
+- Deliver `/imagine` results as image-only Telegram photos, without echoing the
+  source prompt, selected model, or provider-revised prompt in the photo caption.
+- Keep the temporary `🎨 Generating image…` message while rendering, then remove
+  it after successful image delivery so the completed Telegram output is only the image.
+
+### Compatibility and validation
+
+- No runtime dependency-lock or database-schema changes. Existing sessions, image
+  provider selection, prompt limits, scene generation, and updater trust boundaries
+  remain compatible.
+- Publishing this release does not deploy or restart a running bridge.
+
 ## [0.2.057] - 2026-10-02
 
 ### Added

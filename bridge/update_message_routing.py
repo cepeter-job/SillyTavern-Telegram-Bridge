@@ -183,6 +183,7 @@ def route_message_update(
 
     conversational_media = bool(voice or photos or (document and conversational_document(document)))
     conversational_text = bool(text and not is_command_text(str(text)))
+    pending_character_upload = False
     if conversational_media or conversational_text:
         gate_session = services.session.ensure(db, chat_id, model)
         if not services.group.user_turn_allowed(db, chat_id, gate_session["session_id"], sender):

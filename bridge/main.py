@@ -12,7 +12,12 @@ from pathlib import Path
 import bridge.sillytavern_api as _st_api
 import bridge.sqlite_store as _sqlite_store
 from bridge.application_composition import initialize_extensions as _initialize_extensions
-from bridge.background import begin_background_shutdown, register_durable_backlog_dispatcher, submit_chat_background
+from bridge.background import (
+    background_observability_counters,
+    begin_background_shutdown,
+    register_durable_backlog_dispatcher,
+    submit_chat_background,
+)
 from bridge.bot_commands import set_bot_commands
 from bridge.card_content import card_fields, card_fields_from_file, read_png_chara, safe_character_path
 from bridge.codex_auth import CodexAuthError, auth_status, device_login, logout, validate_codex_endpoint
@@ -87,6 +92,7 @@ from bridge.provider_discovery import probe_provider
 from bridge.provider_execution_policy import ProviderExecutionPolicy
 from bridge.provider_health_store import JsonProviderHealthStore
 from bridge.provider_port import ProviderPort as _ProviderPort
+from bridge.provider_port import active_provider_requests
 from bridge.provider_probe_service import ProviderProbeService
 from bridge.provider_runtime_health import ProviderRuntimeHealth
 from bridge.provider_transport import generate_provider_text
@@ -375,7 +381,12 @@ def _build_startup_services(
         npc=npc,
         persona=persona,
         sync=sync,
-        memory_diagnostics=MemoryDiagnostics(config.bridge_home, config.environ),
+        memory_diagnostics=MemoryDiagnostics(
+            config.bridge_home,
+            config.environ,
+            safe_counters=background_observability_counters,
+            provider_activity=active_provider_requests,
+        ),
         jobs=jobs,
         delivery=delivery,
         conversation=conversation,

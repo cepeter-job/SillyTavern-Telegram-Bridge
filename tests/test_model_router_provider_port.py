@@ -116,7 +116,10 @@ def test_provider_port_exposes_safe_inflight_metadata_and_logs_lifecycle(caplog)
     assert type(snapshots[0]["elapsed_ms"]) is int and snapshots[0]["elapsed_ms"] >= 0
     assert module.active_provider_requests() == ()
     assert "provider_start purpose=choices provider=nano-gpt model=z-ai/glm-5.3-flash-uncensored" in caplog.text
-    assert "provider_finish purpose=choices provider=nano-gpt model=z-ai/glm-5.3-flash-uncensored status=succeeded" in caplog.text
+    assert (
+        "provider_finish purpose=choices provider=nano-gpt "
+        "model=z-ai/glm-5.3-flash-uncensored status=succeeded"
+    ) in caplog.text
     assert "PRIVATE_API_KEY" not in caplog.text
     assert "PRIVATE_PROMPT" not in caplog.text
 

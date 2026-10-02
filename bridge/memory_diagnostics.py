@@ -9,7 +9,7 @@ import re
 import stat
 import threading
 import tracemalloc
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path, PureWindowsPath
@@ -87,16 +87,133 @@ def _smaps_rollup_kib(smaps_file: Path = Path("/proc/self/smaps_rollup")) -> dic
     return result
 
 
+def _native_allocator_summary(smaps_file: Path = Path("/proc/self/smaps")) -> dict[str, int]:
+    try:
+        lines = smaps_file.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {"arena_groups": 0, "arena_rss_kib": 0}
+
+    regions: list[dict[str, object]] = []
+    current: dict[str, object] | None = None
+    for line in lines:
+        parts = line.split(maxsplit=5)
+        header = parts[0] if parts else ""
+        if re.fullmatch(r"[0-9A-Fa-f]+-[0-9A-Fa-f]+", header):
+            if current is not None:
+                regions.append(current)
+            start_raw, end_raw = header.split("-", 1)
+            current = {
+                "start": int(start_raw, 16),
+                "end": int(end_raw, 16),
+                "perms": parts[1] if len(parts) > 1 else "",
+                "name": parts[5] if len(parts) > 5 else "",
+                "rss_kib": 0,
+            }
+            continue
+        if current is not None and line.startswith("Rss:"):
+            values = line.split()
+            if len(values) >= 2 and values[1].isdigit():
+                current["rss_kib"] = int(values[1])
+    if current is not None:
+        regions.append(current)
+
+    groups = 0
+    rss_kib = 0
+    for index, region in enumerate(regions[:-1]):
+        following = regions[index + 1]
+        if (
+            region.get("name")
+            or not str(region.get("perms") or "").startswith("rw")
+            or following.get("name")
+            or not str(following.get("perms") or "").startswith("---")
+            or int(following.get("start") or 0) != int(region.get("end") or -1)
+        ):
+            continue
+        total_kib = (int(following["end"]) - int(region["start"])) // 1024
+        if total_kib < 32 * 1024:
+            continue
+        groups += 1
+        rss_kib += int(region.get("rss_kib") or 0)
+    return {"arena_groups": groups, "arena_rss_kib": rss_kib}
+
+
+def _read_integer_file(path: Path) -> int:
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+        return max(0, int(raw))
+    except (OSError, ValueError):
+        return 0
+
+
+def _cgroup_memory_snapshot(
+    cgroup_file: Path = Path("/proc/self/cgroup"),
+    cgroup_root: Path = Path("/sys/fs/cgroup"),
+) -> dict[str, int]:
+    try:
+        lines = cgroup_file.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return {}
+    relative = ""
+    for line in lines:
+        if line.startswith("0::"):
+            relative = line[3:].strip()
+            break
+    path = Path(relative.lstrip("/"))
+    if not relative or ".." in path.parts:
+        return {}
+    group = cgroup_root / path
+    if not group.is_dir():
+        return {}
+
+    events: dict[str, int] = {}
+    try:
+        for line in (group / "memory.events").read_text(encoding="utf-8").splitlines():
+            key, _, value = line.partition(" ")
+            if value.strip().isdigit():
+                events[key] = int(value.strip())
+    except OSError:
+        pass
+
+    pressure = {"some": 0, "full": 0}
+    try:
+        for line in (group / "memory.pressure").read_text(encoding="utf-8").splitlines():
+            parts = line.split()
+            if not parts or parts[0] not in pressure:
+                continue
+            for field in parts[1:]:
+                if field.startswith("avg10="):
+                    try:
+                        pressure[parts[0]] = max(0, round(float(field.split("=", 1)[1]) * 100))
+                    except ValueError:
+                        pass
+                    break
+    except OSError:
+        pass
+
+    return {
+        "memory_current_bytes": _read_integer_file(group / "memory.current"),
+        "memory_peak_bytes": _read_integer_file(group / "memory.peak"),
+        "memory_swap_current_bytes": _read_integer_file(group / "memory.swap.current"),
+        "memory_high_events": max(0, events.get("high", 0)),
+        "memory_oom_events": max(0, events.get("oom", 0)),
+        "memory_oom_kill_events": max(0, events.get("oom_kill", 0)),
+        "psi_some_avg10_x100": pressure["some"],
+        "psi_full_avg10_x100": pressure["full"],
+    }
+
+
 class MemoryDiagnostics:
     def __init__(
         self,
         bridge_home: Path,
         environ: Mapping[str, str],
         safe_counters: Callable[[], Mapping[str, object]] | None = None,
+        provider_activity: Callable[[], Sequence[Mapping[str, object]]] | None = None,
     ) -> None:
         self.bridge_home = Path(bridge_home)
         self.environ = environ
         self.safe_counters = safe_counters
+        self.provider_activity = provider_activity
         self._enabled = environ.get("SILLYTAVERN_MEMORY_DIAGNOSTICS") == "1"
         self._state = DiagnosticState.ARMED if self._enabled else DiagnosticState.DISABLED
         self._lock = threading.RLock()
@@ -229,6 +346,29 @@ class MemoryDiagnostics:
             value = payload.get(key)
             return value if type(value) is int and value >= 0 else None
 
+        native_allocator: dict[str, int] = {}
+        raw_native = payload.get("native_allocator")
+        if isinstance(raw_native, Mapping):
+            for key in ("arena_groups", "arena_rss_kib"):
+                value = raw_native.get(key)
+                if type(value) is int and value >= 0:
+                    native_allocator[key] = value
+        cgroup: dict[str, int] = {}
+        raw_cgroup = payload.get("cgroup")
+        if isinstance(raw_cgroup, Mapping):
+            for key in (
+                "memory_current_bytes",
+                "memory_peak_bytes",
+                "memory_swap_current_bytes",
+                "memory_high_events",
+                "memory_oom_events",
+                "memory_oom_kill_events",
+                "psi_some_avg10_x100",
+                "psi_full_avg10_x100",
+            ):
+                value = raw_cgroup.get(key)
+                if type(value) is int and value >= 0:
+                    cgroup[key] = value
         return {
             **metadata,
             "smaps_kib": smaps,
@@ -236,6 +376,9 @@ class MemoryDiagnostics:
             "traced_peak_bytes": optional_nonnegative_int("traced_peak_bytes"),
             "thread_count": optional_nonnegative_int("thread_count"),
             "safe_counters": cls._safe_report_counters(payload.get("safe_counters")),
+            "native_allocator": native_allocator,
+            "cgroup": cgroup,
+            "provider_inflight": cls._safe_provider_activity(payload.get("provider_inflight")),
             "top_sites": top_sites,
         }
 
@@ -315,6 +458,48 @@ class MemoryDiagnostics:
                 result[key] = value
         return result
 
+    @staticmethod
+    def _safe_provider_activity(raw: object) -> list[dict[str, object]]:
+        if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes, bytearray)):
+            return []
+        result: list[dict[str, object]] = []
+        for item in raw[:8]:
+            if not isinstance(item, Mapping):
+                continue
+            provider = item.get("provider")
+            model = item.get("model")
+            purpose = item.get("purpose")
+            elapsed_ms = item.get("elapsed_ms")
+            if (
+                not isinstance(provider, str)
+                or re.fullmatch(r"[A-Za-z0-9_.:+/-]{1,80}", provider) is None
+                or not isinstance(model, str)
+                or re.fullmatch(r"[A-Za-z0-9_.:+/-]{1,160}", model) is None
+                or not isinstance(purpose, str)
+                or re.fullmatch(r"[A-Za-z0-9_.:-]{0,64}", purpose) is None
+                or type(elapsed_ms) is not int
+                or elapsed_ms < 0
+            ):
+                continue
+            result.append(
+                {
+                    "provider": provider,
+                    "model": model,
+                    "purpose": purpose,
+                    "elapsed_ms": elapsed_ms,
+                }
+            )
+        return result
+
+    def _provider_activity_values(self) -> list[dict[str, object]]:
+        if self.provider_activity is None:
+            return []
+        try:
+            return self._safe_provider_activity(self.provider_activity())
+        except Exception:
+            logging.warning("Memory diagnostics provider activity unavailable")
+            return []
+
     def _build_report(self, rss_kib: int, now: datetime) -> dict[str, object]:
         traced_current: int | None = None
         traced_peak: int | None = None
@@ -343,6 +528,9 @@ class MemoryDiagnostics:
             "top_sites": top_sites,
             "thread_count": threading.active_count(),
             "safe_counters": self._safe_counter_values(),
+            "native_allocator": _native_allocator_summary(),
+            "cgroup": _cgroup_memory_snapshot(),
+            "provider_inflight": self._provider_activity_values(),
         }
 
     @staticmethod
@@ -409,6 +597,32 @@ class MemoryDiagnostics:
         report = self._build_report(rss_kib, now)
         self._write_report(path, report)
         self._rotate_reports(directory)
+        smaps = report.get("smaps_kib") if isinstance(report.get("smaps_kib"), Mapping) else {}
+        native = report.get("native_allocator") if isinstance(report.get("native_allocator"), Mapping) else {}
+        cgroup = report.get("cgroup") if isinstance(report.get("cgroup"), Mapping) else {}
+        counters = report.get("safe_counters") if isinstance(report.get("safe_counters"), Mapping) else {}
+        providers = self._safe_provider_activity(report.get("provider_inflight"))
+        provider_calls = ",".join(
+            f"{item['purpose']}:{item['provider']}::{item['model']}:{item['elapsed_ms']}ms" for item in providers
+        ) or "none"
+        logging.warning(
+            "memory_incident rss_kib=%s anonymous_kib=%s swap_kib=%s threads=%s "
+            "arena_groups=%s arena_rss_kib=%s background_active=%s provider_inflight=%s "
+            "cgroup_high_events=%s psi_some_avg10_x100=%s psi_full_avg10_x100=%s provider_calls=%s report=%s",
+            int(rss_kib),
+            int(smaps.get("Anonymous") or 0),
+            int(smaps.get("Swap") or 0),
+            int(report.get("thread_count") or 0),
+            int(native.get("arena_groups") or 0),
+            int(native.get("arena_rss_kib") or 0),
+            int(counters.get("background.active_total") or 0),
+            len(providers),
+            int(cgroup.get("memory_high_events") or 0),
+            int(cgroup.get("psi_some_avg10_x100") or 0),
+            int(cgroup.get("psi_full_avg10_x100") or 0),
+            provider_calls,
+            path.name,
+        )
         metadata = self._report_metadata(report)
         if metadata is not None:
             with self._lock:

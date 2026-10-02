@@ -2,10 +2,11 @@ import sqlite3
 import time
 
 from application_test_setup import make_test_provider_port
+from persisted_state_test_support import read_episodic_memories
 from settings_test_support import SettingsBuilder
 
 from bridge.episodic_extraction import parse_episodic_candidates
-from bridge.episodic_memory import list_episodic_memories, store_episodic_memory
+from bridge.episodic_memory import store_episodic_memory
 from bridge.memory import generate_session_summary
 from bridge.schema import initialize_database_schema
 
@@ -71,7 +72,7 @@ def test_store_deduplicates_normalized_summary_within_session():
         db.commit()
         assert first is True
         assert second is False
-        assert len(list_episodic_memories(db, "chat", "s1")) == 1
+        assert len(read_episodic_memories(db, "chat", "s1")) == 1
     finally:
         db.close()
 
@@ -95,7 +96,7 @@ def test_auto_summary_extracts_durable_episode_from_stable_segment():
             provider_port=make_test_provider_port(generate_backend=generate),
             app_settings=SettingsBuilder().build(),
         )
-        memories = list_episodic_memories(db, "chat", "s1")
+        memories = read_episodic_memories(db, "chat", "s1")
         assert summary == "The party reached the station."
         assert len(calls) == 2
         assert calls[1][2] == "episodic:chat:s1"
@@ -125,7 +126,7 @@ def test_extraction_failure_does_not_break_continuity_summary():
             app_settings=SettingsBuilder().build(),
         )
         assert summary == "Continuity survives."
-        assert list_episodic_memories(db, "chat", "s1") == []
+        assert read_episodic_memories(db, "chat", "s1") == []
     finally:
         db.close()
 
@@ -150,6 +151,6 @@ def test_force_summary_does_not_reextract_episodic_memory():
         )
         assert summary == "Fresh continuity summary."
         assert len(calls) == 1
-        assert list_episodic_memories(db, "chat", "s1") == []
+        assert read_episodic_memories(db, "chat", "s1") == []
     finally:
         db.close()

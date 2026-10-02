@@ -7,6 +7,7 @@ import json
 from dataclasses import asdict
 
 import pytest
+from persisted_state_test_support import seed_character_rank
 from test_character_mutation_safety import _card_png, apply_proposal, prepare_replacement, upload
 from test_character_mutation_safety import card_context as card_context
 
@@ -39,7 +40,7 @@ def test_optimizer_apply_revalidates_preview_against_exact_card_bytes(card_conte
 def test_rank_cache_is_invalidated_by_file_replacement(card_context):
     db, ctx, _ = card_context
     upload(card_context, _card_png("Alice", "original"))
-    quality.store_character_rank(db, "Alice.png", "S", app_settings=ctx.app_settings)
+    seed_character_rank(db, "Alice.png", "S", app_settings=ctx.app_settings)
     assert quality.character_rank(db, "Alice.png", app_settings=ctx.app_settings) == "S"
     (ctx.app_settings.character_dir / "Alice.png").write_bytes(_card_png("Alice", "changed"))
     assert quality.character_rank(db, "Alice.png", app_settings=ctx.app_settings) == ""

@@ -40,10 +40,6 @@ def grounded_user_enabled(value: str | None) -> bool:
     return normalize_grounded_user(value or "off") == "on"
 
 
-def grounded_user_label(value: str | None) -> str:
-    return "On" if grounded_user_enabled(value) else "Off"
-
-
 def grounded_user_key(chat_id: str, session_id: str) -> str:
     return f"grounded_user:{chat_id}:{session_id}"
 

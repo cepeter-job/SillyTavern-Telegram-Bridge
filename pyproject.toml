@@ -34,4 +34,8 @@ show_missing = true
 fail_under = 76
 
 [tool.pytest.ini_options]
-filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
+filterwarnings = [
+    "error::pytest.PytestUnhandledThreadExceptionWarning",
+    "error::ResourceWarning",
+    "error::pytest.PytestUnraisableExceptionWarning",
+]

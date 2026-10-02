@@ -9,6 +9,7 @@ from application_test_setup import (
     make_test_rag_service,
     make_test_request_context,
 )
+from persisted_state_test_support import find_test_npc
 from settings_test_support import SettingsBuilder
 
 import bridge.conversation_callbacks as conversation_callbacks
@@ -16,7 +17,7 @@ import bridge.edit_messages as edit_messages
 import bridge.message_commands as message_commands
 import bridge.regeneration as regeneration
 from bridge.metadata import set_meta
-from bridge.npc_repository import find_npc_exact, load_npc_fields, set_npc_extraction_coverage
+from bridge.npc_repository import load_npc_fields, set_npc_extraction_coverage
 from bridge.npc_service import NpcService
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
 from bridge.response_variants import keep_swipe_variant, save_response_variant, swipe_state_key
@@ -98,7 +99,7 @@ def _set_relationship(service, db, rowid, value):
 
 
 def _relationship(db):
-    entity = find_npc_exact(db, "chat", "s1", "maya torres")
+    entity = find_test_npc(db, "chat", "s1", "maya torres")
     if entity is None:
         return None
     state = load_npc_fields(db, entity.npc_id).get("relationship")
@@ -232,7 +233,7 @@ def test_reset_purges_npc_bank(monkeypatch):
             npc_service=service,
         )
 
-        assert find_npc_exact(db, "chat", "s1", "maya torres") is None
+        assert find_test_npc(db, "chat", "s1", "maya torres") is None
         assert db.execute("SELECT COUNT(*) FROM npc_field_history").fetchone()[0] == 0
         assert db.execute("SELECT COUNT(*) FROM npc_extraction_state").fetchone()[0] == 0
     finally:

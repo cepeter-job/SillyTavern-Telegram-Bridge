@@ -360,19 +360,23 @@ def _open_initialized_database(
         timeout=30,
         factory=_SerializedSQLiteConnection,
     )
-    _apply_connection_pragmas(
-        db,
-        timeout=30.0,
-        cache_kib=_limits._DB_PRIMARY_CACHE_KIB,
-        mmap_bytes=_limits._DB_PRIMARY_MMAP_BYTES,
-    )
-    # Database-level setup happens only on the first successful open for
-    # this process/path. auto_vacuum must precede WAL negotiation.
-    db.execute("PRAGMA auto_vacuum=INCREMENTAL")
-    db.execute("PRAGMA journal_mode=WAL")
-    _load_optional_vector_extension(db)
-    initialize_database_schema(db)
-    return db
+    try:
+        _apply_connection_pragmas(
+            db,
+            timeout=30.0,
+            cache_kib=_limits._DB_PRIMARY_CACHE_KIB,
+            mmap_bytes=_limits._DB_PRIMARY_MMAP_BYTES,
+        )
+        # Database-level setup happens only on the first successful open for
+        # this process/path. auto_vacuum must precede WAL negotiation.
+        db.execute("PRAGMA auto_vacuum=INCREMENTAL")
+        db.execute("PRAGMA journal_mode=WAL")
+        _load_optional_vector_extension(db)
+        initialize_database_schema(db)
+        return db
+    except BaseException:
+        db.close()
+        raise
 
 
 def _lightweight_db_connect(
@@ -386,13 +390,17 @@ def _lightweight_db_connect(
         timeout=timeout,
         factory=_SerializedSQLiteConnection,
     )
-    _apply_connection_pragmas(
-        db,
-        timeout=timeout,
-        cache_kib=_limits._DB_WORKER_CACHE_KIB,
-        mmap_bytes=_limits._DB_WORKER_MMAP_BYTES,
-    )
-    return db
+    try:
+        _apply_connection_pragmas(
+            db,
+            timeout=timeout,
+            cache_kib=_limits._DB_WORKER_CACHE_KIB,
+            mmap_bytes=_limits._DB_WORKER_MMAP_BYTES,
+        )
+        return db
+    except BaseException:
+        db.close()
+        raise
 
 
 _DB_CONNECTION_GATE = _DatabaseConnectionGate(

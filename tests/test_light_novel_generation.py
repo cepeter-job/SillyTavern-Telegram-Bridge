@@ -72,88 +72,88 @@ def test_inline_choice_contract_preserves_established_maturity_without_forced_es
 
 
 def test_inline_parser_keeps_story_when_choice_tail_is_invalid():
-    from bridge.light_novel_format import parse_story_response
+    from bridge.light_novel_format import parse_story_response_diagnostic
 
     for source in [
         '{"story":"The door opens.","choices":broken}',
         '{"story":"The door opens."}',
         '{"story":"The door opens.","choices":["Go"]}',
     ]:
-        story, choices = parse_story_response(source, 3)
+        story, choices = parse_story_response_diagnostic(source, 3)[:2]
         assert story == "The door opens."
         assert choices is None
 
 
 def test_inline_parser_recovers_trailing_fenced_envelope_after_prose():
-    from bridge.light_novel_format import parse_story_response
+    from bridge.light_novel_format import parse_story_response_diagnostic
 
     source = """Draft narrative that must not leak.
 
 ```json
 {"story":"Canonical narrative.","choices":["Open the door","Wait outside"]}
 ```"""
-    assert parse_story_response(source, 2) == (
+    assert parse_story_response_diagnostic(source, 2)[:2] == (
         "Canonical narrative.",
         ["Open the door", "Wait outside"],
     )
 
 
 def test_inline_parser_recovers_trailing_story_when_its_choices_are_invalid():
-    from bridge.light_novel_format import parse_story_response
+    from bridge.light_novel_format import parse_story_response_diagnostic
 
     source = """Draft narrative that must not leak.
 
 ```json
 {"story":"Canonical narrative.","choices":["Only one"]}
 ```"""
-    assert parse_story_response(source, 2) == ("Canonical narrative.", None)
+    assert parse_story_response_diagnostic(source, 2)[:2] == ("Canonical narrative.", None)
 
 
 def test_inline_parser_recovers_unfenced_duplicate_envelope_and_preserves_header():
-    from bridge.light_novel_format import parse_story_response
+    from bridge.light_novel_format import parse_story_response_diagnostic
 
     header = "[ 🕰️ Time 8:05 PM | 📍 Living Room ]"
     story = "Patricia lowers her glass and waits."
     choices = ["Ask Patricia a question", "Open the case"]
     source = f"{header}\n\n{story}\n\n" + json.dumps({"story": story, "choices": choices})
 
-    assert parse_story_response(source, 2) == (f"{header}\n\n{story}", choices)
+    assert parse_story_response_diagnostic(source, 2)[:2] == (f"{header}\n\n{story}", choices)
 
 
 def test_inline_parser_preserves_unrelated_unfenced_json_as_prose():
-    from bridge.light_novel_format import parse_story_response
+    from bridge.light_novel_format import parse_story_response_diagnostic
 
     source = 'Narrative keeps this visible data.\n\n{"metadata":"part of the story"}'
-    assert parse_story_response(source, 2) == (source, None)
+    assert parse_story_response_diagnostic(source, 2)[:2] == (source, None)
 
 
 def test_inline_parser_accepts_unambiguous_trailing_choices_only_envelope():
-    from bridge.light_novel_format import parse_story_response
+    from bridge.light_novel_format import parse_story_response_diagnostic
 
     source = """Narrative that remains usable.
 
 ```json
 {"choices":["Open the door","Wait outside"]}
 ```"""
-    assert parse_story_response(source, 2) == (
+    assert parse_story_response_diagnostic(source, 2)[:2] == (
         "Narrative that remains usable.",
         ["Open the door", "Wait outside"],
     )
 
 
 def test_inline_parser_removes_a_trailing_non_object_json_value():
-    from bridge.light_novel_format import parse_story_response
+    from bridge.light_novel_format import parse_story_response_diagnostic
 
     source = """Narrative that remains usable.
 
 ```json
 ["Open the door","Wait outside"]
 ```"""
-    assert parse_story_response(source, 2) == ("Narrative that remains usable.", None)
+    assert parse_story_response_diagnostic(source, 2)[:2] == ("Narrative that remains usable.", None)
 
 
 def test_inline_parser_does_not_recover_an_ambiguous_multi_fence_response():
-    from bridge.light_novel_format import parse_story_response
+    from bridge.light_novel_format import parse_story_response_diagnostic
 
     source = """Narrative with an earlier code block.
 ```
@@ -166,40 +166,40 @@ example
 ```
 example
 ```"""
-    assert parse_story_response(source, 2) == (expected, None)
+    assert parse_story_response_diagnostic(source, 2)[:2] == (expected, None)
 
 
 def test_inline_parser_recovers_single_envelope_wrapped_in_top_level_array():
-    from bridge.light_novel_format import parse_story_response
+    from bridge.light_novel_format import parse_story_response_diagnostic
 
     source = json.dumps([{"story": "Canonical narrative.", "choices": ["Open the door", "Wait outside"]}])
-    assert parse_story_response(source, 2) == (
+    assert parse_story_response_diagnostic(source, 2)[:2] == (
         "Canonical narrative.",
         ["Open the door", "Wait outside"],
     )
 
 
 def test_inline_parser_recovers_single_full_response_fence_with_wrong_language_label():
-    from bridge.light_novel_format import parse_story_response
+    from bridge.light_novel_format import parse_story_response_diagnostic
 
     source = """```javascript
 {"story":"Canonical narrative.","choices":["Open the door","Wait outside"]}
 ```"""
-    assert parse_story_response(source, 2) == (
+    assert parse_story_response_diagnostic(source, 2)[:2] == (
         "Canonical narrative.",
         ["Open the door", "Wait outside"],
     )
 
 
 def test_inline_parser_never_leaks_envelope():
-    from bridge.light_novel_format import parse_story_response
+    from bridge.light_novel_format import parse_story_response_diagnostic
 
-    assert parse_story_response('```json\n{"story":"Hello","choices":["Go", "Stay"]}\n```', 2) == (
+    assert parse_story_response_diagnostic('```json\n{"story":"Hello","choices":["Go", "Stay"]}\n```', 2)[:2] == (
         "Hello",
         ["Go", "Stay"],
     )
     with pytest.raises(ValueError):
-        parse_story_response('{"choices":["Go","Stay"]}', 2)
+        parse_story_response_diagnostic('{"choices":["Go","Stay"]}', 2)[:2]
 
 
 @pytest.mark.parametrize(

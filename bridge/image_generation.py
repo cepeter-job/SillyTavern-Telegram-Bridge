@@ -545,25 +545,3 @@ def handle_imagine_custom_prompt(
     if route.transport == "reference":
         normalized = _reference_prompt(normalized, route=route)
     _deliver_resolved_image(token, chat_id, normalized, route, reference, size, app_settings=app_settings)
-
-
-def handle_imagine_prompt(
-    token: str,
-    chat_id: str,
-    prompt: str,
-    selection: str = "",
-    size: str = IMAGE_DEFAULT_SIZE,
-    *,
-    app_settings: AppSettings,
-) -> None:
-    prompt = " ".join(str(prompt or "").split())
-    _provider_id, _spec, model = _resolve_image_provider(selection, app_settings=app_settings)
-    prompt_max_chars = _model_prompt_max_chars(model)
-    if not prompt or len(prompt) > prompt_max_chars:
-        raise ValueError(f"Image prompt for {model} must contain 1–{prompt_max_chars:,} characters")
-    progress_ids = send_text(token, chat_id, "🎨 Generating image…")
-    try:
-        raw, _revised, _used = generate_image(selection, prompt, size, app_settings=app_settings)
-        _multipart_photo(token, chat_id, raw, "")
-    finally:
-        _cleanup_image_progress(token, chat_id, progress_ids)

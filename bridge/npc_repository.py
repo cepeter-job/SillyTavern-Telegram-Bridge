@@ -53,14 +53,6 @@ def list_npc_entities(db: sqlite3.Connection, chat_id: str, session_id: str) -> 
     return [_entity_from_row(row) for row in rows]
 
 
-def find_npc_exact(db: sqlite3.Connection, chat_id: str, session_id: str, canonical_name: str) -> NpcEntity | None:
-    wanted = _normalize_name(canonical_name)
-    matches = [
-        item for item in list_npc_entities(db, chat_id, session_id) if _normalize_name(item.canonical_name) == wanted
-    ]
-    return matches[0] if len(matches) == 1 else None
-
-
 def find_npc_by_name_or_alias(
     db: sqlite3.Connection, chat_id: str, session_id: str, normalized_name: str
 ) -> NpcEntity | None:

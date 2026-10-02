@@ -9,13 +9,14 @@ from application_test_setup import (
     make_test_rag_service,
     make_test_request_context,
 )
+from persisted_state_test_support import find_test_npc
 from settings_test_support import SettingsBuilder
 
 import bridge.callbacks as callbacks
 import bridge.command_panels as command_panels
 import bridge.npc_callbacks as npc_callbacks
 import bridge.npc_panels as npc_panels
-from bridge.npc_repository import find_npc_exact, list_npc_field_history, load_npc_fields
+from bridge.npc_repository import list_npc_field_history, load_npc_fields
 from bridge.npc_service import NpcService
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
 from bridge.schema import initialize_database_schema
@@ -160,7 +161,7 @@ def test_undo_latest_npc_field_change_restores_previous_value():
 
         assert service.undo_latest_field_change(db, "chat", "s1", npc_id, "relationship") is True
 
-        entity = find_npc_exact(db, "chat", "s1", "maya torres")
+        entity = find_test_npc(db, "chat", "s1", "maya torres")
         assert entity is not None
         assert load_npc_fields(db, entity.npc_id)["relationship"].value == "cautious"
     finally:
@@ -251,7 +252,7 @@ def test_npc_undo_confirmation_rejects_newer_unreviewed_change(monkeypatch):
     try:
         npc_id = _apply(service, db, 10, "cautious")
         _apply(service, db, 20, "hostile")
-        entity = find_npc_exact(db, "chat", "s1", "maya torres")
+        entity = find_test_npc(db, "chat", "s1", "maya torres")
         assert entity is not None
         reviewed_change = list_npc_field_history(db, entity.npc_id)[-1].change_id
 

@@ -13,6 +13,8 @@ from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
+from persisted_state_test_support import seed_character_rank
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from aiohttp import web
 from application_test_setup import make_native_test_persona_service
@@ -30,11 +32,10 @@ async def serve() -> None:
     with tempfile.TemporaryDirectory(prefix="miniapp-dom-") as directory:
         services = make_services(Path(directory))
         services.memory_diagnostics = MemoryDiagnostics(services.config.bridge_home, {})
-        from bridge.character_quality import store_character_rank
 
         db = services.db_factory()
         try:
-            store_character_rank(db, "Alice.png", "S", app_settings=services.config)
+            seed_character_rank(db, "Alice.png", "S", app_settings=services.config)
         finally:
             db.close()
         if os.environ.get("MINIAPP_FIXTURE_USAGE") == "1":

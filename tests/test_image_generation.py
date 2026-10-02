@@ -221,11 +221,20 @@ class ImageGenerationTests(SettingsTestCase):
             patch.object(_m_image_generation, "_multipart_photo", side_effect=fake_photo),
             patch.object(_m_image_generation, "telegram_request", side_effect=fake_telegram_request, create=True),
         ):
-            _m_image_generation.handle_imagine_prompt(
+            _m_image_generation._deliver_resolved_image(
                 "token",
                 "chat",
                 "a small moon",
-                selection="test-image::test-model",
+                route=ImageRoute(
+                    selection="test-image::test-model",
+                    provider_id="test-image",
+                    model="test-model",
+                    transport="text",
+                    edit_route="",
+                    spec={},
+                ),
+                reference=None,
+                size="1024x1024",
                 app_settings=self.app_settings_builder.build(),
             )
 
@@ -359,11 +368,20 @@ class ImageGenerationTests(SettingsTestCase):
             ),
             self.assertRaisesRegex(RuntimeError, "provider failed"),
         ):
-            _m_image_generation.handle_imagine_prompt(
+            _m_image_generation._deliver_resolved_image(
                 "token",
                 "chat",
                 "a small moon",
-                selection="test-image::test-model",
+                route=ImageRoute(
+                    selection="test-image::test-model",
+                    provider_id="test-image",
+                    model="test-model",
+                    transport="text",
+                    edit_route="",
+                    spec={},
+                ),
+                reference=None,
+                size="1024x1024",
                 app_settings=self.app_settings_builder.build(),
             )
 
@@ -387,11 +405,20 @@ class ImageGenerationTests(SettingsTestCase):
             ),
             self.assertRaisesRegex(RuntimeError, "delivery failed"),
         ):
-            _m_image_generation.handle_imagine_prompt(
+            _m_image_generation._deliver_resolved_image(
                 "token",
                 "chat",
                 "a small moon",
-                selection="test-image::test-model",
+                route=ImageRoute(
+                    selection="test-image::test-model",
+                    provider_id="test-image",
+                    model="test-model",
+                    transport="text",
+                    edit_route="",
+                    spec={},
+                ),
+                reference=None,
+                size="1024x1024",
                 app_settings=self.app_settings_builder.build(),
             )
 
@@ -414,11 +441,20 @@ class ImageGenerationTests(SettingsTestCase):
             ),
             patch.object(_m_image_generation, "telegram_request", side_effect=RuntimeError("delete failed")),
         ):
-            _m_image_generation.handle_imagine_prompt(
+            _m_image_generation._deliver_resolved_image(
                 "token",
                 "chat",
                 "a small moon",
-                selection="test-image::test-model",
+                route=ImageRoute(
+                    selection="test-image::test-model",
+                    provider_id="test-image",
+                    model="test-model",
+                    transport="text",
+                    edit_route="",
+                    spec={},
+                ),
+                reference=None,
+                size="1024x1024",
                 app_settings=self.app_settings_builder.build(),
             )
 

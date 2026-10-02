@@ -3,7 +3,6 @@ from settings_test_support import SettingsTestCase
 
 import bridge.callback_tokens as _owner_callback_tokens
 import bridge.operations as _owner_operations
-import bridge.response_delivery as _owner_response_delivery
 import bridge.sqlite_store as _sqlite_store
 import bridge.telegram as _owner_telegram
 
@@ -231,24 +230,6 @@ class SqliteContentionTests(SettingsTestCase):
             time.sleep = original_sleep
         self.assertEqual(result, {"message_id": 901})
         self.assertEqual(len(calls), 3)
-
-    def test_delivery_metadata_lock_does_not_turn_sent_reply_into_backend_failure(self):
-        class LockedDb:
-            in_transaction = False
-
-            def __init__(self):
-                self.rolled_back = False
-
-            def execute(self, *_args):
-                raise sqlite3.OperationalError("database is locked")
-
-            def rollback(self):
-                self.rolled_back = True
-
-        db = LockedDb()
-        persisted = _owner_response_delivery.persist_assistant_delivery_ids(db, 42, [900])
-        self.assertFalse(persisted)
-        self.assertFalse(db.rolled_back)
 
     def test_native_edit_post_commit_failure_is_not_treated_as_uncommitted(self):
         operation_id = "edit-test"

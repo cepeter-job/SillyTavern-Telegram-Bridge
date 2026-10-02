@@ -58,8 +58,6 @@ def test_grounded_user_setting_normalizes_aliases_and_rejects_unknown_values():
     assert grounded.normalize_grounded_user("disabled") == "off"
     assert grounded.grounded_user_enabled("on")
     assert not grounded.grounded_user_enabled(None)
-    assert grounded.grounded_user_label("on") == "On"
-    assert grounded.grounded_user_label(None) == "Off"
     with pytest.raises(ValueError):
         grounded.normalize_grounded_user("sometimes")
 

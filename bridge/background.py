@@ -260,9 +260,14 @@ def register_durable_backlog_dispatcher(callback: Callable[[], None] | None) -> 
 def begin_background_shutdown() -> None:
     """Stop accepting work; durable chat jobs remain recoverable in SQLite."""
     global _BACKGROUND_ACCEPTING, _DURABLE_BACKLOG_DISPATCHER
+    # Admission and shutdown take locks in the same order. SQLite owns the
+    # durable backlog; queued closures must not retain payloads after shutdown.
     with _BACKGROUND_STATE_LOCK:
         _BACKGROUND_ACCEPTING = False
-    _DURABLE_BACKLOG_DISPATCHER = None
+        _DURABLE_BACKLOG_DISPATCHER = None
+        with _CHAT_LOCKS_GUARD:
+            _CHAT_QUEUES.clear()
+            _CHAT_ACTIVE.clear()
 
 
 def shutdown_background_executors(timeout: float = 20.0) -> bool:
@@ -337,9 +342,12 @@ def _start_next_chat_job(chat_id: str) -> None:
         _CHAT_IN_FLIGHT.add(chat_id)
     future = _submit_tracked_future(label, function, *args, **kwargs)
     if future is None:
-        with _CHAT_LOCKS_GUARD:
+        with _BACKGROUND_STATE_LOCK, _CHAT_LOCKS_GUARD:
             _CHAT_IN_FLIGHT.discard(chat_id)
-            _CHAT_QUEUES.setdefault(chat_id, deque()).appendleft((label, function, args, kwargs))
+            if _BACKGROUND_ACCEPTING:
+                _CHAT_QUEUES.setdefault(chat_id, deque()).appendleft((label, function, args, kwargs))
+            else:
+                _CHAT_ACTIVE.discard(chat_id)
         slot.release()
         return
 
@@ -361,11 +369,11 @@ def _start_next_chat_job(chat_id: str) -> None:
 def submit_chat_background(
     label: str, chat_id: str, function: Callable[P, T], *args: P.args, **kwargs: P.kwargs
 ) -> bool:
-    if not background_jobs_accepting():
-        logging.info("Background shutdown in progress; durable %s job remains in SQLite", label)
-        return False
     chat_id = str(chat_id)
-    with _CHAT_LOCKS_GUARD:
+    with _BACKGROUND_STATE_LOCK, _CHAT_LOCKS_GUARD:
+        if not _BACKGROUND_ACCEPTING:
+            logging.info("Background shutdown in progress; durable %s job remains in SQLite", label)
+            return False
         if chat_id not in _CHAT_QUEUES and len(_CHAT_QUEUES) >= _limits._BACKGROUND_MAX_SCOPED_QUEUES:
             logging.warning("Global ordered queue limit reached; durable job remains in SQLite")
             return False

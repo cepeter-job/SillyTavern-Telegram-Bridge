@@ -100,13 +100,6 @@ def _store_rank_state(db: sqlite3.Connection, filename: str, rank: str, signatur
         set_meta(db, RANK_META_PREFIX + filename, json.dumps({"rank": rank, "file_signature": signature}))
 
 
-def store_character_rank(db: sqlite3.Connection, filename: str, rank: str, *, app_settings: AppSettings) -> None:
-    tier = str(rank or "").strip().upper()
-    signature = _file_signature(filename, app_settings=app_settings)
-    if tier in RANK_TIERS and signature is not None:
-        _store_rank_state(db, filename, tier, signature)
-
-
 def parse_rank(raw: str | None) -> str | None:
     """Accept a tier alone, a labelled tier, or the requested tier–reason form."""
     text = str(raw or "").strip()

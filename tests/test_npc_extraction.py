@@ -3,16 +3,13 @@ import sqlite3
 import time
 
 from application_test_setup import make_test_provider_port
+from persisted_state_test_support import find_test_npc
 from settings_test_support import SettingsBuilder
 
 from bridge.application_composition import initialize_extensions
 from bridge.extension_registry import extension_registry_snapshot
-from bridge.npc_extraction import parse_npc_extraction, refresh_npc_state_now
-from bridge.npc_repository import (
-    find_npc_exact,
-    get_npc_extraction_coverage,
-    set_npc_extraction_coverage,
-)
+from bridge.npc_extraction import _parse_payload, refresh_npc_state_now
+from bridge.npc_repository import get_npc_extraction_coverage, set_npc_extraction_coverage
 from bridge.schema import initialize_database_schema
 from bridge.sqlite_store import write_transaction
 
@@ -102,7 +99,7 @@ def test_parser_accepts_valid_groups_and_rejects_invalid_identity_and_secret_sco
       ]}
     ]}
     """
-    groups = parse_npc_extraction(raw, primary_name="Alice", user_name="User")
+    groups = _parse_payload(raw, primary_name="Alice", user_name="User")[0]
     assert len(groups) == 1
     assert groups[0].name == "Maya Torres"
     assert groups[0].aliases == ("Maya",)
@@ -110,9 +107,9 @@ def test_parser_accepts_valid_groups_and_rejects_invalid_identity_and_secret_sco
 
 
 def test_parser_returns_empty_for_malformed_or_unsupported_payload():
-    assert parse_npc_extraction("not-json", primary_name="Alice", user_name="User") == []
+    assert _parse_payload("not-json", primary_name="Alice", user_name="User")[0] == []
     raw = _payload(name="Maya", field="unsupported", value="x")
-    assert parse_npc_extraction(raw, primary_name="Alice", user_name="User") == []
+    assert _parse_payload(raw, primary_name="Alice", user_name="User")[0] == []
 
 
 def test_refresh_extracts_once_and_advances_coverage():
@@ -140,7 +137,7 @@ def test_refresh_extracts_once_and_advances_coverage():
         assert applied == 1
         assert len(calls) == 1
         assert calls[0][2] == "npc-state:chat:s1"
-        assert find_npc_exact(db, "chat", "s1", "maya torres") is not None
+        assert find_test_npc(db, "chat", "s1", "maya torres") is not None
         assert coverage > 0
 
         again = refresh_npc_state_now(
@@ -200,7 +197,7 @@ def test_stale_worker_is_rejected_when_coverage_rewinds_during_generation():
             app_settings=SettingsBuilder().build(),
         )
         assert applied == 0
-        assert find_npc_exact(db, "chat", "s1", "maya") is None
+        assert find_test_npc(db, "chat", "s1", "maya") is None
         assert get_npc_extraction_coverage(db, "chat", "s1") == ids[1] - 1
     finally:
         db.close()
@@ -255,7 +252,7 @@ def test_stale_worker_rejects_reused_rowid_after_branch_rewrite():
             app_settings=SettingsBuilder().build(),
         )
         assert applied == 0
-        assert find_npc_exact(db, "chat", "s1", "maya") is None
+        assert find_test_npc(db, "chat", "s1", "maya") is None
         assert get_npc_extraction_coverage(db, "chat", "s1") == 0
     finally:
         db.close()

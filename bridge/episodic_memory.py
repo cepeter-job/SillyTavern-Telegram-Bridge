@@ -11,53 +11,8 @@ import json
 import re
 import sqlite3
 import time
-from dataclasses import dataclass
 
 from bridge.limits import EPISODIC_CONTEXT_MAX_CHARS
-
-
-@dataclass(frozen=True)
-class EpisodicMemory:
-    memory_id: int
-    kind: str
-    importance: float
-    summary: str
-    source_start_rowid: int
-    source_end_rowid: int
-    visibility: str = "shared"
-    known_by: tuple[str, ...] = ()
-
-
-def list_episodic_memories(
-    db: sqlite3.Connection, chat_id: str, session_id: str, limit: int = 10
-) -> list[EpisodicMemory]:
-    rows = db.execute(
-        """
-        SELECT m.memory_id,m.kind,m.importance,m.summary,m.source_start_rowid,m.source_end_rowid,
-               COALESCE(v.visibility,'shared'),COALESCE(v.known_by_json,'[]')
-        FROM episodic_memories AS m
-        LEFT JOIN episodic_memory_visibility AS v ON v.memory_id=m.memory_id
-        WHERE m.chat_id=? AND m.session_id=?
-        ORDER BY m.importance DESC, m.memory_id DESC
-        LIMIT ?
-        """,
-        (chat_id, session_id, limit),
-    ).fetchall()
-    result = []
-    for memory_id, kind, importance, summary, start, end, visibility, known_by_json in rows:
-        result.append(
-            EpisodicMemory(
-                int(memory_id),
-                str(kind),
-                float(importance),
-                str(summary),
-                int(start),
-                int(end),
-                str(visibility),
-                _decode_known_by(known_by_json),
-            )
-        )
-    return result
 
 
 def _normalized_summary(value: str) -> str:

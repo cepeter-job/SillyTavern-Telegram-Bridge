@@ -43,9 +43,6 @@ def handle_pending_input(
     rag_service: RagService,
 ) -> bool:
     """Consume one scoped pending-input message, including cancel and validation."""
-    value = stripped.strip()
-    if is_command_text(value) and value.casefold() != "/cancel":
-        return False
     session_id = session["session_id"]
     setup = _pending_state(db, setup_key(chat_id, request_context.actor_id), session_id, token, chat_id)
     if (
@@ -59,6 +56,8 @@ def handle_pending_input(
     optimizer = _pending_state(
         db, optimizer_suggestion_key(chat_id, request_context.actor_id), session_id, token, chat_id
     )
+    if optimizer and is_command_text(stripped) and stripped.strip().casefold() != "/cancel":
+        return False
     if optimizer and handle_character_optimizer_suggestion_input(
         db,
         token,

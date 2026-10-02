@@ -26,11 +26,15 @@ than presenting its obsolete metrics and recommendations as current findings.
 | Telegram HTTP-error streams survived retries or chained exceptions | Close request-error bodies in `finally` and raw polling-error bodies before retry waits. |
 | Shutdown retained ordered-queue closures and payloads; a submission race could restore them | Atomically stop admission and clear waiting queues. Do not requeue after shutdown. Let running work finish; keep durable recovery in SQLite. |
 | Startup/recovery exceptions bypassed runtime cleanup | Unwind admission, health, diagnostics, sync, executors, and the database with `finally` and `ExitStack`. Continue cleanup when another cleanup callback fails. Run maintenance only after a clean exit. |
+| Hindsight synchronous SDK calls left their thread event loop and socket pair open | Give each synchronous SDK client an `asyncio.Runner` scope spanning construction, request, and transport cleanup. Real SDK cleanup is exercised without network calls; repeated recall/retain success/failure tests require every allocated loop to be closed. |
 | Resource warnings could become non-failing unraisable warnings in pytest | Treat both `ResourceWarning` and `PytestUnraisableExceptionWarning` as errors, alongside existing thread-error checks. |
 
 The first regression run produced 16 expected failures. Another six startup
 failure/interruption regressions failed before lifecycle cleanup was implemented.
 A raw polling HTTP-error regression also reproduced open response ownership before retry.
+The full CI suite exposed an additional SDK event-loop leak. Allocation tracing
+identified Hindsight synchronous cleanup; four repeated-operation regressions
+failed before adding explicit loop ownership. The warning policy was not weakened.
 The CI-warning guard and ten retirement guards also failed before their fixes.
 Tests include genuine SQLite handles, weak references to queued payloads, a real
 executor with controlled events, and decoded-data cache eviction/copy checks.
@@ -82,9 +86,10 @@ those are not compatibility facades to delete indiscriminately.
 
 Run the changed-area regressions, Ruff lint/format, architecture scan, dependency
 lock validation, leakscan, the repository mypy target set, and `git diff --check`.
-Local verification passed: **372 selected tests**, Ruff lint/format (505 Python
-files), architecture/dependency-lock/leakscan checks, mypy (99 target files), and
-`git diff --check`. A deliberately leaked file was independently rejected by the
+Local verification passed: **373 selected tests** before the additional SDK finding;
+the Hindsight ownership follow-up passed **99 tests plus 65 subtests**. Ruff
+lint/format (505 Python files), architecture/dependency-lock/leakscan checks,
+mypy (99 target files), and `git diff --check` also passed. A deliberately leaked file was independently rejected by the
 new unraisable-warning policy. The final runtime reference sweep found no remaining
 unreferenced top-level function candidates under the audit heuristic.
 

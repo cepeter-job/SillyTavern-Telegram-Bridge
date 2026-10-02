@@ -232,3 +232,93 @@ def test_miniapp_fixture_bootstraps_imports_without_pytest_paths(tmp_path):
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("operation", ["recall", "retain"])
+@pytest.mark.parametrize("fails", [False, True])
+def test_hindsight_sync_operations_close_owned_event_loops(monkeypatch, tmp_path, operation, fails):
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    from hindsight_client import Hindsight
+    from settings_test_support import make_test_settings
+
+    from bridge import memory_backend
+
+    loops = []
+    original_init = asyncio.BaseEventLoop.__init__
+
+    def track(loop, *args, **kwargs):
+        original_init(loop, *args, **kwargs)
+        loops.append(loop)
+
+    def response(self, **kwargs):
+        if fails:
+            raise RuntimeError("synthetic Hindsight failure")
+        return SimpleNamespace(results=[], success=True)
+
+    monkeypatch.setattr(asyncio.BaseEventLoop, "__init__", track)
+    monkeypatch.setattr(Hindsight, operation, response)
+    monkeypatch.setattr(memory_backend, "memory_mode", lambda *args: "on")
+    monkeypatch.setattr(memory_backend, "_record_hindsight_document", lambda *args, **kwargs: None)
+    settings = make_test_settings(home=tmp_path, environ={"HINDSIGHT_API_URL": "http://127.0.0.1:8890"})
+
+    def exercise():
+        if operation == "recall":
+            return memory_backend.recall_memory_results(
+                None, "chat", {"session_id": "session"}, "query", app_settings=settings
+            )
+        return memory_backend._retain_with_client(
+            "chat",
+            "session",
+            "document",
+            "character",
+            "content",
+            "context",
+            "explicit",
+            "Failure %s",
+            app_settings=settings,
+        )
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            for _ in range(3):
+                executor.submit(exercise).result(timeout=10)
+        assert loops, "The real SDK close path must exercise event-loop ownership"
+        assert all(loop.is_closed() for loop in loops)
+    finally:
+        for loop in loops:
+            if not loop.is_closed():
+                loop.close()
+
+
+@pytest.mark.parametrize("stage", ["constructor", "cleanup"])
+def test_hindsight_owned_loop_closes_when_lifecycle_fails(monkeypatch, tmp_path, stage):
+    import asyncio
+
+    from settings_test_support import make_test_settings
+
+    from bridge import memory_backend
+
+    loops = []
+
+    def fail_close():
+        raise RuntimeError("cleanup failed")
+
+    def factory(**kwargs):
+        loops.append(asyncio.get_event_loop())
+        if stage == "constructor":
+            raise RuntimeError("constructor failed")
+        return SimpleNamespace(close=fail_close)
+
+    monkeypatch.setattr(memory_backend, "hindsight_client", factory)
+    settings = make_test_settings(home=tmp_path)
+    if stage == "constructor":
+        with pytest.raises(RuntimeError, match="constructor failed"):
+            with memory_backend.hindsight_client_scope(app_settings=settings):
+                pytest.fail("The constructor must fail before yielding a client")
+    else:
+        with memory_backend.hindsight_client_scope(app_settings=settings):
+            pass
+    assert len(loops) == 1
+    assert loops[0].is_closed()

@@ -91,7 +91,6 @@ def test_provider_port_is_pure_and_delegates_exact_call_shape():
     ]
 
 
-
 def test_provider_port_exposes_safe_inflight_metadata_and_logs_lifecycle(caplog):
     module = importlib.import_module("bridge.provider_port")
     snapshots = []
@@ -117,11 +116,11 @@ def test_provider_port_exposes_safe_inflight_metadata_and_logs_lifecycle(caplog)
     assert module.active_provider_requests() == ()
     assert "provider_start purpose=choices provider=nano-gpt model=z-ai/glm-5.3-flash-uncensored" in caplog.text
     assert (
-        "provider_finish purpose=choices provider=nano-gpt "
-        "model=z-ai/glm-5.3-flash-uncensored status=succeeded"
+        "provider_finish purpose=choices provider=nano-gpt model=z-ai/glm-5.3-flash-uncensored status=succeeded"
     ) in caplog.text
     assert "PRIVATE_API_KEY" not in caplog.text
     assert "PRIVATE_PROMPT" not in caplog.text
+
 
 def test_provider_catalog_returns_empty_mapping_on_read_failure(tmp_path, app_settings_builder):
     module = importlib.import_module("bridge.provider_catalog")

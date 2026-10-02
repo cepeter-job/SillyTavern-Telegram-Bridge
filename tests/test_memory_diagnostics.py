@@ -125,8 +125,7 @@ def test_cgroup_memory_snapshot_is_bounded_and_numeric(tmp_path):
     (group / "memory.swap.current").write_text("4096\n")
     (group / "memory.events").write_text("low 0\nhigh 7\nmax 0\noom 1\noom_kill 0\n")
     (group / "memory.pressure").write_text(
-        "some avg10=1.25 avg60=0.50 avg300=0.10 total=100\n"
-        "full avg10=0.75 avg60=0.25 avg300=0.05 total=50\n"
+        "some avg10=1.25 avg60=0.50 avg300=0.10 total=100\nfull avg10=0.75 avg60=0.25 avg300=0.05 total=50\n"
     )
     snapshot = getattr(memory_diagnostics, "_cgroup_memory_snapshot", lambda *_args, **_kwargs: {})
 

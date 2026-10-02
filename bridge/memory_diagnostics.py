@@ -602,9 +602,12 @@ class MemoryDiagnostics:
         cgroup = report.get("cgroup") if isinstance(report.get("cgroup"), Mapping) else {}
         counters = report.get("safe_counters") if isinstance(report.get("safe_counters"), Mapping) else {}
         providers = self._safe_provider_activity(report.get("provider_inflight"))
-        provider_calls = ",".join(
-            f"{item['purpose']}:{item['provider']}::{item['model']}:{item['elapsed_ms']}ms" for item in providers
-        ) or "none"
+        provider_calls = (
+            ",".join(
+                f"{item['purpose']}:{item['provider']}::{item['model']}:{item['elapsed_ms']}ms" for item in providers
+            )
+            or "none"
+        )
         logging.warning(
             "memory_incident rss_kib=%s anonymous_kib=%s swap_kib=%s threads=%s "
             "arena_groups=%s arena_rss_kib=%s background_active=%s provider_inflight=%s "

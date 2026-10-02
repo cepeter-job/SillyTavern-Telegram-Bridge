@@ -21,12 +21,102 @@ from bridge.sqlite_store import write_transaction
 from bridge.telegram import send_text, split_telegram_text, telegram_request
 from bridge.telegram_output import telegram_safe_output
 
+_ROLEPLAY_ITALIC = re.compile(r"(?<!\*)\*(?![\s*])(?P<body>.*?)(?<![\s*])\*(?!\*)", re.DOTALL)
+
+
+def _utf16_length(text: str) -> int:
+    return len(str(text).encode("utf-16-le")) // 2
+
+
+def _roleplay_reply_chunks(text: str) -> list[tuple[str, list[dict[str, int | str]]]]:
+    """Render SillyTavern single-star narration as Telegram italic entities."""
+    source = str(text or "")
+    source_chunks = split_telegram_text(source)
+    matches = list(_ROLEPLAY_ITALIC.finditer(source))
+    if not matches:
+        return [(chunk, []) for chunk in source_chunks]
+
+    opening = {match.start() for match in matches}
+    closing = {match.end() - 1 for match in matches}
+    visible_chars: list[str] = []
+    source_to_visible_char = [0] * (len(source) + 1)
+    source_to_visible_utf16 = [0] * (len(source) + 1)
+    entities: list[dict[str, int | str]] = []
+    italic_start: int | None = None
+    visible_utf16 = 0
+
+    for index, char in enumerate(source):
+        source_to_visible_char[index] = len(visible_chars)
+        source_to_visible_utf16[index] = visible_utf16
+        if index in opening:
+            italic_start = visible_utf16
+        elif index in closing:
+            if italic_start is not None and visible_utf16 > italic_start:
+                entities.append(
+                    {
+                        "type": "italic",
+                        "offset": italic_start,
+                        "length": visible_utf16 - italic_start,
+                    }
+                )
+            italic_start = None
+        else:
+            visible_chars.append(char)
+            visible_utf16 += _utf16_length(char)
+        source_to_visible_char[index + 1] = len(visible_chars)
+        source_to_visible_utf16[index + 1] = visible_utf16
+
+    visible = "".join(visible_chars)
+    rendered: list[tuple[str, list[dict[str, int | str]]]] = []
+    source_start = 0
+    for source_chunk in source_chunks:
+        source_end = source_start + len(source_chunk)
+        visible_start = source_to_visible_char[source_start]
+        visible_end = source_to_visible_char[source_end]
+        utf16_start = source_to_visible_utf16[source_start]
+        utf16_end = source_to_visible_utf16[source_end]
+        chunk_entities: list[dict[str, int | str]] = []
+        for entity in entities:
+            entity_start = int(entity["offset"])
+            entity_end = entity_start + int(entity["length"])
+            overlap_start = max(entity_start, utf16_start)
+            overlap_end = min(entity_end, utf16_end)
+            if overlap_start < overlap_end:
+                chunk_entities.append(
+                    {
+                        "type": "italic",
+                        "offset": overlap_start - utf16_start,
+                        "length": overlap_end - overlap_start,
+                    }
+                )
+        chunk_text = visible[visible_start:visible_end]
+        if chunk_text:
+            rendered.append((chunk_text, chunk_entities))
+        source_start = source_end
+    return rendered
+
+
+def _send_reply_chunk(
+    token: str,
+    chat_id: str,
+    chunk: tuple[str, list[dict[str, int | str]]],
+    acknowledged: Callable[[int], None] | None = None,
+) -> list[int]:
+    text, entities = chunk
+    if acknowledged is not None and entities:
+        return send_text(token, chat_id, text, acknowledged_chunk=acknowledged, entities=entities)
+    if acknowledged is not None:
+        return send_text(token, chat_id, text, acknowledged_chunk=acknowledged)
+    if entities:
+        return send_text(token, chat_id, text, entities=entities)
+    return send_text(token, chat_id, text)
+
 
 def delete_outgoing_messages(
     db: sqlite3.Connection, token: str, chat_id: str, session_id: str, after_rowid: int | None = None
 ) -> None:
     query = "SELECT telegram_message_ids FROM messages WHERE chat_id=? AND session_id=? AND role='assistant'"
-    params = [chat_id, session_id]
+    params: list[str | int] = [chat_id, session_id]
     if after_rowid is not None:
         query += " AND rowid>?"
         params.append(after_rowid)
@@ -121,7 +211,7 @@ def persist_assistant_delivery_ids(db: sqlite3.Connection, assistant_rowid: int,
     nested = db.in_transaction
     try:
 
-        def write():
+        def write() -> bool:
             store_delivery_ids(db, assistant_rowid, message_ids)
 
             return True
@@ -163,7 +253,7 @@ def send_reply(
             raise DeliveryFailure("Reply committed; delivery checkpoint could not be prepared") from exc
         if complete:
             return
-    chunks = split_telegram_text(text)
+    chunks = _roleplay_reply_chunks(text)
 
     def acknowledged(message_id: int) -> None:
         message_ids.append(message_id)
@@ -183,15 +273,16 @@ def send_reply(
         if db is None or assistant_rowid is None:
             # Preserve the public adapter's ordinary untracked send behavior.
             if replace_message_id is None:
-                send_text(token, chat_id, text)
+                for chunk in chunks:
+                    _send_reply_chunk(token, chat_id, chunk)
             else:
                 _send_preview(token, chat_id, chunks, replace_message_id, acknowledged)
         else:
             if not message_ids and replace_message_id is not None:
                 _send_preview(token, chat_id, chunks[:1], replace_message_id, acknowledged)
             remaining = chunks[len(message_ids) :]
-            if remaining:
-                send_text(token, chat_id, "".join(remaining), acknowledged_chunk=acknowledged)
+            for chunk in remaining:
+                _send_reply_chunk(token, chat_id, chunk, acknowledged)
             if len(message_ids) != len(chunks):
                 raise DeliveryFailure("Telegram did not acknowledge every reply chunk")
             checkpoint(
@@ -223,23 +314,27 @@ def send_reply(
 
 
 def _send_preview(
-    token: str, chat_id: str, chunks: list[str], preview_id: int, acknowledged: Callable[[int], None]
+    token: str,
+    chat_id: str,
+    chunks: list[tuple[str, list[dict[str, int | str]]]],
+    preview_id: int,
+    acknowledged: Callable[[int], None],
 ) -> None:
+    text, entities = chunks[0]
+    payload: dict[str, object] = {
+        "chat_id": chat_id,
+        "message_id": preview_id,
+        "text": text,
+        "disable_web_page_preview": True,
+    }
+    if entities:
+        payload["entities"] = entities
     try:
-        telegram_request(
-            token,
-            "editMessageText",
-            {
-                "chat_id": chat_id,
-                "message_id": preview_id,
-                "text": chunks[0],
-                "disable_web_page_preview": True,
-            },
-        )
+        telegram_request(token, "editMessageText", payload)
     except RuntimeError as exc:
         detail = str(exc).casefold()
         if "message to edit not found" in detail:
-            send_text(token, chat_id, chunks[0], acknowledged_chunk=acknowledged)
+            _send_reply_chunk(token, chat_id, chunks[0], acknowledged)
         elif "message is not modified" in detail:
             acknowledged(preview_id)
         else:
@@ -247,4 +342,4 @@ def _send_preview(
     else:
         acknowledged(preview_id)
     for chunk in chunks[1:]:
-        send_text(token, chat_id, chunk, acknowledged_chunk=acknowledged)
+        _send_reply_chunk(token, chat_id, chunk, acknowledged)

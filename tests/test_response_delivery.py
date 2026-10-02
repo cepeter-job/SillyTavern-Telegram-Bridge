@@ -6,6 +6,7 @@ from unittest.mock import patch
 from settings_test_support import SettingsTestCase
 
 import bridge.response_delivery as response_delivery
+import bridge.telegram as telegram
 from bridge.schema import initialize_database_schema
 
 
@@ -44,6 +45,130 @@ class ResponseDeliveryTests(SettingsTestCase):
             )
 
         self.assertEqual(sent, ["Recovered\nreply"])
+
+    def test_send_reply_renders_single_star_narration_as_telegram_italic(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 73}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                '*She looks away.*\n\n"I saw her yesterday."',
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(
+            requests,
+            [
+                (
+                    "sendMessage",
+                    {
+                        "chat_id": "chat",
+                        "text": 'She looks away.\n\n"I saw her yesterday."',
+                        "disable_web_page_preview": True,
+                        "entities": [{"type": "italic", "offset": 0, "length": 15}],
+                    },
+                )
+            ],
+        )
+
+    def test_send_reply_preserves_non_roleplay_star_sequences(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 75}
+
+        source = "Literal **bold** stays; * unfinished; trailing *"
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                source,
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], source)
+        self.assertNotIn("entities", requests[0][1])
+
+    def test_send_reply_uses_utf16_offsets_for_italic_entities(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 74}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                '🙂 "Hi." *She smiles.*',
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], '🙂 "Hi." She smiles.')
+        self.assertEqual(requests[0][1]["entities"], [{"type": "italic", "offset": 9, "length": 11}])
+
+    def test_send_reply_keeps_italic_style_when_span_crosses_chunk_boundary(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 80 + len(requests)}
+
+        source = "*" + ("A" * 4100) + '* "Done."'
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                source,
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(requests[0][1]["text"], "A" * 3999)
+        self.assertEqual(requests[0][1]["entities"], [{"type": "italic", "offset": 0, "length": 3999}])
+        self.assertEqual(requests[1][1]["text"], ("A" * 101) + ' "Done."')
+        self.assertEqual(requests[1][1]["entities"], [{"type": "italic", "offset": 0, "length": 101}])
+
+    def test_send_reply_applies_italic_entities_to_streaming_preview(self):
+        requests = []
+
+        def edit_existing(_token, method, payload):
+            requests.append((method, payload))
+            raise RuntimeError("Telegram editMessageText failed: Bad Request: message is not modified")
+
+        with patch.object(response_delivery, "telegram_request", side_effect=edit_existing):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                '*Final narration.* "Hi."',
+                self.db,
+                None,
+                42,
+                replace_message_id=71,
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(
+            requests,
+            [
+                (
+                    "editMessageText",
+                    {
+                        "chat_id": "chat",
+                        "message_id": 71,
+                        "text": 'Final narration. "Hi."',
+                        "disable_web_page_preview": True,
+                        "entities": [{"type": "italic", "offset": 0, "length": 16}],
+                    },
+                )
+            ],
+        )
 
     def test_send_reply_reuses_streaming_preview_as_final_message(self):
         requests = []

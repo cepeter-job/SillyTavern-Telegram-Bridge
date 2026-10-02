@@ -282,19 +282,26 @@ def split_telegram_text(text: str, limit: int = MAX_TELEGRAM_LENGTH) -> list[str
 
 
 def send_text(
-    token: str, chat_id: str, text: str, *, acknowledged_chunk: Callable[[int], None] | None = None
+    token: str,
+    chat_id: str,
+    text: str,
+    *,
+    acknowledged_chunk: Callable[[int], None] | None = None,
+    entities: list[dict[str, int | str]] | None = None,
 ) -> list[int]:
+    chunks = split_telegram_text(text)
+    if entities and len(chunks) != 1:
+        raise ValueError("Telegram entities require pre-split text")
     message_ids = []
-    for chunk in split_telegram_text(text):
-        result = telegram_request(
-            token,
-            "sendMessage",
-            {
-                "chat_id": chat_id,
-                "text": chunk,
-                "disable_web_page_preview": True,
-            },
-        )
+    for chunk in chunks:
+        payload: dict[str, object] = {
+            "chat_id": chat_id,
+            "text": chunk,
+            "disable_web_page_preview": True,
+        }
+        if entities:
+            payload["entities"] = entities
+        result = telegram_request(token, "sendMessage", payload)
         if acknowledged_chunk is not None and result.get("message_id") is None:
             raise RuntimeError("Telegram did not acknowledge the reply chunk")
         if result.get("message_id") is not None:

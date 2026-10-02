@@ -26,8 +26,26 @@ class _FakeResponse:
     def __exit__(self, *_args):
         return False
 
-    def read(self):
-        return json.dumps(self.payload).encode()
+    def read(self, size=-1):
+        raw = json.dumps(self.payload).encode()
+        return raw if size < 0 else raw[:size]
+
+
+class _RawResponse:
+    def __init__(self, raw, status=200):
+        self.raw = raw
+        self.status = status
+        self.read_sizes = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self, size=-1):
+        self.read_sizes.append(size)
+        return self.raw if size < 0 else self.raw[:size]
 
 
 class _FakeStreamResponse(_FakeResponse):
@@ -144,6 +162,54 @@ class GenerationContinuationTests(SettingsTestCase):
         )
 
         self.assertEqual(result, "OK")
+
+    def test_non_stream_response_is_bounded_before_json_decode(self):
+        limit = 4 * 1024 * 1024
+        response = _RawResponse(b" " * (limit + 2))
+        _m_provider_transport.strict_urlopen = lambda _request, **_kwargs: response
+
+        with self.assertRaisesRegex(ValueError, "Provider response exceeded the safety limit"):
+            _m_provider_transport.generate_provider_text(
+                self.router,
+                "",
+                "test",
+                [{"role": "user", "content": "Reply OK."}],
+                settings=dict(_m_sync_core.GENERATION_DEFAULTS),
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(response.read_sizes, [limit + 1])
+
+    def test_non_stream_continuation_response_is_bounded(self):
+        limit = 4 * 1024 * 1024
+        oversized = _RawResponse(b" " * (limit + 2))
+        responses = [
+            _FakeResponse(
+                {
+                    "choices": [
+                        {
+                            "message": {"content": "Part one."},
+                            "finish_reason": "length",
+                        }
+                    ]
+                }
+            ),
+            oversized,
+        ]
+        _m_provider_transport.strict_urlopen = lambda _request, **_kwargs: responses.pop(0)
+
+        with self.assertLogs(level="WARNING"):
+            result = _m_provider_transport.generate_provider_text(
+                self.router,
+                "",
+                "test",
+                [{"role": "user", "content": "Write a complete answer."}],
+                settings=dict(_m_sync_core.GENERATION_DEFAULTS),
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(result, "Part one.")
+        self.assertEqual(oversized.read_sizes, [limit + 1])
 
     def test_standard_top_level_choices_still_returns_assistant_content(self):
         _m_provider_transport.strict_urlopen = lambda _request, **_kwargs: _FakeResponse(

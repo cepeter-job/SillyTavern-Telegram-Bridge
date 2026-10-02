@@ -11,7 +11,7 @@ import urllib.request
 
 from bridge.codex_transport import generate_codex_response
 from bridge.config import GENERATION_DEFAULTS
-from bridge.limits import DEFAULT_MAX_TOKENS
+from bridge.limits import DEFAULT_MAX_TOKENS, PROVIDER_TEXT_RESPONSE_MAX_BYTES
 from bridge.model_router import ModelRouter
 from bridge.network_security import strict_urlopen, validate_provider_endpoint
 from bridge.settings import AppSettings
@@ -131,6 +131,13 @@ def _read_openai_stream_segment(
             cancelled = True
         usage.final = not cancelled and finish_reason is not None
         return content, finish_reason, cancelled
+
+
+def _read_bounded_provider_json(response):
+    raw = response.read(PROVIDER_TEXT_RESPONSE_MAX_BYTES + 1)
+    if len(raw) > PROVIDER_TEXT_RESPONSE_MAX_BYTES:
+        raise ValueError("Provider response exceeded the safety limit")
+    return json.loads(raw.decode("utf-8"))
 
 
 def _parse_stop_sequences(raw: object) -> list[str]:
@@ -514,7 +521,7 @@ def generate_provider_text(
     ) as response:
         if not is_streaming:
             with UsageCapture(usage_callback) as usage:
-                result = json.loads(response.read().decode("utf-8"))
+                result = _read_bounded_provider_json(response)
                 usage.observe(result)
             choices = _openai_response_choices(result)
             finish_reason = choices[0].get("finish_reason") if choices else None
@@ -583,7 +590,7 @@ def generate_provider_text(
                         environ=app_settings.environ,
                     ) as continuation_response:
                         with UsageCapture(usage_callback) as usage:
-                            continuation_result = json.loads(continuation_response.read().decode("utf-8"))
+                            continuation_result = _read_bounded_provider_json(continuation_response)
                             usage.observe(continuation_result)
                     continuation_choices = _openai_response_choices(continuation_result)
                     continuation = (

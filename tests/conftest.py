@@ -6,6 +6,8 @@ import pytest
 import bridge.background as _background
 
 _PRODUCTION_MAX_XDIST_WORKERS = 2
+_PRODUCTION_MAX_COLLECTED_TESTS = 512
+_PRODUCTION_FULL_SUITE_OVERRIDE = "SILLYTAVERN_ALLOW_PRODUCTION_FULL_TESTS"
 
 
 def _production_host_marker() -> Path:
@@ -36,6 +38,20 @@ def pytest_configure(config):
     if isinstance(requested, int) and requested > limit:
         raise pytest.UsageError(
             f"Production host allows at most {limit} pytest-xdist workers; run larger parallel suites in CI."
+        )
+
+
+def pytest_collection_modifyitems(config, items):
+    del config
+    if _production_test_worker_limit() is None:
+        return
+    override = os.environ.get(_PRODUCTION_FULL_SUITE_OVERRIDE, "").strip().casefold()
+    if override in {"1", "true", "yes", "on"}:
+        return
+    if len(items) > _PRODUCTION_MAX_COLLECTED_TESTS:
+        raise pytest.UsageError(
+            "production host collected more than 512 tests; run the full suite in CI or set "
+            "SILLYTAVERN_ALLOW_PRODUCTION_FULL_TESTS=1 explicitly."
         )
 
 

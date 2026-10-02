@@ -254,6 +254,51 @@ def test_handled_ordinary_message_completes_once(monkeypatch):
     assert completions == [(13, 14)]
 
 
+def test_rejected_sender_delivery_failure_does_not_block_update_completion(monkeypatch):
+    from types import SimpleNamespace
+
+    import bridge.update_routing as routing
+
+    class BlockedTelegram:
+        @staticmethod
+        def send_text(*_args, **_kwargs):
+            raise RuntimeError("Telegram sendMessage failed: Forbidden: bot was blocked by the user")
+
+    services = SimpleNamespace(
+        config=SimpleNamespace(bot_token="token", default_model="model"),
+        telegram=BlockedTelegram(),
+    )
+    db = route_db()
+    completions = []
+    monkeypatch.setattr(
+        routing,
+        "complete_update",
+        lambda _db, update_id, offset: completions.append((update_id, offset)),
+    )
+
+    try:
+        result = routing.route_update(
+            services,  # type: ignore[arg-type]
+            db,
+            {},
+            {
+                "update_id": 14,
+                "message": {
+                    "from": {"id": "blocked-user"},
+                    "chat": {"id": "blocked-user"},
+                    "text": "hello",
+                },
+            },
+            0,
+            frozenset({"permitted-user"}),
+        )
+    finally:
+        db.close()
+
+    assert result == 15
+    assert completions == [(14, 15)]
+
+
 def test_unroutable_ordinary_message_does_not_complete(monkeypatch):
     import bridge.update_routing as routing
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import re
 import time
@@ -22,6 +23,9 @@ from bridge.telegram import send_text
 from bridge.topic_scope import parse_topic_scope
 
 IMAGE_PROMPT_MAX_CHARS = 4000
+IMAGE_MODEL_PROMPT_MAX_CHARS = {
+    "z-image-turbo": 1200,
+}
 IMAGE_DEFAULT_SIZE = "1024x1024"
 IMAGE_RESPONSE_FORMAT = "b64_json"
 IMAGE_JSON_MAX_BYTES = 4 * ((IMAGE_MAX_BYTES + 2) // 3) + 65536
@@ -135,6 +139,19 @@ def _resolve_image_provider(selection: str = "", *, app_settings: AppSettings) -
     )
 
 
+def _model_prompt_max_chars(model: str) -> int:
+    return min(
+        IMAGE_PROMPT_MAX_CHARS,
+        IMAGE_MODEL_PROMPT_MAX_CHARS.get(str(model or "").casefold(), IMAGE_PROMPT_MAX_CHARS),
+    )
+
+
+def image_prompt_max_chars(selection: str = "", *, app_settings: AppSettings) -> int:
+    """Return the bridge prompt ceiling for the selected image model."""
+    _provider_id, _spec, model = _resolve_image_provider(selection, app_settings=app_settings)
+    return _model_prompt_max_chars(model)
+
+
 def _image_endpoint(spec: dict, *, app_settings: AppSettings) -> str:
     base = str(spec.get("image_endpoint") or spec.get("api_endpoint") or spec.get("api") or "").rstrip("/")
     if not base:
@@ -159,6 +176,29 @@ def _image_headers(spec: dict, *, app_settings: AppSettings) -> dict[str, str]:
         headers["Authorization"] = f"Bearer {key}"
     headers.update(spec.get("extra_headers") or {})
     return headers
+
+
+def _provider_prompt_too_long(exc: urllib.error.HTTPError) -> bool:
+    if exc.code not in {400, 413, 422}:
+        return False
+    try:
+        raw = exc.read(8193)
+    except OSError:
+        return False
+    exc.fp = io.BytesIO(raw)
+    if len(raw) > 8192:
+        return False
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(payload, dict):
+        return False
+    error = payload.get("error")
+    code = payload.get("code")
+    if isinstance(error, dict):
+        code = code or error.get("code")
+    return str(code or "").casefold() == "prompt_too_long"
 
 
 def _image_bytes_from_response(payload: dict, spec: dict, *, app_settings: AppSettings) -> tuple[bytes, str]:
@@ -190,18 +230,26 @@ def generate_image(
     selection: str, prompt: str, size: str = IMAGE_DEFAULT_SIZE, *, app_settings: AppSettings
 ) -> tuple[bytes, str, str]:
     prompt = " ".join(str(prompt or "").split())
-    if not 1 <= len(prompt) <= IMAGE_PROMPT_MAX_CHARS:
-        raise ValueError(f"Image prompt must contain 1–{IMAGE_PROMPT_MAX_CHARS} characters")
+    if not prompt:
+        raise ValueError("Image prompt must contain at least 1 character")
     if not re.fullmatch(r"(?:256|512|1024|1536)x(?:256|512|1024|1536)", size):
         raise ValueError("Image size must use WIDTHxHEIGHT with supported dimensions")
     provider_id, spec, model = _resolve_image_provider(selection, app_settings=app_settings)
+    prompt_max_chars = _model_prompt_max_chars(model)
+    if len(prompt) > prompt_max_chars:
+        raise ValueError(f"Image prompt for {model} must contain 1–{prompt_max_chars:,} characters")
     endpoint = _image_endpoint(spec, app_settings=app_settings)
     body = {"model": model, "prompt": prompt, "size": size, "n": 1, "response_format": IMAGE_RESPONSE_FORMAT}
     request = urllib.request.Request(  # noqa: S310 -- strict_urlopen validates scheme and host
         endpoint, data=json.dumps(body).encode(), headers=_image_headers(spec, app_settings=app_settings), method="POST"
     )
-    with strict_urlopen(request, timeout=180, environ=app_settings.environ) as response:
-        raw_response = response.read(IMAGE_JSON_MAX_BYTES + 1)
+    try:
+        with strict_urlopen(request, timeout=180, environ=app_settings.environ) as response:
+            raw_response = response.read(IMAGE_JSON_MAX_BYTES + 1)
+    except urllib.error.HTTPError as exc:
+        if _provider_prompt_too_long(exc):
+            raise ValueError(f"Image prompt for {model} is too long for the provider; shorten it and retry") from None
+        raise
     if len(raw_response) > IMAGE_JSON_MAX_BYTES:
         raise ValueError("Image provider response exceeds the JSON size limit")
     payload = json.loads(raw_response.decode("utf-8"))
@@ -262,8 +310,10 @@ def build_scene_image_prompt(
     *,
     provider_port: ProviderPort,
     app_settings: AppSettings,
+    max_chars: int = IMAGE_PROMPT_MAX_CHARS,
 ) -> str:
     """Build a bounded visual prompt from committed story state without mutating it."""
+    prompt_max_chars = max(1, min(int(max_chars), IMAGE_PROMPT_MAX_CHARS))
     session_id = str(session["session_id"])
     scene = scene_state_text(db, chat_id, session_id)
     latest_story = _latest_assistant_scene_text(db, chat_id, session_id)
@@ -283,7 +333,8 @@ def build_scene_image_prompt(
                 "lighting, time, weather, mood, and composition when known. "
                 "Depict the latest committed moment only: do not advance the plot, invent future actions, "
                 "or add characters, clothing, objects, relationships, or events that are not established. "
-                "Prefer concrete visual detail and camera/composition language over narrative prose."
+                "Prefer concrete visual detail and camera/composition language over narrative prose. "
+                f"Keep the final visual prompt within {prompt_max_chars:,} characters."
             ),
         },
         {
@@ -322,7 +373,7 @@ def build_scene_image_prompt(
         prompt = prompt.split(":", 1)[1].strip()
     if not prompt:
         raise ValueError("Utility model returned no usable current-scene image prompt")
-    return prompt[:IMAGE_PROMPT_MAX_CHARS]
+    return prompt[:prompt_max_chars]
 
 
 def handle_imagine_scene(
@@ -335,6 +386,12 @@ def handle_imagine_scene(
     provider_port: ProviderPort,
     app_settings: AppSettings,
 ) -> None:
+    selection, size = session_image_settings(
+        db,
+        chat_id,
+        str(session["session_id"]),
+        app_settings=app_settings,
+    )
     prompt = build_scene_image_prompt(
         db,
         chat_id,
@@ -342,12 +399,7 @@ def handle_imagine_scene(
         fields,
         provider_port=provider_port,
         app_settings=app_settings,
-    )
-    selection, size = session_image_settings(
-        db,
-        chat_id,
-        str(session["session_id"]),
-        app_settings=app_settings,
+        max_chars=image_prompt_max_chars(selection, app_settings=app_settings),
     )
     handle_imagine_prompt(token, chat_id, prompt, selection=selection, size=size, app_settings=app_settings)
 
@@ -361,6 +413,11 @@ def handle_imagine_prompt(
     *,
     app_settings: AppSettings,
 ) -> None:
+    prompt = " ".join(str(prompt or "").split())
+    _provider_id, _spec, model = _resolve_image_provider(selection, app_settings=app_settings)
+    prompt_max_chars = _model_prompt_max_chars(model)
+    if not prompt or len(prompt) > prompt_max_chars:
+        raise ValueError(f"Image prompt for {model} must contain 1–{prompt_max_chars:,} characters")
     send_text(token, chat_id, "🎨 Generating image…")
     raw, revised, used = generate_image(selection, prompt, size, app_settings=app_settings)
     caption = f"🎨 {prompt[:700]}\nModel: {used}"

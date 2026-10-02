@@ -13,8 +13,11 @@ from bridge.feature_panels import send_curated_memory_menu, send_director_goal_m
 from bridge.group_commands import handle_summary_command
 from bridge.group_service import GroupService
 from bridge.image_generation import (
+    IMAGE_PROMPT_MAX_CHARS,
     handle_imagine_scene,
+    image_prompt_max_chars,
     reset_session_image_settings,
+    session_image_settings,
     set_session_image_model,
     set_session_image_size,
 )
@@ -155,13 +158,24 @@ def handle_feature_panel_callback(
             close_panel_message(db, token, chat_id, callback)
         elif action == "custom":
             answer_callback(token, str(callback.get("id", "")), "Send prompt")
+            prompt_max_chars = IMAGE_PROMPT_MAX_CHARS
+            try:
+                selection, _size = session_image_settings(
+                    db,
+                    chat_id,
+                    session_id,
+                    app_settings=request_context.app_settings,
+                )
+                prompt_max_chars = image_prompt_max_chars(selection, app_settings=request_context.app_settings)
+            except ValueError:
+                pass
             start_text_action_input(
                 db,
                 token,
                 chat_id,
                 session_id,
                 "imagine",
-                "Send a custom image prompt (1–4,000 characters).",
+                f"Send a custom image prompt (1–{prompt_max_chars:,} characters).",
                 callback,
             )
         elif action == "scene":

@@ -25,6 +25,7 @@ def process_document_job(
     message_id: int | None = None,
     queued_session_id: str | None = None,
     model_override: str | None = None,
+    character_upload: bool = False,
     job_id: int | None = None,
 ) -> None:
     token = services.config.bot_token
@@ -97,6 +98,7 @@ def process_document_job(
                 rag_service=services.rag,
                 provider_port=services.provider,
                 request_context=request_context,
+                character_upload=character_upload,
             )
             if job_id is not None:
                 jobs.complete(db, job_id)

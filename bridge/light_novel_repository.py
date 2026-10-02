@@ -65,16 +65,6 @@ def latest_choice_set(db: sqlite3.Connection, chat_id: str, session_id: str) -> 
     )
 
 
-def choice_set_for_assistant(db: sqlite3.Connection, chat_id: str, session_id: str, rowid: int) -> ChoiceSet | None:
-    return _record(
-        db.execute(
-            f"SELECT {_COLUMNS} FROM light_novel_choice_sets "  # noqa: S608 -- fixed columns
-            "WHERE chat_id=? AND session_id=? AND assistant_rowid=? ORDER BY id DESC LIMIT 1",
-            (chat_id, session_id, rowid),
-        ).fetchone()
-    )
-
-
 def reserve_choice_set(
     db: sqlite3.Connection,
     chat_id: str,

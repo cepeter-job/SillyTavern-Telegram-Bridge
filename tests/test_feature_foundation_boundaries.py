@@ -20,7 +20,6 @@ MEMORY_BACKEND_EXPORTS = (
     "hindsight_bank_id",
     "hindsight_tags",
     "hindsight_client",
-    "close_hindsight_client",
     "hindsight_session_lock",
     "hindsight_session_prefix",
     "hindsight_conversation_document_id",

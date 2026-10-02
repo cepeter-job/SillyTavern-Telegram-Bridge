@@ -67,6 +67,12 @@ class _FakeHindsight:
         self.documents = _FakeDocuments(documents, fail_list=fail_list)
         self.retained = []
 
+    def close(self):
+        self.documents.closed = True
+
+    async def aclose(self):
+        await self.documents.close()
+
     def retain(self, **kwargs):
         self.retained.append(kwargs)
         document_id = kwargs["document_id"]
@@ -269,25 +275,18 @@ class HindsightSessionCleanupTests(SettingsTestCase):
         self.assertTrue(fake.documents.closed)
         self.assertEqual(fake.documents.documents, {"other-session": ["session:other", "character:shared"]})
 
-    def test_close_hindsight_client_closes_memory_and_document_api_clients_once(self):
-        class _ApiClient:
+    def test_sync_cleanup_does_not_support_retired_private_client_protocol(self):
+        class PrivateClient:
             def __init__(self):
                 self.closed = 0
 
             async def close(self):
                 self.closed += 1
 
-        memory_client = _ApiClient()
-        document_client = _ApiClient()
-        wrapper = SimpleNamespace(
-            _memory_api=SimpleNamespace(api_client=memory_client),
-            documents=SimpleNamespace(api_client=document_client),
-        )
-
-        _m_memory.close_hindsight_client(wrapper)
-
-        self.assertEqual(memory_client.closed, 1)
-        self.assertEqual(document_client.closed, 1)
+        private = PrivateClient()
+        legacy = SimpleNamespace(api_client=private)
+        memory_backend.close_hindsight_client(legacy)
+        self.assertEqual(private.closed, 0)
 
     def test_close_hindsight_client_prefers_public_sync_lifecycle(self):
         class _ApiClient:
@@ -307,7 +306,7 @@ class HindsightSessionCleanupTests(SettingsTestCase):
                 self.closed += 1
 
         wrapper = _Wrapper()
-        _m_memory.close_hindsight_client(wrapper)
+        memory_backend.close_hindsight_client(wrapper)
 
         self.assertEqual(wrapper.closed, 1)
         self.assertEqual(wrapper.private_client.closed, 0)

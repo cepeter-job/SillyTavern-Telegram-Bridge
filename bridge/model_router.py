@@ -45,12 +45,6 @@ class ModelRouter:
             raise ModelRoutingError("provider catalog must contain a providers mapping")
         return catalog
 
-    def provider_spec(self, provider_id: str) -> Mapping[str, object]:
-        spec = self._catalog().get(provider_id)
-        if not isinstance(spec, Mapping):
-            raise ModelRoutingError("unknown provider; configure it in the private provider catalog")
-        return spec
-
     def route(self, model: str) -> ModelRoute:
         if not isinstance(model, str) or not _valid_selection(model):
             raise ModelRoutingError("model selection must be a nonempty identifier of at most 200 characters")

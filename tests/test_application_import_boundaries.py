@@ -266,7 +266,7 @@ class ApplicationImportBoundaryTests(SettingsTestCase):
             (generation, ("build_chat_messages",)),
             (regeneration, ("regenerate_last",)),
             (continuation, ("continue_last",)),
-            (model_router.ModelRouter, ("route", "provider_spec")),
+            (model_router.ModelRouter, ("route",)),
             (provider_port.ProviderPort, ("generate",)),
             (provider_transport, ("generate_provider_text",)),
             (command_routes, ("handle_command_route",)),

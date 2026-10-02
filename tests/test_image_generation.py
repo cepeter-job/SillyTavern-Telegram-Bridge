@@ -4,10 +4,12 @@ from settings_test_support import SettingsTestCase
 ensure_application_extensions()
 
 import base64
+import io
 import json
 import os
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -94,6 +96,77 @@ class ImageGenerationTests(SettingsTestCase):
             _m_image_generation.generate_image(
                 "test-image::test-model", "a prompt", "999x999", app_settings=self.app_settings_builder.build()
             )
+
+    def test_z_image_turbo_rejects_prompt_over_model_limit_before_request(self):
+        self.catalog.write_text(
+            (
+                "providers:\n  test-image:\n    name: Test Image\n    api_endpoint: "
+                "https://images.example/v1\n    api_key_env: TEST_IMAGE_KEY\n    "
+                "image_enabled: true\n    image_models: [z-image-turbo]\n"
+            ),
+            encoding="utf-8",
+        )
+        calls = []
+
+        def fake_urlopen(request, timeout, *, environ=None):
+            calls.append((request, timeout))
+            return _Response({"data": [{"b64_json": base64.b64encode(b"PNG-DATA").decode()}]})
+
+        _m_image_generation.strict_urlopen = fake_urlopen
+        with patch.dict(os.environ, {"SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": "images.example"}):
+            with self.assertRaisesRegex(ValueError, "z-image-turbo.*1,200"):
+                _m_image_generation.generate_image(
+                    "test-image::z-image-turbo",
+                    "x" * 1201,
+                    "1024x1024",
+                    app_settings=self.app_settings_builder.build(),
+                )
+        self.assertEqual(calls, [])
+
+    def test_unknown_image_model_keeps_generic_4000_prompt_ceiling(self):
+        captured = []
+
+        def fake_urlopen(request, timeout, *, environ=None):
+            captured.append(json.loads(request.data.decode()))
+            return _Response({"data": [{"b64_json": base64.b64encode(b"PNG-DATA").decode()}]})
+
+        _m_image_generation.strict_urlopen = fake_urlopen
+        with patch.dict(os.environ, {"SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": "images.example"}):
+            result = _m_image_generation.generate_image(
+                "test-image::test-model",
+                "x" * 4000,
+                "1024x1024",
+                app_settings=self.app_settings_builder.build(),
+            )
+            self.assertEqual(result[2], "test-image::test-model")
+            self.assertEqual(len(captured[0]["prompt"]), 4000)
+            with self.assertRaisesRegex(ValueError, "4,000"):
+                _m_image_generation.generate_image(
+                    "test-image::test-model",
+                    "x" * 4001,
+                    "1024x1024",
+                    app_settings=self.app_settings_builder.build(),
+                )
+
+    def test_provider_prompt_too_long_error_becomes_safe_model_specific_value_error(self):
+        def fake_urlopen(request, timeout, *, environ=None):
+            raise urllib.error.HTTPError(
+                request.full_url,
+                400,
+                "Bad Request",
+                {},
+                io.BytesIO(b'{"error":"provider-specific internal prompt text","code":"prompt_too_long"}'),
+            )
+
+        _m_image_generation.strict_urlopen = fake_urlopen
+        with patch.dict(os.environ, {"SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": "images.example"}):
+            with self.assertRaisesRegex(ValueError, "test-model.*too long"):
+                _m_image_generation.generate_image(
+                    "test-image::test-model",
+                    "a prompt",
+                    "1024x1024",
+                    app_settings=self.app_settings_builder.build(),
+                )
 
     def test_disabled_provider_fails_closed(self):
         self.catalog.write_text("providers: {}\n", encoding="utf-8")
@@ -213,6 +286,34 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
             prompt,
             "cinematic photo, Mira in a blue coat holding a red umbrella at a rainy station",
         )
+
+    def test_current_scene_uses_selected_model_prompt_limit(self):
+        self.catalog.write_text(
+            "providers:\n"
+            "  test-image:\n"
+            "    name: Test Image\n"
+            "    api_endpoint: https://images.example/v1\n"
+            "    image_enabled: true\n"
+            "    image_models: [z-image-turbo]\n",
+            encoding="utf-8",
+        )
+        self._add_scene()
+        provider = make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "x" * 1702)
+        settings = self.app_settings_builder.build()
+        with patch.object(_m_image_generation, "handle_imagine_prompt") as deliver:
+            _m_image_generation.handle_imagine_scene(
+                self.db,
+                "token",
+                "chat",
+                self.session,
+                {"name": "Mira", "description": "Mira has dark hair."},
+                provider_port=provider,
+                app_settings=settings,
+            )
+        deliver.assert_called_once()
+        _token, _chat, prompt = deliver.call_args.args[:3]
+        self.assertEqual(len(prompt), 1200)
+        self.assertEqual(deliver.call_args.kwargs["selection"], "test-image::z-image-turbo")
 
     def test_current_scene_requires_existing_committed_context(self):
         called = []
@@ -436,6 +537,39 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
             )
         self.assertTrue(handled)
         self.assertEqual(len(calls), 1)
+
+    def test_custom_prompt_button_uses_selected_model_prompt_limit(self):
+        self.catalog.write_text(
+            "providers:\n"
+            "  test-image:\n"
+            "    name: Test Image\n"
+            "    api_endpoint: https://images.example/v1\n"
+            "    image_enabled: true\n"
+            "    image_models: [z-image-turbo]\n",
+            encoding="utf-8",
+        )
+        callback = {"id": "cb", "message": {"message_id": 77}}
+        request_context = SimpleNamespace(app_settings=self.app_settings_builder.build())
+        with patch.object(_m_feature_callbacks, "start_text_action_input") as start_input:
+            _m_feature_callbacks.handle_feature_panel_callback(
+                self.db,
+                "token",
+                callback,
+                lambda *_args: None,
+                "imagine:custom",
+                "chat",
+                callback["message"],
+                self.session,
+                self.session["session_id"],
+                None,
+                group_service=None,
+                provider_port=make_test_provider_port(),
+                request_context=request_context,
+            )
+        self.assertEqual(
+            start_input.call_args.args[5],
+            "Send a custom image prompt (1–1,200 characters).",
+        )
 
     def test_custom_prompt_button_starts_scoped_text_input(self):
         callback = {"id": "cb", "message": {"message_id": 77}}

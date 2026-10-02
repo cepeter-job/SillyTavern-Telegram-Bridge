@@ -439,7 +439,11 @@ def import_telegram_document(
         try:
             parse_png_chara_bytes(raw)
         except Exception:
-            send_text(token, chat_id, "This PNG is not a valid SillyTavern character card; chara metadata was not found.")
+            send_text(
+                token,
+                chat_id,
+                "This PNG is not a valid SillyTavern character card; chara metadata was not found.",
+            )
             return
         installed = import_character_card(
             db,

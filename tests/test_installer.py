@@ -42,6 +42,35 @@ def test_fresh_install_has_private_config_starters_service_and_idempotency(tmp_p
     assert len(cards) == 1
 
 
+def test_prepare_hardens_source_and_migrates_legacy_sensitive_artifacts(tmp_path):
+    from bridge.install_support import prepare_install
+
+    home, source, env, units = inputs(tmp_path)
+    ordinary = source / "ordinary.txt"
+    executable = source / "tool.sh"
+    backup = source / ".env.bak-bailu-clean"
+    ordinary.write_text("source\n")
+    executable.write_text("#!/bin/sh\n")
+    backup.write_text("LLM_API_KEY=synthetic-secret\n")
+    ordinary.chmod(0o664)
+    executable.chmod(0o775)
+    backup.chmod(0o660)
+    legacy_db = home / ".local/share/sillytavern-telegram/sillytavern_telegram.sqlite3"
+    legacy_db.parent.mkdir(parents=True)
+    legacy_db.touch(mode=0o644)
+
+    prepare_install(source, home, env, units)
+
+    assert ordinary.stat().st_mode & 0o022 == 0
+    assert executable.stat().st_mode & 0o022 == 0
+    assert not backup.exists()
+    migrated = home / ".local/share/sillytavern-telegram/backups/.env.bak-bailu-clean"
+    assert migrated.read_text() == "LLM_API_KEY=synthetic-secret\n"
+    assert migrated.stat().st_mode & 0o077 == 0
+    assert migrated.parent.stat().st_mode & 0o077 == 0
+    assert not legacy_db.exists()
+
+
 def test_fresh_install_sets_standard_update_signer_path(tmp_path):
     from bridge.install_support import prepare_install
 

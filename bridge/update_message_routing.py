@@ -10,6 +10,7 @@ from bridge.composition import BridgeServices
 from bridge.conversation_lifecycle import (
     START_REQUIRED,
     conversation_state,
+    has_pending_character_upload,
     has_pending_management_input,
     is_command_text,
     require_started,
@@ -182,6 +183,7 @@ def route_message_update(
 
     conversational_media = bool(voice or photos or (document and conversational_document(document)))
     conversational_text = bool(text and not is_command_text(str(text)))
+    pending_character_upload = False
     if conversational_media or conversational_text:
         gate_session = services.session.ensure(db, chat_id, model)
         if not services.group.user_turn_allowed(db, chat_id, gate_session["session_id"], sender):
@@ -190,7 +192,16 @@ def route_message_update(
         pending_input = conversational_text and has_pending_management_input(
             db, chat_id, gate_session["session_id"], sender
         )
-        if not pending_input and not require_started(db, chat_id, gate_session["session_id"]):
+        pending_character_upload = bool(
+            document
+            and Path(str(document.get("file_name") or "")).suffix.casefold() == ".png"
+            and has_pending_character_upload(db, chat_id, gate_session["session_id"], sender)
+        )
+        if (
+            not pending_input
+            and not pending_character_upload
+            and not require_started(db, chat_id, gate_session["session_id"])
+        ):
             services.telegram.send_text(token, chat_id, START_REQUIRED)
             return True
 
@@ -370,6 +381,7 @@ def route_message_update(
                 "model": model,
                 "resolve_active": False,
                 "actor_id": sender,
+                "character_upload": pending_character_upload,
             },
         )
         queued = services.jobs.submit(
@@ -386,6 +398,7 @@ def route_message_update(
                     message_id,
                     queued_session_id,
                     None,
+                    pending_character_upload,
                 ),
             ),
         )

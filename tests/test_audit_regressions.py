@@ -71,8 +71,9 @@ class AuditRegressionTests(SettingsTestCase):
             def __exit__(self, *_args):
                 return False
 
-            def read(self):
-                return json.dumps({"choices": [{"message": {"content": "visible"}}]}).encode()
+            def read(self, size=-1):
+                raw = json.dumps({"choices": [{"message": {"content": "visible"}}]}).encode()
+                return raw if size < 0 else raw[:size]
 
         original_urlopen = _m_provider_transport.strict_urlopen
         old_key = os.environ.get("TEST_OPENROUTER_KEY")

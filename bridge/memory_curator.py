@@ -39,6 +39,7 @@ from bridge.provider_port import ProviderPort
 from bridge.session_core import load_session
 from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect, write_transaction
+from bridge.transcript_repository import recent_transcript_rows
 
 _MEMORY_CURATOR_MAX_ITEMS = 24
 _MEMORY_CURATOR_TRANSCRIPT_MESSAGES = 20
@@ -139,24 +140,6 @@ def curated_memory_text(db: sqlite3.Connection, chat_id: str, session_id: str) -
     return "\n".join(lines)[:12000]
 
 
-def _curator_source_rows(
-    db: sqlite3.Connection,
-    chat_id: str,
-    session_id: str,
-    through_rowid: int | None = None,
-) -> list[tuple[int, str, str]]:
-    params: list[object] = [str(chat_id), str(session_id)]
-    where = "chat_id=? AND session_id=?"
-    if through_rowid is not None:
-        where += " AND rowid<=?"
-        params.append(int(through_rowid))
-    rows = db.execute(
-        "SELECT rowid,role,content FROM messages WHERE " + where + " ORDER BY created_at DESC,rowid DESC LIMIT ?",  # noqa: S608 -- SQL structure uses fixed columns/placeholders; all values are bound
-        (*params, _MEMORY_CURATOR_TRANSCRIPT_MESSAGES),
-    ).fetchall()
-    return list(reversed(rows))
-
-
 def curate_memory_now(
     db: sqlite3.Connection,
     api_key: str,
@@ -178,7 +161,9 @@ def curate_memory_now(
         revision = _repo_load_meta_value(db, revision_key, "0")
         epoch = _memory_hindsight_epoch(db, chat_id, session_id)
         initial_state = _repo_load_meta_value(db, memory_curator_key(chat_id, session_id), "")
-        rows = _curator_source_rows(db, chat_id, session_id, through_rowid)
+        rows = recent_transcript_rows(
+            db, chat_id, session_id, limit=_MEMORY_CURATOR_TRANSCRIPT_MESSAGES, through_rowid=through_rowid
+        )
         existing, covered = get_curated_memory_state(db, chat_id, session_id)
     if not rows:
         return None
@@ -252,7 +237,10 @@ def curate_memory_now(
                 or _repo_load_meta_value(db, revision_key, "0") != revision
                 or _memory_hindsight_epoch(db, chat_id, session_id) != epoch
                 or _repo_load_meta_value(db, memory_curator_key(chat_id, session_id), "") != initial_state
-                or _curator_source_rows(db, chat_id, session_id, through_rowid) != rows
+                or recent_transcript_rows(
+                    db, chat_id, session_id, limit=_MEMORY_CURATOR_TRANSCRIPT_MESSAGES, through_rowid=through_rowid
+                )
+                != rows
                 or current_covered > target_rowid
             ):
                 return current_items or None

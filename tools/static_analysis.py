@@ -369,6 +369,8 @@ CALLBACK_DOMAIN_MODULES = frozenset(
         "bridge.conversation_callbacks",
         "bridge.sync_callbacks",
         "bridge.character_callbacks",
+        "bridge.character_optimizer_callbacks",
+        "bridge.character_proposal_callbacks",
         "bridge.session_callbacks",
         "bridge.world_callbacks",
         "bridge.provider_callbacks",

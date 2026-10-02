@@ -22,13 +22,20 @@ _GENERATION_SLOTS = threading.BoundedSemaphore(6)
 _UTILITY_SLOTS = threading.BoundedSemaphore(4)
 
 
+_MEMORY_SLOTS = threading.BoundedSemaphore(4)
+
+
 _GENERATION_EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
 
 
 _UTILITY_EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
 
 
+_MEMORY_EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
+
+
 _GENERATION_LABELS = {"generation", "command", "retry", "regen", "continue", "edit", "summarize"}
+_MEMORY_LABELS = {"hindsight_retain", "memory_curator", "scene_state_refresh", "npc_state_refresh"}
 
 
 _CHAT_LOCKS: weakref.WeakValueDictionary[str, threading.Lock] = weakref.WeakValueDictionary()
@@ -57,7 +64,7 @@ def chat_job_lock(chat_id: str) -> threading.Lock:
 
 
 def _executor_for(label: str) -> concurrent.futures.ThreadPoolExecutor:
-    global _GENERATION_EXECUTOR, _UTILITY_EXECUTOR
+    global _GENERATION_EXECUTOR, _UTILITY_EXECUTOR, _MEMORY_EXECUTOR
 
     with _EXECUTOR_LOCK:
         if label in _GENERATION_LABELS:
@@ -68,6 +75,14 @@ def _executor_for(label: str) -> concurrent.futures.ThreadPoolExecutor:
                 )
             return _GENERATION_EXECUTOR
 
+        if label in _MEMORY_LABELS:
+            if _MEMORY_EXECUTOR is None:
+                _MEMORY_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+                    max_workers=1,
+                    thread_name_prefix="st-memory",
+                )
+            return _MEMORY_EXECUTOR
+
         if _UTILITY_EXECUTOR is None:
             _UTILITY_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
                 max_workers=2,
@@ -77,7 +92,11 @@ def _executor_for(label: str) -> concurrent.futures.ThreadPoolExecutor:
 
 
 def _admission_slot(label: str) -> threading.BoundedSemaphore:
-    return _GENERATION_SLOTS if label in _GENERATION_LABELS else _UTILITY_SLOTS
+    if label in _GENERATION_LABELS:
+        return _GENERATION_SLOTS
+    if label in _MEMORY_LABELS:
+        return _MEMORY_SLOTS
+    return _UTILITY_SLOTS
 
 
 def background_jobs_accepting() -> bool:
@@ -174,7 +193,7 @@ def begin_background_shutdown() -> None:
 
 
 def shutdown_background_executors(timeout: float = 20.0) -> bool:
-    global _GENERATION_EXECUTOR, _UTILITY_EXECUTOR
+    global _GENERATION_EXECUTOR, _UTILITY_EXECUTOR, _MEMORY_EXECUTOR
 
     begin_background_shutdown()
     drained = drain_background_jobs(timeout)
@@ -189,13 +208,17 @@ def shutdown_background_executors(timeout: float = 20.0) -> bool:
     with _EXECUTOR_LOCK:
         generation = _GENERATION_EXECUTOR
         utility = _UTILITY_EXECUTOR
+        memory = _MEMORY_EXECUTOR
         _GENERATION_EXECUTOR = None
         _UTILITY_EXECUTOR = None
+        _MEMORY_EXECUTOR = None
 
     if generation is not None:
         generation.shutdown(wait=drained, cancel_futures=not drained)
     if utility is not None:
         utility.shutdown(wait=drained, cancel_futures=not drained)
+    if memory is not None:
+        memory.shutdown(wait=drained, cancel_futures=not drained)
     return drained
 
 

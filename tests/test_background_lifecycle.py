@@ -94,6 +94,41 @@ class BackgroundLifecycleTests(SettingsTestCase):
             _background._GENERATION_EXECUTOR = old_generation
             _background._UTILITY_EXECUTOR = old_utility
 
+    def test_memory_enrichment_uses_dedicated_single_worker_pool(self):
+        old_generation = _background._GENERATION_EXECUTOR
+        old_utility = _background._UTILITY_EXECUTOR
+        old_memory = getattr(_background, "_MEMORY_EXECUTOR", None)
+        _background._GENERATION_EXECUTOR = None
+        _background._UTILITY_EXECUTOR = None
+        if hasattr(_background, "_MEMORY_EXECUTOR"):
+            _background._MEMORY_EXECUTOR = None
+        try:
+            utility = Mock()
+            memory = Mock()
+            with patch.object(
+                concurrent.futures,
+                "ThreadPoolExecutor",
+                side_effect=[utility, memory],
+            ) as constructor:
+                callback = _background._executor_for("callback")
+                hindsight = _background._executor_for("hindsight_retain")
+                curator = _background._executor_for("memory_curator")
+                scene = _background._executor_for("scene_state_refresh")
+                npc = _background._executor_for("npc_state_refresh")
+
+            self.assertIs(callback, utility)
+            self.assertIs(hindsight, memory)
+            self.assertIs(curator, memory)
+            self.assertIs(scene, memory)
+            self.assertIs(npc, memory)
+            self.assertEqual(constructor.call_count, 2)
+            self.assertEqual(constructor.call_args_list[1].kwargs["max_workers"], 1)
+        finally:
+            _background._GENERATION_EXECUTOR = old_generation
+            _background._UTILITY_EXECUTOR = old_utility
+            if hasattr(_background, "_MEMORY_EXECUTOR"):
+                _background._MEMORY_EXECUTOR = old_memory
+
     def test_shutdown_timeout_logs_active_labels_and_does_not_wait_forever(self):
         old_generation = _background._GENERATION_EXECUTOR
         old_utility = _background._UTILITY_EXECUTOR

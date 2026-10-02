@@ -4,16 +4,14 @@ import ast
 from dataclasses import fields
 from pathlib import Path
 
+from source_test_support import top_level_functions
+
 ROOT = Path(__file__).parents[1]
 BRIDGE = ROOT / "bridge"
 
 
-def top_level_functions(filename: str) -> set[str]:
-    tree = ast.parse((BRIDGE / filename).read_text(encoding="utf-8"))
-    return {node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
-
-
 def top_level_classes(filename: str) -> set[str]:
+    """Return class names defined directly in the named bridge source file."""
     tree = ast.parse((BRIDGE / filename).read_text(encoding="utf-8"))
     return {node.name for node in tree.body if isinstance(node, ast.ClassDef)}
 

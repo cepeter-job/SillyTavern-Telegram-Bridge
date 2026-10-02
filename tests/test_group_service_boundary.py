@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import ast
 import importlib
 import inspect
 from dataclasses import MISSING
 from pathlib import Path
 
 from application_test_setup import make_test_session_service
+from source_test_support import imported_modules
 
 import bridge.group_commands as _owner_group_commands
 import bridge.group_panels as _owner_group_panels
@@ -19,18 +19,8 @@ ROOT = Path(__file__).parents[1]
 BRIDGE = ROOT / "bridge"
 
 
-def imported_modules(filename: str) -> set[str]:
-    tree = ast.parse((BRIDGE / filename).read_text(encoding="utf-8"))
-    result: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            result.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            result.add(node.module)
-    return result
-
-
 def group_service_module():
+    """Import the group service after asserting that its source module exists."""
     path = BRIDGE / "group_service.py"
     assert path.is_file(), "GroupService module is missing"
     return importlib.import_module("bridge.group_service")

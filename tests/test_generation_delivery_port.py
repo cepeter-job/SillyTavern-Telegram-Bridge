@@ -6,6 +6,8 @@ import inspect
 from dataclasses import MISSING
 from pathlib import Path
 
+from source_test_support import imported_modules
+
 import bridge.continuation as _owner_continuation
 import bridge.generation_recovery as _owner_generation_recovery
 import bridge.regeneration as _owner_regeneration
@@ -14,18 +16,8 @@ ROOT = Path(__file__).parents[1]
 BRIDGE = ROOT / "bridge"
 
 
-def imported_modules(filename: str) -> set[str]:
-    tree = ast.parse((BRIDGE / filename).read_text(encoding="utf-8"))
-    result: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            result.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            result.add(node.module)
-    return result
-
-
 def test_delivery_port_is_pure_and_declares_required_callables():
+    """Verify the delivery port exposes the required fields and only imports contracts."""
     path = BRIDGE / "delivery_port.py"
     assert path.is_file(), "DeliveryPort module is missing"
     module = importlib.import_module("bridge.delivery_port")

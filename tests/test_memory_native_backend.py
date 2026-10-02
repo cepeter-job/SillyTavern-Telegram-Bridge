@@ -71,6 +71,12 @@ class _FakeHindsight:
         self.documents = _FakeDocuments()
         self.retained = []
 
+    def close(self):
+        self.documents.closed = True
+
+    async def aclose(self):
+        await self.documents.close()
+
     def retain(self, **kwargs):
         self.retained.append(kwargs)
         self.documents.documents[kwargs["document_id"]] = list(kwargs.get("tags") or [])

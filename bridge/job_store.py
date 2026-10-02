@@ -57,6 +57,16 @@ def enqueue_panel_callback_job(
         )
 
 
+def job_payload(db: sqlite3.Connection, job_id: int | None) -> dict[str, object]:
+    if job_id is None:
+        return {}
+    try:
+        value = json.loads(load_job_payload(db, int(job_id)))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def job_actor_id(db: sqlite3.Connection, job_id: int | None) -> str:
     if job_id is None:
         return ""

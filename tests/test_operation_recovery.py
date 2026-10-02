@@ -469,6 +469,99 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
             0,
         )
 
+    def test_edit_deletes_invalidated_choice_panel_before_manual_reply(self):
+        from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
+        from bridge.light_novel_repository import (
+            attach_choice_set,
+            bind_choice_panel,
+            invalidate_choice_sets,
+            reserve_choice_set,
+        )
+        from bridge.light_novel_service import story_digest
+        from bridge.sqlite_store import write_transaction
+
+        configure_conversation(self.db, "chat", self.session["session_id"], "lightnovel", "a")
+        state = conversation_state(self.db, "chat", self.session["session_id"])
+        self.assertTrue(mark_started(self.db, "chat", self.session["session_id"], state.epoch))
+        now = time.time()
+        story = self.db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+            ("chat", self.session["session_id"], "assistant", "story before manual reply", now),
+        )
+        self.assertIsNotNone(story.lastrowid)
+        with write_transaction(self.db):
+            previous = reserve_choice_set(
+                self.db,
+                "chat",
+                self.session["session_id"],
+                state.epoch,
+                "manual-reply-source",
+                "a",
+                2,
+                "owner",
+                self.session["model_id"],
+                now,
+            )
+            attach_choice_set(
+                self.db,
+                previous.nonce,
+                int(story.lastrowid),
+                story_digest("story before manual reply"),
+                ["Left", "Right"],
+            )
+            bind_choice_panel(self.db, previous.nonce, 81)
+            invalidate_choice_sets(self.db, "chat", self.session["session_id"])
+
+        user = self.db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_id,created_at) VALUES(?,?,?,?,?,?)",
+            ("chat", self.session["session_id"], "user", "manual reply", "77", now + 1),
+        )
+        self.assertIsNotNone(user.lastrowid)
+        assistant = self.db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_ids,created_at) VALUES(?,?,?,?,?,?)",
+            ("chat", self.session["session_id"], "assistant", "old response", "[91]", now + 2),
+        )
+        self.assertIsNotNone(assistant.lastrowid)
+        self.db.commit()
+
+        fields = {
+            "name": "Mira",
+            "system_prompt": "",
+            "description": "",
+            "personality": "",
+            "scenario": "",
+            "mes_example": "",
+            "first_mes": "",
+            "post_history_instructions": "",
+            "alternate_greetings": "[]",
+        }
+        telegram = Mock(return_value={})
+        with (
+            patch.object(_owner_edit_messages, "telegram_request", telegram),
+            patch.object(_owner_edit_messages, "send_reply"),
+            patch.object(_owner_edit_messages, "send_typing"),
+        ):
+            _owner_edit_messages.regenerate_edited_turn(
+                self.db,
+                "token",
+                "key",
+                self.session,
+                fields,
+                "chat",
+                int(user.lastrowid),
+                "replacement",
+                operation_id=651,
+                provider_port=make_test_provider_port(generate_backend=lambda *_args, **_kwargs: "new response"),
+                memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
+                persona_service=make_test_persona_service(),
+                app_settings=self.app_settings_builder.build(),
+                rag_service=make_test_rag_service(),
+            )
+
+        deleted = [call.args[2]["message_id"] for call in telegram.call_args_list if call.args[1] == "deleteMessage"]
+        self.assertEqual(deleted, [91, 81])
+
     def test_edit_deletes_replaced_light_novel_choice_panel(self):
         from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
         from bridge.light_novel_repository import attach_choice_set, bind_choice_panel, reserve_choice_set

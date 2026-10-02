@@ -17,6 +17,7 @@ from bridge.edit_messages import edit_telegram_user_message
 from bridge.failed_turns import clear_failed_turn, record_failed_turn
 from bridge.image_messages import process_image_message
 from bridge.job_service import DurableJob, JobSubmission
+from bridge.job_store import job_payload
 from bridge.light_novel_jobs import process_light_novel_choices_job
 from bridge.limits import IMAGE_MAX_BYTES
 from bridge.operations import operation_phase, operation_was_applied, record_operation
@@ -47,6 +48,7 @@ def process_message_job(
     with chat_job_lock(chat_id):
         db = services.db_factory()
         claimed = False
+        story_model_override: str | None = None
         try:
             if job_id is not None and not jobs.start(db, job_id):
                 return
@@ -104,6 +106,11 @@ def process_message_job(
                     jobs.complete(db, job_id)
                 services.telegram.send_text(token, chat_id, "It is not your turn in manual group mode.")
                 return
+            payload = job_payload(db, job_id)
+            story_model_override = str(payload.get("story_model_override") or "").strip() or None
+            light_novel_strategy_override = str(payload.get("light_novel_strategy_override") or "").casefold()
+            if light_novel_strategy_override not in {"a", "b", "c"}:
+                light_novel_strategy_override = None
             services.conversation.process_message(
                 db,
                 token,
@@ -116,7 +123,10 @@ def process_message_job(
                 queued_session_id=queued_session_id,
                 operation_id=job_id,
                 actor_id=actor_id,
+                story_model_override=story_model_override,
+                light_novel_strategy_override=light_novel_strategy_override,
             )
+            clear_failed_turn(db, chat_id, message_id)
             if job_id is not None:
                 jobs.complete(db, job_id)
         except Exception as exc:
@@ -126,7 +136,16 @@ def process_message_job(
                 handle_delivery_failure(services, db, chat_id, job_id, exc)
                 return
             logging.error("Background message processing failed: %s", exc, exc_info=True)
-            record_failed_turn(db, chat_id, message_id, text, model, str(exc), queued_session_id or "")
+            record_failed_turn(
+                db,
+                chat_id,
+                message_id,
+                text,
+                model,
+                str(exc),
+                queued_session_id or "",
+                preserve_model=story_model_override is not None,
+            )
             if job_id is not None:
                 jobs.fail(db, job_id, exc)
             if str(text).lstrip().startswith("/"):
@@ -293,6 +312,7 @@ def process_callback_job(
                 operation_id=job_id,
                 actor_id=actor_id,
                 services=services,
+                message_worker=process_message_job,
             )
             if job_id is not None:
 

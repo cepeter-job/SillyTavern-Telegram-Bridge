@@ -243,6 +243,71 @@ def test_retry_choices_enqueues_only_choice_job_with_unchanged_count(novel_db):
     assert db.execute("SELECT count(*) FROM messages").fetchone()[0] == 1
 
 
+def test_failed_turn_recovery_callback_queues_strategy_b_for_only_that_turn(novel_db):
+    from bridge.callback_dispatch import process_callback
+    from bridge.failed_turns import record_failed_turn
+    from bridge.panel_bindings import bind_panel_session
+
+    db, session, settings = make_started(novel_db, "a")
+    sent = []
+    services = bridge_services(settings, sent)
+    submissions = []
+    worker = Mock()
+
+    def submit_chat(label, chat_id, worker, *args):
+        submissions.append((label, chat_id, worker, args))
+        return True
+
+    services = replace(services, jobs=replace(services.jobs, submit_chat=submit_chat))
+    for _ in range(2):
+        record_failed_turn(
+            db,
+            "chat",
+            -265,
+            "Try a different response",
+            session["model_id"],
+            "Story response has no usable narrative",
+            session["session_id"],
+        )
+    bind_panel_session(db, "chat", 81, session["session_id"], "owner")
+    callback = {
+        "id": "cb-retry-turn",
+        "from": {"id": "owner"},
+        "message": {"chat": {"id": "chat"}, "message_id": 81},
+        "data": "lnturnretry:-265:b",
+        "_queued": True,
+    }
+
+    process_callback(
+        db,
+        "token",
+        callback,
+        operation_id=700,
+        actor_id="owner",
+        services=services,
+        message_worker=worker,
+    )
+
+    row = db.execute(
+        "SELECT telegram_message_id,session_id,payload_json FROM jobs "
+        "WHERE kind='generation' ORDER BY job_id DESC LIMIT 1"
+    ).fetchone()
+    assert row[:2] == ("-265", "story")
+    payload = json.loads(row[2])
+    assert payload["text"] == "Try a different response"
+    assert payload["story_model_override"] == "story::test"
+    assert payload["light_novel_strategy_override"] == "b"
+    assert submissions[-1][0:2] == ("generation", "chat")
+    assert conversation_state(db, "chat", "story").strategy == "a"
+
+    submission = submissions[-1]
+    assert not any(arg is services for arg in submission[3]), "Leaf job arguments must not include root services"
+    submission[2](*submission[3])
+    worker.assert_called_once_with(
+        services, {}, "chat", "Try a different response", -265, None, "story", "story::test", submission[3][-1]
+    )
+
+
 def test_opening_light_novel_commit_creates_first_choice_job(novel_db, monkeypatch):
     from bridge import greetings
 
@@ -508,6 +573,93 @@ def test_durable_recovery_resolves_choices_to_choice_only_worker(novel_db):
     submission = resolve_recovered_job_submission(services, {}, job)
     assert submission.worker is process_light_novel_choices_job
     assert submission.args[1:] == ("chat", record.nonce, True)
+
+
+def test_successful_retry_worker_clears_failed_turn(novel_db):
+    from bridge import worker_orchestration as workers
+    from bridge.failed_turns import latest_failed_turn, record_failed_turn
+    from bridge.sqlite_store import db_connect
+
+    db, _session, settings = make_started(novel_db, "a")
+    filename = db.execute("PRAGMA database_list").fetchone()[2]
+    record_failed_turn(
+        db,
+        "chat",
+        -265,
+        "Retry me",
+        "story::test",
+        "Story response has no usable narrative",
+        "story",
+    )
+    services = bridge_services(settings, [])
+    conversation = Mock()
+    services = replace(
+        services,
+        db_factory=lambda: db_connect(filename, app_settings=settings),
+        conversation=conversation,
+    )
+
+    workers.process_message_job(
+        services,
+        {},
+        "chat",
+        "Retry me",
+        -265,
+        None,
+        "story",
+        "story::test",
+    )
+
+    conversation.process_message.assert_called_once()
+    assert latest_failed_turn(db, "chat") is None
+
+
+def test_durable_generation_recovery_preserves_retry_model_and_strategy_overrides(novel_db):
+    from bridge import worker_orchestration as workers
+    from bridge.sqlite_store import db_connect
+
+    db, _session, settings = make_started(novel_db, "a")
+    filename = db.execute("PRAGMA database_list").fetchone()[2]
+    services = bridge_services(settings, [])
+    conversation = Mock()
+    services = replace(
+        services,
+        db_factory=lambda: db_connect(filename, app_settings=settings),
+        conversation=conversation,
+    )
+    state = conversation_state(db, "chat", "story")
+    job_id = services.jobs.enqueue(
+        db,
+        500,
+        "chat",
+        "story",
+        -265,
+        "generation",
+        {
+            "text": "Retry me",
+            "model": "story::test",
+            "story_model_override": "utility::model",
+            "light_novel_strategy_override": "b",
+            "actor_id": "owner",
+            "epoch": state.epoch,
+        },
+    )
+
+    workers.process_message_job(
+        services,
+        {},
+        "chat",
+        "Retry me",
+        -265,
+        None,
+        "story",
+        "story::test",
+        job_id,
+    )
+
+    kwargs = conversation.process_message.call_args.kwargs
+    assert kwargs["story_model_override"] == "utility::model"
+    assert kwargs["light_novel_strategy_override"] == "b"
 
 
 def test_choice_worker_does_not_regenerate_ready_inline_story(novel_db, monkeypatch):

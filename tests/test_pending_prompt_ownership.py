@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 from application_test_setup import make_test_group_service
 from settings_test_support import SettingsTestCase
+from source_test_support import imported_modules
 
 import bridge.background as _background
 import bridge.pending_input as _owner_pending_input
@@ -20,18 +21,8 @@ import bridge.telegram as telegram
 BRIDGE_DIR = Path(__file__).parents[1] / "bridge"
 
 
-def imported_modules(path: Path) -> set[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    modules: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            modules.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            modules.add(node.module)
-    return modules
-
-
 def imported_names(path: Path, module: str) -> set[str]:
+    """Return original names imported from the specified module anywhere in a source file."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     return {
         alias.name

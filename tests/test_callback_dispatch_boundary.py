@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import subprocess
 import sys
 import unittest
@@ -10,25 +9,16 @@ from unittest.mock import Mock, patch
 
 from application_test_setup import make_test_session_service
 from settings_test_support import SettingsTestCase, make_test_settings
+from source_test_support import imported_modules
 
 from bridge.session_service import SessionService
 
 BRIDGE_DIR = Path(__file__).parents[1] / "bridge"
 
 
-def imported_modules(path: Path) -> set[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    modules: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            modules.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            modules.add(node.module)
-    return modules
-
-
 class CallbackDispatchBoundaryTests(SettingsTestCase):
     def test_callbacks_does_not_import_panel_callback_routes(self):
+        """Keep callback helpers independent of panel-route dispatch."""
         self.assertNotIn(
             "bridge.panel_callback_routes",
             imported_modules(BRIDGE_DIR / "callbacks.py"),

@@ -30,12 +30,14 @@ def record_failed_turn(
     model: str,
     error: str,
     session_id: str = "",
+    *,
+    preserve_model: bool = False,
 ) -> None:
     if not _retryable_model_turn_text(text):
         return
     with write_transaction(db):
         resolved = str(model or "")
-        if session_id:
+        if session_id and not preserve_model:
             selected = load_session_model(db, chat_id, session_id)
             if selected.strip():
                 resolved = selected

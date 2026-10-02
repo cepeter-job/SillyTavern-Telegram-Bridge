@@ -8,7 +8,7 @@ import time
 from dataclasses import dataclass
 
 from bridge.job_store import job_actor_id
-from bridge.light_novel_format import add_inline_contract, parse_story_response_diagnostic
+from bridge.light_novel_format import add_inline_contract, light_novel_response_shape, parse_story_response_diagnostic
 from bridge.light_novel_repository import ChoiceSet
 from bridge.light_novel_service import attach_turn, prepare_turn
 from bridge.sqlite_store import write_transaction
@@ -27,7 +27,28 @@ class NovelTurn:
     def extract(self, raw: str) -> str:
         if self.record.strategy != "a":
             return raw
-        story, self.choices, reason, observed_count = parse_story_response_diagnostic(raw, self.record.requested_count)
+        try:
+            story, self.choices, reason, observed_count = parse_story_response_diagnostic(
+                raw, self.record.requested_count
+            )
+        except ValueError as exc:
+            detail = str(exc)
+            reason = (
+                "no_usable_narrative"
+                if detail == "Story response has no usable narrative"
+                else "malformed_story_envelope"
+                if detail == "Malformed story envelope; no complete narrative to recover"
+                else "invalid_story_protocol"
+            )
+            logging.warning(
+                "Light Novel story protocol rejected: strategy=%s shape=%s chars=%s requested_count=%s reason=%s",
+                self.record.strategy,
+                light_novel_response_shape(raw),
+                len(str(raw or "")),
+                self.record.requested_count,
+                reason,
+            )
+            raise
         if self.choices is None:
             logging.warning(
                 "Light Novel inline choices unavailable: reason=%s requested_count=%s observed_count=%s",

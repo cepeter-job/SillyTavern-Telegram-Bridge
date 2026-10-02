@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import importlib
 import inspect
 from dataclasses import MISSING
@@ -9,23 +8,14 @@ from types import SimpleNamespace
 
 from application_test_setup import make_test_rag_service, make_test_session_service
 from settings_test_support import make_test_settings
+from source_test_support import imported_modules
 
 ROOT = Path(__file__).parents[1]
 BRIDGE = ROOT / "bridge"
 
 
-def imported_modules(filename: str) -> set[str]:
-    tree = ast.parse((BRIDGE / filename).read_text(encoding="utf-8"))
-    result: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            result.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            result.add(node.module)
-    return result
-
-
 def test_input_flow_service_is_pure_and_delegates():
+    """Verify the independent input service forwards arguments, its handler, and results."""
     path = BRIDGE / "input_flow_service.py"
     assert path.is_file(), "InputFlowService module is missing"
     module = importlib.import_module("bridge.input_flow_service")

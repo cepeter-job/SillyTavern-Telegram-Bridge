@@ -167,6 +167,22 @@ def regeneration_choice_panel_message_ids(
         ).fetchone()
         if row:
             panel_ids.append(int(row[0]))
+    else:
+        previous_assistant = db.execute(
+            "SELECT rowid FROM messages WHERE chat_id=? AND session_id=? AND role='assistant' AND rowid<? "
+            "ORDER BY rowid DESC LIMIT 1",
+            (chat_id, session_id, user_rowid),
+        ).fetchone()
+        if previous_assistant:
+            panel_ids.extend(
+                int(row[0])
+                for row in db.execute(
+                    "SELECT panel_message_id FROM light_novel_choice_sets "
+                    "WHERE chat_id=? AND session_id=? AND assistant_rowid=? AND state='invalidated' "
+                    "AND panel_message_id IS NOT NULL ORDER BY id",
+                    (chat_id, session_id, int(previous_assistant[0])),
+                ).fetchall()
+            )
     panel_ids.extend(
         int(row[0])
         for row in db.execute(

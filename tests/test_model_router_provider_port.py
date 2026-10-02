@@ -143,6 +143,13 @@ def test_startup_composes_model_router_and_provider_port():
     assert "load_catalog=_partial(load_routing_catalog, app_settings=config)" in source
 
 
+def test_startup_wires_runtime_observability_into_memory_diagnostics():
+    source = (BRIDGE / "main.py").read_text(encoding="utf-8")
+
+    assert "safe_counters=background_observability_counters" in source
+    assert "provider_activity=active_provider_requests" in source
+
+
 def test_provider_transport_is_infrastructure_only():
     path = BRIDGE / "provider_transport.py"
     assert path.is_file(), "provider transport adapter is missing"

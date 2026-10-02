@@ -1,6 +1,6 @@
 # Character-Reference /imagine Routing Design
 
-**Date:** 2026-10-02  
+**Date:** 2026-10-02
 **Status:** Design approved; implementation not started
 
 ## Goal

@@ -92,7 +92,7 @@ Assertions must prove legacy config still resolves its first concrete model, Aut
 
 - [ ] **Step 2: Run the new routing tests and verify they fail**
 
-Run: `python -m pytest tests/test_image_routing.py -q`  
+Run: `python -m pytest tests/test_image_routing.py -q`
 Expected: FAIL because `bridge.image_routing` and Auto capability handling do not exist.
 
 - [ ] **Step 3: Implement catalog parsing, session persistence, and route resolution**
@@ -117,7 +117,7 @@ The last test covers a target removed after a session stored Auto; capability mi
 
 - [ ] **Step 5: Run routing tests**
 
-Run: `python -m pytest tests/test_image_routing.py -q`  
+Run: `python -m pytest tests/test_image_routing.py -q`
 Expected: PASS.
 
 - [ ] **Step 6: Update existing imports to consume `bridge.image_routing` without behavior changes yet**
@@ -126,7 +126,7 @@ Update `image_panels.py`, `feature_callbacks.py`, `text_action_input.py`, and `i
 
 - [ ] **Step 7: Run existing image tests for regression**
 
-Run: `python -m pytest tests/test_image_generation.py -q`  
+Run: `python -m pytest tests/test_image_generation.py -q`
 Expected: PASS for existing text-only cases.
 
 - [ ] **Step 8: Commit**
@@ -166,7 +166,7 @@ Fixtures should use a minimal structurally valid PNG and separately corrupt the 
 
 - [ ] **Step 2: Run tests and verify they fail**
 
-Run: `python -m pytest tests/test_image_reference.py -q`  
+Run: `python -m pytest tests/test_image_reference.py -q`
 Expected: FAIL because the loader does not exist.
 
 - [ ] **Step 3: Implement bounded PNG reference loading**
@@ -185,7 +185,7 @@ The loader must return `None` when the path was previously valid but no longer e
 
 - [ ] **Step 5: Run reference tests**
 
-Run: `python -m pytest tests/test_image_reference.py -q`  
+Run: `python -m pytest tests/test_image_reference.py -q`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
@@ -218,7 +218,7 @@ Add tests proving `edit_image`:
 - uses the same Authorization/extra-header policy as text generation;
 - accepts the existing base64 response contract and returns the exact `provider::model` selection.
 
-Run: `python -m pytest tests/test_image_generation.py -k "edit_image" -q`  
+Run: `python -m pytest tests/test_image_generation.py -k "edit_image" -q`
 Expected: FAIL because edit transport does not exist.
 
 - [ ] **Step 2: Implement the edit endpoint and bounded multipart request**
@@ -251,7 +251,7 @@ In `tests/test_provider_ingestion_safety.py`, add tests proving:
 
 - [ ] **Step 5: Run transport/security tests**
 
-Run: `python -m pytest tests/test_image_generation.py tests/test_provider_ingestion_safety.py -q`  
+Run: `python -m pytest tests/test_image_generation.py tests/test_provider_ingestion_safety.py -q`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
@@ -321,7 +321,7 @@ Provider exceptions after request dispatch must propagate to the existing bounde
 
 - [ ] **Step 6: Run image orchestration tests**
 
-Run: `python -m pytest tests/test_image_generation.py -q`  
+Run: `python -m pytest tests/test_image_generation.py -q`
 Expected: PASS.
 
 - [ ] **Step 7: Commit**
@@ -376,7 +376,7 @@ Create progress immediately before provider I/O. Attempt deletion in `finally` f
 
 - [ ] **Step 5: Run panel/progress tests**
 
-Run: `python -m pytest tests/test_image_generation.py -q`  
+Run: `python -m pytest tests/test_image_generation.py -q`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
@@ -417,7 +417,7 @@ and that example Auto targets are fully-qualified `provider::model` values.
 
 - [ ] **Step 2: Run governance test and verify failure**
 
-Run: `python -m pytest tests/test_governance.py -k "provider_catalog" -q`  
+Run: `python -m pytest tests/test_governance.py -k "provider_catalog" -q`
 Expected: FAIL until docs/examples are updated.
 
 - [ ] **Step 3: Update provider example and configuration guide**
@@ -439,7 +439,7 @@ Do not claim multi-character/group reference support.
 
 - [ ] **Step 5: Run governance/help/image documentation tests**
 
-Run: `python -m pytest tests/test_governance.py tests/test_image_generation.py -q`  
+Run: `python -m pytest tests/test_governance.py tests/test_image_generation.py -q`
 Expected: PASS.
 
 - [ ] **Step 6: Commit**
@@ -479,7 +479,7 @@ Expected: all commands exit 0.
 
 - [ ] **Step 3: Run full test suite**
 
-Run: `python -m pytest`  
+Run: `python -m pytest`
 Expected: PASS.
 
 - [ ] **Step 4: Run coverage gate used by repository CI**

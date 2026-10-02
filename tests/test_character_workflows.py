@@ -65,11 +65,19 @@ def test_document_job_and_recovery_keep_queued_session_and_actor(card_context, m
     recovered = resolve_recovered_job_submission(
         services,
         {},
-        DurableJob(job_id, "chat", "queued-session", 55, "document", {"document": document, "resolve_active": True}),
+        DurableJob(
+            job_id,
+            "chat",
+            "queued-session",
+            55,
+            "document",
+            {"document": document, "resolve_active": True, "character_upload": True},
+        ),
     )
     assert recovered is not None
     assert recovered.worker is document_jobs.process_document_job
     assert recovered.args[4] == "queued-session"
+    assert recovered.args[6] is True
 
 
 @pytest.mark.parametrize("rank_fails", [False, True])

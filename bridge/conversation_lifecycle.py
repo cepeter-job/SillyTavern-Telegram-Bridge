@@ -118,7 +118,6 @@ def has_pending_character_upload(db: sqlite3.Connection, chat_id: str, session_i
         return False
 
 
-
 def has_pending_management_input(db: sqlite3.Connection, chat_id: str, session_id: str, actor_id: str) -> bool:
     # Classification only. The canonical input owner still validates and consumes the value.
     prefixes = (

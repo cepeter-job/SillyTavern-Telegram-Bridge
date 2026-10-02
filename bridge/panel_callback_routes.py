@@ -165,6 +165,7 @@ def handle_primary_panel_callback(
         provider_port=provider_port,
         memory_service=memory_service,
         request_context=request_context,
+        delivery_port=delivery_port,
     ):
         return True
     if handle_help_callback(

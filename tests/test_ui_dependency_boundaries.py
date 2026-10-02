@@ -1,32 +1,19 @@
 from __future__ import annotations
 
-import ast
 import inspect
 from dataclasses import MISSING
 from pathlib import Path
 from types import SimpleNamespace
 
 from application_test_setup import make_test_delivery_port, make_test_group_service, make_test_request_context
+from source_test_support import imported_modules
 
 import bridge.group_callbacks as _owner_group_callbacks
 import bridge.settings_callbacks as _owner_settings_callbacks
 
-ROOT = Path(__file__).parents[1]
-BRIDGE = ROOT / "bridge"
-
-
-def imported_modules(filename: str) -> set[str]:
-    tree = ast.parse((BRIDGE / filename).read_text(encoding="utf-8"))
-    result: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            result.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            result.add(node.module)
-    return result
-
 
 def test_expressions_no_longer_imports_telegram():
+    """Keep expression handling independent of Telegram transport."""
     assert "bridge.telegram" not in imported_modules("expressions.py")
 
 

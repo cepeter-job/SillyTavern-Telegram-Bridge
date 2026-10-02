@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import ast
 from dataclasses import MISSING
-from pathlib import Path
 from types import SimpleNamespace
 
 from application_test_setup import (
@@ -14,27 +12,15 @@ from application_test_setup import (
     make_test_rag_service,
     make_test_request_context,
 )
+from source_test_support import imported_modules
 
 import bridge.enum_callbacks as _owner_enum_callbacks
 import bridge.text_action_input as _owner_text_action_input
 from bridge.session_service import SessionService
 
-ROOT = Path(__file__).parents[1]
-BRIDGE = ROOT / "bridge"
-
-
-def imported_modules(filename: str) -> set[str]:
-    tree = ast.parse((BRIDGE / filename).read_text(encoding="utf-8"))
-    result: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            result.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            result.add(node.module)
-    return result
-
 
 def test_input_flow_service_requires_final_backends_and_injects_handler():
+    """Verify required input backends receive the injected handler and call arguments."""
     from bridge.input_flow_service import InputFlowService
 
     for name in (

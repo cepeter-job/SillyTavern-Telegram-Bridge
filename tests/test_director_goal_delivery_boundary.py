@@ -1,29 +1,19 @@
 from __future__ import annotations
 
-import ast
 import importlib
 import inspect
 from pathlib import Path
 from types import SimpleNamespace
 
 from application_test_setup import make_test_delivery_port
+from source_test_support import imported_modules
 
 ROOT = Path(__file__).parents[1]
 BRIDGE = ROOT / "bridge"
 
 
-def imported_modules(filename: str) -> set[str]:
-    tree = ast.parse((BRIDGE / filename).read_text(encoding="utf-8"))
-    result: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            result.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            result.add(node.module)
-    return result
-
-
 def test_director_goal_panel_is_pure_and_exact():
+    """Verify the goal panel has no bridge dependencies and renders both goal states."""
     path = BRIDGE / "director_goal_panel.py"
     assert path.is_file()
     module = importlib.import_module("bridge.director_goal_panel")

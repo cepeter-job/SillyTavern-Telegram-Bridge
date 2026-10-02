@@ -73,15 +73,17 @@ def test_accepted_media_invalidates_the_older_choice_panel_before_worker_executi
     assert db.execute("SELECT count(*) FROM jobs WHERE update_id=240").fetchone()[0] == 1
 
 
-def test_choice_only_request_contains_actual_persona_world_and_system_context(novel_db, monkeypatch):
+@pytest.mark.parametrize("strategy", ["a", "b", "c"])
+def test_choice_only_request_uses_bounded_roleplay_context_across_strategies(novel_db, monkeypatch, strategy):
     from bridge import light_novel_jobs as workers
     from bridge.model_selection import set_task_model
+    from bridge.npc_types import NpcExtractionGroup, NpcOperation
     from bridge.persona_service import PersonaService
     from bridge.provider_port import ProviderPort
     from bridge.session_core import update_session
     from bridge.sqlite_store import db_connect
 
-    record = attached_choice(novel_db, "b", ready=False)
+    record = attached_choice(novel_db, strategy, ready=False)
     db, _session, settings = novel_db
     settings.native_persona_settings_file.parent.mkdir(parents=True, exist_ok=True)
     settings.native_persona_settings_file.write_text(
@@ -100,8 +102,8 @@ def test_choice_only_request_contains_actual_persona_world_and_system_context(no
             {
                 "entries": {
                     "0": {
-                        "constant": True,
-                        "content": "Only the captain may enter the sealed tower.",
+                        "key": ["Pilot"],
+                        "content": "The pilot carries the sealed tower key.",
                         "order": 1,
                     }
                 }
@@ -114,16 +116,35 @@ def test_choice_only_request_contains_actual_persona_world_and_system_context(no
         "story",
         persona_id="pilot.png",
         world_file="World.json",
-        system_prompt="Respect the mystery setting.",
+        system_prompt="{{user}} must protect {{char}}.",
+        author_note="Remember that {{user}} trusts {{char}}.",
+    )
+    db.execute(
+        "INSERT INTO session_summaries VALUES(?,?,?,?,?)",
+        ("chat", "story", "The tower alarm is disabled but the gate remains locked.", 1, 1.0),
+    )
+    services = bridge_services(settings, [])
+    services.npc.apply_group(
+        db,
+        "chat",
+        "story",
+        NpcExtractionGroup(
+            "Maya",
+            (),
+            (NpcOperation("role", "set", "Archivist", "mutable", "shared", ()),),
+        ),
+        source_rowid=int(record.assistant_rowid or 1),
+        primary_name="Alice",
+        user_name="Pilot",
     )
     set_task_model(db, "chat", "story", "utility::test")
+    db.commit()
     calls = []
 
     def generate(*args, **kwargs):
         calls.append(args[2])
         return '{"choices":["Go inside","Stay outside"]}'
 
-    services = bridge_services(settings, [])
     persona = replace(
         services.persona,
         load_personas=lambda: {"pilot.png": {"name": "Pilot", "description": "A cautious captain who cannot swim."}},
@@ -142,8 +163,14 @@ def test_choice_only_request_contains_actual_persona_world_and_system_context(no
     workers.process_light_novel_choices_job(services, "chat", record.nonce, False, job_id)
     prompt = "\n".join(message["content"] for message in calls[0])
     assert "A cautious captain who cannot swim." in prompt
-    assert "Only the captain may enter the sealed tower." in prompt
-    assert "Respect the mystery setting." in prompt
+    assert "The pilot carries the sealed tower key." in prompt
+    assert "Pilot must protect Alice." in prompt
+    assert "Remember that Pilot trusts Alice." in prompt
+    assert "The tower alarm is disabled but the gate remains locked." in prompt
+    assert "NPC: Maya" in prompt
+    assert "Archivist" in prompt
+    assert "{{user}}" not in prompt
+    assert "{{char}}" not in prompt
 
 
 def test_choice_recovery_executes_the_normal_conversation_pipeline_exactly_once(novel_db, monkeypatch):

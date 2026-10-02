@@ -2,6 +2,42 @@
 
 All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
+## [0.2.057] - 2026-10-02
+
+### Added
+
+- Render SillyTavern-style single-star narration, thoughts, and actions as Telegram
+  italic entities while keeping direct spoken dialogue and surrounding text normal.
+  Preserve stored transcripts, generation prompts, Light Novel envelopes, TTS quote
+  extraction, delivery checkpoints, UTF-16 offsets, long-message splitting, and
+  streaming-preview finalization.
+
+### Fixed
+
+- Prevent rejected or unauthorized Telegram senders from stalling durable update
+  polling when the best-effort private-bot notification itself fails, including the
+  `403: bot was blocked by the user` case.
+
+### Changed
+
+- Complete canonical feature-panel ownership and bounded transcript-read ownership,
+  removing duplicate domain senders/readers while preserving domain-specific policy.
+- Complete the audited callback decomposition across character, feature/common, enum,
+  provider, persona, session, NPC, World Info, and greeting workflows. Large flat
+  dispatchers now route through explicit named actions with narrow arguments while
+  preserving callback vocabulary, authorization, ordering, durable operation identity,
+  and existing behavior.
+
+### Compatibility and validation
+
+- No runtime dependency-lock or database-schema changes. Existing sessions, queued
+  operations, updater trust boundaries, public configuration examples, and private
+  deployment state remain compatible.
+- Release-prep verification runs the protected CI, dependency audit, secret scan,
+  static analysis, Mini App smoke/session-safety checks, full Python test suite, and
+  application/security coverage gates before the signed tag is published.
+- Publishing this release does not deploy or restart a running bridge.
+
 ## [0.2.056] - 2026-10-02
 
 ### Fixed

@@ -51,7 +51,7 @@ def test_production_host_rejects_large_full_suite_collection(tmp_path, monkeypat
     hook = getattr(test_config, "pytest_collection_modifyitems", None)
 
     assert hook is not None
-    with pytest.raises(pytest.UsageError, match="production host.*512"):
+    with pytest.raises(pytest.UsageError, match=r"production host.*512"):
         hook(SimpleNamespace(), [object()] * 513)
 
 

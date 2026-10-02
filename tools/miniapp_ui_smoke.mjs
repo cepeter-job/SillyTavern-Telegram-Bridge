@@ -23,6 +23,19 @@ assert.equal(initialDocument.querySelector('#more-menu'),null,'Management is a f
 const context=dom.getInternalVMContext(),errors=[],expectedFailures=new Set(),observedFailures=[];
 let portraitMode='success',forcedFailure='',scrollResets=0;
 let summaryScenario=null,memoryStatusScenario=null,memoryDetailScenario=null,memoryDetailRequests=0;
+const fixtureRequestTimes=[];
+async function reserveFixtureCapacity(count) {
+  // Keep real integration phases below the unchanged 120/minute server limit.
+  // Response times conservatively follow admission; reserve extra polling headroom.
+  assert.ok(Number.isInteger(count)&&count>0&&count<=100);
+  for(;;) {
+    const now=performance.now();
+    while(fixtureRequestTimes.length&&fixtureRequestTimes[0]<=now-61000)fixtureRequestTimes.shift();
+    if(fixtureRequestTimes.length+count<=100)return;
+    await new Promise(resolve=>setTimeout(resolve,Math.max(1,fixtureRequestTimes[0]+61000-now)));
+  }
+}
+
 const memoryThresholds={warning:262144,tracing:327680,capture:393216};
 const memorySummaries={
   disabled:{enabled:false,state:'disabled',rss_kib:null,thresholds_kib:memoryThresholds,report_count:0,latest_incident:null},
@@ -59,6 +72,7 @@ dom.window.fetch=async (path,options)=>{
     }}),{status:200,headers:{'Content-Type':'application/json'}});
   }
   const response=await fetch(ready.url+path,options);
+  fixtureRequestTimes.push(performance.now());
   if(memoryStatusScenario&&String(path)==='/api/v1/status'&&response.ok) {
     const data=await response.json();data.memory_diagnostics=memoryStatusScenario;
     return new Response(JSON.stringify(data),{status:200,headers:{'Content-Type':'application/json'}});
@@ -296,6 +310,9 @@ try {
     {name:'complete',incomplete:false,explainsSaved:false},
   ],'Incomplete summary regeneration must be reported for partial work and old-summary fallback; complete regeneration retains its normal flow');
   console.log('summary-regeneration=partial-notice,old-fallback-notice,complete-normal; summary-session-scope=preserved');
+  // Extra real reads make the rolling-window regression reproducible on fast runners.
+  for(let extra=0;extra<12;extra++)await app.namespace.api('/status');
+  await reserveFixtureCapacity(60);
   await app.namespace.navigate('models');
   const document=dom.window.document;
   const reasoningLabel=[...document.querySelectorAll('label')].find(n=>n.textContent==='Reasoning level');

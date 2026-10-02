@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from bridge.character_callbacks import handle_character_callback
+from bridge.character_optimizer_callbacks import handle_character_optimizer_callback
+from bridge.character_proposal_callbacks import handle_character_proposal_callback
 from bridge.conversation_callbacks import handle_greeting_callback, handle_reset_callback, handle_swipe_callback
 from bridge.delivery_port import DeliveryPort
 from bridge.feature_callbacks import handle_prompt_and_feature_callback
@@ -165,6 +167,7 @@ def handle_primary_panel_callback(
         provider_port=provider_port,
         memory_service=memory_service,
         request_context=request_context,
+        delivery_port=delivery_port,
     ):
         return True
     if handle_help_callback(
@@ -234,6 +237,36 @@ def handle_entity_panel_callback(
     request_context,
 ):
     """Dispatch character, session, persona, and World Info callbacks."""
+    if handle_character_optimizer_callback(
+        db,
+        token,
+        callback,
+        answer_callback,
+        data,
+        chat_id,
+        message,
+        session,
+        session_id,
+        operation_id,
+        provider_port=provider_port,
+        request_context=request_context,
+    ):
+        return True
+    if handle_character_proposal_callback(
+        db,
+        token,
+        callback,
+        answer_callback,
+        data,
+        chat_id,
+        message,
+        session,
+        session_id,
+        operation_id,
+        provider_port=provider_port,
+        request_context=request_context,
+    ):
+        return True
     if handle_character_callback(
         db,
         token,

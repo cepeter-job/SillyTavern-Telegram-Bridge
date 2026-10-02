@@ -39,3 +39,23 @@ def assistant_by_row(db: sqlite3.Connection, rowid: int, chat_id: str, session_i
         "SELECT rowid,content FROM messages WHERE rowid=? AND chat_id=? AND session_id=? AND role='assistant'",
         (rowid, chat_id, session_id),
     ).fetchone()
+
+
+def recent_transcript_rows(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    *,
+    limit: int,
+    through_rowid: int | None = None,
+) -> list[tuple[int, str, str]]:
+    """Read the latest bounded window in chronological order without owning a transaction."""
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+        raise ValueError("Transcript row limit must be a positive integer")
+    cutoff = int(through_rowid) if through_rowid is not None else None
+    rows = db.execute(
+        "SELECT rowid,role,content FROM messages WHERE chat_id=? AND session_id=? "
+        "AND (? IS NULL OR rowid<=?) ORDER BY created_at DESC,rowid DESC LIMIT ?",
+        (str(chat_id), str(session_id), cutoff, cutoff, limit),
+    ).fetchall()
+    return list(reversed(rows))

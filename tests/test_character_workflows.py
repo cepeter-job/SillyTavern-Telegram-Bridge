@@ -12,7 +12,16 @@ from application_test_setup import make_test_application_services, make_test_rag
 from test_character_mutation_safety import _card_png
 from test_character_mutation_safety import card_context as card_context
 
-from bridge import callback_dispatch, cards, character_callbacks, character_quality, document_jobs, native_imports
+from bridge import (
+    callback_dispatch,
+    cards,
+    character_callbacks,
+    character_optimizer_callbacks,
+    character_proposal_callbacks,
+    character_quality,
+    document_jobs,
+    native_imports,
+)
 from bridge.callback_tokens import dynamic_callback_token
 from bridge.card_content import parse_png_chara_bytes
 from bridge.character_proposals import load_character_proposal
@@ -91,7 +100,8 @@ def test_optimizer_callback_preview_apply_and_replay_use_exact_proposal(card_con
         bind_panel_session(db, "chat", 55, request_context.session_id, request_context.actor_id)
 
     monkeypatch.setattr(cards, "send_panel_request", send_panel)
-    monkeypatch.setattr(character_callbacks, "send_panel_request", send_panel)
+    monkeypatch.setattr(character_optimizer_callbacks, "send_panel_request", send_panel)
+    monkeypatch.setattr(character_proposal_callbacks, "send_panel_request", send_panel)
     bind_panel_session(db, "chat", 55, session["session_id"], "actor")
     token = dynamic_callback_token("character", "Alice.png", "chat", db=db)
 
@@ -127,7 +137,7 @@ def test_optimizer_callback_preview_apply_and_replay_use_exact_proposal(card_con
         def fail_ranking(*args, **kwargs):
             raise OSError("fixture optional ranking failure")
 
-        monkeypatch.setattr(character_callbacks, "rank_character", fail_ranking)
+        monkeypatch.setattr(character_proposal_callbacks, "rank_character", fail_ranking)
     callback_dispatch.process_callback(db, "token", callback(apply_data), services=services)
     assert "optimized" in outputs[-1]["text"]
     result_callbacks = [
@@ -183,7 +193,7 @@ def test_optimizer_callback_reports_sanitized_provider_failure(card_context, mon
     monkeypatch.setattr(callback_dispatch, "answer_callback", lambda *a, **k: None)
     monkeypatch.setattr(character_quality, "task_model_for_session", lambda *a, **k: "provider::model")
     monkeypatch.setattr(
-        character_callbacks, "send_panel_request", lambda _t, _m, payload, **_k: outputs.append(payload)
+        character_optimizer_callbacks, "send_panel_request", lambda _t, _m, payload, **_k: outputs.append(payload)
     )
 
     callback_dispatch.process_callback(db, "token", callback, services=services)  # type: ignore[arg-type]
@@ -344,7 +354,8 @@ def test_manual_optimizer_option_starts_actor_session_digest_bound_pending_state
         bind_panel_session(db, "chat", 55, request_context.session_id, request_context.actor_id)
 
     monkeypatch.setattr(cards, "send_panel_request", send_panel)
-    monkeypatch.setattr(character_callbacks, "send_panel_request", send_panel)
+    monkeypatch.setattr(character_optimizer_callbacks, "send_panel_request", send_panel)
+    monkeypatch.setattr(character_proposal_callbacks, "send_panel_request", send_panel)
     bind_panel_session(db, "chat", 55, session["session_id"], "actor")
     token = dynamic_callback_token("character", "Alice.png", "chat", db=db)
     callback = {
@@ -524,11 +535,11 @@ def test_manual_refinement_callback_uses_current_temporary_fields_as_next_base(c
     )
     captured = []
     monkeypatch.setattr(
-        character_callbacks,
+        character_optimizer_callbacks,
         "start_character_optimizer_suggestion_input",
         lambda *a, **k: captured.append((a, k)),
     )
-    handled = character_callbacks.handle_character_callback(
+    handled = character_optimizer_callbacks.handle_character_optimizer_callback(
         db,
         "token",
         {"id": "cb", "message": {"message_id": 55}},
@@ -539,7 +550,6 @@ def test_manual_refinement_callback_uses_current_temporary_fields_as_next_base(c
         session,
         ctx.session_id,
         None,
-        group_service=make_test_application_services(app_settings=ctx.app_settings).group,
         provider_port=provider,
         request_context=ctx,
     )

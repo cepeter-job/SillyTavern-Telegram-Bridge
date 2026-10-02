@@ -32,6 +32,7 @@ from bridge.scene_repository import upsert_scene_state_if_fresh as _repo_upsert_
 from bridge.session_core import load_session
 from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect, write_transaction
+from bridge.transcript_repository import recent_transcript_rows
 
 _SCENE_STATE_KEYS = ("location", "time", "weather", "participants", "objects", "facts", "goals")
 _SCENE_STATE_MAX_TEXT = 5000
@@ -112,24 +113,6 @@ def clear_scene_state(db: sqlite3.Connection, chat_id: str, session_id: str) -> 
         _repo_delete_scene_state(db, chat_id, session_id)
 
 
-def _scene_state_source_rows(
-    db: sqlite3.Connection,
-    chat_id: str,
-    session_id: str,
-    through_rowid: int | None = None,
-) -> list[tuple[int, str, str]]:
-    params: list[object] = [str(chat_id), str(session_id)]
-    where = "chat_id=? AND session_id=?"
-    if through_rowid is not None:
-        where += " AND rowid<=?"
-        params.append(int(through_rowid))
-    rows = db.execute(
-        "SELECT rowid,role,content FROM messages WHERE " + where + " ORDER BY created_at DESC,rowid DESC LIMIT ?",  # noqa: S608 -- SQL structure uses fixed columns/placeholders; all values are bound
-        (*params, _SCENE_STATE_TRANSCRIPT_MESSAGES),
-    ).fetchall()
-    return list(reversed(rows))
-
-
 def refresh_scene_state_now(
     db: sqlite3.Connection,
     api_key: str,
@@ -142,7 +125,9 @@ def refresh_scene_state_now(
     app_settings: AppSettings,
 ) -> dict[str, object] | None:
     session_id = str(session["session_id"])
-    rows = _scene_state_source_rows(db, chat_id, session_id, through_rowid)
+    rows = recent_transcript_rows(
+        db, chat_id, session_id, limit=_SCENE_STATE_TRANSCRIPT_MESSAGES, through_rowid=through_rowid
+    )
     if not rows:
         return None
     target_rowid = int(rows[-1][0])

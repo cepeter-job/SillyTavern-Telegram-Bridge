@@ -26,6 +26,7 @@ import bridge.sqlite_store as _m_sqlite_store
 import bridge.text_action_input as _m_text_action_input
 from bridge.image_reference import ImageReference
 from bridge.image_routing import ImageRoute
+from bridge.provider_errors import ProviderRequestError
 
 
 class _Response:
@@ -191,6 +192,68 @@ class ImageGenerationTests(SettingsTestCase):
                     "1024x1024",
                     app_settings=self.app_settings_builder.build(),
                 )
+
+    def test_generate_image_http_429_becomes_sanitized_provider_request_error(self):
+        def fake_urlopen(request, timeout, *, environ=None):
+            raise urllib.error.HTTPError(
+                request.full_url,
+                429,
+                "provider-secret-reason",
+                {"Retry-After": "37", "X-Secret": "do-not-leak"},
+                io.BytesIO(b'{"error":"provider internal secret"}'),
+            )
+
+        _m_image_generation.strict_urlopen = fake_urlopen
+        with patch.dict(os.environ, {"SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": "images.example"}):
+            with self.assertRaises(ProviderRequestError) as raised:
+                _m_image_generation.generate_image(
+                    "test-image::test-model",
+                    "a prompt",
+                    "1024x1024",
+                    app_settings=self.app_settings_builder.build(),
+                )
+
+        error = raised.exception
+        self.assertEqual(error.model, "test-image::test-model")
+        self.assertEqual(error.category, "rate_limit")
+        self.assertEqual(error.status, 429)
+        self.assertEqual(error.retry_after, 37.0)
+        self.assertNotIn("provider internal secret", str(error))
+        self.assertNotIn("provider-secret-reason", str(error))
+
+    def test_edit_image_timeout_becomes_sanitized_provider_request_error(self):
+        _m_image_generation.strict_urlopen = lambda *args, **kwargs: (_ for _ in ()).throw(TimeoutError("secret"))
+        with patch.dict(os.environ, {"SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": "images.example"}):
+            with self.assertRaises(ProviderRequestError) as raised:
+                _m_image_generation.edit_image(
+                    self._step_route(),
+                    "portrait",
+                    ImageReference(b"PNG", "image/png", "Mira.png"),
+                    "1024x1024",
+                    app_settings=self.app_settings_builder.build(),
+                )
+
+        error = raised.exception
+        self.assertEqual(error.model, "test-image::step-image-edit-2")
+        self.assertEqual(error.category, "timeout")
+        self.assertIsNone(error.status)
+        self.assertNotIn("secret", str(error))
+
+    def test_image_provider_error_message_is_detailed_and_safe(self):
+        error = ProviderRequestError(
+            "nano-gpt::qwen-image-2.0",
+            "rate_limit",
+            429,
+            retry_after=37,
+        )
+        self.assertEqual(
+            _m_image_generation.image_provider_error_message(error),
+            "Image generation failed.\n\n"
+            "Model: nano-gpt::qwen-image-2.0\n"
+            "Reason: Rate limited by provider (HTTP 429)\n"
+            "Retry: in 37 seconds\n"
+            "Next: Try again later or choose another image model in /imagine.",
+        )
 
     def test_disabled_provider_fails_closed(self):
         self.catalog.write_text("providers: {}\n", encoding="utf-8")
@@ -1346,6 +1409,90 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
             "Send a custom image prompt (1–4,000 characters).",
             callback,
         )
+
+    def test_current_scene_provider_error_is_reported_to_user(self):
+        callback = {"id": "cb", "message": {"message_id": 77}}
+        request_context = SimpleNamespace(app_settings=self.app_settings_builder.build())
+        messages = []
+        error = ProviderRequestError("nano-gpt::qwen-image-2.0", "rate_limit", 429, retry_after=37)
+        with (
+            patch.object(_m_feature_callbacks, "send_typing"),
+            patch.object(_m_feature_callbacks, "handle_imagine_scene", side_effect=error),
+            patch.object(_m_feature_callbacks, "send_text", side_effect=lambda _t, _c, text: messages.append(text)),
+        ):
+            handled = _m_feature_callbacks.handle_feature_panel_callback(
+                self.db,
+                "token",
+                callback,
+                lambda *_args: None,
+                "imagine:scene",
+                "chat",
+                callback["message"],
+                self.session,
+                self.session["session_id"],
+                None,
+                group_service=None,
+                provider_port=make_test_provider_port(),
+                request_context=request_context,
+                delivery_port=make_test_delivery_port(),
+            )
+
+        self.assertTrue(handled)
+        self.assertEqual(
+            messages,
+            [
+                "Image generation failed.\n\n"
+                "Model: nano-gpt::qwen-image-2.0\n"
+                "Reason: Rate limited by provider (HTTP 429)\n"
+                "Retry: in 37 seconds\n"
+                "Next: Try again later or choose another image model in /imagine."
+            ],
+        )
+
+    def test_custom_prompt_provider_error_is_reported_to_user(self):
+        settings = self.app_settings_builder.build()
+        request_context = SimpleNamespace(app_settings=settings)
+        state = {"action": "imagine", "session_id": self.session["session_id"]}
+        messages = []
+        error = ProviderRequestError("nano-gpt::qwen-image-2.0", "provider_unavailable", 503)
+        with (
+            patch.object(_m_text_action_input, "handle_imagine_custom_prompt", side_effect=error),
+            patch.object(
+                _m_text_action_input,
+                "send_pending_input_message",
+                side_effect=lambda _db, _t, _c, _k, _s, text: messages.append(text),
+            ),
+            patch.object(_m_text_action_input, "_cancel_pending") as cancel,
+        ):
+            handled = _m_text_action_input._handle_text_action_input(
+                self.db,
+                "token",
+                "",
+                "chat",
+                self.session,
+                {},
+                "custom visual prompt",
+                state,
+                None,
+                provider_port=make_test_provider_port(),
+                memory_service=None,
+                npc_service=None,
+                persona_service=None,
+                request_context=request_context,
+                rag_service=None,
+            )
+
+        self.assertTrue(handled)
+        self.assertEqual(
+            messages,
+            [
+                "Image generation failed.\n\n"
+                "Model: nano-gpt::qwen-image-2.0\n"
+                "Reason: Provider temporarily unavailable (HTTP 503)\n"
+                "Next: Try again later or choose another image model in /imagine."
+            ],
+        )
+        cancel.assert_not_called()
 
     def test_current_scene_button_uses_scene_generator(self):
         callback = {"id": "cb", "message": {"message_id": 77}}

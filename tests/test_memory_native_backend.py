@@ -124,6 +124,27 @@ class MemoryNativeBackendTests(SettingsTestCase):
                 self.assertIn("127.0.0.1", bypass)
                 self.assertIn("::1", bypass)
 
+    def test_loopback_proxy_bypass_stops_growing_across_client_constructions(self):
+        # Regression: the merge read NO_PROXY and no_proxy, concatenated them,
+        # then wrote the result to both keys, so each call doubled the value
+        # (3 * 2**(n-1)). After 16 calls the buggy version holds 655KB of
+        # proxy entries and urllib stalls parsing them on every request.
+        import os
+
+        with patch.dict("os.environ", {"NO_PROXY": "", "no_proxy": ""}, clear=False):
+            for _ in range(16):
+                memory_backend._ensure_hindsight_loopback_proxy_bypass("127.0.0.1")
+
+            merged = os.environ["NO_PROXY"]
+            entries = [item.strip() for item in merged.split(",") if item.strip()]
+
+            self.assertLess(len(merged), 100)
+            self.assertEqual(len(entries), len(set(entries)))
+            self.assertEqual(os.environ["no_proxy"], merged)
+            self.assertIn("127.0.0.1", entries)
+            self.assertIn("::1", entries)
+            self.assertIn("[::1]", entries)
+
     def setUp(self):
         # This suite tests the Hindsight guard, not asynchronous scene/curator
         # workers. Those extension hooks have their own tests. Letting them run

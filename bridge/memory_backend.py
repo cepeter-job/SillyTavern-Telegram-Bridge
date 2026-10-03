@@ -68,15 +68,29 @@ def _validated_hindsight_base_url(value: str) -> tuple[str, str]:
 
 
 def _ensure_hindsight_loopback_proxy_bypass(host: str) -> None:
+    # Merge read both spellings (NO_PROXY and no_proxy) but wrote the merged
+    # value back to both, so every call re-read its own previous output twice
+    # and doubled the variable: 3 * 2**(n-1) entries, 42MB and 6.3M items
+    # after 22 client constructions. urllib parses NO_PROXY on every request,
+    # so the growth stalled polling outright. Deduplicate on read so the merge
+    # is idempotent, and skip the write when nothing changed so os.environ -
+    # and the copy handed to every child process - stays stable.
     values: list[str] = []
+    seen: set[str] = set()
     for name in ("NO_PROXY", "no_proxy"):
-        values.extend(item.strip() for item in os.environ.get(name, "").split(",") if item.strip())
+        for item in os.environ.get(name, "").split(","):
+            entry = item.strip()
+            if entry and entry not in seen:
+                seen.add(entry)
+                values.append(entry)
     for required in (host, "127.0.0.1", "::1", "[::1]"):
-        if required not in values:
+        if required not in seen:
+            seen.add(required)
             values.append(required)
     combined = ",".join(values)
-    os.environ["NO_PROXY"] = combined
-    os.environ["no_proxy"] = combined
+    for name in ("NO_PROXY", "no_proxy"):
+        if os.environ.get(name) != combined:
+            os.environ[name] = combined
 
 
 def hindsight_client(*, app_settings: AppSettings):

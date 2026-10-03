@@ -75,4 +75,14 @@ def context_diagnostics_snapshot(
     for key in _BOOL_FIELDS:
         if isinstance(saved.get(key), bool):
             result[key] = saved[key]
+    final_tokens = result.get("final_tokens")
+    budget_tokens = result.get("budget_tokens")
+    result["usage_percent"] = (
+        round(int(final_tokens) * 100 / int(budget_tokens))
+        if isinstance(final_tokens, int) and isinstance(budget_tokens, int) and budget_tokens > 0
+        else None
+    )
+    trimmed_components = [name for name in ("memory", "rag", "npc", "summary") if result.get(f"{name}_trimmed") is True]
+    result["trimmed_components"] = trimmed_components
+    result["compacted"] = bool(int(result.get("dropped_history") or 0) or trimmed_components)
     return result

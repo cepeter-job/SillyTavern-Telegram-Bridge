@@ -16,6 +16,7 @@ from bridge.image_generation import (
     IMAGE_PROMPT_MAX_CHARS,
     handle_imagine_scene,
     image_prompt_max_chars,
+    image_provider_error_message,
     imagine_prompt_input_max_chars,
 )
 from bridge.image_panels import (
@@ -34,6 +35,7 @@ from bridge.memory_backend import memory_mode
 from bridge.memory_curator import curate_memory_now, send_curated_memory_menu
 from bridge.memory_panels import send_memory_menu
 from bridge.prompt_panels import send_prompt_menu
+from bridge.provider_errors import ProviderRequestError
 from bridge.provider_port import ProviderPort
 from bridge.scene_state import clear_scene_state, refresh_scene_state_now, send_scene_menu
 from bridge.status_panels import status_text
@@ -192,6 +194,9 @@ def _imagine_scene(db, token, callback, answer_callback, chat_id, session, provi
             provider_port=provider_port,
             app_settings=request_context.app_settings,
         )
+    except ProviderRequestError as exc:
+        logging.warning("Current-scene image provider request failed: %s", exc)
+        send_text(token, chat_id, image_provider_error_message(exc))
     except ValueError as exc:
         send_text(token, chat_id, f"Image generation unavailable: {exc}")
     except Exception:

@@ -6,8 +6,8 @@
 
 # Optional catalog-level Auto routing for /imagine. Targets must be fully qualified.
 # image_auto:
-#   text_model: nano-gpt::chroma
-#   reference_model: nano-gpt::step-image-edit-2
+#   text_model: image-provider::text-model
+#   reference_model: image-provider::reference-model
 
 providers:
   provider-one:
@@ -40,21 +40,21 @@ providers:
       - provider-two/model-a
 
 # Optional OpenAI-compatible Images provider for /imagine.
-# This NanoGPT-shaped example shows text + one-reference image routing.
-#  nano-gpt:
-#    name: NanoGPT Images # Label shown for /imagine.
-#    api_endpoint: https://nano-gpt.com/api/v1 # API base URL.
-#    api_key_env: NANOGPT_API_KEY # Environment variable containing the API key.
+# This generic example shows text + one-reference image routing.
+#  image-provider:
+#    name: Example Images # Label shown for /imagine.
+#    api_endpoint: https://image-provider.example/v1 # API base URL.
+#    api_key_env: IMAGE_PROVIDER_API_KEY # Environment variable containing the API key.
 #    image_enabled: true # Opt in to image generation for this provider.
-#    image_endpoint: https://nano-gpt.com/api/v1/images/generations # Text-to-image request URL.
-#    image_edit_endpoint: https://nano-gpt.com/api/v1/images/edits # Reference/edit request URL.
+#    image_endpoint: https://image-provider.example/v1/images/generations # Text-to-image request URL.
+#    image_edit_endpoint: https://image-provider.example/v1/images/edits # Reference/edit request URL.
 #    image_models: # Image model IDs; chat-only models are not used here.
-#      - chroma
-#      - step-image-edit-2
+#      - text-model
+#      - reference-model
 #    image_model_capabilities:
-#      chroma:
+#      text-model:
 #        mode: text
-#      step-image-edit-2:
+#      reference-model:
 #        mode: reference
 #        edit_route: openai
 

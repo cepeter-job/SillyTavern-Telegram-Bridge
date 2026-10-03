@@ -125,6 +125,50 @@ class SessionNamingTests(SettingsTestCase):
         self.assertIn("🗂️ Session: Evening Story (default)", self.sent[-1])
         self.assertIn("• System Prompt: off", self.sent[-1])
 
+    def test_status_displays_context_budget_and_compaction(self):
+        _m_session_naming.set_meta(
+            self.db,
+            f"context_stats:chat:{self.session['session_id']}",
+            json.dumps(
+                {
+                    "window_tokens": 32768,
+                    "output_reserve_tokens": 4096,
+                    "safety_margin_tokens": 656,
+                    "budget_tokens": 28016,
+                    "final_tokens": 23450,
+                    "dropped_history": 4,
+                    "memory_trimmed": True,
+                    "rag_trimmed": False,
+                    "npc_trimmed": False,
+                    "summary_trimmed": True,
+                    "source": "global-fallback",
+                }
+            ),
+        )
+        original_card = _m_message_commands.card_fields_from_file
+        _m_message_commands.card_fields_from_file = lambda _filename, *, app_settings=None: {
+            "name": "Test",
+            "post_history_instructions": "",
+        }
+        try:
+            make_test_conversation_service(app_settings=self.app_settings_builder.build()).process_message(
+                self.db,
+                "token",
+                "key",
+                self.app_settings_builder.default_model,
+                {},
+                "chat",
+                "/status",
+            )
+        finally:
+            _m_message_commands.card_fields_from_file = original_card
+        self.assertIn("📐 Context budget", self.sent[-1])
+        self.assertIn("23,450 / 28,016 input tokens (84%)", self.sent[-1])
+        self.assertIn("Window: 32,768 tokens (global fallback)", self.sent[-1])
+        self.assertIn("Compaction: yes", self.sent[-1])
+        self.assertIn("4 history dropped", self.sent[-1])
+        self.assertIn("memory, summary trimmed", self.sent[-1])
+
     def test_invalid_name_reprompts_without_creating_session(self):
         _m_session_naming.start_session_name_input(
             self.db,

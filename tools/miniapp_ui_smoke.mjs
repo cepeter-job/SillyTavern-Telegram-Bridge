@@ -22,7 +22,7 @@ assert.ok(initialDocument.querySelector('#content .skeleton-shell'),'Initial con
 assert.equal(initialDocument.querySelector('#more-menu'),null,'Management is a full page, not a navigation sheet');
 const context=dom.getInternalVMContext(),errors=[],expectedFailures=new Set(),observedFailures=[];
 let portraitMode='success',forcedFailure='',scrollResets=0;
-let summaryScenario=null,memoryStatusScenario=null,memoryDetailScenario=null,memoryDetailRequests=0;
+let summaryScenario=null,memoryStatusScenario=null,contextStatusScenario=null,memoryDetailScenario=null,memoryDetailRequests=0;
 const fixtureRequestTimes=[];
 async function reserveFixtureCapacity(count) {
   // Keep real integration phases below the unchanged 120/minute server limit.
@@ -73,8 +73,10 @@ dom.window.fetch=async (path,options)=>{
   }
   const response=await fetch(ready.url+path,options);
   fixtureRequestTimes.push(performance.now());
-  if(memoryStatusScenario&&String(path)==='/api/v1/status'&&response.ok) {
-    const data=await response.json();data.memory_diagnostics=memoryStatusScenario;
+  if((memoryStatusScenario||contextStatusScenario)&&String(path)==='/api/v1/status'&&response.ok) {
+    const data=await response.json();
+    if(memoryStatusScenario)data.memory_diagnostics=memoryStatusScenario;
+    if(contextStatusScenario)data.context_diagnostics=contextStatusScenario;
     return new Response(JSON.stringify(data),{status:200,headers:{'Content-Type':'application/json'}});
   }
   if(summaryScenario&&String(path)==='/api/v1/memory'&&response.ok) {
@@ -198,6 +200,21 @@ try {
   assert.ok(shellDocument.querySelector('.story-card'),'An optional status failure cannot blank Home');
   assert.ok([...shellDocument.querySelectorAll('.story-status-item')].some(node=>node.textContent.includes('Unavailable')),'Unavailable optional status is labeled');
   forcedFailure='';
+  contextStatusScenario={
+    source:'provider-model',window_tokens:32768,output_reserve_tokens:4096,safety_margin_tokens:656,
+    budget_tokens:28016,final_tokens:23450,usage_percent:84,compacted:true,dropped_history:4,
+    trimmed_components:['memory','summary'],memory_trimmed:true,rag_trimmed:false,npc_trimmed:false,summary_trimmed:true,
+  };
+  await app.namespace.navigate('dashboard');
+  let contextText=shellDocument.querySelector('.dashboard-health [data-health-icon="models"]').closest('.card').textContent;
+  assert.ok(contextText.includes('23,450 / 28,016 input tokens (84%)'),'Home shows used and usable input context with percentage');
+  assert.ok(contextText.includes('Compacted'),'Home labels compacted context explicitly');
+  assert.ok(contextText.includes('memory, summary'),'Home identifies trimmed context components');
+  await app.namespace.navigate('system');
+  contextText=shellDocument.querySelector('main [data-health-icon="models"]').closest('.card').textContent;
+  assert.ok(contextText.includes('23,450 / 28,016 input tokens (84%)'),'System shows used and usable input context with percentage');
+  assert.ok(contextText.includes('Compacted'),'System labels compacted context explicitly');
+  contextStatusScenario=null;
   for(const [name,label,rssText] of [
     ['disabled','Disabled','Not sampled'],
     ['armed','Armed','200 MiB'],

@@ -6,6 +6,7 @@ import base64
 import io
 import json
 import logging
+import math
 import re
 import time
 import urllib.error
@@ -39,7 +40,8 @@ from bridge.image_routing import (
 from bridge.limits import IMAGE_MAX_BYTES
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.network_security import strict_urlopen, validate_provider_endpoint
-from bridge.provider_port import ProviderPort
+from bridge.provider_errors import ProviderRequestError
+from bridge.provider_port import ProviderPort, normalize_provider_exception
 from bridge.scene_state import scene_state_text
 from bridge.settings import AppSettings
 from bridge.telegram import send_text, telegram_request
@@ -124,6 +126,46 @@ def _image_headers(spec: dict, *, app_settings: AppSettings) -> dict[str, str]:
         headers["Authorization"] = f"Bearer {key}"
     headers.update(spec.get("extra_headers") or {})
     return headers
+
+
+def image_provider_error_message(error: ProviderRequestError) -> str:
+    reasons = {
+        "rate_limit": "Rate limited by provider",
+        "authentication": "Provider authentication failed",
+        "credits": "Provider requires credits",
+        "model_unavailable": "Image model unavailable",
+        "request_too_large": "Image request is too large",
+        "timeout": "Provider request timed out",
+        "provider_unavailable": "Provider temporarily unavailable",
+        "network": "Provider could not be reached",
+        "provider_rejected": "Provider rejected the image request",
+        "provider_failure": "Provider request failed",
+    }
+    next_steps = {
+        "authentication": "Check provider credentials or choose another image model in /imagine.",
+        "credits": "Add provider credits or choose another image model in /imagine.",
+        "model_unavailable": "Refresh providers or choose another image model in /imagine.",
+        "request_too_large": "Reduce the request or choose another image model in /imagine.",
+        "timeout": "Retry or choose another image model in /imagine.",
+        "network": "Retry or choose another image model in /imagine.",
+    }
+    status = f" (HTTP {error.status})" if error.status is not None else ""
+    lines = [
+        "Image generation failed.",
+        "",
+        f"Model: {error.model}",
+        f"Reason: {reasons.get(error.category, 'Provider request failed')}{status}",
+    ]
+    if error.retry_after is not None and error.retry_after > 0:
+        lines.append(f"Retry: in {math.ceil(error.retry_after)} seconds")
+    lines.append(
+        "Next: "
+        + next_steps.get(
+            error.category,
+            "Try again later or choose another image model in /imagine.",
+        )
+    )
+    return "\n".join(lines)
 
 
 def _provider_prompt_too_long(exc: urllib.error.HTTPError) -> bool:
@@ -229,11 +271,14 @@ def edit_image(
     try:
         with strict_urlopen(request, timeout=180, environ=app_settings.environ) as response:
             raw_response = response.read(IMAGE_JSON_MAX_BYTES + 1)
-    except urllib.error.HTTPError as exc:
-        if _provider_prompt_too_long(exc):
+    except Exception as exc:
+        if isinstance(exc, urllib.error.HTTPError) and _provider_prompt_too_long(exc):
             raise ValueError(
                 f"Image prompt for {route.model} is too long for the provider; shorten it and retry"
             ) from None
+        normalized = normalize_provider_exception(exc, route.selection)
+        if normalized is not None:
+            raise normalized from None
         raise
     if len(raw_response) > IMAGE_JSON_MAX_BYTES:
         raise ValueError("Image provider response exceeds the JSON size limit")
@@ -264,9 +309,12 @@ def generate_image(
     try:
         with strict_urlopen(request, timeout=180, environ=app_settings.environ) as response:
             raw_response = response.read(IMAGE_JSON_MAX_BYTES + 1)
-    except urllib.error.HTTPError as exc:
-        if _provider_prompt_too_long(exc):
+    except Exception as exc:
+        if isinstance(exc, urllib.error.HTTPError) and _provider_prompt_too_long(exc):
             raise ValueError(f"Image prompt for {model} is too long for the provider; shorten it and retry") from None
+        normalized = normalize_provider_exception(exc, f"{provider_id}::{model}")
+        if normalized is not None:
+            raise normalized from None
         raise
     if len(raw_response) > IMAGE_JSON_MAX_BYTES:
         raise ValueError("Image provider response exceeds the JSON size limit")

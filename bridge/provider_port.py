@@ -62,7 +62,8 @@ def active_provider_requests() -> tuple[dict[str, object], ...]:
     )
 
 
-def _normalize_provider_exception(error: BaseException, model: str) -> ProviderRequestError | None:
+def normalize_provider_exception(error: BaseException, model: str) -> ProviderRequestError | None:
+    """Convert provider transport exceptions into the canonical sanitized error."""
     if isinstance(error, ProviderRequestError):
         return error
     if isinstance(error, ProviderTransportError):
@@ -236,7 +237,7 @@ class ProviderPort:
                 status = "cancelled"
             if callback_failed:
                 raise
-            normalized = _normalize_provider_exception(exc, observed_model)
+            normalized = normalize_provider_exception(exc, observed_model)
             if self.policy is not None and attempt is not None and normalized is not None:
                 if cancel_event is None or not cancel_event.is_set():
                     self.policy.fail(attempt, normalized)

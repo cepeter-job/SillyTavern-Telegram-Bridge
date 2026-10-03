@@ -222,22 +222,21 @@ def refresh_model_catalog(
                     raise ValueError("invalid models response")
                 items = payload["data"]
                 models = model_ids([item.get("id") for item in items if isinstance(item, Mapping)])
-                if not models:
-                    error = "empty_catalog"
-                else:
-                    if model_due:
-                        updated.update(models=models, refreshed_at=now, last_error=None)
-                    if metadata_due:
-                        updated.update(
-                            model_context_window_tokens=_context_windows_for_configured_models(
-                                items,
-                                model_ids(spec.get("models")),
-                            ),
-                            metadata_refreshed_at=now,
-                            metadata_last_error=None,
-                        )
+                model_error = "empty_catalog" if model_due and not models else None
+                if model_due and models:
+                    updated.update(models=models, refreshed_at=now, last_error=None)
+                if metadata_due:
+                    updated.update(
+                        model_context_window_tokens=_context_windows_for_configured_models(
+                            items,
+                            model_ids(spec.get("models")),
+                        ),
+                        metadata_refreshed_at=now,
+                        metadata_last_error=None,
+                    )
             except Exception as exc:
                 error = _failure_category(exc)
+                model_error = None
 
         if error is not None:
             if model_due:
@@ -246,6 +245,10 @@ def refresh_model_catalog(
                 updated["metadata_last_error"] = error
             failed += 1
             logging.info("Provider catalog refresh failed for provider %s (%s)", current_id, error)
+        elif model_error is not None:
+            updated["last_error"] = model_error
+            failed += 1
+            logging.info("Provider catalog refresh failed for provider %s (%s)", current_id, model_error)
         else:
             refreshed += 1
 

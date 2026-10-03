@@ -257,6 +257,7 @@ def test_custom_models_endpoint_is_used_for_refresh(configured, monkeypatch):
 @pytest.mark.parametrize(
     "payload",
     [
+        {"data": []},
         {"data": [{"id": "remote", "context_length": 262144}]},
         {"data": [{"id": "seed", "context_length": 1}]},
     ],

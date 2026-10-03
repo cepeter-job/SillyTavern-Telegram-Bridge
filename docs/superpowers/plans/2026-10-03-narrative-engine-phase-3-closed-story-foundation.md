@@ -28,7 +28,7 @@
 - User edits before a stored finale-ready revision → readiness and checkpoint become invalid/stale.
 - Crash between checkpoint creation and FINALE transition → impossible because both writes are one transaction.
 - Ending Goal is automatically adapted → old/new values and reason remain in bounded history.
-- Repeated finale confirmation on same revision → one transition/checkpoint, not duplicates.
+- Repeated attempt to enter FINALE on the same revision → one transition/checkpoint, not duplicates.
 
 ---
 

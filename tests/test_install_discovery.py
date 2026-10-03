@@ -206,10 +206,7 @@ def test_interactive_configure_collects_minimal_first_run_values(tmp_path: Path)
     assert "LLM_API_KEY=secret" in text
     assert f"SILLYTAVERN_DIR={root}" in text
     assert f"SILLYTAVERN_CHARACTER_DIR={root / 'data/alice/characters'}" in text
-    assert not any(
-        "context" in prompt.casefold() or "window" in prompt.casefold()
-        for prompt in prompts
-    )
+    assert not any("context" in prompt.casefold() or "window" in prompt.casefold() for prompt in prompts)
 
 
 def test_interactive_configure_can_defer_without_requesting_secrets(tmp_path: Path):

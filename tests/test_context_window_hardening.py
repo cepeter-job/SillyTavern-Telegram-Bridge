@@ -25,10 +25,7 @@ class ContextWindowHardeningTests(SettingsTestCase):
 
     def test_discovered_context_metadata_overrides_global_fallback(self):
         settings = self._catalog_settings(
-            "providers:\n"
-            "  demo:\n"
-            "    models: [model-a]\n"
-            "    discover_model_metadata: true\n"
+            "providers:\n  demo:\n    models: [model-a]\n    discover_model_metadata: true\n"
         )
         self._write_cache(
             settings,
@@ -100,11 +97,7 @@ class ContextWindowHardeningTests(SettingsTestCase):
         self.assertEqual(profile.source, "provider-model")
 
     def test_discovered_metadata_is_ignored_when_flag_off_or_model_unconfigured(self):
-        settings = self._catalog_settings(
-            "providers:\n"
-            "  demo:\n"
-            "    models: [model-a]\n"
-        )
+        settings = self._catalog_settings("providers:\n  demo:\n    models: [model-a]\n")
         self._write_cache(
             settings,
             {
@@ -119,10 +112,7 @@ class ContextWindowHardeningTests(SettingsTestCase):
         disabled = context.context_profile("demo::model-a", app_settings=settings)
 
         enabled = self._catalog_settings(
-            "providers:\n"
-            "  demo:\n"
-            "    models: [model-a]\n"
-            "    discover_model_metadata: true\n"
+            "providers:\n  demo:\n    models: [model-a]\n    discover_model_metadata: true\n"
         )
         self._write_cache(
             enabled,
@@ -150,8 +140,9 @@ class ContextWindowHardeningTests(SettingsTestCase):
         live = context.ContextProfile(32768, 4096, 656, 28016, 4.0, "global-fallback")
         saved = json.dumps({"source": "discovered-provider-model"})
 
-        with mock.patch.object(diagnostics, "context_profile", return_value=live), mock.patch.object(
-            diagnostics, "get_meta", return_value=saved
+        with (
+            mock.patch.object(diagnostics, "context_profile", return_value=live),
+            mock.patch.object(diagnostics, "get_meta", return_value=saved),
         ):
             snapshot = diagnostics.context_diagnostics_snapshot(
                 mock.Mock(),

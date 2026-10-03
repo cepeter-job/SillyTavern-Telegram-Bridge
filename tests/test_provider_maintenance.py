@@ -174,7 +174,6 @@ def test_discovery_uses_native_anthropic_headers_and_base_endpoint(configured, m
     assert "authorization" not in headers
 
 
-
 def test_metadata_only_refresh_caches_context_without_adding_remote_models(configured, monkeypatch):
     from bridge.provider_catalog_cache import read_model_cache
 
@@ -245,8 +244,9 @@ def test_custom_models_endpoint_is_used_for_refresh(configured, monkeypatch):
     monkeypatch.setattr(
         discovery,
         "strict_urlopen",
-        lambda request, **kw: calls.append(request.full_url)
-        or Response({"data": [{"id": "seed", "context_length": 131072}]}),
+        lambda request, **kw: (
+            calls.append(request.full_url) or Response({"data": [{"id": "seed", "context_length": 131072}]})
+        ),
     )
 
     discovery.refresh_model_catalog(force=True, metadata_only=True, app_settings=settings)
@@ -266,9 +266,7 @@ def test_successful_metadata_refresh_clears_stale_context_for_missing_or_invalid
 ):
     from bridge.provider_catalog_cache import read_model_cache
 
-    settings = configured(
-        {"alpha": spec(discover_models=False, discover_model_metadata=True, models=["seed"])}
-    )
+    settings = configured({"alpha": spec(discover_models=False, discover_model_metadata=True, models=["seed"])})
     settings.model_cache_file.write_text(
         json.dumps(
             {
@@ -299,9 +297,7 @@ def test_successful_metadata_refresh_clears_stale_context_for_missing_or_invalid
 def test_failed_metadata_refresh_preserves_last_good_context(configured, monkeypatch):
     from bridge.provider_catalog_cache import read_model_cache
 
-    settings = configured(
-        {"alpha": spec(discover_models=False, discover_model_metadata=True, models=["seed"])}
-    )
+    settings = configured({"alpha": spec(discover_models=False, discover_model_metadata=True, models=["seed"])})
     settings.model_cache_file.write_text(
         json.dumps(
             {
@@ -348,9 +344,7 @@ def test_provider_without_metadata_flag_does_not_request_metadata(configured, mo
 def test_failed_metadata_refresh_is_throttled_by_metadata_attempt_timestamp(configured, monkeypatch):
     from bridge.provider_catalog_cache import read_model_cache
 
-    settings = configured(
-        {"alpha": spec(discover_models=False, discover_model_metadata=True, models=["seed"])}
-    )
+    settings = configured({"alpha": spec(discover_models=False, discover_model_metadata=True, models=["seed"])})
     calls = []
 
     def offline(*args, **kwargs):
@@ -381,9 +375,7 @@ def test_failed_metadata_refresh_is_throttled_by_metadata_attempt_timestamp(conf
 def test_metadata_context_aliases_are_parsed(configured, monkeypatch, field):
     from bridge.provider_catalog_cache import read_model_cache
 
-    settings = configured(
-        {"alpha": spec(discover_models=False, discover_model_metadata=True, models=["seed"])}
-    )
+    settings = configured({"alpha": spec(discover_models=False, discover_model_metadata=True, models=["seed"])})
     monkeypatch.setattr(
         discovery,
         "strict_urlopen",
@@ -393,6 +385,7 @@ def test_metadata_context_aliases_are_parsed(configured, monkeypatch, field):
     discovery.refresh_model_catalog(force=True, metadata_only=True, app_settings=settings)
 
     assert read_model_cache(app_settings=settings)["alpha"]["model_context_window_tokens"] == {"seed": 131072}
+
 
 def test_first_byte_of_inference_is_not_reported_as_successful_completion(configured, monkeypatch):
     settings = configured({"alpha": spec(health_check="chat_completion")})
@@ -447,7 +440,6 @@ def test_concurrent_cache_updates_preserve_both_providers_with_private_permissio
     assert set(read_model_cache(app_settings=settings)) == {"alpha", "beta"}
     assert settings.model_cache_file.stat().st_mode & 0o777 == 0o600
     assert not list(settings.model_cache_file.parent.glob(".models-*"))
-
 
 
 def test_cache_sanitizes_model_context_metadata_and_metadata_timestamps(configured):
@@ -559,6 +551,7 @@ def test_model_and_metadata_cache_writers_do_not_clobber_each_other(configured):
     assert entry["last_attempt_at"] == 20
     assert entry["model_context_window_tokens"] == {"seed": 262144}
     assert entry["metadata_last_attempt_at"] == 30
+
 
 def test_older_cache_writer_does_not_replace_newer_results(configured):
     from bridge.provider_catalog_cache import read_model_cache, update_model_cache

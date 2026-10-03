@@ -208,11 +208,11 @@ def refresh_model_catalog(
 
         if error is None:
             try:
-                request = urllib.request.Request(
+                request = urllib.request.Request(  # noqa: S310 -- validated endpoint; DNS-pinned strict_urlopen only
                     endpoint,
                     headers=headers,
                     method="GET",
-                )  # noqa: S310 -- DNS-pinned strict_urlopen only
+                )
                 with strict_urlopen(request, timeout=30, environ=app_settings.environ) as response:
                     content = response.read(MAX_CACHE_BYTES + 1)
                 if len(content) > MAX_CACHE_BYTES:
@@ -294,21 +294,21 @@ def probe_provider(provider_id: str, raw_spec: object, *, app_settings: AppSetti
                 "stream": True,
             }
             suffix = "/messages" if transport == "anthropic_messages" else "/chat/completions"
-            request = urllib.request.Request(
+            request = urllib.request.Request(  # noqa: S310 -- validated endpoint; DNS-pinned strict_urlopen only
                 endpoint + suffix,
                 data=json.dumps(body).encode(),
                 headers={**headers, "Accept": "text/event-stream", "Content-Type": "application/json"},
                 method="POST",
-            )  # noqa: S310 -- DNS-pinned strict_urlopen only
+            )
             with strict_urlopen(request, timeout=30, environ=app_settings.environ) as response:
                 first_byte = response.read(1)
             status = "inference stream opened (completion not validated)" if first_byte else "inference stream empty"
             return provider_id, name, status
-        request = urllib.request.Request(
+        request = urllib.request.Request(  # noqa: S310 -- validated endpoint; DNS-pinned strict_urlopen only
             _catalog_endpoint(spec, app_settings=app_settings),
             headers=headers,
             method="GET",
-        )  # noqa: S310 -- DNS-pinned strict_urlopen only
+        )
         with strict_urlopen(request, timeout=10, environ=app_settings.environ) as response:
             return provider_id, name, f"catalog reachable (HTTP {response.status})"
     except urllib.error.HTTPError as exc:

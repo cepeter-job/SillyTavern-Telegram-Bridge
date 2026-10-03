@@ -67,7 +67,6 @@ def test_plain_providers_opens_target_selection(monkeypatch):
     assert calls[0][1]["request_context"] is context
 
 
-
 def test_provider_panel_uses_catalog_refresh_label_without_changing_callback(monkeypatch):
     sent = []
     context = make_test_request_context(app_settings=make_test_settings())

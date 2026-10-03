@@ -116,7 +116,9 @@ def test_runtime_startup_failure_releases_acquired_resources(monkeypatch, tmp_pa
         db_factory=open_database,
         sync=object(),
         background=SimpleNamespace(
-            begin_shutdown=lambda: events.append("admission-stop"), register_backlog_dispatcher=lambda callback: None
+            begin_shutdown=lambda: events.append("admission-stop"),
+            submit=lambda *_args, **_kwargs: True,
+            register_backlog_dispatcher=lambda callback: None,
         ),
         jobs=SimpleNamespace(recover=recover),
         memory_diagnostics=SimpleNamespace(
@@ -195,7 +197,9 @@ def test_polling_http_error_closes_response_before_retry_wait(monkeypatch, tmp_p
 
     services.telegram = SimpleNamespace(request=request, send_text=lambda *args: None)
     services.background = SimpleNamespace(
-        begin_shutdown=lambda: None, register_backlog_dispatcher=lambda callback: None
+        begin_shutdown=lambda: None,
+        submit=lambda *_args, **_kwargs: True,
+        register_backlog_dispatcher=lambda callback: None,
     )
     services.jobs = SimpleNamespace(recover=lambda *args, **kwargs: None)
     monkeypatch.setattr(lifecycle, "capture_deployment", lambda config: SimpleNamespace(version="test", commit="test"))

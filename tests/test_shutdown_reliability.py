@@ -34,7 +34,11 @@ def _exercise_shutdown(monkeypatch, tmp_path, *, drained: bool):
         config=config,
         db_factory=lambda: database,
         telegram=SimpleNamespace(request=request, send_text=lambda *_args: None),
-        background=SimpleNamespace(begin_shutdown=lambda: None, register_backlog_dispatcher=lambda _callback: None),
+        background=SimpleNamespace(
+            begin_shutdown=lambda: None,
+            submit=lambda *_args, **_kwargs: True,
+            register_backlog_dispatcher=lambda _callback: None,
+        ),
         jobs=SimpleNamespace(recover=lambda *_args, **_kwargs: None),
         sync=object(),
         health=None,

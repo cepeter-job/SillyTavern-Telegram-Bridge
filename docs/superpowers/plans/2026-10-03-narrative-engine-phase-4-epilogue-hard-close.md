@@ -274,7 +274,8 @@ Assert after CLOSED:
 - voice/photo story turns blocked;
 - `/imagine` and all fresh image generation blocked;
 - status/usage/history/View Ending allowed;
-- committed delivery recovery allowed.
+- committed delivery recovery allowed;
+- queued/recovered operations and @bot command normalization cannot bypass the closed-session mutation guard.
 
 - [ ] **Step 2: Run tests**
 

@@ -197,8 +197,8 @@ def test_user_configuration_guide_documents_provider_catalog_controls():
     provider_example = (ROOT / "config/providers.example.yaml").read_text()
     assert "image_default_size" not in provider_example
     assert "image_auto:" in provider_example
-    assert "text_model: nano-gpt::chroma" in provider_example
-    assert "reference_model: nano-gpt::step-image-edit-2" in provider_example
+    assert "text_model: image-provider::text-model" in provider_example
+    assert "reference_model: image-provider::reference-model" in provider_example
     assert "image_model_capabilities:" in provider_example
     assert "edit_route: openai" in provider_example
 

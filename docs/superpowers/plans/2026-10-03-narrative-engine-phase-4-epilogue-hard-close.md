@@ -189,11 +189,12 @@ git commit -m "feat: generate separate story epilogues"
 ### Task 4: Atomic closure and restart recovery
 
 **Files:**
-- Create: `bridge/closed_story.py`
+- Create: `bridge/ending_recovery.py`
 - Modify: `bridge/ending_repository.py`
 - Modify: `bridge/ending_service.py`
-- Modify: `bridge/conversation_jobs.py`
-- Modify: `bridge/job_store.py`
+- Modify: `bridge/main.py`
+- Modify: `bridge/background.py`
+- Modify: `bridge/operation_recovery.py`
 - Test: `tests/test_closed_story_recovery.py`
 - Test: `tests/test_operation_recovery.py`
 
@@ -201,7 +202,10 @@ git commit -m "feat: generate separate story epilogues"
 - Produces:
   - `close_after_epilogue(db, chat_id: str, session_id: str, *, expected_lifecycle_revision: int, epilogue_rowid: int) -> bool`
   - `recover_ending_workflow(db, chat_id: str, session_id: str) -> EndingRecoveryAction`
+  - `recoverable_endings(db) -> list[tuple[str, str]]`
+  - `queue_startup_ending_recovery(..., *, app_settings: AppSettings) -> int`
 - Recovery decisions use durable ending fields: checkpoint ID, finale operation ID/committed rowid, resolution rowid, epilogue operation ID/committed rowid.
+- Startup queues bounded recovery only after services/providers are composed; migration/schema initialization itself makes no provider calls.
 - Closure does not depend on Telegram delivery state.
 
 - [ ] **Step 1: Write recovery-matrix tests**
@@ -221,9 +225,9 @@ Cover:
 Run: `python -m pytest -q tests/test_closed_story_recovery.py tests/test_operation_recovery.py`  
 Expected: FAIL.
 
-- [ ] **Step 3: Implement recovery state machine**
+- [ ] **Step 3: Implement recovery state machine and startup admission**
 
-Return explicit actions; keep generation/delivery owners responsible for performing the action. No “scan latest assistant message and guess” fallback.
+Return explicit actions; keep generation/delivery owners responsible for performing the action. On startup, scan only durable nonterminal EndingState rows and queue bounded recovery work after application composition. No “scan latest assistant message and guess” fallback and no provider work during migration/database initialization.
 
 - [ ] **Step 4: Run tests**
 
@@ -233,7 +237,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add bridge/closed_story.py bridge/ending_repository.py bridge/ending_service.py bridge/conversation_jobs.py bridge/job_store.py tests/test_closed_story_recovery.py tests/test_operation_recovery.py
+git add bridge/ending_recovery.py bridge/ending_repository.py bridge/ending_service.py bridge/main.py bridge/background.py bridge/operation_recovery.py tests/test_closed_story_recovery.py tests/test_operation_recovery.py
 git commit -m "feat: recover closed story endings durably"
 ```
 

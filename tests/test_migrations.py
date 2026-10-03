@@ -194,7 +194,7 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
         self.db.close()
 
     def test_initial_schema_preserved_with_conversation_migration(self):
-        self.assertEqual(len(schema.SCHEMA_MIGRATIONS), 9)
+        self.assertEqual(len(schema.SCHEMA_MIGRATIONS), 10)
         migration = schema.SCHEMA_MIGRATIONS[0]
         self.assertEqual((migration.version, migration.name), (1, "initial_schema"))
 
@@ -213,6 +213,7 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
                 (7, "message_identity"),
                 (8, "assistant_delivery_progress"),
                 (9, "job_delivery_intents"),
+                (10, "narrative_engine_foundation"),
             ],
         )
 
@@ -245,7 +246,7 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
             "data_bank_fts",
             "group_sessions",
             "scene_states",
-            "director_goals",
+            "director_state",
         ):
             with self.subTest(table=table):
                 self.assertIsNotNone(
@@ -258,7 +259,6 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
         for object_type, name in (
             ("index", "scene_states_updated_idx"),
             ("trigger", "scene_states_session_delete"),
-            ("trigger", "director_goals_session_delete"),
             ("trigger", "sessions_delete_sync_binding"),
         ):
             with self.subTest(name=name):
@@ -337,7 +337,7 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
         self.assertIsNone(self.db.execute("SELECT 1 FROM callback_tokens WHERE token='expired'").fetchone())
         self.assertEqual(
             self.db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0],
-            9,
+            10,
         )
 
 

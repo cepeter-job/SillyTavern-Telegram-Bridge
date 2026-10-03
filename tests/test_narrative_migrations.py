@@ -105,7 +105,7 @@ def test_corrupted_goal_copy_rolls_back_before_legacy_data_is_dropped():
         db.commit()
         db.execute("BEGIN IMMEDIATE")
         try:
-            with pytest.raises((ValueError, RuntimeError, sqlite3.DatabaseError), match="goal|schema|column"):
+            with pytest.raises((ValueError, RuntimeError, sqlite3.DatabaseError), match=r"goal|schema|column"):
                 migrate_narrative_engine_foundation(db)
         finally:
             db.rollback()

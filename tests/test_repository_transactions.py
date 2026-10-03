@@ -128,10 +128,11 @@ class RepositoryPrimitiveTests(SettingsTestCase):
         self.db = sqlite3.connect(":memory:")
         self.db.executescript(
             """
-            CREATE TABLE director_goals(
+            CREATE TABLE director_state(
                 chat_id TEXT NOT NULL,
                 session_id TEXT NOT NULL,
                 goal TEXT NOT NULL,
+                state_revision INTEGER NOT NULL DEFAULT 0,
                 updated_at REAL NOT NULL,
                 PRIMARY KEY(chat_id, session_id)
             );

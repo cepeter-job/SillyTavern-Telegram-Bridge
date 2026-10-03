@@ -565,6 +565,7 @@ def _provider_document(settings: AppSettings) -> bytes | None:
                 "api_key_env": "LLM_API_KEY",
                 "models": list(dict.fromkeys(models)),
                 "discover_models": False,
+                "discover_model_metadata": True,
             }
         }
     }

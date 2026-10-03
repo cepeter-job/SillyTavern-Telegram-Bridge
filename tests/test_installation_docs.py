@@ -88,3 +88,20 @@ def test_manual_git_update_verifies_signed_tag_before_checkout():
     assert checkout in manual
     assert manual.index(verify) < manual.index(checkout)
     assert "git pull --ff-only origin main" not in manual
+
+
+def test_public_docs_explain_model_context_metadata_discovery_and_fallback():
+    configuration = (ROOT / "docs/configuration.md").read_text()
+    installation = (ROOT / "docs/installation.md").read_text()
+    user_guide = (ROOT / "docs/user-guide.md").read_text()
+    example = (ROOT / "config/providers.example.yaml").read_text()
+
+    for text in (configuration, user_guide, example):
+        assert "discover_model_metadata" in text
+        assert "discover_models" in text
+    assert "models_endpoint" in configuration
+    assert "model_context_window_tokens" in configuration
+    assert "32768" in configuration or "32K" in configuration
+    assert "explicit" in configuration.lower() and "override" in configuration.lower()
+    assert "context" in installation.lower()
+    assert "does not ask" in installation.lower() or "not ask" in installation.lower()

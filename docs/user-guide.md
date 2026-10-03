@@ -63,9 +63,13 @@ Beyond basic generation, the bridge handles:
 - 💾 Presets
 
 Health checks, model discovery, endpoint validation, and streaming configuration
-are all built in. Recognized provider rate limits, authentication/credit failures,
-timeouts, unavailable models, upstream outages, and network failures are converted
-to bounded actionable messages. Raw upstream response bodies, URLs, credentials,
+are all built in. Provider catalogs can keep `discover_models: false` to pin the
+model list while enabling `discover_model_metadata: true` to learn context-window
+metadata only for those configured models. Explicit provider or per-model context
+values override discovered metadata; unknown context safely falls back to 32K.
+Recognized provider rate limits, authentication/credit failures, timeouts,
+unavailable models, upstream outages, and network failures are converted to
+bounded actionable messages. Raw upstream response bodies, URLs, credentials,
 and local paths are never shown in those user-facing errors.
 
 ### 🧠 Memory and retrieval

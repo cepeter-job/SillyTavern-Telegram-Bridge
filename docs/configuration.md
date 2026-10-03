@@ -139,7 +139,20 @@ window, bounded to 512..8192 tokens) in addition to the configured output
 reserve. Provider catalogs may declare `context_window_tokens` and
 `token_estimate_chars_per_token`, with per-model overrides in
 `model_context_window_tokens` and `model_token_estimate_chars_per_token`.
-Unknown models continue to use `SILLYTAVERN_CONTEXT_WINDOW_TOKENS`.
+
+Model-list discovery and context-metadata discovery are independent. Set
+`discover_models: true` only when the provider may add returned model IDs to
+the picker/router. Set `discover_model_metadata: true` to let the bridge read
+context metadata for model IDs already listed in `models:` without expanding
+the routing surface. Providers whose richer catalog is not at
+`<api_endpoint>/models` may set an explicit validated `models_endpoint`.
+Metadata discovery is best-effort and never runs inside story generation.
+
+Context-window precedence is: explicit `model_context_window_tokens`, then
+explicit provider `context_window_tokens`, then discovered metadata for the
+configured model, then the global fallback. Explicit YAML therefore always
+overrides discovered metadata. When no usable value is available, the default
+`SILLYTAVERN_CONTEXT_WINDOW_TOKENS=32768` remains the conservative fallback.
 
 Memory diagnostics sample process RSS every 20 seconds. They warn at 256 MiB,
 start temporary Python allocation tracing at 320 MiB, and capture an incident

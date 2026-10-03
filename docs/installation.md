@@ -100,7 +100,12 @@ Provider API key
 ```
 
 The endpoint hostname is written automatically to
-`SILLYTAVERN_PROVIDER_ALLOWED_HOSTS`; it is not requested separately.
+`SILLYTAVERN_PROVIDER_ALLOWED_HOSTS`; it is not requested separately. The
+guided installer does not ask for a model context-window size. New generated
+custom-provider catalogs keep `discover_models: false` so the selected model
+list stays pinned, while `discover_model_metadata: true` lets the bridge
+best-effort discover context sizes for those configured models. If the provider
+does not publish usable metadata, the bridge safely uses its 32K fallback.
 
 If a provider catalog/model is already configured, those values are preserved.
 If all required Telegram/model values are already valid, the installer does not

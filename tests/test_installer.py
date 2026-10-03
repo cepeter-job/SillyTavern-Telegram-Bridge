@@ -125,6 +125,11 @@ def test_provider_catalog_can_be_prepared_using_only_env_values(tmp_path):
     settings = installation_settings(source, home, env)
     assert settings.provider_config_file.is_file()
     assert "private-key" not in settings.provider_config_file.read_text()
+    import yaml
+
+    provider = yaml.safe_load(settings.provider_config_file.read_text())["providers"]["test"]
+    assert provider["discover_models"] is False
+    assert provider["discover_model_metadata"] is True
     assert "private-key" not in (units / "sillytavern-telegram.service").read_text()
     assert validate_install(source, home, env) == []
     assert not (env.parent / "Caddyfile.miniapp").exists()

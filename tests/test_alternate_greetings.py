@@ -52,7 +52,7 @@ class AlternateGreetingTests(SettingsTestCase):
         sent = []
         original_send = greeting_delivery.send_text
         original_randrange = _m_greetings.random.randrange
-        greeting_delivery.send_text = lambda _token, _chat_id, text, acknowledged_chunk=None: (
+        greeting_delivery.send_text = lambda _token, _chat_id, text, acknowledged_chunk=None, entities=None: (
             sent.append(text) or acknowledged_chunk(88) or [88]
         )
         _m_greetings.random.randrange = lambda _length: 1
@@ -75,7 +75,57 @@ class AlternateGreetingTests(SettingsTestCase):
             _m_greetings.random.randrange = original_randrange
         self.assertEqual(sent, ["Alt User"])
         row = self.db.execute("SELECT role, content FROM messages").fetchone()
-        self.assertEqual(tuple(row), ("assistant", "Alt User"))
+        self.assertEqual(tuple(row), ("assistant", "*Alt User*"))
+
+    def test_first_message_normalizes_narration_and_keeps_dialogue_normal(self):
+        sent = []
+        original_send = greeting_delivery.send_text
+
+        def capture(_token, _chat_id, text, acknowledged_chunk=None, entities=None):
+            sent.append((text, entities))
+            if acknowledged_chunk:
+                acknowledged_chunk(88)
+            return [88]
+
+        greeting_delivery.send_text = capture
+        try:
+            fields = {
+                "name": "Character",
+                "first_mes": 'She looks away. "Hello." She smiles.',
+                "alternate_greetings": "[]",
+            }
+            self.assertTrue(
+                _m_greetings.send_character_greeting(
+                    self.db,
+                    "token",
+                    "chat",
+                    fields,
+                    self.session["session_id"],
+                    "User",
+                    0,
+                    app_settings=self.app_settings_builder.build(),
+                )
+            )
+        finally:
+            greeting_delivery.send_text = original_send
+
+        row = self.db.execute("SELECT role, content FROM messages").fetchone()
+        self.assertEqual(
+            tuple(row),
+            ("assistant", '*She looks away.* "Hello." *She smiles.*'),
+        )
+        self.assertEqual(
+            sent,
+            [
+                (
+                    'She looks away. "Hello." She smiles.',
+                    [
+                        {"type": "italic", "offset": 0, "length": 15},
+                        {"type": "italic", "offset": 25, "length": 11},
+                    ],
+                )
+            ],
+        )
 
     def test_greeting_menu_lists_default_alternates_and_preview(self):
         calls = []
@@ -156,7 +206,7 @@ class AlternateGreetingTests(SettingsTestCase):
         original_send = greeting_delivery.send_text
         original_close = _owner_conversation_callbacks.close_panel_message
         _owner_conversation_callbacks.card_fields_from_file = lambda _filename, *, app_settings=None: fields
-        greeting_delivery.send_text = lambda _token, _chat_id, text, acknowledged_chunk=None: (
+        greeting_delivery.send_text = lambda _token, _chat_id, text, acknowledged_chunk=None, entities=None: (
             sent.append(text) or acknowledged_chunk(99) or [99]
         )
         _owner_conversation_callbacks.close_panel_message = lambda *_args, **_kwargs: None
@@ -191,7 +241,7 @@ class AlternateGreetingTests(SettingsTestCase):
         self.assertEqual(sent, ["Alt"])
         self.assertIn("Started with Alternate 2", answers)
         rows = self.db.execute("SELECT role, content FROM messages").fetchall()
-        self.assertEqual([tuple(row) for row in rows], [("assistant", "Alt")])
+        self.assertEqual([tuple(row) for row in rows], [("assistant", "*Alt*")])
         self.assertTrue(_m_callbacks.is_session_scoped_panel_callback("greeting:preview:0:0"))
 
 

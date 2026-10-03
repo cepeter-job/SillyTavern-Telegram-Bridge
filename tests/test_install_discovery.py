@@ -178,12 +178,21 @@ def test_interactive_configure_collects_minimal_first_run_values(tmp_path: Path)
         ]
     )
     secrets = iter(["123456:synthetic", "secret"])
+    prompts = []
+
+    def ask(prompt):
+        prompts.append(prompt)
+        return next(answers)
+
+    def secret(prompt):
+        prompts.append(prompt)
+        return next(secrets)
 
     complete = interactive_configure(
         home=home,
         env_path=env,
-        input_fn=lambda _prompt: next(answers),
-        secret_fn=lambda _prompt: next(secrets),
+        input_fn=ask,
+        secret_fn=secret,
         output_fn=lambda _message: None,
     )
 
@@ -197,6 +206,7 @@ def test_interactive_configure_collects_minimal_first_run_values(tmp_path: Path)
     assert "LLM_API_KEY=secret" in text
     assert f"SILLYTAVERN_DIR={root}" in text
     assert f"SILLYTAVERN_CHARACTER_DIR={root / 'data/alice/characters'}" in text
+    assert not any("context" in prompt.casefold() or "window" in prompt.casefold() for prompt in prompts)
 
 
 def test_interactive_configure_can_defer_without_requesting_secrets(tmp_path: Path):

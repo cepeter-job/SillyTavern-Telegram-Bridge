@@ -67,6 +67,38 @@ def test_plain_providers_opens_target_selection(monkeypatch):
     assert calls[0][1]["request_context"] is context
 
 
+def test_provider_panel_uses_catalog_refresh_label_without_changing_callback(monkeypatch):
+    sent = []
+    context = make_test_request_context(app_settings=make_test_settings())
+    monkeypatch.setattr(
+        provider_panels,
+        "get_model_groups",
+        lambda **kw: {"provider": ("Provider", [("model", "provider::model")], True)},
+    )
+    monkeypatch.setattr(
+        provider_panels,
+        "send_panel_message",
+        lambda token, chat, text, markup, *a, **kw: sent.append((text, markup)),
+    )
+    monkeypatch.setattr(
+        provider_panels,
+        "dynamic_callback_token",
+        lambda kind, value, chat_id, db: "provider-token",
+    )
+
+    provider_panels.send_model_menu(
+        "token",
+        "chat",
+        "provider::model",
+        request_context=context,
+        refresh_catalog=False,
+    )
+
+    buttons = [button for row in sent[0][1]["inline_keyboard"] for button in row]
+    refresh = next(button for button in buttons if button["callback_data"] == "provider:refresh")
+    assert refresh["text"] == "🔄 Refresh provider catalog"
+
+
 def test_provider_help_and_readme_advertise_only_panel_entry():
     commands = {command for entries in help_details.HELP_CATEGORIES.values() for command, _ in entries}
     assert "/providers" in commands

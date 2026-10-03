@@ -64,7 +64,13 @@ def context_diagnostics_snapshot(
     if isinstance(value, (int, float)) and not isinstance(value, bool) and 1.0 <= float(value) <= 8.0:
         result["chars_per_token"] = float(value)
     source = saved.get("source")
-    if isinstance(source, str) and source in {"global-fallback", "provider", "provider-model", "codex-alias"}:
+    if isinstance(source, str) and source in {
+        "global-fallback",
+        "provider",
+        "provider-model",
+        "discovered-provider-model",
+        "codex-alias",
+    }:
         result["source"] = source
     for key in _BOOL_FIELDS:
         if isinstance(saved.get(key), bool):

@@ -14,6 +14,7 @@ from contextlib import ExitStack
 from bridge.background import shutdown_background_executors
 from bridge.composition import BridgeServices
 from bridge.metadata import get_meta
+from bridge.provider_discovery import refresh_model_catalog
 from bridge.runtime_health import capture_deployment
 from bridge.sqlite_store import run_database_maintenance, write_transaction
 from bridge.sync_api import start_live_sync_worker, stop_live_sync_worker
@@ -136,6 +137,12 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
         db = services.db_factory()
         start_live_sync_worker(sync_service=services.sync, app_settings=services.config)
         services.background.register_backlog_dispatcher(make_durable_backlog_dispatcher(services, fields))
+        services.background.submit(
+            "provider_catalog_refresh",
+            refresh_model_catalog,
+            metadata_only=True,
+            app_settings=config,
+        )
         # Only startup may reset leases. Ordinary backlog dispatch must not race an active choice call.
         with write_transaction(db):
             db.execute(

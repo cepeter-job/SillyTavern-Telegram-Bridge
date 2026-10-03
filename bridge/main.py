@@ -16,6 +16,7 @@ from bridge.background import (
     background_observability_counters,
     begin_background_shutdown,
     register_durable_backlog_dispatcher,
+    submit_background,
     submit_chat_background,
 )
 from bridge.bot_commands import set_bot_commands
@@ -273,6 +274,7 @@ def _build_startup_services(
     )
     background = _BackgroundRuntime(
         submit_chat=submit_chat_background,
+        submit=submit_background,
         register_backlog_dispatcher=register_durable_backlog_dispatcher,
         begin_shutdown=begin_background_shutdown,
     )

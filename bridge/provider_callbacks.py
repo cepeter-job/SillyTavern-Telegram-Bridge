@@ -222,7 +222,7 @@ def _handle_provider_refresh(
 ):
     answer_callback(token, str(callback.get("id", "")), "Refreshing")
     _config, refreshed, failed = refresh_model_catalog(force=True, app_settings=request_context.app_settings)
-    send_text(token, chat_id, f"Model catalog refreshed: {refreshed} providers updated; {failed} failed.")
+    send_text(token, chat_id, f"Provider catalog refreshed: {refreshed} providers updated; {failed} failed.")
     send_models(
         token,
         chat_id,
@@ -316,7 +316,7 @@ def _handle_provider_maint(
         _config, refreshed, failed = refresh_model_catalog(
             force=True, provider_id=provider_id, app_settings=request_context.app_settings
         )
-        send_text(token, chat_id, f"Model catalog refreshed: {refreshed} providers updated; {failed} failed.")
+        send_text(token, chat_id, f"Provider catalog refreshed: {refreshed} providers updated; {failed} failed.")
     elif provider_policy is not None:
         provider_policy.reset(provider_id)
         send_text(token, chat_id, "Local runtime state reset. Provider credentials and model selection are unchanged.")

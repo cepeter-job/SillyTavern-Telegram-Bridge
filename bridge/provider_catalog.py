@@ -98,9 +98,23 @@ def context_metadata_for_model(model_selection: str, *, app_settings: AppSetting
     if spec is None:
         return {}
 
-    window = _context_int(spec.get("context_window_tokens"))
+    window = None
     chars_per_token = _context_float(spec.get("token_estimate_chars_per_token"))
-    source = "provider" if window is not None or chars_per_token is not None else ""
+    source = "provider" if chars_per_token is not None else ""
+
+    if spec.get("discover_model_metadata") is True:
+        cached = read_model_cache(app_settings=app_settings).get(provider_id, {})
+        cached_windows = cached.get("model_context_window_tokens")
+        if isinstance(cached_windows, Mapping):
+            discovered_window = _context_int(cached_windows.get(model_id))
+            if discovered_window is not None:
+                window = discovered_window
+                source = "discovered-provider-model"
+
+    provider_window = _context_int(spec.get("context_window_tokens"))
+    if provider_window is not None:
+        window = provider_window
+        source = "provider"
 
     model_windows = spec.get("model_context_window_tokens")
     if isinstance(model_windows, Mapping):

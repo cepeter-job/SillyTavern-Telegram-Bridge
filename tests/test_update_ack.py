@@ -290,7 +290,11 @@ def test_completion_notification_is_sent_only_after_successful_poll(tmp_path, mo
         return []
 
     services.telegram = SimpleNamespace(request=request, send_text=lambda *args: events.append("ack"))
-    services.background = SimpleNamespace(begin_shutdown=lambda: None, register_backlog_dispatcher=lambda x: None)
+    services.background = SimpleNamespace(
+        begin_shutdown=lambda: None,
+        submit=lambda *_args, **_kwargs: True,
+        register_backlog_dispatcher=lambda x: None,
+    )
     services.jobs = SimpleNamespace(recover=lambda *args, **kwargs: None)
     monkeypatch.setattr(lifecycle, "capture_deployment", lambda config: DeploymentIdentity("0.2.033", "a" * 40))
     monkeypatch.setattr(lifecycle, "install_bridge_signal_handlers", lambda *args: None)
@@ -325,7 +329,11 @@ def test_revision_mismatch_is_attempted_only_once_per_process(tmp_path, monkeypa
         return []
 
     services.telegram = SimpleNamespace(request=request, send_text=lambda *_args: None)
-    services.background = SimpleNamespace(begin_shutdown=lambda: None, register_backlog_dispatcher=lambda _x: None)
+    services.background = SimpleNamespace(
+        begin_shutdown=lambda: None,
+        submit=lambda *_args, **_kwargs: True,
+        register_backlog_dispatcher=lambda _x: None,
+    )
     services.jobs = SimpleNamespace(recover=lambda *args, **kwargs: None)
     monkeypatch.setattr(lifecycle, "capture_deployment", lambda _config: DeploymentIdentity("0.2.033", "a" * 40))
     monkeypatch.setattr(lifecycle, "install_bridge_signal_handlers", lambda *args: None)
@@ -367,7 +375,11 @@ def test_retryable_ack_uses_bounded_exponential_backoff(tmp_path, monkeypatch):
         return []
 
     services.telegram = SimpleNamespace(request=request, send_text=lambda *_args: None)
-    services.background = SimpleNamespace(begin_shutdown=lambda: None, register_backlog_dispatcher=lambda _x: None)
+    services.background = SimpleNamespace(
+        begin_shutdown=lambda: None,
+        submit=lambda *_args, **_kwargs: True,
+        register_backlog_dispatcher=lambda _x: None,
+    )
     services.jobs = SimpleNamespace(recover=lambda *args, **kwargs: None)
     monkeypatch.setattr(lifecycle, "capture_deployment", lambda _config: DeploymentIdentity("0.2.033", "a" * 40))
     monkeypatch.setattr(lifecycle, "install_bridge_signal_handlers", lambda *args: None)

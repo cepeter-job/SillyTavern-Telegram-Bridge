@@ -6,6 +6,7 @@ import json
 import logging
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Mapping
 
@@ -15,6 +16,7 @@ from bridge.provider_catalog import load_provider_catalog, load_routing_catalog,
 from bridge.provider_catalog_cache import (
     MAX_CACHE_BYTES,
     cache_timestamp,
+    context_window_value,
     model_ids,
     read_model_cache,
     update_model_cache,
@@ -22,6 +24,14 @@ from bridge.provider_catalog_cache import (
 from bridge.provider_errors import provider_category_for_status
 from bridge.provider_transport import opencode_muse_headers
 from bridge.settings import AppSettings
+
+_CONTEXT_FIELDS = (
+    "context_length",
+    "context_window_tokens",
+    "context_window",
+    "max_context_length",
+    "max_position_embeddings",
+)
 
 
 class _MissingCredential(ValueError):
@@ -37,6 +47,17 @@ def _endpoint(spec: Mapping[str, object], *, app_settings: AppSettings) -> str:
         raise ValueError("provider endpoint not configured")
     validate_provider_endpoint(endpoint, environ=app_settings.environ)
     return endpoint
+
+
+def _catalog_endpoint(spec: Mapping[str, object], *, app_settings: AppSettings) -> str:
+    explicit = str(spec.get("models_endpoint") or "").strip()
+    if not explicit:
+        return _endpoint(spec, app_settings=app_settings) + "/models"
+    parts = urllib.parse.urlsplit(explicit)
+    if parts.scheme not in {"http", "https"} or not parts.hostname or parts.username or parts.password:
+        raise ValueError("models_endpoint must be an HTTP(S) URL without credentials")
+    validate_provider_endpoint(explicit, environ=app_settings.environ)
+    return explicit
 
 
 def _headers(provider_id: str, spec: Mapping[str, object], *, app_settings: AppSettings) -> dict[str, str]:
@@ -80,42 +101,118 @@ def _failure_category(error: Exception) -> str:
     return "request_failed"
 
 
+def _is_due(
+    cached: Mapping[str, object],
+    *,
+    force: bool,
+    now: float,
+    attempt_field: str,
+    refreshed_field: str,
+    refresh_seconds: int,
+) -> bool:
+    if force:
+        return True
+    last_attempt = cache_timestamp(cached.get(attempt_field))
+    if last_attempt is None:
+        last_attempt = cache_timestamp(cached.get(refreshed_field))
+    return last_attempt is None or not 0 <= now - last_attempt < refresh_seconds
+
+
+def _context_windows_for_configured_models(
+    items: list[object],
+    configured_models: list[str],
+) -> dict[str, int]:
+    configured = set(configured_models)
+    result: dict[str, int] = {}
+    for item in items:
+        if not isinstance(item, Mapping):
+            continue
+        model = item.get("id")
+        if not isinstance(model, str) or model not in configured:
+            continue
+        for field in _CONTEXT_FIELDS:
+            value = context_window_value(item.get(field))
+            if value is not None:
+                result[model] = value
+                break
+    return result
+
+
 def refresh_model_catalog(
-    force: bool = False, provider_id: str | None = None, *, app_settings: AppSettings
+    force: bool = False,
+    provider_id: str | None = None,
+    *,
+    metadata_only: bool = False,
+    app_settings: AppSettings,
 ) -> tuple[dict, int, int]:
     providers = load_provider_catalog(app_settings=app_settings)
     cache = read_model_cache(app_settings=app_settings)
     updates: dict[str, dict[str, object]] = {}
     refreshed = failed = 0
-    for current_id, spec in providers.items():
+
+    for current_id, raw_spec in providers.items():
         if provider_id is not None and current_id != provider_id:
             continue
-        if not isinstance(spec, Mapping):
+        if not isinstance(raw_spec, Mapping):
             failed += 1
             continue
-        if spec.get("discover_models") is not True:
+        spec = raw_spec
+        discover_models = spec.get("discover_models") is True and not metadata_only
+        discover_metadata = spec.get("discover_model_metadata") is True
+        if metadata_only:
+            if not discover_metadata:
+                continue
+        elif not discover_models and not discover_metadata:
             continue
+
         cached = cache.get(current_id, {})
         if str(spec.get("transport") or "") == "openai_codex":
-            if not model_ids(spec.get("models")) and not model_ids(cached.get("models")):
+            if discover_models and not model_ids(spec.get("models")) and not model_ids(cached.get("models")):
                 failed += 1
             continue
+
         now = time.time()
-        last_attempt = cache_timestamp(cached.get("last_attempt_at")) or cache_timestamp(cached.get("refreshed_at"))
-        if not force and last_attempt is not None and 0 <= now - last_attempt < app_settings.model_refresh_seconds:
+        model_due = discover_models and _is_due(
+            cached,
+            force=force,
+            now=now,
+            attempt_field="last_attempt_at",
+            refreshed_field="refreshed_at",
+            refresh_seconds=app_settings.model_refresh_seconds,
+        )
+        metadata_due = discover_metadata and _is_due(
+            cached,
+            force=force,
+            now=now,
+            attempt_field="metadata_last_attempt_at",
+            refreshed_field="metadata_refreshed_at",
+            refresh_seconds=app_settings.model_refresh_seconds,
+        )
+        if not model_due and not metadata_due:
             continue
-        updated: dict[str, object] = {**cached, "last_attempt_at": now}
+
+        updated: dict[str, object] = {}
+        if model_due:
+            updated["last_attempt_at"] = now
+        if metadata_due:
+            updated["metadata_last_attempt_at"] = now
+
         error: str | None = None
         try:
-            endpoint = _endpoint(spec, app_settings=app_settings)
+            endpoint = _catalog_endpoint(spec, app_settings=app_settings)
             headers = _headers(current_id, spec, app_settings=app_settings)
         except _MissingCredential:
             error = "missing_credential"
         except Exception:
             error = "configuration"
+
         if error is None:
             try:
-                request = urllib.request.Request(endpoint + "/models", headers=headers, method="GET")  # noqa: S310 -- DNS-pinned strict_urlopen only
+                request = urllib.request.Request(  # noqa: S310 -- validated endpoint; DNS-pinned strict_urlopen only
+                    endpoint,
+                    headers=headers,
+                    method="GET",
+                )
                 with strict_urlopen(request, timeout=30, environ=app_settings.environ) as response:
                     content = response.read(MAX_CACHE_BYTES + 1)
                 if len(content) > MAX_CACHE_BYTES:
@@ -123,20 +220,41 @@ def refresh_model_catalog(
                 payload = json.loads(content)
                 if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
                     raise ValueError("invalid models response")
-                models = model_ids([item.get("id") for item in payload["data"] if isinstance(item, dict)])
-                if models:
+                items = payload["data"]
+                models = model_ids([item.get("id") for item in items if isinstance(item, Mapping)])
+                model_error = "empty_catalog" if model_due and not models else None
+                if model_due and models:
                     updated.update(models=models, refreshed_at=now, last_error=None)
-                    refreshed += 1
-                else:
-                    error = "empty_catalog"
+                if metadata_due:
+                    updated.update(
+                        model_context_window_tokens=_context_windows_for_configured_models(
+                            items,
+                            model_ids(spec.get("models")),
+                        ),
+                        metadata_refreshed_at=now,
+                        metadata_last_error=None,
+                    )
             except Exception as exc:
                 error = _failure_category(exc)
+                model_error = None
+
         if error is not None:
-            updated["last_error"] = error
+            if model_due:
+                updated["last_error"] = error
+            if metadata_due:
+                updated["metadata_last_error"] = error
             failed += 1
-            logging.info("Model discovery failed for provider %s (%s)", current_id, error)
-        cache[current_id] = updated
+            logging.info("Provider catalog refresh failed for provider %s (%s)", current_id, error)
+        elif model_error is not None:
+            updated["last_error"] = model_error
+            failed += 1
+            logging.info("Provider catalog refresh failed for provider %s (%s)", current_id, model_error)
+        else:
+            refreshed += 1
+
+        cache[current_id] = {**cached, **updated}
         updates[current_id] = updated
+
     update_model_cache(updates, app_settings=app_settings)
     return {"providers": merge_model_catalog(providers, cache)}, refreshed, failed
 
@@ -179,7 +297,7 @@ def probe_provider(provider_id: str, raw_spec: object, *, app_settings: AppSetti
                 "stream": True,
             }
             suffix = "/messages" if transport == "anthropic_messages" else "/chat/completions"
-            request = urllib.request.Request(  # noqa: S310 -- DNS-pinned strict_urlopen only
+            request = urllib.request.Request(  # noqa: S310 -- validated endpoint; DNS-pinned strict_urlopen only
                 endpoint + suffix,
                 data=json.dumps(body).encode(),
                 headers={**headers, "Accept": "text/event-stream", "Content-Type": "application/json"},
@@ -189,7 +307,11 @@ def probe_provider(provider_id: str, raw_spec: object, *, app_settings: AppSetti
                 first_byte = response.read(1)
             status = "inference stream opened (completion not validated)" if first_byte else "inference stream empty"
             return provider_id, name, status
-        request = urllib.request.Request(endpoint + "/models", headers=headers, method="GET")  # noqa: S310 -- DNS-pinned strict_urlopen only
+        request = urllib.request.Request(  # noqa: S310 -- validated endpoint; DNS-pinned strict_urlopen only
+            _catalog_endpoint(spec, app_settings=app_settings),
+            headers=headers,
+            method="GET",
+        )
         with strict_urlopen(request, timeout=10, environ=app_settings.environ) as response:
             return provider_id, name, f"catalog reachable (HTTP {response.status})"
     except urllib.error.HTTPError as exc:

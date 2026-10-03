@@ -1,7 +1,9 @@
 import dataclasses
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from application_test_setup import make_test_persona_service
 from settings_test_support import SettingsTestCase
@@ -16,6 +18,140 @@ class ContextWindowHardeningTests(SettingsTestCase):
         path = root / "providers.yaml"
         path.write_text(body, encoding="utf-8")
         return dataclasses.replace(self.app_settings_builder.build(), provider_config_file=path)
+
+    def _write_cache(self, settings, payload):
+        settings.model_cache_file.parent.mkdir(parents=True, exist_ok=True)
+        settings.model_cache_file.write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_discovered_context_metadata_overrides_global_fallback(self):
+        settings = self._catalog_settings(
+            "providers:\n  demo:\n    models: [model-a]\n    discover_model_metadata: true\n"
+        )
+        self._write_cache(
+            settings,
+            {
+                "demo": {
+                    "models": [],
+                    "model_context_window_tokens": {"model-a": 131072},
+                    "metadata_refreshed_at": 1,
+                    "metadata_last_attempt_at": 1,
+                }
+            },
+        )
+
+        profile = context.context_profile("demo::model-a", app_settings=settings)
+
+        self.assertEqual(profile.window_tokens, 131072)
+        self.assertEqual(profile.source, "discovered-provider-model")
+
+    def test_explicit_provider_context_beats_discovered_metadata(self):
+        settings = self._catalog_settings(
+            "providers:\n"
+            "  demo:\n"
+            "    models: [model-a]\n"
+            "    discover_model_metadata: true\n"
+            "    context_window_tokens: 65536\n"
+        )
+        self._write_cache(
+            settings,
+            {
+                "demo": {
+                    "models": [],
+                    "model_context_window_tokens": {"model-a": 131072},
+                    "metadata_refreshed_at": 1,
+                    "metadata_last_attempt_at": 1,
+                }
+            },
+        )
+
+        profile = context.context_profile("demo::model-a", app_settings=settings)
+
+        self.assertEqual(profile.window_tokens, 65536)
+        self.assertEqual(profile.source, "provider")
+
+    def test_explicit_model_context_beats_provider_and_discovered_metadata(self):
+        settings = self._catalog_settings(
+            "providers:\n"
+            "  demo:\n"
+            "    models: [model-a]\n"
+            "    discover_model_metadata: true\n"
+            "    context_window_tokens: 65536\n"
+            "    model_context_window_tokens:\n"
+            "      model-a: 131072\n"
+        )
+        self._write_cache(
+            settings,
+            {
+                "demo": {
+                    "models": [],
+                    "model_context_window_tokens": {"model-a": 262144},
+                    "metadata_refreshed_at": 1,
+                    "metadata_last_attempt_at": 1,
+                }
+            },
+        )
+
+        profile = context.context_profile("demo::model-a", app_settings=settings)
+
+        self.assertEqual(profile.window_tokens, 131072)
+        self.assertEqual(profile.source, "provider-model")
+
+    def test_discovered_metadata_is_ignored_when_flag_off_or_model_unconfigured(self):
+        settings = self._catalog_settings("providers:\n  demo:\n    models: [model-a]\n")
+        self._write_cache(
+            settings,
+            {
+                "demo": {
+                    "models": [],
+                    "model_context_window_tokens": {"model-a": 131072, "other": 262144},
+                    "metadata_refreshed_at": 1,
+                    "metadata_last_attempt_at": 1,
+                }
+            },
+        )
+        disabled = context.context_profile("demo::model-a", app_settings=settings)
+
+        enabled = self._catalog_settings(
+            "providers:\n  demo:\n    models: [model-a]\n    discover_model_metadata: true\n"
+        )
+        self._write_cache(
+            enabled,
+            {
+                "demo": {
+                    "models": [],
+                    "model_context_window_tokens": {"other": 262144},
+                    "metadata_refreshed_at": 1,
+                    "metadata_last_attempt_at": 1,
+                }
+            },
+        )
+        unconfigured = context.context_profile("demo::other", app_settings=enabled)
+
+        self.assertEqual(disabled.window_tokens, settings.context_window_tokens)
+        self.assertEqual(disabled.source, "global-fallback")
+        self.assertEqual(unconfigured.window_tokens, enabled.context_window_tokens)
+        self.assertEqual(unconfigured.source, "global-fallback")
+
+    def test_context_diagnostics_accepts_discovered_provider_model_source(self):
+        import bridge.context_diagnostics as diagnostics
+
+        settings = self.app_settings_builder.build()
+        session = {"session_id": "session", "model_id": "unknown"}
+        live = context.ContextProfile(32768, 4096, 656, 28016, 4.0, "global-fallback")
+        saved = json.dumps({"source": "discovered-provider-model"})
+
+        with (
+            mock.patch.object(diagnostics, "context_profile", return_value=live),
+            mock.patch.object(diagnostics, "get_meta", return_value=saved),
+        ):
+            snapshot = diagnostics.context_diagnostics_snapshot(
+                mock.Mock(),
+                "chat",
+                session,
+                app_settings=settings,
+            )
+
+        self.assertEqual(snapshot["source"], "discovered-provider-model")
 
     def test_provider_and_model_context_metadata_override_global_fallback(self):
         settings = self._catalog_settings(

@@ -76,6 +76,10 @@ class ChatSubmit(Protocol):
     ) -> bool: ...
 
 
+class BackgroundSubmit(Protocol):
+    def __call__(self, label: str, function: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs) -> bool: ...
+
+
 class ProviderProbes(Protocol):
     def check(self, provider_id: str | None = None) -> list[tuple[str, str, str]]: ...
 

@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from bridge.settings import AppSettings
 
 MAX_CACHE_BYTES = 2_000_000
+MAX_MODEL_CONTEXT_WINDOWS = 500
 _CACHE_LOCK = threading.RLock()
 _ERRORS = frozenset(
     {
@@ -32,6 +33,15 @@ _ERRORS = frozenset(
         "request_failed",
     }
 )
+_MODEL_FIELDS = frozenset({"models", "refreshed_at", "last_attempt_at", "last_error"})
+_METADATA_FIELDS = frozenset(
+    {
+        "model_context_window_tokens",
+        "metadata_refreshed_at",
+        "metadata_last_attempt_at",
+        "metadata_last_error",
+    }
+)
 
 
 def model_ids(raw: object) -> list[str]:
@@ -48,6 +58,31 @@ def model_ids(raw: object) -> list[str]:
     )
 
 
+def context_window_value(raw: object) -> int | None:
+    if isinstance(raw, bool) or not isinstance(raw, (str, int, float)):
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return value if 4096 <= value <= 1_000_000 else None
+
+
+def model_context_windows(raw: object) -> dict[str, int]:
+    if not isinstance(raw, Mapping):
+        return {}
+    result: dict[str, int] = {}
+    for model, value in raw.items():
+        if len(result) >= MAX_MODEL_CONTEXT_WINDOWS:
+            break
+        if model_ids([model]) != [model]:
+            continue
+        parsed = context_window_value(value)
+        if parsed is not None:
+            result[model] = parsed
+    return result
+
+
 def cache_timestamp(value: object) -> float | None:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return None
@@ -56,6 +91,21 @@ def cache_timestamp(value: object) -> float | None:
     except OverflowError:
         return None
     return number if math.isfinite(number) and number >= 0 else None
+
+
+def _clean_cache_entry(entry: Mapping[str, object]) -> dict[str, object]:
+    clean: dict[str, object] = {"models": model_ids(entry.get("models"))}
+    if "model_context_window_tokens" in entry and isinstance(entry.get("model_context_window_tokens"), Mapping):
+        clean["model_context_window_tokens"] = model_context_windows(entry.get("model_context_window_tokens"))
+    for name in ("refreshed_at", "last_attempt_at", "metadata_refreshed_at", "metadata_last_attempt_at"):
+        stamp = cache_timestamp(entry.get(name))
+        if stamp is not None:
+            clean[name] = stamp
+    for name in ("last_error", "metadata_last_error"):
+        error = entry.get(name)
+        if isinstance(error, str) and error in _ERRORS:
+            clean[name] = error
+    return clean
 
 
 def read_model_cache(*, app_settings: AppSettings) -> dict[str, dict[str, object]]:
@@ -73,18 +123,29 @@ def read_model_cache(*, app_settings: AppSettings) -> dict[str, dict[str, object
     for provider, entry in raw.items():
         if not isinstance(provider, str) or not isinstance(entry, dict):
             continue
-        clean: dict[str, object] = {"models": model_ids(entry.get("models"))}
-        for name in ("refreshed_at", "last_attempt_at"):
-            stamp = cache_timestamp(entry.get(name))
-            if stamp is not None:
-                clean[name] = stamp
-        error = entry.get("last_error")
-        if isinstance(error, str) and error in _ERRORS:
-            clean["last_error"] = error
-        result[provider] = clean
+        result[provider] = _clean_cache_entry(entry)
         if len(result) >= 1024:
             break
     return result
+
+
+def _merge_dimension(
+    merged: dict[str, object],
+    previous: Mapping[str, object],
+    incoming: Mapping[str, object],
+    *,
+    fields: frozenset[str],
+    attempt_field: str,
+) -> None:
+    if not any(field in incoming for field in fields):
+        return
+    incoming_attempt = cache_timestamp(incoming.get(attempt_field)) or 0
+    previous_attempt = cache_timestamp(previous.get(attempt_field)) or 0
+    if incoming_attempt < previous_attempt:
+        return
+    for field in fields:
+        if field in incoming:
+            merged[field] = incoming[field]
 
 
 def update_model_cache(updates: Mapping[str, dict[str, object]], *, app_settings: AppSettings) -> None:
@@ -95,12 +156,25 @@ def update_model_cache(updates: Mapping[str, dict[str, object]], *, app_settings
         with _CACHE_LOCK:
             cache = read_model_cache(app_settings=app_settings)
             for provider, entry in updates.items():
-                previous = cache.get(provider, {})
-                if (cache_timestamp(entry.get("last_attempt_at")) or 0) < (
-                    cache_timestamp(previous.get("last_attempt_at")) or 0
-                ):
+                if not isinstance(provider, str) or not isinstance(entry, Mapping):
                     continue
-                cache[provider] = {**previous, **entry}
+                previous = cache.get(provider, {})
+                merged: dict[str, object] = dict(previous)
+                _merge_dimension(
+                    merged,
+                    previous,
+                    entry,
+                    fields=_MODEL_FIELDS,
+                    attempt_field="last_attempt_at",
+                )
+                _merge_dimension(
+                    merged,
+                    previous,
+                    entry,
+                    fields=_METADATA_FIELDS,
+                    attempt_field="metadata_last_attempt_at",
+                )
+                cache[provider] = _clean_cache_entry(merged)
             data = json.dumps(cache, sort_keys=True, indent=2).encode()
             if len(data) > MAX_CACHE_BYTES:
                 raise ValueError("discovery cache exceeds size limit")

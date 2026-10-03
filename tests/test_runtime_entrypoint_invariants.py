@@ -12,6 +12,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
 from settings_test_support import SettingsTestCase
 
 REPO_ROOT = Path(__file__).parents[1]
@@ -171,8 +172,16 @@ if __name__ == "__main__":
     unittest.main()
 
 
-def _exercise_runtime_memory_diagnostics(monkeypatch, tmp_path, diagnostics_type, injected=None, events=None):
+def _exercise_runtime_memory_diagnostics(
+    monkeypatch,
+    tmp_path,
+    diagnostics_type,
+    injected=None,
+    events=None,
+    background_submit=None,
+):
     import bridge.runtime_lifecycle as lifecycle
+    from bridge.settings import load_app_settings
 
     events = [] if events is None else events
     database = sqlite3.connect(":memory:")
@@ -185,12 +194,7 @@ def _exercise_runtime_memory_diagnostics(monkeypatch, tmp_path, diagnostics_type
             return []
         return {}
 
-    config = SimpleNamespace(
-        bot_token="token",
-        allowed_users=frozenset(),
-        bridge_home=tmp_path / "bridge-home",
-        environ={},
-    )
+    config = load_app_settings({}, home=tmp_path)
     services = SimpleNamespace(
         config=config,
         db_factory=lambda: database,
@@ -198,6 +202,7 @@ def _exercise_runtime_memory_diagnostics(monkeypatch, tmp_path, diagnostics_type
         background=SimpleNamespace(
             begin_shutdown=lambda: None,
             register_backlog_dispatcher=lambda _callback: None,
+            submit=background_submit or (lambda *_args, **_kwargs: True),
         ),
         jobs=SimpleNamespace(recover=lambda *_args, **_kwargs: None),
         sync=object(),
@@ -219,6 +224,55 @@ def _exercise_runtime_memory_diagnostics(monkeypatch, tmp_path, diagnostics_type
     finally:
         lifecycle._SHUTDOWN_EVENT.clear()
     return events
+
+
+def test_runtime_schedules_nonblocking_metadata_refresh_before_first_poll(monkeypatch, tmp_path):
+    import bridge.provider_discovery as discovery
+
+    events = []
+    submitted = []
+
+    def submit(label, function, *args, **kwargs):
+        events.append("submit")
+        submitted.append((label, function, args, kwargs))
+        return True
+
+    class Recorder:
+        def start(self):
+            return True
+
+        def stop(self, timeout=1.0):
+            return True
+
+    def diagnostics_type(_events):
+        return Recorder
+
+    result = _exercise_runtime_memory_diagnostics(
+        monkeypatch,
+        tmp_path,
+        diagnostics_type,
+        injected=Recorder(),
+        events=events,
+        background_submit=submit,
+    )
+
+    assert result is events
+    assert events.index("submit") < events.index("poll")
+    assert len(submitted) == 1
+    label, function, args, kwargs = submitted[0]
+    assert label == "provider_catalog_refresh"
+    assert function is discovery.refresh_model_catalog
+    assert args == ()
+    assert kwargs["metadata_only"] is True
+
+    monkeypatch.setattr(
+        discovery,
+        "strict_urlopen",
+        lambda *a, **kw: pytest.fail("legacy config attempted provider metadata network I/O"),
+    )
+    config, refreshed, failed = function(*args, **kwargs)
+    assert config == {"providers": {}}
+    assert (refreshed, failed) == (0, 0)
 
 
 def test_runtime_memory_diagnostics_start_before_poll_and_stop_after(monkeypatch, tmp_path):

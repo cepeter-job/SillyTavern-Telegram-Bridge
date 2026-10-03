@@ -64,6 +64,7 @@ def test_empty_catalog_panel_explains_how_to_add_models(tmp_path, monkeypatch):
     text, markup = calls[-1][2:4]
     assert "No provider models available" in text
     assert "SILLYTAVERN_PROVIDER_CONFIG" in text
+    assert "Refresh provider catalog" in text
     callbacks = [button["callback_data"] for row in markup["inline_keyboard"] for button in row]
     assert "provider:health" in callbacks
     assert "provider:refresh" in callbacks

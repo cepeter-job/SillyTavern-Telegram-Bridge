@@ -18,6 +18,9 @@ providers:
     # streaming: true # Enable only when the endpoint returns SSE chunks.
     models: # Model IDs accepted by this provider.
       - provider-one/model-a
+    discover_models: false # Keep the configured model list pinned.
+    discover_model_metadata: true # Best-effort context metadata for configured models only.
+    # models_endpoint: https://provider-one.example/v1/models?detailed=true
     # Optional context metadata. Provider defaults apply to every listed model;
     # per-model maps override only the named model.
     # context_window_tokens: 131072

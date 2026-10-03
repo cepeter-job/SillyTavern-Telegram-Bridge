@@ -62,7 +62,7 @@ def send_model_menu(
         rows.append(
             [
                 {"text": "🩺 Provider health", "callback_data": "provider:health"},
-                {"text": "🔄 Refresh models", "callback_data": "provider:refresh"},
+                {"text": "🔄 Refresh provider catalog", "callback_data": "provider:refresh"},
             ]
         )
         rows.append(
@@ -75,7 +75,7 @@ def send_model_menu(
         if not options:
             text += (
                 "\n\nNo provider models available. Configure models in the private YAML file selected "
-                "by SILLYTAVERN_PROVIDER_CONFIG, or enable discover_models and use Refresh models."
+                "by SILLYTAVERN_PROVIDER_CONFIG. Use Refresh provider catalog for enabled discovery."
             )
     else:
         label, models, is_supported = groups.get(provider_id, (provider_id, [], False))
@@ -324,7 +324,7 @@ def send_provider_health_menu(
         rows.append([{"text": "Test this provider again", "callback_data": f"provider:maint:test:{handle}"}])
     else:
         rows.append([{"text": "Run probes again", "callback_data": "provider:health"}])
-    rows.append([{"text": "Refresh models", "callback_data": "provider:refresh"}])
+    rows.append([{"text": "Refresh provider catalog", "callback_data": "provider:refresh"}])
     rows.append(
         [
             {"text": "Back to providers", "callback_data": "provider:back"},

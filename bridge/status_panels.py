@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from bridge.card_content import active_world_files, system_prompt_label
+from bridge.context_diagnostics import context_diagnostics_snapshot
 from bridge.expressions import expression_mode_key
 from bridge.generation_settings import get_generation_settings
 from bridge.group_service import GroupService
@@ -18,6 +19,36 @@ from bridge.persona_sync import persona_name
 from bridge.rag_query import rag_mode
 from bridge.rag_repository import data_bank_documents
 from bridge.settings import AppSettings
+
+
+def _context_status_text(diagnostics: dict[str, object]) -> str:
+    budget = int(diagnostics.get("budget_tokens") or 0)
+    final = diagnostics.get("final_tokens")
+    usage = diagnostics.get("usage_percent")
+    if isinstance(final, int):
+        input_text = f"{final:,} / {budget:,} input tokens"
+        if isinstance(usage, int):
+            input_text += f" ({usage}%)"
+    else:
+        input_text = f"not recorded / {budget:,} input tokens"
+    source = str(diagnostics.get("source") or "global-fallback").replace("-", " ")
+    compacted = diagnostics.get("compacted") is True
+    details: list[str] = []
+    dropped = int(diagnostics.get("dropped_history") or 0)
+    if dropped:
+        details.append(f"{dropped} history dropped")
+    trimmed = diagnostics.get("trimmed_components")
+    if isinstance(trimmed, list) and trimmed:
+        details.append(f"{', '.join(str(item) for item in trimmed)} trimmed")
+    compaction = "yes" if compacted else "no"
+    if details:
+        compaction += f" ({'; '.join(details)})"
+    return (
+        "📐 Context budget\n"
+        f"• Input: {input_text}\n"
+        f"• Window: {int(diagnostics.get('window_tokens') or 0):,} tokens ({source})\n"
+        f"• Compaction: {compaction}"
+    )
 
 
 def status_text(
@@ -48,6 +79,9 @@ def status_text(
     group_state_text = f"{'on' if group['enabled'] else 'off'} ({', '.join(group_labels) if group_labels else 'none'})"
     expression_mode = get_meta(db, expression_mode_key(chat_id, session["session_id"]), "off")
     utility_model = task_model_for_session(db, chat_id, session, "utility", app_settings=app_settings)
+    context_status = _context_status_text(
+        context_diagnostics_snapshot(db, str(chat_id), session, app_settings=app_settings)
+    )
     return (
         "📊 Session status\n"
         "━━━━━━━━━━━━━━━━━━\n"
@@ -58,6 +92,7 @@ def status_text(
         f"🛠️ Utility model: {utility_model}\n"
         f"🌐 Response language: {response_language_label(session.get('response_language') or 'auto')}\n"
         f"🖋️ Humanizer: {humanizer_label(session.get('humanizer'))}\n\n"
+        f"{context_status}\n\n"
         "📚 Native context\n"
         f"• Persona: {persona}\n"
         f"• World Info: {world}\n"

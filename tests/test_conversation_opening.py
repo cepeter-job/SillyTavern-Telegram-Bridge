@@ -268,4 +268,4 @@ def test_failed_greeting_delivery_reuses_committed_row(novel_db, monkeypatch):
         app_settings=settings,
     )
     assert sent == ["Original"]
-    assert db.execute("SELECT content FROM messages").fetchall() == [("*Original*",)]
+    assert db.execute("SELECT content FROM messages").fetchall() == [("Original",)]

@@ -208,7 +208,7 @@ def send_character_greeting(
         send_reply(
             token,
             chat_id,
-            normalize_roleplay_transport(str(row[1])),
+            normalize_roleplay_transport(str(row[1]), preserve_authored_unquoted_dialogue=True),
             db,
             None,
             int(row[0]),
@@ -239,14 +239,18 @@ def send_character_greeting(
             if delivery_complete(db, int(opening["rowid"])):
                 record_operation(db, operation_id, operation_kind)
                 return False
-            rowid, greeting = int(opening["rowid"]), normalize_roleplay_transport(str(row[0]))
+            rowid, greeting = (
+                int(opening["rowid"]),
+                normalize_roleplay_transport(str(row[0]), preserve_authored_unquoted_dialogue=True),
+            )
         else:
             options = greeting_options(fields)
             if not options:
                 return False
             selected_index = random.randrange(len(options)) if index is None else int(index)  # noqa: S311 -- greeting selection
             greeting = normalize_roleplay_transport(
-                telegram_safe_output(render_greeting(fields, user_name, selected_index, app_settings=app_settings))
+                telegram_safe_output(render_greeting(fields, user_name, selected_index, app_settings=app_settings)),
+                preserve_authored_unquoted_dialogue=True,
             )
             if not greeting:
                 return False

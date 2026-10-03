@@ -7,6 +7,7 @@ import re
 _CODE = re.compile(r"```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`")
 _CODE_TOKEN = re.compile(r"\x00RPCODE(?P<index>\d+)\x00")
 _SINGLE_STAR = re.compile(r"(?<!\*)\*(?!\*)")
+_ROLEPLAY_ITALIC = re.compile(r"(?<!\*)\*(?![\s*])(?P<body>.*?)(?<![\s*])\*(?!\*)", re.DOTALL)
 _QUOTE_PAIRS = {'"': '"', "“": "”", "«": "»"}
 
 
@@ -52,8 +53,12 @@ def _wrap_narration(segment: str) -> str:
     return f"{leading}*{body}*{trailing}"
 
 
-def normalize_roleplay_transport(text: str) -> str:
-    """Make unquoted roleplay prose italic transport spans and quoted speech normal."""
+def normalize_roleplay_transport(
+    text: str,
+    *,
+    preserve_authored_unquoted_dialogue: bool = False,
+) -> str:
+    """Normalize roleplay transport while optionally preserving authored ST syntax."""
     protected_code: list[str] = []
 
     def protect_code(match: re.Match[str]) -> str:
@@ -61,10 +66,24 @@ def normalize_roleplay_transport(text: str) -> str:
         protected_code.append(match.group(0))
         return token
 
+    def restore_code(value: str) -> str:
+        for index, code in enumerate(protected_code):
+            value = value.replace(f"\x00RPCODE{index}\x00", code)
+        return value
+
     source = _CODE.sub(protect_code, str(text or ""))
+    if preserve_authored_unquoted_dialogue:
+        single_stars = list(_SINGLE_STAR.finditer(source))
+        valid_spans = list(_ROLEPLAY_ITALIC.finditer(source))
+        if valid_spans and len(single_stars) == 2 * len(valid_spans):
+            return restore_code(source)
+        stripped = _SINGLE_STAR.sub("", source)
+        if not _quoted_speech_ranges(stripped):
+            return restore_code(source)
+
     source = _SINGLE_STAR.sub("", source)
     if not source.strip():
-        return source
+        return restore_code(source)
 
     protected_ranges = _quoted_speech_ranges(source)
     protected_ranges.extend((match.start(), match.end()) for match in _CODE_TOKEN.finditer(source))
@@ -82,7 +101,4 @@ def normalize_roleplay_transport(text: str) -> str:
     if cursor < len(source):
         parts.append(_wrap_narration(source[cursor:]))
 
-    result = "".join(parts)
-    for index, code in enumerate(protected_code):
-        result = result.replace(f"\x00RPCODE{index}\x00", code)
-    return result
+    return restore_code("".join(parts))

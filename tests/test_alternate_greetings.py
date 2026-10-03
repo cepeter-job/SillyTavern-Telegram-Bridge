@@ -75,7 +75,51 @@ class AlternateGreetingTests(SettingsTestCase):
             _m_greetings.random.randrange = original_randrange
         self.assertEqual(sent, ["Alt User"])
         row = self.db.execute("SELECT role, content FROM messages").fetchone()
-        self.assertEqual(tuple(row), ("assistant", "*Alt User*"))
+        self.assertEqual(tuple(row), ("assistant", "Alt User"))
+
+    def test_first_message_preserves_authored_action_and_unquoted_dialogue(self):
+        sent = []
+        original_send = greeting_delivery.send_text
+
+        def capture(_token, _chat_id, text, acknowledged_chunk=None, entities=None):
+            sent.append((text, entities))
+            if acknowledged_chunk:
+                acknowledged_chunk(87)
+            return [87]
+
+        greeting_delivery.send_text = capture
+        try:
+            fields = {
+                "name": "Character",
+                "first_mes": "*She waves.* Hello there!",
+                "alternate_greetings": "[]",
+            }
+            self.assertTrue(
+                _m_greetings.send_character_greeting(
+                    self.db,
+                    "token",
+                    "chat",
+                    fields,
+                    self.session["session_id"],
+                    "User",
+                    0,
+                    app_settings=self.app_settings_builder.build(),
+                )
+            )
+        finally:
+            greeting_delivery.send_text = original_send
+
+        row = self.db.execute("SELECT role, content FROM messages").fetchone()
+        self.assertEqual(tuple(row), ("assistant", "*She waves.* Hello there!"))
+        self.assertEqual(
+            sent,
+            [
+                (
+                    "She waves. Hello there!",
+                    [{"type": "italic", "offset": 0, "length": 10}],
+                )
+            ],
+        )
 
     def test_first_message_normalizes_narration_and_keeps_dialogue_normal(self):
         sent = []
@@ -241,7 +285,7 @@ class AlternateGreetingTests(SettingsTestCase):
         self.assertEqual(sent, ["Alt"])
         self.assertIn("Started with Alternate 2", answers)
         rows = self.db.execute("SELECT role, content FROM messages").fetchall()
-        self.assertEqual([tuple(row) for row in rows], [("assistant", "*Alt*")])
+        self.assertEqual([tuple(row) for row in rows], [("assistant", "Alt")])
         self.assertTrue(_m_callbacks.is_session_scoped_panel_callback("greeting:preview:0:0"))
 
 

@@ -32,15 +32,23 @@ function memoryHealthCard(memory={}) {
 function contextTokens(value) {
   return Number.isFinite(value)?Math.round(value).toLocaleString()+' tokens':'Not recorded';
 }
+function contextInputUsage(context={}) {
+  const budget=Number.isFinite(context.budget_tokens)?Math.round(context.budget_tokens):null;
+  const final=Number.isFinite(context.final_tokens)?Math.round(context.final_tokens):null;
+  if(final===null)return 'Not assembled yet / '+(budget===null?'unknown':budget.toLocaleString())+' input tokens';
+  let percent=Number.isFinite(context.usage_percent)?Math.round(context.usage_percent):null;
+  if(percent===null&&budget>0)percent=Math.round(final*100/budget);
+  return final.toLocaleString()+' / '+(budget===null?'unknown':budget.toLocaleString())+' input tokens'+(percent===null?'':' ('+percent+'%)');
+}
 function contextHealthCard(context={}) {
-  const final=Number.isFinite(context.final_tokens)?contextTokens(context.final_tokens):'Not assembled yet';
-  const budget=contextTokens(context.budget_tokens),window=contextTokens(context.window_tokens);
-  const trimmed=['memory','rag','npc','summary'].filter(key=>context[key+'_trimmed']).join(', ')||'none';
+  const window=contextTokens(context.window_tokens);
+  const trimmed=Array.isArray(context.trimmed_components)?context.trimmed_components.join(', '):['memory','rag','npc','summary'].filter(key=>context[key+'_trimmed']).join(', ');
+  const compacted=context.compacted===true||Number(context.dropped_history||0)>0||Boolean(trimmed);
   return healthCard('models','Context',
     el('span',{class:'badge'},String(context.source||'global-fallback').replaceAll('-',' ')),
-    el('p',{},final+' / '+budget),
-    el('p',{class:'muted'},'Window '+window+' · Safety '+contextTokens(context.safety_margin_tokens)),
-    el('p',{class:'muted'},'Dropped history '+(context.dropped_history||0)+' · Trimmed '+trimmed));
+    el('p',{},contextInputUsage(context)),
+    el('p',{class:'muted'},'Window '+window+' · Output reserve '+contextTokens(context.output_reserve_tokens)+' · Safety '+contextTokens(context.safety_margin_tokens)),
+    el('p',{class:'muted'},(compacted?'Compacted':'Not compacted')+' · Dropped history '+(context.dropped_history||0)+' · Trimmed '+(trimmed||'none')));
 }
 function details(data) {
   return el('div',{class:'grid'},healthCard('system','Bridge',el('p',{},'Running: v'+data.deployment.version),el('p',{class:'muted'},'Revision: '+(data.deployment.commit.slice(0,12)||'unverified')),el('p',{},'Uptime: '+Math.floor(data.uptime_seconds/60)+' minutes'),el('p',{class:'muted'},'Installed files: v'+data.installed_version)),

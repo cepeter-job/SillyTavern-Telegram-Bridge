@@ -22,6 +22,9 @@ def test_status_is_scoped_and_does_not_expose_runtime_secrets(tmp_path):
     assert s.config.bot_token not in json.dumps(result)
     assert str(tmp_path) not in json.dumps(result)
     assert result["telegram"]["state"] == "unobserved"
+    assert result["context_diagnostics"]["usage_percent"] is None
+    assert result["context_diagnostics"]["compacted"] is False
+    assert result["context_diagnostics"]["trimmed_components"] == []
 
 
 def test_status_includes_memory_diagnostics_summary(tmp_path):
@@ -302,7 +305,12 @@ def test_status_includes_last_context_window_diagnostics(tmp_path):
         db.commit()
 
     result = system_status(s, w, {})
-    assert result["context_diagnostics"]["window_tokens"] == 131072
-    assert result["context_diagnostics"]["final_tokens"] == 54321
-    assert result["context_diagnostics"]["dropped_history"] == 8
-    assert result["context_diagnostics"]["memory_trimmed"] is True
+    diagnostics = result["context_diagnostics"]
+    assert diagnostics["window_tokens"] == 131072
+    assert diagnostics["budget_tokens"] == 122000
+    assert diagnostics["final_tokens"] == 54321
+    assert diagnostics["usage_percent"] == 45
+    assert diagnostics["compacted"] is True
+    assert diagnostics["trimmed_components"] == ["memory"]
+    assert diagnostics["dropped_history"] == 8
+    assert diagnostics["memory_trimmed"] is True

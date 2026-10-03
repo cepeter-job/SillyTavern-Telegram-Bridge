@@ -121,7 +121,7 @@ The Narrative Style default is **per Telegram user**, not bot-wide.
 
 For a private chat, the authenticated user owns the default. For a Forum Topic/group setup, the initiating user's default is used only to prefill the setup wizard. Once Apply succeeds, the group session owns its own Narrative Style.
 
-Changing a personal default later never modifies an existing story.
+Changing a personal default later never modifies an existing story. The personal default is a setup prefill, not a live inheritance link to active sessions.
 
 The Narrative panel provides an explicit **Save as my default** action. Selecting a style for one session does not silently overwrite the personal default.
 
@@ -737,6 +737,10 @@ FINALE
 
 Without confirmation mode, validated finale readiness may transition directly to FINALE.
 
+Ending Mode, Ending Goal, and finale-confirmation settings remain editable only until FINALE begins. Once FINALE starts, the pre-finale checkpoint and ending path are immutable for that original session.
+
+When confirmation is required, FINALE_READY is bound to the story revision that produced it. If the user continues the story instead of confirming, that readiness becomes stale, returns to OPEN, and must be reassessed from the newer committed story rather than repeatedly prompting on an obsolete decision.
+
 The bridge owns allowed lifecycle transitions. The Director proposes; the validator decides whether the transition is legal.
 
 ## 23. Pre-finale checkpoint
@@ -774,9 +778,9 @@ synchronous reconciliation
   ↓
 RESOLUTION_COMMITTED
   ↓
-Director creates epilogue brief
-  ↓
 EPILOGUE_PENDING
+  ↓
+Director creates epilogue brief
   ↓
 Story model writes separate epilogue
   ↓
@@ -788,6 +792,8 @@ CLOSED
 ```
 
 The Director may propose required thematic/narrative resolutions, but reconciliation decides what the committed finale actually established.
+
+FINALE may span multiple committed Story turns. The bridge advances to RESOLUTION_COMMITTED only when current reconciliation confirms the required resolution conditions are actually satisfied. If the finale scene leaves the story unresolved, the lifecycle remains FINALE and the Director may provide another validated finale direction.
 
 If the Director expected one outcome and Story produced another valid outcome, the committed Story wins and the epilogue uses that reality.
 
@@ -1025,9 +1031,11 @@ Keyed by authenticated Telegram user/owner identity and storing validated defaul
 
 ### 30.2 Narrative settings
 
-Keyed by chat/session and storing the effective session override applied by setup.
+Keyed by chat/session and storing the effective Narrative Style applied to that session.
 
-No row means resolve to the user's default; if no user default exists, resolve to Player-centric.
+The personal default is used only to prefill a new setup draft. Apply always writes a session-owned narrative-settings row. Migration 10 backfills every existing session with an explicit Player-centric row so a later personal-default change cannot alter an old story.
+
+A missing row after migration is treated only as a defensive legacy/corruption fallback and resolves to Player-centric, never to the user's current personal default.
 
 Once a group session is applied, its row is independent from the initiating user's future default changes.
 
@@ -1072,15 +1080,17 @@ Current schema ends at migration 9. This feature uses a forward **Migration 10: 
 Migration 10 must:
 
 1. create the new tables/indexes/triggers;
-2. migrate existing Group Director goals into the canonical Director objective when present;
-3. preserve existing Scene State unchanged;
-4. leave old/unconfigured sessions behaviorally Player-centric;
+2. migrate existing Group Director goals into the canonical Director objective when present, then retire the old `director_goals` runtime source so only one hidden objective remains;
+3. backfill every existing session with an explicit Player-centric narrative-settings row;
+4. preserve existing Scene State unchanged;
 5. avoid AI/provider calls during migration or startup;
 6. avoid fabricating historical scenes/arcs for existing transcripts;
 7. be idempotent under the repository's migration runner;
 8. preserve session delete cleanup/cascade semantics.
 
-Old sessions initialize narrative state lazily on the next relevant story/Director operation.
+After its data is copied successfully, the obsolete `director_goals` table may be dropped in the same migration; no compatibility read/write path should remain.
+
+Old sessions initialize derived narrative state lazily on the next relevant story/Director operation.
 
 ## 32. Transactions and concurrency
 
@@ -1172,7 +1182,9 @@ Blocked operations include:
 - Light Novel choice submission;
 - Director reassessment/mutation;
 - Ending Goal mutation;
-- new AI-generated story/media continuation tied to the closed session.
+- all new model/image generation in the closed session, including `/imagine`.
+
+Hard close permits viewing/recovering already committed material, but V1 does not create fresh creative content inside the closed original.
 
 Allowed operations include:
 

@@ -203,8 +203,8 @@ def build_chat_messages(
     grounded_policy = grounded_user_policy(session.get("grounded_user"))
     if grounded_policy:
         system += "\n\n## Grounded User Policy\n" + grounded_policy
-    system += "\n\n## Mandatory response language\n" + language_instruction
     system += "\n\n" + _ROLEPLAY_OUTPUT_CONTRACT
+    system += "\n\n## Mandatory response language\n" + language_instruction
     messages = [{"role": "system", "content": system}]
     if not history and fields["first_mes"]:
         messages.append(

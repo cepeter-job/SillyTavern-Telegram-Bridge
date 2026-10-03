@@ -523,6 +523,13 @@ Example scene transition:
 
 Malformed structured output gets at most one bounded repair attempt. Repeated repair loops are forbidden.
 
+`schema_version` is validated before any field is interpreted. A proposal whose
+`schema_version` is unsupported is rejected outright: it is not passed to the
+repair path, because repair cannot invent a missing or newer contract. The
+validator owns the only supported version set; adding a version is a code change
+that also updates this specification. Unknown fields are ignored, but an
+unsupported version is a hard reject.
+
 ## 14. Plans vs committed facts
 
 The Director's plan is not story truth.
@@ -763,6 +770,31 @@ The checkpoint is valid only for the exact story revision that created it. A pre
 
 The checkpoint payload is versioned because it is restoration data that may survive releases.
 
+### 23.1 Checkpoint/finale atomicity and crash recovery
+
+Checkpoint creation and the `FINALE` transition must be one atomic commit. The
+bridge writes the immutable checkpoint row and advances `EndingState` to `FINALE`
+in a single SQLite write transaction; a crash can therefore never leave `FINALE`
+without its checkpoint.
+
+Recovery from an interrupted finale is defined by committed state alone:
+
+| Committed state | Recovery |
+|---|---|
+| `OPEN` / `FINALE_READY`, no checkpoint | Reassess finale readiness from committed Story. |
+| `FINALE`, checkpoint present, no committed finale message | The checkpoint is authoritative. Retry finale generation with the accepted direction bound to that checkpoint revision. No second checkpoint is created. |
+| `FINALE`, committed finale message, no resolution | Lifecycle remains `FINALE`; reconciliation decides whether resolution conditions hold (§24). |
+| `RESOLUTION_COMMITTED`, no epilogue | Atomically advance to `EPILOGUE_PENDING`, then retry epilogue planning/generation only (§27.5). |
+
+Recovery does not infer these conditions by scanning arbitrary prose. `ending_state`
+stores the checkpoint identity plus durable finale/epilogue operation and committed
+message identities needed to distinguish “not started,” “in progress,” and
+“already committed” after restart.
+
+A retry never regenerates committed prose. Each row above is derived from durable
+state, so restart is safe without operator intervention and satisfies the §39
+invariant that a process restart cannot reopen or silently rewind a CLOSED story.
+
 ## 24. Finale, resolution, and separate epilogue
 
 The ending pipeline is deliberately split.
@@ -908,6 +940,23 @@ The alternate session must not share the closed original's mutable Hindsight nam
 
 It receives a new session/namespace. If supported, checkpoint-valid memories may be seeded into the new namespace. If seeding fails, the new session remains usable from copied transcript/local summary rather than pointing at the original ending's memory.
 
+The existing Hindsight backend uses one bank per Telegram chat:
+`hindsight_bank_id(chat_id)` does **not** include the session ID. Session isolation
+inside that shared bank comes from the `session:<session_id>` tag, session-derived
+document IDs/prefixes, and recall's strict session-tag filter. A new Alternate
+Ending session therefore receives a distinct session-scoped namespace inside the
+same chat bank without requiring another bank-mapping table.
+
+Checkpoint-valid Hindsight state is rebuilt or seeded only into deterministic
+document IDs/tags for the **target** session. The durable Alternate Ending
+operation is keyed by target session + checkpoint identity/revision, so resuming
+the same admitted operation cannot create a second target or duplicate seed work.
+If the existing retain path can rebuild the target conversation document from the
+copied transcript, prefer that path over copying opaque source-session documents.
+A failed or partial external-memory seed never points recall at the source
+session; the new branch remains usable from its copied transcript/local summary
+and may report memory seeding as degraded.
+
 ## 27. Recovery semantics
 
 ### 27.1 Director failure during normal RP
@@ -1003,6 +1052,17 @@ It clears story-derived state:
 - pre-finale checkpoints;
 - existing memory/variant/state already covered by current reset behavior.
 
+It also clears every Migration 10 narrative table for the session:
+`narrative_state`, `narrative_scenes`, `narrative_threads`, `narrative_arcs`,
+`director_state`, `director_decisions`, `ending_state`, `ending_goal_history`,
+and `narrative_checkpoints`. `narrative_settings` and `narrative_defaults` are
+preserved, because Narrative Style and the personal default are configuration
+rather than story-derived state.
+
+Clearing `narrative_checkpoints` means the reset session is no longer eligible for
+Alternate Ending (§25 offers Alternate Ending only when a valid pre-finale
+checkpoint exists). That is intended: a reset story has no finale to branch from.
+
 The session returns to an unstarted state and requires `/start`.
 
 ## 30. Persistence model
@@ -1059,9 +1119,70 @@ Detailed history belongs in scenes/threads/arcs.
 
 Retention must be bounded so long-running stories do not grow unboundedly.
 
+The bound is explicit: `director_decisions` retains the most recent 200 rows per
+session; older rows are pruned in the same transaction that appends a new one.
+`ending_goal_history` follows the same rule with a 100-row bound. Both tables
+carry `ON DELETE CASCADE` from their owning session, so deleting a session cannot
+leave orphaned decision rows. A bounded append-only log is still auditable
+because the current accepted direction and Ending Goal live in their own
+single-row state tables, not in the history.
+
+### 30.4.1 Migration 10 DDL requirements
+
+Migration 10 must satisfy the idempotency and cascade contracts in §31 through
+DDL, not convention:
+
+- every table is created with `CREATE TABLE IF NOT EXISTS`;
+- every index is created with `CREATE INDEX IF NOT EXISTS`;
+- every session-owned table declares a foreign key to the session with
+  `ON DELETE CASCADE`;
+- user-owned `narrative_defaults` keys on the authenticated Telegram identity;
+- migration registration remains a single ordered entry, so re-running the
+  migration runner performs no further writes once the tables exist.
+
+`director_goals` retirement happens in three ordered steps: copy rows into the
+canonical Director objective, verify the copied **content**, then drop the old
+table. Verification requires both equal row counts and a zero-row anti-join over
+`(chat_id, session_id, goal)`; count equality alone is insufficient. If
+verification fails, the migration aborts before the drop, leaving the legacy
+table intact so no goal is lost.
+
+### 30.4.2 Logical key, uniqueness, and revision contracts
+
+Migration 10 does not need to inline every SQL statement in this design, but the
+schema must implement these logical contracts:
+
+| Table | Required identity / uniqueness | Critical revision/ownership fields |
+|---|---|---|
+| `narrative_defaults` | one row per authenticated Telegram owner/user | owner identity, validated settings, updated_at |
+| `narrative_settings` | PK `(chat_id, session_id)` | session FK with cascade; effective preset/custom values |
+| `narrative_state` | PK `(chat_id, session_id)` | active scene/thread, story phase, state revision, `updated_through_rowid` |
+| `narrative_scenes` | PK `(chat_id, session_id, scene_id)` with scene IDs local to a session | start/end rowids, source revision, thread/viewpoint/status |
+| `narrative_threads` | PK `(chat_id, session_id, thread_id)` | status, last scene, source revision |
+| `narrative_arcs` | PK `(chat_id, session_id, arc_id)` | status/phase, source revision |
+| `director_state` | PK `(chat_id, session_id)` | state revision, accepted-through rowid, active direction/objective, cadence/degraded state |
+| `director_decisions` | stable decision ID plus session FK; append order indexed per session | expected story/state revision, source, result, created_at |
+| `ending_state` | PK `(chat_id, session_id)` | lifecycle revision, finale-ready revision, checkpoint ID, finale/epilogue operation IDs and committed rowids |
+| `ending_goal_history` | PK `(chat_id, session_id, goal_revision)` | story revision, scene ID, source, before/after/reason |
+| `narrative_checkpoints` | stable checkpoint ID; unique `(chat_id, session_id, kind, source_revision)` | immutable payload version, source revision, created_at |
+
+Current-state writes use compare-and-swap/freshness predicates on the stored state
+revision or `updated_through_rowid`; they are never last-writer-wins. Session-owned
+rows reference `sessions(chat_id, session_id)` with `ON DELETE CASCADE`.
+
+The pre-finale checkpoint is immutable and reusable by multiple **separately
+requested** Alternate Ending operations. Idempotency applies to one admitted
+branch operation, not to the checkpoint itself.
+
 ### 30.5 Ending and checkpoints
 
-`ending_state` stores the mechanical ending lifecycle and finale-confirmation state.
+`ending_state` stores the mechanical ending lifecycle and finale-confirmation
+state. It also stores durable recovery identity: the current checkpoint ID,
+finale-ready/story revision, accepted finale direction revision, finale operation
+ID, committed finale/resolution rowid where present, epilogue operation ID, and
+committed epilogue rowid where present. Exact column names may vary, but restart
+logic must not infer these boundaries by scanning for an arbitrary assistant
+message after the checkpoint.
 
 `ending_goal_history` stores auditable revisions.
 
@@ -1149,6 +1270,16 @@ Checks include:
 - alternate-ending checkpoint matches the story revision.
 
 Invalid proposals are never partially applied.
+
+The alternate-ending checkpoint check is evaluated against the **originating**
+(CLOSED) session and its `session_id`, before the new session exists. The validator
+verifies that the stored checkpoint is still valid for that session's committed
+revision and that it has not been superseded. Creation of the new session is a
+separate durable operation that **references** the already-validated immutable
+checkpoint. One admitted operation may create at most one target session, while a
+later explicit Alternate Ending request may reuse the same checkpoint to create a
+different independent branch. Validator scope and target-session creation never
+overlap.
 
 ## 34. User-agency enforcement
 

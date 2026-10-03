@@ -28,43 +28,90 @@ def _utf16_length(text: str) -> int:
     return len(str(text).encode("utf-16-le")) // 2
 
 
+def _is_escaped(text: str, index: int) -> bool:
+    backslashes = 0
+    cursor = index - 1
+    while cursor >= 0 and text[cursor] == "\\":
+        backslashes += 1
+        cursor -= 1
+    return bool(backslashes % 2)
+
+
+def _quoted_speech_ranges(text: str) -> list[tuple[int, int]]:
+    ranges: list[tuple[int, int]] = []
+    opened_at: int | None = None
+    closing = ""
+    pairs = {'"': '"', "“": "”"}
+    for index, char in enumerate(text):
+        if opened_at is None:
+            if char in pairs and (char != '"' or not _is_escaped(text, index)):
+                opened_at = index
+                closing = pairs[char]
+            continue
+        if char == closing and (char != '"' or not _is_escaped(text, index)):
+            ranges.append((opened_at, index + 1))
+            opened_at = None
+            closing = ""
+    if opened_at is not None:
+        ranges.append((opened_at, len(text)))
+    return ranges
+
+
+def _unquoted_segments(start: int, end: int, quoted: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    segments: list[tuple[int, int]] = []
+    cursor = start
+    for quote_start, quote_end in quoted:
+        if quote_end <= cursor:
+            continue
+        if quote_start >= end:
+            break
+        if quote_start > cursor:
+            segments.append((cursor, min(quote_start, end)))
+        cursor = max(cursor, quote_end)
+        if cursor >= end:
+            break
+    if cursor < end:
+        segments.append((cursor, end))
+    return segments
+
+
 def _roleplay_reply_chunks(text: str) -> list[tuple[str, list[dict[str, int | str]]]]:
-    """Render SillyTavern single-star narration as Telegram italic entities."""
+    """Render narration markers as italics while quoted speech stays normal."""
     source = str(text or "")
     source_chunks = split_telegram_text(source)
     matches = list(_ROLEPLAY_ITALIC.finditer(source))
     if not matches:
         return [(chunk, []) for chunk in source_chunks]
 
-    opening = {match.start() for match in matches}
-    closing = {match.end() - 1 for match in matches}
-    visible_chars: list[str] = []
+    marker_positions = {position for match in matches for position in (match.start(), match.end() - 1)}
     source_to_visible_char = [0] * (len(source) + 1)
     source_to_visible_utf16 = [0] * (len(source) + 1)
-    entities: list[dict[str, int | str]] = []
-    italic_start: int | None = None
+    visible_chars: list[str] = []
     visible_utf16 = 0
 
     for index, char in enumerate(source):
         source_to_visible_char[index] = len(visible_chars)
         source_to_visible_utf16[index] = visible_utf16
-        if index in opening:
-            italic_start = visible_utf16
-        elif index in closing:
-            if italic_start is not None and visible_utf16 > italic_start:
-                entities.append(
-                    {
-                        "type": "italic",
-                        "offset": italic_start,
-                        "length": visible_utf16 - italic_start,
-                    }
-                )
-            italic_start = None
-        else:
+        if index not in marker_positions:
             visible_chars.append(char)
             visible_utf16 += _utf16_length(char)
         source_to_visible_char[index + 1] = len(visible_chars)
         source_to_visible_utf16[index + 1] = visible_utf16
+
+    quoted = _quoted_speech_ranges(source)
+    entities: list[dict[str, int | str]] = []
+    for match in matches:
+        for segment_start, segment_end in _unquoted_segments(match.start("body"), match.end("body"), quoted):
+            entity_start = source_to_visible_utf16[segment_start]
+            entity_end = source_to_visible_utf16[segment_end]
+            if entity_end > entity_start:
+                entities.append(
+                    {
+                        "type": "italic",
+                        "offset": entity_start,
+                        "length": entity_end - entity_start,
+                    }
+                )
 
     visible = "".join(visible_chars)
     rendered: list[tuple[str, list[dict[str, int | str]]]] = []

@@ -29,6 +29,15 @@ from bridge.rag_service import RagService
 from bridge.settings import AppSettings
 from bridge.telegram_output import telegram_safe_output
 
+_ROLEPLAY_OUTPUT_CONTRACT = (
+    "## Telegram Roleplay Output Contract\n"
+    "This transport contract is mandatory for roleplay output and overrides conflicting formatting instructions, "
+    "including requests for plain prose or no Markdown. Wrap every narration, physical action, scene description, "
+    "and unspoken thought in matched single asterisks (`*...*`). Spoken dialogue must remain outside single "
+    "asterisks and should use quotation marks. Do not use single asterisks for emphasis inside spoken dialogue. "
+    "The single asterisks are transport markers consumed by Telegram, not decorative Markdown."
+)
+
 
 def render_response_language(
     api_key: str,
@@ -194,6 +203,7 @@ def build_chat_messages(
     grounded_policy = grounded_user_policy(session.get("grounded_user"))
     if grounded_policy:
         system += "\n\n## Grounded User Policy\n" + grounded_policy
+    system += "\n\n" + _ROLEPLAY_OUTPUT_CONTRACT
     system += "\n\n## Mandatory response language\n" + language_instruction
     messages = [{"role": "system", "content": system}]
     if not history and fields["first_mes"]:

@@ -76,6 +76,53 @@ class ResponseDeliveryTests(SettingsTestCase):
             ],
         )
 
+    def test_send_reply_keeps_single_star_emphasis_inside_dialogue_normal(self):
+        for source, expected in (
+            ('*Narration.* "I *really* mean it."', 'Narration. "I really mean it."'),
+            ("*Narration.* “I *really* mean it.”", "Narration. “I really mean it.”"),
+        ):
+            with self.subTest(source=source):
+                requests = []
+
+                def request(_token, method, payload, sink=requests):
+                    sink.append((method, payload))
+                    return {"message_id": 76}
+
+                with patch.object(telegram, "telegram_request", side_effect=request):
+                    response_delivery.send_reply(
+                        "token",
+                        "chat",
+                        source,
+                        app_settings=self.app_settings_builder.build(),
+                    )
+
+                self.assertEqual(requests[0][1]["text"], expected)
+                self.assertEqual(requests[0][1]["entities"], [{"type": "italic", "offset": 0, "length": 10}])
+
+    def test_send_reply_excludes_quoted_speech_from_a_narration_marker(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 77}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                '*She says "I mean it." softly.*',
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], 'She says "I mean it." softly.')
+        self.assertEqual(
+            requests[0][1]["entities"],
+            [
+                {"type": "italic", "offset": 0, "length": 9},
+                {"type": "italic", "offset": 21, "length": 8},
+            ],
+        )
+
     def test_send_reply_preserves_non_roleplay_star_sequences(self):
         requests = []
 

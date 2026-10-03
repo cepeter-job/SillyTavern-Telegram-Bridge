@@ -89,13 +89,18 @@ git commit -m "feat: create alternate ending sessions"
 - Modify: `bridge/narrative_checkpoints.py`
 - Modify: `bridge/narrative_repository.py`
 - Modify: `bridge/ending_repository.py`
-- Modify: `bridge/variant_repository.py`
+- Modify: `bridge/conversation_lifecycle.py`
+- Modify: `bridge/memory.py`
+- Modify: `bridge/episodic_memory.py`
+- Modify: `bridge/npc_repository.py`
+- Modify: `bridge/scene_repository.py`
 - Test: `tests/test_alternate_ending_state_copy.py`
 - Test: `tests/test_npc_branch_safety.py`
 - Test: `tests/test_scene_state.py`
 
 **Interfaces:**
-- Produces internal `copy_checkpoint_state(db, chat_id: str, origin_session_id: str, target_session_id: str, checkpoint: NarrativeCheckpoint) -> None`, callable only inside the branch transaction.
+- Produces internal `copy_checkpoint_state(db, chat_id: str, origin_session_id: str, target_session_id: str, checkpoint: NarrativeCheckpoint, rowid_map: dict[int, int]) -> None`, callable only inside the branch transaction.
+- Existing domain owners gain narrow clone-through-boundary helpers where SQL ownership already lives; `alternate_ending.py` orchestrates them and does not become an aggregate SQL repository.
 - Copy through boundary:
   - session Character/Persona/World/System Prompt/Author's Note/response language;
   - Story/Utility/Director model selections and reasoning settings;
@@ -107,7 +112,7 @@ git commit -m "feat: create alternate ending sessions"
   - Director state/goal history through boundary;
   - Ending Goal history through boundary.
 - Target ending lifecycle resets to OPEN at the checkpoint's pre-finale story state; target has no finale/epilogue/CLOSED state.
-- Do not copy response-variant/delivery/job records that refer to post-boundary or source row IDs without remapping.
+- Do not copy response-variant, Telegram delivery, job, callback, or operation records from the source. Conversation mode/Light Novel strategy is copied through the canonical conversation-lifecycle owner.
 
 - [ ] **Step 1: Write exact copy-boundary tests**
 
@@ -120,7 +125,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement row mapping and state restore**
 
-Create an origin-rowid → target-rowid map while copying transcript and use it for summary/episodic/NPC/scene source boundaries. Do not reuse source Telegram message IDs or delivery IDs.
+Create an origin-rowid → target-rowid map while copying transcript and pass it to the canonical summary/episodic/NPC/scene clone helpers. Do not reuse source Telegram message IDs, callback IDs, operation IDs, job IDs, or delivery IDs.
 
 - [ ] **Step 4: Run tests**
 
@@ -130,7 +135,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add bridge/alternate_ending.py bridge/narrative_checkpoints.py bridge/narrative_repository.py bridge/ending_repository.py bridge/variant_repository.py tests/test_alternate_ending_state_copy.py tests/test_npc_branch_safety.py tests/test_scene_state.py
+git add bridge/alternate_ending.py bridge/narrative_checkpoints.py bridge/narrative_repository.py bridge/ending_repository.py bridge/conversation_lifecycle.py bridge/memory.py bridge/episodic_memory.py bridge/npc_repository.py bridge/scene_repository.py tests/test_alternate_ending_state_copy.py tests/test_npc_branch_safety.py tests/test_scene_state.py
 git commit -m "feat: restore narrative state for alternate endings"
 ```
 

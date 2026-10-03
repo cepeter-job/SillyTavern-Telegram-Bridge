@@ -174,6 +174,226 @@ def test_discovery_uses_native_anthropic_headers_and_base_endpoint(configured, m
     assert "authorization" not in headers
 
 
+
+def test_metadata_only_refresh_caches_context_without_adding_remote_models(configured, monkeypatch):
+    from bridge.provider_catalog_cache import read_model_cache
+
+    settings = configured(
+        {
+            "alpha": spec(
+                discover_models=False,
+                discover_model_metadata=True,
+                models=["seed"],
+            )
+        }
+    )
+    payload = {
+        "data": [
+            {"id": "seed", "context_length": 131072},
+            {"id": "remote", "context_length": 262144},
+        ]
+    }
+    monkeypatch.setattr(discovery, "strict_urlopen", lambda *a, **kw: Response(payload))
+
+    result, refreshed, failed = discovery.refresh_model_catalog(
+        force=True,
+        metadata_only=True,
+        app_settings=settings,
+    )
+
+    assert (refreshed, failed) == (1, 0)
+    assert result["providers"]["alpha"]["models"] == ["seed"]
+    assert read_model_cache(app_settings=settings)["alpha"]["model_context_window_tokens"] == {"seed": 131072}
+
+
+def test_combined_model_and_metadata_discovery_reuses_one_catalog_response(configured, monkeypatch):
+    from bridge.provider_catalog_cache import read_model_cache
+
+    settings = configured({"alpha": spec(discover_model_metadata=True, models=["seed"])})
+    payload = {
+        "data": [
+            {"id": "seed", "context_length": 131072},
+            {"id": "remote", "context_length": 262144},
+        ]
+    }
+    calls = []
+    monkeypatch.setattr(
+        discovery,
+        "strict_urlopen",
+        lambda request, **kw: calls.append(request.full_url) or Response(payload),
+    )
+
+    result, refreshed, failed = discovery.refresh_model_catalog(force=True, app_settings=settings)
+
+    assert (refreshed, failed) == (1, 0)
+    assert calls == ["https://alpha.example/v1/models"]
+    assert result["providers"]["alpha"]["models"] == ["seed", "remote"]
+    assert read_model_cache(app_settings=settings)["alpha"]["model_context_window_tokens"] == {"seed": 131072}
+
+
+def test_custom_models_endpoint_is_used_for_refresh(configured, monkeypatch):
+    settings = configured(
+        {
+            "alpha": spec(
+                discover_models=False,
+                discover_model_metadata=True,
+                models_endpoint="https://catalog.example/v1/models?detailed=true",
+            )
+        }
+    )
+    calls = []
+    monkeypatch.setattr(
+        discovery,
+        "strict_urlopen",
+        lambda request, **kw: calls.append(request.full_url)
+        or Response({"data": [{"id": "seed", "context_length": 131072}]}),
+    )
+
+    discovery.refresh_model_catalog(force=True, metadata_only=True, app_settings=settings)
+
+    assert calls == ["https://catalog.example/v1/models?detailed=true"]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"data": [{"id": "remote", "context_length": 262144}]},
+        {"data": [{"id": "seed", "context_length": 1}]},
+    ],
+)
+def test_successful_metadata_refresh_clears_stale_context_for_missing_or_invalid_model(
+    configured, monkeypatch, payload
+):
+    from bridge.provider_catalog_cache import read_model_cache
+
+    settings = configured(
+        {"alpha": spec(discover_models=False, discover_model_metadata=True, models=["seed"])}
+    )
+    settings.model_cache_file.write_text(
+        json.dumps(
+            {
+                "alpha": {
+                    "models": [],
+                    "model_context_window_tokens": {"seed": 262144},
+                    "metadata_refreshed_at": 1,
+                    "metadata_last_attempt_at": 1,
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(discovery, "strict_urlopen", lambda *a, **kw: Response(payload))
+
+    _result, refreshed, failed = discovery.refresh_model_catalog(
+        force=True,
+        metadata_only=True,
+        app_settings=settings,
+    )
+
+    entry = read_model_cache(app_settings=settings)["alpha"]
+    assert (refreshed, failed) == (1, 0)
+    assert entry["model_context_window_tokens"] == {}
+    assert entry["metadata_refreshed_at"] > 1
+    assert "metadata_last_error" not in entry
+
+
+def test_failed_metadata_refresh_preserves_last_good_context(configured, monkeypatch):
+    from bridge.provider_catalog_cache import read_model_cache
+
+    settings = configured(
+        {"alpha": spec(discover_models=False, discover_model_metadata=True, models=["seed"])}
+    )
+    settings.model_cache_file.write_text(
+        json.dumps(
+            {
+                "alpha": {
+                    "models": [],
+                    "model_context_window_tokens": {"seed": 262144},
+                    "metadata_refreshed_at": 1,
+                    "metadata_last_attempt_at": 1,
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(discovery, "strict_urlopen", lambda *a, **kw: (_ for _ in ()).throw(TimeoutError("private")))
+
+    _result, refreshed, failed = discovery.refresh_model_catalog(
+        force=True,
+        metadata_only=True,
+        app_settings=settings,
+    )
+
+    entry = read_model_cache(app_settings=settings)["alpha"]
+    assert (refreshed, failed) == (0, 1)
+    assert entry["model_context_window_tokens"] == {"seed": 262144}
+    assert entry["metadata_last_error"] == "timeout"
+
+
+def test_provider_without_metadata_flag_does_not_request_metadata(configured, monkeypatch):
+    settings = configured({"alpha": spec(discover_models=False)})
+    monkeypatch.setattr(
+        discovery,
+        "strict_urlopen",
+        lambda *a, **kw: pytest.fail("metadata-disabled provider made a catalog request"),
+    )
+
+    _result, refreshed, failed = discovery.refresh_model_catalog(
+        force=True,
+        metadata_only=True,
+        app_settings=settings,
+    )
+
+    assert (refreshed, failed) == (0, 0)
+
+
+def test_failed_metadata_refresh_is_throttled_by_metadata_attempt_timestamp(configured, monkeypatch):
+    from bridge.provider_catalog_cache import read_model_cache
+
+    settings = configured(
+        {"alpha": spec(discover_models=False, discover_model_metadata=True, models=["seed"])}
+    )
+    calls = []
+
+    def offline(*args, **kwargs):
+        calls.append(1)
+        raise TimeoutError("private")
+
+    monkeypatch.setattr(discovery, "strict_urlopen", offline)
+    discovery.refresh_model_catalog(metadata_only=True, app_settings=settings)
+    discovery.refresh_model_catalog(metadata_only=True, app_settings=settings)
+
+    entry = read_model_cache(app_settings=settings)["alpha"]
+    assert len(calls) == 1
+    assert entry["metadata_last_error"] == "timeout"
+    assert entry["metadata_last_attempt_at"] > 0
+    assert "last_attempt_at" not in entry
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "context_length",
+        "context_window_tokens",
+        "context_window",
+        "max_context_length",
+        "max_position_embeddings",
+    ],
+)
+def test_metadata_context_aliases_are_parsed(configured, monkeypatch, field):
+    from bridge.provider_catalog_cache import read_model_cache
+
+    settings = configured(
+        {"alpha": spec(discover_models=False, discover_model_metadata=True, models=["seed"])}
+    )
+    monkeypatch.setattr(
+        discovery,
+        "strict_urlopen",
+        lambda *a, **kw: Response({"data": [{"id": "seed", field: 131072}]}),
+    )
+
+    discovery.refresh_model_catalog(force=True, metadata_only=True, app_settings=settings)
+
+    assert read_model_cache(app_settings=settings)["alpha"]["model_context_window_tokens"] == {"seed": 131072}
+
 def test_first_byte_of_inference_is_not_reported_as_successful_completion(configured, monkeypatch):
     settings = configured({"alpha": spec(health_check="chat_completion")})
     monkeypatch.setattr(discovery, "strict_urlopen", lambda *a, **kw: Response())

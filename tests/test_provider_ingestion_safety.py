@@ -490,3 +490,49 @@ def test_live_memory_panel_preserves_owner_access(interaction):
     callback["from"]["id"] = "owner"
     callback_dispatch.process_callback(db, "token", callback, services=services)
     assert get_meta(db, "memory_mode:chat") == "off"
+
+
+@pytest.mark.parametrize(
+    "models_endpoint",
+    [
+        "https://user:pass@provider.example/v1/models",
+        "https://catalog.example/v1/models",
+    ],
+)
+def test_models_endpoint_obeys_provider_endpoint_policy(tmp_path, monkeypatch, models_endpoint):
+    from bridge import provider_discovery as discovery
+
+    catalog = tmp_path / "providers.yaml"
+    catalog.write_text(
+        "providers:\n"
+        "  alpha:\n"
+        "    api_endpoint: https://provider.example/v1\n"
+        "    api_key_env: LLM_API_KEY\n"
+        "    transport: chat_completions\n"
+        "    models: [seed]\n"
+        "    discover_models: false\n"
+        "    discover_model_metadata: true\n"
+        f"    models_endpoint: {models_endpoint}\n",
+        encoding="utf-8",
+    )
+    settings = make_test_settings(
+        environ={
+            "LLM_API_KEY": "fixture-key",
+            "SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": "provider.example",
+        },
+        home=tmp_path,
+        provider_config_file=catalog,
+    )
+    monkeypatch.setattr(
+        discovery,
+        "strict_urlopen",
+        lambda *a, **kw: pytest.fail("rejected models endpoint reached the network"),
+    )
+
+    _config, refreshed, failed = discovery.refresh_model_catalog(
+        force=True,
+        metadata_only=True,
+        app_settings=settings,
+    )
+
+    assert (refreshed, failed) == (0, 1)

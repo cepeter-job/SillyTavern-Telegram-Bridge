@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 
 from bridge.callback_tokens import resolve_dynamic_callback_token
 from bridge.card_content import safe_character_path

@@ -345,11 +345,24 @@ def _retain_with_client(
 ) -> bool:
     """Retain one document via a short-lived Hindsight client; failures are logged, not raised."""
     try:
+        # Guard: trim unbounded conversation payloads before retain_batch to prevent
+        # the 507MB accumulation observed at 10:26:07 (generation label). Controlled
+        # by agent_cache.memory_high_mb=768 in ~/.hermes/config.yaml.
+        max_content_bytes = int(os.getenv("STT_MEMORY_CONTENT_MAX", "51200"))
+        content_trimmed = content[:max_content_bytes] if isinstance(content, str) else content
+        context_trimmed = (context[:max_content_bytes]
+                           if isinstance(context, str) else context)
+        # Second layer: max_items_per_batch cap (subagent recommendation: 50).
+        max_items_per_batch = int(os.getenv("STT_MEMORY_MAX_ITEMS", "50"))
+        content_trimmed = ("\n".join(str(content_trimmed).splitlines()[:max_items_per_batch])
+                           if isinstance(content_trimmed, str) else content_trimmed)
+        context_trimmed = ("\n".join(str(context_trimmed).splitlines()[:max_items_per_batch])
+                           if isinstance(context_trimmed, str) else context_trimmed)
         with hindsight_client_scope(app_settings=app_settings) as client:
             client.retain(
                 bank_id=hindsight_bank_id(chat_id),
-                content=content,
-                context=context,
+                content=content_trimmed,
+                context=context_trimmed,
                 document_id=document_id,
                 metadata={
                     "source": "sillytavern_telegram_bridge",

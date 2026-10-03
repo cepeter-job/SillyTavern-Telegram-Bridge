@@ -47,9 +47,7 @@ def test_optimizer_repairs_invalid_json_once(card_context, monkeypatch):
     assert "I improved the card, but this is not valid JSON." in repair_prompt
 
 
-def test_optimizer_preview_validation_logs_exact_reason_and_sanitizes_user_message(
-    card_context, monkeypatch, caplog
-):
+def test_optimizer_preview_validation_logs_exact_reason_and_sanitizes_user_message(card_context, monkeypatch, caplog):
     db, ctx, _ = card_context
     target = ctx.app_settings.character_dir / "Alice.png"
     target.write_bytes(_card_png("Alice", "original"))

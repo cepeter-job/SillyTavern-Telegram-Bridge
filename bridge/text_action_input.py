@@ -11,7 +11,7 @@ from bridge.databank_panels import send_databank_menu
 from bridge.director_goal_panel import director_goal_panel
 from bridge.director_goals import set_director_goal
 from bridge.edit_messages import edit_last_user
-from bridge.image_generation import handle_imagine_custom_prompt
+from bridge.image_generation import handle_imagine_custom_prompt, image_provider_error_message
 from bridge.limits import PENDING_SETTINGS_TTL_SECONDS
 from bridge.macro_commands import handle_macro_command
 from bridge.memory import handle_memory_command
@@ -23,6 +23,7 @@ from bridge.metadata import set_meta
 from bridge.npc_service import NpcService
 from bridge.pending_input import _cancel_pending
 from bridge.persona_service import PersonaService
+from bridge.provider_errors import ProviderRequestError
 from bridge.provider_port import ProviderPort
 from bridge.rag_service import RagService
 from bridge.telegram import send_panel_request, send_text
@@ -195,6 +196,9 @@ def _handle_text_action_input(
             )
         else:
             raise ValueError("Unknown text action")
+    except ProviderRequestError as exc:
+        send_pending_input_message(db, token, chat_id, meta_key, state, image_provider_error_message(exc))
+        return True
     except ValueError as exc:
         send_pending_input_message(db, token, chat_id, meta_key, state, f"{exc}. Try again or send /cancel.")
         return True

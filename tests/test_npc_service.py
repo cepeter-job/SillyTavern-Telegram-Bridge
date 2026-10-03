@@ -2,8 +2,9 @@ import sqlite3
 import time
 
 import pytest
+from persisted_state_test_support import find_test_npc
 
-from bridge.npc_repository import find_npc_exact, list_npc_field_history, load_npc_fields
+from bridge.npc_repository import list_npc_field_history, load_npc_fields
 from bridge.npc_service import NpcService
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
 from bridge.schema import initialize_database_schema
@@ -60,7 +61,7 @@ def test_npc_append_preserves_restricted_audience(operation, value):
             )
 
         assert apply("set", ["Alice secret"], ("Alice",), 1).applied == 1
-        npc = find_npc_exact(db, "chat", "s1", "maya torres")
+        npc = find_test_npc(db, "chat", "s1", "maya torres")
         before = load_npc_fields(db, npc.npc_id)["secrets"]
         history = list_npc_field_history(db, npc.npc_id)
         result = apply(operation, value, ("Bob",), 2)
@@ -100,7 +101,7 @@ def test_fixed_field_is_write_once_and_rejected_overwrite_creates_no_history():
             primary_name="Alice",
             user_name="User",
         )
-        npc = find_npc_exact(db, "chat", "s1", "maya torres")
+        npc = find_test_npc(db, "chat", "s1", "maya torres")
         fields = load_npc_fields(db, npc.npc_id)
         assert first.applied == 1
         assert second.applied == 0
@@ -142,7 +143,7 @@ def test_mutable_set_records_full_before_after_history_and_noop_is_ignored():
             primary_name="Alice",
             user_name="User",
         )
-        npc = find_npc_exact(db, "chat", "s1", "maya torres")
+        npc = find_test_npc(db, "chat", "s1", "maya torres")
         changes = list_npc_field_history(db, npc.npc_id)
         assert [change.before.value if change.before else None for change in changes] == [None, "Find the ledger"]
         assert [change.after.value if change.after else None for change in changes] == [
@@ -178,7 +179,7 @@ def test_list_append_deduplicates_and_remove_uses_normalized_exact_match():
                 primary_name="Alice",
                 user_name="User",
             )
-        npc = find_npc_exact(db, "chat", "s1", "maya torres")
+        npc = find_test_npc(db, "chat", "s1", "maya torres")
         fields = load_npc_fields(db, npc.npc_id)
         assert fields["secrets"].value == ["Owes the guard a favor"]
         assert len(list_npc_field_history(db, npc.npc_id)) == 3
@@ -211,7 +212,7 @@ def test_restricted_requires_known_by_and_secret_fails_closed_when_shared():
         )
         assert result.applied == 0
         assert result.rejected == 1
-        assert find_npc_exact(db, "chat", "s1", "maya torres") is None
+        assert find_test_npc(db, "chat", "s1", "maya torres") is None
     finally:
         db.close()
 
@@ -261,7 +262,7 @@ def test_alias_collision_rejects_group_instead_of_merging():
         )
         assert result.applied == 0
         assert result.rejected == 1
-        assert find_npc_exact(db, "chat", "s1", "maya chen") is None
+        assert find_test_npc(db, "chat", "s1", "maya chen") is None
     finally:
         db.close()
 
@@ -305,10 +306,10 @@ def test_rollback_restores_pre_edit_value_removes_future_entity_and_rewinds_cove
 
         removed = service.rollback_from_row(db, "chat", "s1", 140)
 
-        maya = find_npc_exact(db, "chat", "s1", "maya torres")
+        maya = find_test_npc(db, "chat", "s1", "maya torres")
         assert load_npc_fields(db, maya.npc_id)["relationship"].value == "cautious"
         assert maya.last_seen_rowid == 100
-        assert find_npc_exact(db, "chat", "s1", "jon") is None
+        assert find_test_npc(db, "chat", "s1", "jon") is None
         assert (
             db.execute(
                 "SELECT updated_through_rowid FROM npc_extraction_state WHERE chat_id='chat' AND session_id='s1'"

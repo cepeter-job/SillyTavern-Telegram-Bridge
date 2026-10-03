@@ -147,23 +147,3 @@ def attempt_pending_update_ack(
         return UpdateAckStatus.RETRYABLE_ERROR
     _discard(path)
     return UpdateAckStatus.DELIVERED
-
-
-def acknowledge_pending_update(
-    token: str,
-    *,
-    app_settings: AppSettings,
-    send_text_backend: SendTextBackend,
-    version_backend: VersionBackend | None = None,
-    commit_backend: VersionBackend | None = None,
-) -> bool:
-    return (
-        attempt_pending_update_ack(
-            token,
-            app_settings=app_settings,
-            send_text_backend=send_text_backend,
-            version_backend=version_backend,
-            commit_backend=commit_backend,
-        )
-        is UpdateAckStatus.DELIVERED
-    )

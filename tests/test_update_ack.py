@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from settings_test_support import make_test_settings
 
 import bridge.update as update
+from bridge.update_ack import UpdateAckStatus
 
 
 def _settings(tmp_path: Path):
@@ -39,13 +40,13 @@ def test_pending_update_ack_is_written_atomically_with_expected_identity(tmp_pat
 
 
 def test_successful_startup_ack_is_one_shot(tmp_path):
-    from bridge.update_ack import acknowledge_pending_update, arm_pending_update_ack, pending_update_ack_path
+    from bridge.update_ack import arm_pending_update_ack, attempt_pending_update_ack, pending_update_ack_path
 
     settings = _settings(tmp_path)
     arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=settings)
     calls = []
 
-    delivered = acknowledge_pending_update(
+    delivered = attempt_pending_update_ack(
         "token",
         app_settings=settings,
         commit_backend=lambda **_kwargs: "a" * 40,
@@ -53,19 +54,19 @@ def test_successful_startup_ack_is_one_shot(tmp_path):
         send_text_backend=lambda token, chat_id, text: calls.append((token, chat_id, text)),
     )
 
-    assert delivered is True
+    assert delivered is UpdateAckStatus.DELIVERED
     assert calls == [("token", "12345", "✅ Update complete — Running v0.2.033 successfully.")]
     assert not pending_update_ack_path(settings).exists()
 
 
 def test_version_mismatch_never_claims_update_success(tmp_path):
-    from bridge.update_ack import acknowledge_pending_update, arm_pending_update_ack, pending_update_ack_path
+    from bridge.update_ack import arm_pending_update_ack, attempt_pending_update_ack, pending_update_ack_path
 
     settings = _settings(tmp_path)
     arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=settings)
     calls = []
 
-    delivered = acknowledge_pending_update(
+    delivered = attempt_pending_update_ack(
         "token",
         app_settings=settings,
         commit_backend=lambda **_kwargs: "a" * 40,
@@ -73,7 +74,7 @@ def test_version_mismatch_never_claims_update_success(tmp_path):
         send_text_backend=lambda *args: calls.append(args),
     )
 
-    assert delivered is False
+    assert delivered is UpdateAckStatus.REVISION_MISMATCH
     assert calls == []
     assert pending_update_ack_path(settings).exists()
 
@@ -101,7 +102,7 @@ def test_revision_mismatch_has_explicit_non_retryable_process_status(tmp_path):
 
 
 def test_malformed_pending_ack_never_blocks_startup(tmp_path):
-    from bridge.update_ack import acknowledge_pending_update, pending_update_ack_path
+    from bridge.update_ack import attempt_pending_update_ack, pending_update_ack_path
 
     settings = _settings(tmp_path)
     path = pending_update_ack_path(settings)
@@ -109,33 +110,33 @@ def test_malformed_pending_ack_never_blocks_startup(tmp_path):
     path.write_text("{not-json", encoding="utf-8")
 
     assert (
-        acknowledge_pending_update(
+        attempt_pending_update_ack(
             "token",
             app_settings=settings,
             commit_backend=lambda **_kwargs: "a" * 40,
             version_backend=lambda **_kwargs: "0.2.033",
             send_text_backend=lambda *_args: (_ for _ in ()).throw(AssertionError("must not send")),
         )
-        is False
+        is UpdateAckStatus.ABSENT
     )
     assert not path.exists()
 
 
 def test_failed_telegram_ack_is_retried_on_later_startup(tmp_path):
-    from bridge.update_ack import acknowledge_pending_update, arm_pending_update_ack, pending_update_ack_path
+    from bridge.update_ack import arm_pending_update_ack, attempt_pending_update_ack, pending_update_ack_path
 
     settings = _settings(tmp_path)
     arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=settings)
 
     assert (
-        acknowledge_pending_update(
+        attempt_pending_update_ack(
             "token",
             app_settings=settings,
             commit_backend=lambda **_kwargs: "a" * 40,
             version_backend=lambda **_kwargs: "0.2.033",
             send_text_backend=lambda *_args: (_ for _ in ()).throw(OSError("telegram unavailable")),
         )
-        is False
+        is UpdateAckStatus.RETRYABLE_ERROR
     )
     assert pending_update_ack_path(settings).exists()
 
@@ -192,6 +193,7 @@ def test_restart_scheduled_status_does_not_claim_restart_success():
 
 def test_normal_startup_does_not_claim_readiness_before_polling(monkeypatch, tmp_path):
     import bridge.main as main
+    import bridge.runtime_lifecycle as lifecycle
 
     settings = _settings(tmp_path)
     services = SimpleNamespace(config=settings)
@@ -210,8 +212,8 @@ def test_normal_startup_does_not_claim_readiness_before_polling(monkeypatch, tmp
     monkeypatch.setattr(main, "read_png_chara", lambda _path: {})
     monkeypatch.setattr(main, "card_fields", lambda *_args, **_kwargs: {"name": "test"})
     monkeypatch.setattr(
-        main,
-        "acknowledge_pending_update",
+        lifecycle,
+        "attempt_pending_update_ack",
         lambda *_args, **_kwargs: events.append("ack"),
         raising=False,
     )
@@ -227,17 +229,20 @@ def test_normal_startup_does_not_claim_readiness_before_polling(monkeypatch, tmp
 
 
 def test_same_version_wrong_commit_does_not_acknowledge(tmp_path):
-    from bridge.update_ack import acknowledge_pending_update, arm_pending_update_ack
+    from bridge.update_ack import arm_pending_update_ack, attempt_pending_update_ack
 
     settings = _settings(tmp_path)
     arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=settings)
     calls = []
-    assert not acknowledge_pending_update(
-        "token",
-        app_settings=settings,
-        version_backend=lambda **kwargs: "0.2.033",
-        commit_backend=lambda **kwargs: "b" * 40,
-        send_text_backend=lambda *args: calls.append(args),
+    assert (
+        attempt_pending_update_ack(
+            "token",
+            app_settings=settings,
+            version_backend=lambda **kwargs: "0.2.033",
+            commit_backend=lambda **kwargs: "b" * 40,
+            send_text_backend=lambda *args: calls.append(args),
+        )
+        is UpdateAckStatus.REVISION_MISMATCH
     )
     assert not calls
 
@@ -245,7 +250,7 @@ def test_same_version_wrong_commit_does_not_acknowledge(tmp_path):
 def test_stale_acknowledgement_is_discarded(tmp_path):
     import time
 
-    from bridge.update_ack import acknowledge_pending_update, arm_pending_update_ack, pending_update_ack_path
+    from bridge.update_ack import arm_pending_update_ack, attempt_pending_update_ack, pending_update_ack_path
 
     settings = _settings(tmp_path)
     arm_pending_update_ack("12345", "0.2.033", commit="a" * 40, app_settings=settings)
@@ -254,12 +259,15 @@ def test_stale_acknowledgement_is_discarded(tmp_path):
     payload["created_at"] = time.time() - 86401
     path.write_text(json.dumps(payload))
     calls = []
-    assert not acknowledge_pending_update(
-        "token",
-        app_settings=settings,
-        version_backend=lambda **kwargs: "0.2.033",
-        commit_backend=lambda **kwargs: "a" * 40,
-        send_text_backend=lambda *args: calls.append(args),
+    assert (
+        attempt_pending_update_ack(
+            "token",
+            app_settings=settings,
+            version_backend=lambda **kwargs: "0.2.033",
+            commit_backend=lambda **kwargs: "a" * 40,
+            send_text_backend=lambda *args: calls.append(args),
+        )
+        is UpdateAckStatus.ABSENT
     )
     assert not calls and not path.exists()
 
@@ -382,17 +390,20 @@ def test_retryable_ack_uses_bounded_exponential_backoff(tmp_path, monkeypatch):
 
 
 def test_acknowledgement_preserves_native_forum_topic_scope(tmp_path):
-    from bridge.update_ack import acknowledge_pending_update, arm_pending_update_ack
+    from bridge.update_ack import arm_pending_update_ack, attempt_pending_update_ack
 
     settings = _settings(tmp_path)
     scope = "-100123456789|topic:42"
     arm_pending_update_ack(scope, "0.2.033", commit="a" * 40, app_settings=settings)
     calls = []
-    assert acknowledge_pending_update(
-        "token",
-        app_settings=settings,
-        version_backend=lambda **kwargs: "0.2.033",
-        commit_backend=lambda **kwargs: "a" * 40,
-        send_text_backend=lambda token, chat, text: calls.append(chat),
+    assert (
+        attempt_pending_update_ack(
+            "token",
+            app_settings=settings,
+            version_backend=lambda **kwargs: "0.2.033",
+            commit_backend=lambda **kwargs: "a" * 40,
+            send_text_backend=lambda token, chat, text: calls.append(chat),
+        )
+        is UpdateAckStatus.DELIVERED
     )
     assert calls == [scope]

@@ -1,5 +1,7 @@
 # Preproduction lifecycle and dead-code audit — 2026-10-02
 
+Historical snapshot. Test-only interfaces retained here were subsequently retired; see the [2026-10-03 audit](../../AUDIT.md).
+
 ## Scope and evidence
 
 Reviewed `cepeter/SillyTavern-Telegram-Bridge` at base commit

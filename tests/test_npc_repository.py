@@ -2,10 +2,10 @@ import sqlite3
 import time
 
 import pytest
+from persisted_state_test_support import find_test_npc
 
 from bridge.npc_repository import (
     find_npc_by_name_or_alias,
-    find_npc_exact,
     get_npc_extraction_coverage,
     insert_npc_entity,
     list_npc_entities,
@@ -68,7 +68,7 @@ def test_insert_and_list_npc_are_session_isolated():
         assert first != second
         assert [x.npc_id for x in list_npc_entities(db, "chat", "s1")] == [first]
         assert [x.npc_id for x in list_npc_entities(db, "chat", "s2")] == [second]
-        assert find_npc_exact(db, "chat", "s1", "maya torres").npc_id == first
+        assert find_test_npc(db, "chat", "s1", "maya torres").npc_id == first
     finally:
         db.close()
 

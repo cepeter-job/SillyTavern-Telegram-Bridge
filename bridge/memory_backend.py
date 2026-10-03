@@ -13,6 +13,9 @@ import sqlite3
 import threading
 import time
 import weakref
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import Any
 from urllib.parse import urlsplit
 
 from bridge.limits import (
@@ -98,6 +101,22 @@ def close_hindsight_client(client) -> None:
         client.close()
     except Exception:
         logging.debug("Could not close Hindsight client cleanly", exc_info=True)
+
+
+@contextmanager
+def hindsight_client_scope(*, app_settings: AppSettings) -> Iterator[Any]:
+    """Own the loop used by one synchronous SDK client, including its cleanup.
+
+    The SDK's sync API reuses the thread's current loop but does not close it.
+    Runner installs an owned loop before construction and drains/closes it after
+    the transport, even when client construction, requests, or cleanup fail.
+    """
+    with asyncio.Runner():
+        client = hindsight_client(app_settings=app_settings)
+        try:
+            yield client
+        finally:
+            close_hindsight_client(client)
 
 
 def hindsight_session_lock(chat_id: str, session_id: str) -> threading.RLock:
@@ -262,23 +281,22 @@ def recall_memory_results(
 ):
     if memory_mode(db, chat_id) != "on" or not query.strip():
         return []
-    client = None
     try:
-        client = hindsight_client(app_settings=app_settings)
-        results = client.recall(
-            bank_id=hindsight_bank_id(chat_id),
-            query=query[:4000],
-            max_tokens=max_tokens,
-            budget="low",
-            tags=memory_recall_filter(db, chat_id, session, character_name or session.get("character_file", "unknown")),
-            tags_match="any_strict",
-        )
-        return list(getattr(results, "results", []) or [])
+        with hindsight_client_scope(app_settings=app_settings) as client:
+            results = client.recall(
+                bank_id=hindsight_bank_id(chat_id),
+                query=query[:4000],
+                max_tokens=max_tokens,
+                budget="low",
+                tags=memory_recall_filter(
+                    db, chat_id, session, character_name or session.get("character_file", "unknown")
+                ),
+                tags_match="any_strict",
+            )
+            return list(getattr(results, "results", []) or [])
     except Exception:
         logging.warning("Hindsight recall unavailable for chat %s", chat_id, exc_info=True)
         return []
-    finally:
-        close_hindsight_client(client)
 
 
 def recall_memory_context(
@@ -312,25 +330,26 @@ def _retain_with_client(
     app_settings: AppSettings,
 ) -> bool:
     """Retain one document via a short-lived Hindsight client; failures are logged, not raised."""
-    client = None
     try:
-        client = hindsight_client(app_settings=app_settings)
-        client.retain(
-            bank_id=hindsight_bank_id(chat_id),
-            content=content,
-            context=context,
-            document_id=document_id,
-            metadata={"source": "sillytavern_telegram_bridge", "session_id": session_id, "character": character_name},
-            tags=hindsight_tags(chat_id, session_id, character_name),
-            retain_async=False,
-        )
-        _record_hindsight_document(chat_id, session_id, document_id, kind, app_settings=app_settings)
-        return True
+        with hindsight_client_scope(app_settings=app_settings) as client:
+            client.retain(
+                bank_id=hindsight_bank_id(chat_id),
+                content=content,
+                context=context,
+                document_id=document_id,
+                metadata={
+                    "source": "sillytavern_telegram_bridge",
+                    "session_id": session_id,
+                    "character": character_name,
+                },
+                tags=hindsight_tags(chat_id, session_id, character_name),
+                retain_async=False,
+            )
+            _record_hindsight_document(chat_id, session_id, document_id, kind, app_settings=app_settings)
+            return True
     except Exception:
         logging.warning(log_message, chat_id, exc_info=True)
         return False
-    finally:
-        close_hindsight_client(client)
 
 
 def _memory_hindsight_epoch_key(

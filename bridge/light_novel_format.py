@@ -234,11 +234,6 @@ def parse_story_response_diagnostic(
     return text, None, "missing_inline_choices", None
 
 
-def parse_story_response(source: str, requested_count: int) -> tuple[str, list[str] | None]:
-    story, choices, _reason, _observed_count = parse_story_response_diagnostic(source, requested_count)
-    return story, choices
-
-
 def parse_choice_response(source: str, requested_count: int) -> list[str]:
     value = json.loads(_unfence(source))
     return validate_choices(value.get("choices") if isinstance(value, dict) else value, requested_count)

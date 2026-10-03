@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from miniapp_test_support import card_bytes, identity, make_services
+from persisted_state_test_support import seed_character_rank
 
 
 def setup(tmp_path):
@@ -111,7 +112,7 @@ def test_optimizer_proposal_retains_original_and_is_actor_bound(tmp_path):
 
 
 def test_miniapp_optimizer_apply_reranks_character(tmp_path):
-    from bridge.character_quality import character_rank, store_character_rank
+    from bridge.character_quality import character_rank
     from bridge.miniapp_characters import apply_proposal, optimize_character
     from bridge.provider_port import ProviderPort
 
@@ -125,7 +126,7 @@ def test_miniapp_optimizer_apply_reranks_character(tmp_path):
     s.provider = ProviderPort(generate_backend=lambda *a, **k: next(responses))
     target = s.config.character_dir / "Alice.png"
     with s.db_factory() as db:
-        store_character_rank(db, "Alice.png", "B", app_settings=s.config)
+        seed_character_rank(db, "Alice.png", "B", app_settings=s.config)
 
     proposal = optimize_character(
         s,
@@ -149,7 +150,7 @@ def test_miniapp_optimizer_apply_reranks_character(tmp_path):
 
 
 def test_miniapp_optimizer_apply_clears_rank_when_reranking_has_no_result(tmp_path):
-    from bridge.character_quality import character_rank, store_character_rank
+    from bridge.character_quality import character_rank
     from bridge.miniapp_characters import apply_proposal, optimize_character
     from bridge.provider_port import ProviderPort
 
@@ -163,7 +164,7 @@ def test_miniapp_optimizer_apply_clears_rank_when_reranking_has_no_result(tmp_pa
     s.provider = ProviderPort(generate_backend=lambda *a, **k: next(responses))
     target = s.config.character_dir / "Alice.png"
     with s.db_factory() as db:
-        store_character_rank(db, "Alice.png", "A", app_settings=s.config)
+        seed_character_rank(db, "Alice.png", "A", app_settings=s.config)
 
     proposal = optimize_character(
         s,

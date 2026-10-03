@@ -9,6 +9,7 @@ from email.message import Message
 
 import pytest
 from application_test_setup import make_test_application_services, make_test_rag_service
+from persisted_state_test_support import seed_character_rank
 from test_character_mutation_safety import _card_png
 from test_character_mutation_safety import card_context as card_context
 
@@ -99,7 +100,7 @@ def test_optimizer_callback_preview_apply_and_replay_use_exact_proposal(card_con
 
     services = make_test_application_services(app_settings=ctx.app_settings, provider=ProviderPort(generate))
     session = services.session.create(db, "chat", ctx.app_settings.default_model, session_id="session")
-    character_quality.store_character_rank(db, "Alice.png", "S", app_settings=ctx.app_settings)
+    seed_character_rank(db, "Alice.png", "S", app_settings=ctx.app_settings)
     monkeypatch.setattr(character_quality, "task_model_for_session", lambda *a, **k: "utility::fixture")
     monkeypatch.setattr(callback_dispatch, "answer_callback", lambda *a, **k: None)
 
@@ -486,7 +487,7 @@ def test_optimizer_details_show_cached_character_rank(card_context, monkeypatch)
 
     db, ctx, _ = card_context
     (ctx.app_settings.character_dir / "Alice.png").write_bytes(_card_png("Alice", "original"))
-    character_quality.store_character_rank(db, "Alice.png", "S", app_settings=ctx.app_settings)
+    seed_character_rank(db, "Alice.png", "S", app_settings=ctx.app_settings)
     delivered = []
     monkeypatch.setattr(
         character_optimizer_panels,
@@ -516,7 +517,7 @@ def test_optimizer_picker_shows_registered_rank_icon(card_context, monkeypatch):
 
     db, ctx, _ = card_context
     (ctx.app_settings.character_dir / "Alice.png").write_bytes(_card_png("Alice", "original"))
-    character_quality.store_character_rank(db, "Alice.png", "S", app_settings=ctx.app_settings)
+    seed_character_rank(db, "Alice.png", "S", app_settings=ctx.app_settings)
     delivered = []
     monkeypatch.setattr(
         character_optimizer_panels,
@@ -534,7 +535,7 @@ def test_optimizer_picker_shows_registered_rank_icon(card_context, monkeypatch):
 def test_character_info_picker_shows_registered_rank_icon(card_context, monkeypatch):
     db, ctx, _ = card_context
     (ctx.app_settings.character_dir / "Alice.png").write_bytes(_card_png("Alice", "original"))
-    character_quality.store_character_rank(db, "Alice.png", "S", app_settings=ctx.app_settings)
+    seed_character_rank(db, "Alice.png", "S", app_settings=ctx.app_settings)
     delivered = []
     monkeypatch.setattr(
         cards, "send_panel_request", lambda _token, _method, payload, **_k: delivered.append(payload) or {}

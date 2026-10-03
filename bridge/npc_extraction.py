@@ -112,11 +112,6 @@ def _parse_payload(raw: str, *, primary_name: str, user_name: str) -> tuple[list
     return groups, True
 
 
-def parse_npc_extraction(raw: str, *, primary_name: str, user_name: str) -> list[NpcExtractionGroup]:
-    groups, valid = _parse_payload(raw, primary_name=primary_name, user_name=user_name)
-    return groups if valid else []
-
-
 def _source_rows(
     db: sqlite3.Connection, chat_id: str, session_id: str, coverage: int, target_rowid: int
 ) -> list[tuple[int, str, str]]:

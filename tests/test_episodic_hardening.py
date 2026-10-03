@@ -1,5 +1,7 @@
 import sqlite3
 
+from persisted_state_test_support import read_episodic_memories
+
 from bridge import episodic_memory as episodic
 from bridge.episodic_extraction import parse_episodic_candidates
 from bridge.memory_service import MemoryService
@@ -128,7 +130,7 @@ def test_invalidate_episodic_memories_removes_edited_and_later_ranges():
         removed = episodic.invalidate_episodic_memories_from_row(db, "chat", "s1", 5)
         db.commit()
 
-        remaining = episodic.list_episodic_memories(db, "chat", "s1")
+        remaining = read_episodic_memories(db, "chat", "s1")
         assert removed == 2
         assert [item.summary for item in remaining] == ["early red key fact"]
     finally:

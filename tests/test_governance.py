@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).parents[1]
@@ -245,6 +246,10 @@ def test_user_documentation_relative_links_resolve():
 
 def test_completed_internal_planning_artifacts_are_not_shipped_as_user_docs():
     retired = (
+        "docs/superpowers/plans/2026-10-02-callback-decomposition.md",
+        "docs/superpowers/specs/2026-10-02-callback-decomposition.md",
+        "docs/superpowers/plans/2026-10-02-imagine-character-reference-routing.md",
+        "docs/superpowers/specs/2026-10-02-imagine-character-reference-routing-design.md",
         "docs/audit-repairs-2026-09-30.md",
         "docs/superpowers/plans/2026-09-26-light-novel-mode.md",
         "docs/superpowers/plans/2026-09-27-miniapp-delivery.md",
@@ -278,3 +283,34 @@ def test_release_signing_rotation_runbook_requires_overlap_and_revocation_steps(
         assert phrase in operations.casefold(), phrase
     assert "multiple public signer entries" in security.casefold()
     assert "private signing keys" in security.casefold()
+
+
+def test_resource_leaks_cannot_escape_ci_as_unraisable_warnings():
+    import tomllib
+
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    filters = config["tool"]["pytest"]["ini_options"]["filterwarnings"]
+    assert "error::pytest.PytestUnraisableExceptionWarning" in filters
+
+
+@pytest.mark.parametrize(
+    "module,name",
+    [
+        ("light_novel_repository", "fail_choice_generation"),
+        ("response_delivery", "persist_assistant_delivery_ids"),
+        ("light_novel_format", "parse_story_response"),
+        ("npc_repository", "find_npc_exact"),
+        ("image_generation", "handle_imagine_prompt"),
+        ("update_ack", "acknowledge_pending_update"),
+        ("episodic_memory", "list_episodic_memories"),
+        ("character_quality", "store_character_rank"),
+        ("npc_extraction", "parse_npc_extraction"),
+        ("grounded_user_settings", "grounded_user_label"),
+    ],
+)
+def test_retired_entrypoints_and_test_only_helpers_do_not_ship(module, name):
+    import ast
+
+    tree = ast.parse((ROOT / "bridge" / f"{module}.py").read_text())
+    definitions = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
+    assert name not in definitions

@@ -224,14 +224,17 @@ def test_choice_scope_rejected_without_generation_job(novel_db, bad):
 
 def test_retry_choices_enqueues_only_choice_job_with_unchanged_count(novel_db):
     from bridge.light_novel_callbacks import route_light_novel_callback
-    from bridge.light_novel_repository import bind_choice_panel, fail_choice_generation
+    from bridge.light_novel_repository import bind_choice_panel
 
     record = attached_choice(novel_db, ready=False)
     db, _session, settings = novel_db
     services = bridge_services(settings, [])
     with write_transaction(db):
         bind_choice_panel(db, record.nonce, 81)
-        fail_choice_generation(db, record.nonce)
+        db.execute(
+            "UPDATE light_novel_choice_sets SET generation_status='failed',lease_token='',lease_until=0 WHERE nonce=?",
+            (record.nonce,),
+        )
         db.execute("UPDATE jobs SET state='done'")
     callback = {"id": "cb", "data": f"lnretry:{record.nonce}", "message": {"message_id": 81}}
     route_light_novel_callback(services, db, callback, 105, "chat", "owner", message_worker=lambda *a: None)

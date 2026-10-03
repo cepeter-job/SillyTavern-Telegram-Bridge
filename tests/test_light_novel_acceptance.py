@@ -177,13 +177,13 @@ def test_choice_recovery_executes_the_normal_conversation_pipeline_exactly_once(
     from test_character_mutation_safety import _card_png
 
     from bridge import message_commands
+    from bridge.delivery_repository import store_delivery_ids
     from bridge.job_service import DurableJob
     from bridge.light_novel_callbacks import route_light_novel_callback
     from bridge.light_novel_repository import bind_choice_panel, latest_choice_set
     from bridge.light_novel_service import prepare_turn
     from bridge.metadata import set_meta
     from bridge.provider_port import ProviderPort
-    from bridge.response_delivery import persist_assistant_delivery_ids
     from bridge.session_core import update_session
     from bridge.sqlite_store import db_connect, write_transaction
     from bridge.worker_orchestration import resolve_recovered_job_submission
@@ -211,11 +211,13 @@ def test_choice_recovery_executes_the_normal_conversation_pipeline_exactly_once(
     )
     monkeypatch.setattr(message_commands, "send_typing", lambda *a: None)
     monkeypatch.setattr(message_commands, "queue_user_quote_tts", lambda *a, **k: None)
-    monkeypatch.setattr(
-        message_commands,
-        "send_reply",
-        lambda token, chat, text, db, sid, rowid, **kw: persist_assistant_delivery_ids(db, rowid, [92]),
-    )
+
+    def record_sent_reply(token, chat, text, db, sid, rowid, **kw):
+        with write_transaction(db):
+            store_delivery_ids(db, rowid, [92])
+        return True
+
+    monkeypatch.setattr(message_commands, "send_reply", record_sent_reply)
     monkeypatch.setattr(
         message_commands,
         "prepare_turn",

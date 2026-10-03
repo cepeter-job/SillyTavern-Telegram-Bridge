@@ -1,4 +1,5 @@
 from application_test_setup import ensure_application_extensions, make_test_provider_port
+from persisted_state_test_support import seed_character_rank
 
 ensure_application_extensions()
 
@@ -220,11 +221,11 @@ class CharacterQualityPersistenceTests(SettingsTestCase):
         self.tmp.cleanup()
 
     def test_store_and_load_rank(self):
-        quality.store_character_rank(self.db, "alice.png", "S", app_settings=self.app_settings)
+        seed_character_rank(self.db, "alice.png", "S", app_settings=self.app_settings)
         self.assertEqual(quality.character_rank(self.db, "alice.png", app_settings=self.app_settings), "S")
 
     def test_invalid_tier_not_stored(self):
-        quality.store_character_rank(self.db, "bob.png", "Z", app_settings=self.app_settings)
+        seed_character_rank(self.db, "bob.png", "Z", app_settings=self.app_settings)
         self.assertEqual(quality.character_rank(self.db, "bob.png", app_settings=self.app_settings), "")
 
     def test_unranked_defaults_empty(self):

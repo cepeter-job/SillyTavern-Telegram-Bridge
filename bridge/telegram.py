@@ -60,6 +60,8 @@ def telegram_request(token: str, method: str, payload: dict | None = None) -> di
                 detail = json.loads(exc.read().decode("utf-8")).get("description") or exc.reason
             except (OSError, ValueError, json.JSONDecodeError):
                 detail = exc.reason
+            finally:
+                exc.close()
             if method == "sendMessage" and exc.code == 404 and attempt < 2:
                 logging.warning("Telegram sendMessage returned 404; retrying (attempt %s/3)", attempt + 2)
                 time.sleep(0.5 * (attempt + 1))

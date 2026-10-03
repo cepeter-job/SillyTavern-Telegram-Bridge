@@ -12,7 +12,7 @@ from functools import partial as _partial
 
 from bridge.background import submit_background
 from bridge.delivery_progress import DeliveryFailure, DeliveryTargetExpired, checkpoint, prepare_progress
-from bridge.delivery_repository import clear_progress, store_delivery_ids
+from bridge.delivery_repository import clear_progress
 from bridge.expressions import deliver_expression
 from bridge.metadata import get_meta
 from bridge.settings import AppSettings
@@ -204,26 +204,6 @@ def queue_user_quote_tts(
         logging.warning("Automatic user-quote TTS dropped for chat %s", chat_id)
         return False
     return True
-
-
-def persist_assistant_delivery_ids(db: sqlite3.Connection, assistant_rowid: int, message_ids: list[int]) -> bool:
-    """Persist Telegram delivery metadata without misreporting a sent reply as generation failure."""
-    nested = db.in_transaction
-    try:
-
-        def write() -> bool:
-            store_delivery_ids(db, assistant_rowid, message_ids)
-
-            return True
-
-        with write_transaction(db):
-            return write()
-    except sqlite3.OperationalError as exc:
-        if nested or ("locked" not in str(exc).casefold() and "busy" not in str(exc).casefold()):
-            raise
-
-        logging.warning("Reply delivered but Telegram message IDs could not be recorded: %s", exc)
-        return False
 
 
 def send_reply(

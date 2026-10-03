@@ -248,15 +248,6 @@ def complete_choice_generation(
     )
 
 
-def fail_choice_generation(db: sqlite3.Connection, nonce: str) -> None:
-    require_active_transaction(db)
-    db.execute(
-        "UPDATE light_novel_choice_sets SET generation_status='failed',lease_token='',l"
-        "ease_until=0 WHERE nonce=? AND state='open' AND generation_status<>'ready'",
-        (nonce,),
-    )
-
-
 def consume_choice_set(
     db: sqlite3.Connection,
     nonce: str,

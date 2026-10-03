@@ -181,7 +181,9 @@ Extend each provider's existing model catalog cache entry with metadata-specific
 
 Existing model-list cache fields remain separate.
 
-A metadata refresh failure does not delete the last successfully cached context values. This prevents a temporary provider outage from suddenly compacting established sessions back to 32K. Diagnostics may mark the metadata stale or report the last refresh error.
+A transport or provider refresh failure does not delete the last successfully cached context values. This prevents a temporary provider outage from suddenly compacting established sessions back to 32K. Diagnostics may mark the metadata stale or report the last refresh error.
+
+A successful catalog response is authoritative for metadata presence. For each explicitly configured model, if the returned model entry is absent or contains no valid bounded context field, the bridge clears that model's previously discovered context value so resolution safely falls back to explicit configuration or the global fallback. This prevents stale discovered metadata from indefinitely overestimating a model whose provider-side limits changed.
 
 Cache values are advisory only. They never override explicit YAML.
 
@@ -269,8 +271,8 @@ Metadata discovery is best-effort.
 | HTTP 429/503 | record provider availability error; keep cached values |
 | timeout/network error | record error; keep cached values |
 | oversized/invalid JSON | reject response; keep cached values |
-| model entry missing | keep prior value if present; otherwise fallback |
-| context field invalid/out of bounds | ignore value |
+| successful response omits configured model entry | clear that model's discovered context; use explicit/fallback context |
+| successful response contains invalid/out-of-bounds context | clear that model's discovered context; use explicit/fallback context |
 | model not explicitly configured | ignore metadata |
 | explicit YAML value exists | use YAML regardless of cache |
 
@@ -334,7 +336,8 @@ No new service, daemon, timer, or database table is required.
 - only explicitly configured models receive metadata
 - known context field aliases parse correctly
 - invalid/out-of-range values are ignored
-- refresh failures preserve prior successful metadata
+- transport/provider refresh failures preserve prior successful metadata
+- successful responses clear stale metadata when a configured model no longer publishes a valid context value
 
 ### Context resolution tests
 

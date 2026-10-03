@@ -43,6 +43,7 @@ def test_failed_migration_rolls_back_legacy_goal(monkeypatch):
     from bridge import narrative_schema
 
     with closing(database()) as db:
+
         def reject(_db):
             raise ValueError("Director goal copy verification failed")
 

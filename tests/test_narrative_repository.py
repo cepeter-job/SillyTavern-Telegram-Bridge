@@ -3,6 +3,7 @@
 import json
 import sqlite3
 from contextlib import closing
+from dataclasses import asdict
 
 import pytest
 
@@ -66,13 +67,17 @@ def test_scene_thread_identity_is_scoped_and_stale_updates_do_not_win(db):
     db.execute("BEGIN")
     thread = NarrativeThread("rebellion", "Rebellion", source_revision=10)
     scene = NarrativeScene("gate", "rebellion", viewpoint_character="Mara", start_rowid=10, source_revision=10)
-    assert repo.upsert_narrative_thread(db, "chat", "story", thread)
-    assert repo.upsert_narrative_scene(db, "chat", "story", scene)
-    assert repo.load_narrative_scene(db, "chat", "story", "gate") == scene
+    assert repo.upsert_narrative_thread(db, "chat", "story", asdict(thread))
+    assert repo.upsert_narrative_scene(db, "chat", "story", asdict(scene))
+    assert repo.load_narrative_scene(db, "chat", "story", "gate") == asdict(scene)
     assert repo.load_narrative_scene(db, "other", "story", "gate") is None
-    assert not repo.upsert_narrative_thread(db, "chat", "story", NarrativeThread("rebellion", "Old", source_revision=9))
-    assert not repo.upsert_narrative_scene(db, "chat", "story", NarrativeScene("gate", "rebellion", source_revision=9))
-    assert repo.load_narrative_thread(db, "chat", "story", "rebellion").title == "Rebellion"
+    assert not repo.upsert_narrative_thread(
+        db, "chat", "story", asdict(NarrativeThread("rebellion", "Old", source_revision=9))
+    )
+    assert not repo.upsert_narrative_scene(
+        db, "chat", "story", asdict(NarrativeScene("gate", "rebellion", source_revision=9))
+    )
+    assert repo.load_narrative_thread(db, "chat", "story", "rebellion")["title"] == "Rebellion"
     db.commit()
     assert not db.in_transaction
     assert len(repo.list_narrative_threads(db, "chat", "story")) == 1

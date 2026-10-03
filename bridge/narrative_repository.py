@@ -2,10 +2,9 @@
 
 import json
 import sqlite3
-from dataclasses import asdict
+from collections.abc import Mapping
 from typing import Any
 
-from bridge.narrative_values import NarrativeScene, NarrativeThread
 from bridge.repository_contracts import require_active_transaction
 
 
@@ -110,40 +109,50 @@ def upsert_narrative_state_if_fresh(
 
 def load_narrative_thread(
     db: sqlite3.Connection, chat_id: str, session_id: str, thread_id: str
-) -> NarrativeThread | None:
+) -> dict[str, Any] | None:
     row = db.execute(
         "SELECT thread_id,title,status,summary,last_scene_id,source_revision FROM narrative_threads "
         "WHERE chat_id=? AND session_id=? AND thread_id=?",
         (chat_id, session_id, thread_id),
     ).fetchone()
-    return NarrativeThread(*row) if row else None
+    columns = ("thread_id", "title", "status", "summary", "last_scene_id", "source_revision")
+    return dict(zip(columns, row, strict=True)) if row else None
 
 
 def list_narrative_threads(
     db: sqlite3.Connection, chat_id: str, session_id: str, limit: int = 32, offset: int = 0
-) -> list[NarrativeThread]:
+) -> list[dict[str, Any]]:
     rows = db.execute(
         "SELECT thread_id,title,status,summary,last_scene_id,source_revision FROM narrative_threads "
         "WHERE chat_id=? AND session_id=? ORDER BY source_revision DESC,thread_id LIMIT ? OFFSET ?",
         (chat_id, session_id, min(100, max(1, limit)), max(0, offset)),
     ).fetchall()
-    return [NarrativeThread(*row) for row in rows]
+    columns = ("thread_id", "title", "status", "summary", "last_scene_id", "source_revision")
+    return [dict(zip(columns, row, strict=True)) for row in rows]
 
 
-def upsert_narrative_thread(db: sqlite3.Connection, chat_id: str, session_id: str, thread: NarrativeThread) -> bool:
+def upsert_narrative_thread(db: sqlite3.Connection, chat_id: str, session_id: str, thread: Mapping[str, Any]) -> bool:
     require_active_transaction(db)
     cursor = db.execute(
-        "INSERT INTO narrative_threads(chat_id,session_id,thread_id,title,status,summary,last_scene_id,source_revision)"
-        " "
+        "INSERT INTO narrative_threads(chat_id,session_id,thread_id,title,status,summary,last_scene_id,source_revision) "
         "VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(chat_id,session_id,thread_id) DO UPDATE SET "
         "title=excluded.title,status=excluded.status,summary=excluded.summary,last_scene_id=excluded.last_scene_id,"
         "source_revision=excluded.source_revision WHERE excluded.source_revision>=narrative_threads.source_revision",
-        (chat_id, session_id, *asdict(thread).values()),
+        (
+            chat_id,
+            session_id,
+            thread["thread_id"],
+            thread["title"],
+            thread["status"],
+            thread["summary"],
+            thread["last_scene_id"],
+            thread["source_revision"],
+        ),
     )
     return cursor.rowcount == 1
 
 
-def load_narrative_scene(db: sqlite3.Connection, chat_id: str, session_id: str, scene_id: str) -> NarrativeScene | None:
+def load_narrative_scene(db: sqlite3.Connection, chat_id: str, session_id: str, scene_id: str) -> dict[str, Any] | None:
     row = db.execute(
         "SELECT scene_id,thread_id,viewpoint_character,pov_mode,user_present,purpose,transition_type,"
         "start_rowid,end_rowid,status,source_revision FROM narrative_scenes "
@@ -153,10 +162,23 @@ def load_narrative_scene(db: sqlite3.Connection, chat_id: str, session_id: str, 
     if row is None:
         return None
     present = None if row[4] is None else bool(row[4])
-    return NarrativeScene(*row[:4], present, *row[5:])
+    columns = (
+        "scene_id",
+        "thread_id",
+        "viewpoint_character",
+        "pov_mode",
+        "user_present",
+        "purpose",
+        "transition_type",
+        "start_rowid",
+        "end_rowid",
+        "status",
+        "source_revision",
+    )
+    return dict(zip(columns, (*row[:4], present, *row[5:]), strict=True))
 
 
-def upsert_narrative_scene(db: sqlite3.Connection, chat_id: str, session_id: str, scene: NarrativeScene) -> bool:
+def upsert_narrative_scene(db: sqlite3.Connection, chat_id: str, session_id: str, scene: Mapping[str, Any]) -> bool:
     require_active_transaction(db)
     cursor = db.execute(
         "INSERT INTO narrative_scenes(chat_id,session_id,scene_id,thread_id,viewpoint_character,pov_mode,"
@@ -166,6 +188,20 @@ def upsert_narrative_scene(db: sqlite3.Connection, chat_id: str, session_id: str
         "user_present=excluded.user_present,purpose=excluded.purpose,transition_type=excluded.transition_type,"
         "start_rowid=excluded.start_rowid,end_rowid=excluded.end_rowid,status=excluded.status,"
         "source_revision=excluded.source_revision WHERE excluded.source_revision>=narrative_scenes.source_revision",
-        (chat_id, session_id, *asdict(scene).values()),
+        (
+            chat_id,
+            session_id,
+            scene["scene_id"],
+            scene["thread_id"],
+            scene["viewpoint_character"],
+            scene["pov_mode"],
+            scene["user_present"],
+            scene["purpose"],
+            scene["transition_type"],
+            scene["start_rowid"],
+            scene["end_rowid"],
+            scene["status"],
+            scene["source_revision"],
+        ),
     )
     return cursor.rowcount == 1

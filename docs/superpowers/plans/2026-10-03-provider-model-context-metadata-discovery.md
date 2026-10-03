@@ -81,7 +81,7 @@ Expected: FAIL because metadata fields/helpers are not yet preserved.
 
 In `bridge/provider_catalog_cache.py`:
 - add `context_window_value(raw: object) -> int | None` using the exact 4,096..1,000,000 bounds;
-- add `model_context_windows(raw: object) -> dict[str, int]` using existing model-ID validation and a bounded number of entries;
+- add `model_context_windows(raw: object) -> dict[str, int]` using existing model-ID validation and a hard maximum of 500 entries, matching the installer/provider configured-model limit;
 - teach `read_model_cache()` to sanitize metadata fields and metadata timestamps/errors;
 - teach `update_model_cache()` to compare `last_attempt_at` for model-list fields and `metadata_last_attempt_at` for metadata fields independently so concurrent writers cannot regress either dimension.
 
@@ -142,6 +142,9 @@ def test_failed_metadata_refresh_preserves_last_good_context(configured, monkeyp
 
 def test_provider_without_metadata_flag_does_not_request_metadata(configured, monkeypatch):
     ...
+
+def test_failed_metadata_refresh_is_throttled_by_metadata_attempt_timestamp(configured, monkeypatch):
+    ...
 ```
 
 Pin these exact behaviors:
@@ -150,7 +153,8 @@ Pin these exact behaviors:
 - `models_endpoint` replaces the derived `<api_endpoint>/models` URL;
 - a successful response that omits `seed` or gives it invalid context removes stale discovered `seed` context;
 - timeout/429/503 preserves prior discovered context;
-- no flag means no metadata request.
+- no flag means no metadata request;
+- metadata retry throttling uses `metadata_last_attempt_at` independently of model-list `last_attempt_at`.
 
 - [ ] **Step 2: Write failing endpoint-security tests**
 
@@ -379,6 +383,8 @@ git commit -m "feat: enable zero-knowledge context discovery on install"
 - Modify: `bridge/provider_callbacks.py`
 - Modify: `bridge/help_details.json`
 - Test: `tests/test_runtime_entrypoint_invariants.py`
+- Test: `tests/test_composition.py`
+- Test: `tests/test_job_service_workers.py`
 - Test: `tests/test_provider_maintenance.py`
 - Test: `tests/test_provider_panel_contract.py`
 - Test: `tests/test_provider_diagnostics_panels.py`
@@ -420,7 +426,7 @@ Update provider panel/diagnostic tests to assert:
 Run:
 
 ```bash
-pytest -q tests/test_runtime_entrypoint_invariants.py tests/test_provider_panel_contract.py tests/test_provider_diagnostics_panels.py tests/test_provider_maintenance.py
+pytest -q tests/test_runtime_entrypoint_invariants.py tests/test_composition.py tests/test_job_service_workers.py tests/test_provider_panel_contract.py tests/test_provider_diagnostics_panels.py tests/test_provider_maintenance.py
 ```
 
 Expected: FAIL because background runtime lacks general submission and UI strings still say model refresh.
@@ -436,6 +442,8 @@ submit: Callable[..., bool]
 to `BackgroundRuntime`.
 
 In `bridge/main.py` import `submit_background` and pass it as `BackgroundRuntime.submit`.
+
+Update every direct `BackgroundRuntime(...)` construction in `tests/test_composition.py` and `tests/test_job_service_workers.py` with a deterministic no-op/recorder `submit` callable; do not make the production field optional just to avoid updating fixtures.
 
 Do not create a new executor or thread.
 
@@ -477,7 +485,7 @@ Expected: PASS.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add bridge/composition.py bridge/main.py bridge/runtime_lifecycle.py bridge/provider_panels.py bridge/provider_callbacks.py bridge/help_details.json tests/test_runtime_entrypoint_invariants.py tests/test_provider_maintenance.py tests/test_provider_panel_contract.py tests/test_provider_diagnostics_panels.py
+git add bridge/composition.py bridge/main.py bridge/runtime_lifecycle.py bridge/provider_panels.py bridge/provider_callbacks.py bridge/help_details.json tests/test_runtime_entrypoint_invariants.py tests/test_composition.py tests/test_job_service_workers.py tests/test_provider_maintenance.py tests/test_provider_panel_contract.py tests/test_provider_diagnostics_panels.py
 git commit -m "feat: refresh provider metadata nonblocking"
 ```
 

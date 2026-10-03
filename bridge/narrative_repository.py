@@ -134,8 +134,8 @@ def list_narrative_threads(
 def upsert_narrative_thread(db: sqlite3.Connection, chat_id: str, session_id: str, thread: Mapping[str, Any]) -> bool:
     require_active_transaction(db)
     cursor = db.execute(
-        "INSERT INTO narrative_threads(chat_id,session_id,thread_id,title,status,summary,last_scene_id,source_revision) "
-        "VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(chat_id,session_id,thread_id) DO UPDATE SET "
+        "INSERT INTO narrative_threads(chat_id,session_id,thread_id,title,status,summary,last_scene_id,source_revision)"
+        " VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(chat_id,session_id,thread_id) DO UPDATE SET "
         "title=excluded.title,status=excluded.status,summary=excluded.summary,last_scene_id=excluded.last_scene_id,"
         "source_revision=excluded.source_revision WHERE excluded.source_revision>=narrative_threads.source_revision",
         (

@@ -1,14 +1,18 @@
 # Token usage
 
+[Back to README](../README.md) · [Mini App](miniapp.md) ·
+[Model calls explained](user-guide.md#model-calls-and-token-use)
+
 Open **Manage → Advanced settings → Usage** in the Mini App. Choose **Last
 24 hours**, **Last 7 days**, or **Last 30 days**, and **Current session** or
 **All my sessions**. Refresh after a request completes to see new activity.
 
 ## Reading the numbers
 
-The tracker records **provider-reported token counts**, not estimates based on
-message length. Large headline figures use compact notation; expand **Exact token
-counts** for the full integers. Daily figures are available in an accessible table.
+The tracker records **provider-reported token counts**. The estimates in
+`/prompt` → Budget serve a different purpose: planning what fits in a request.
+Large totals use compact notation; expand **Exact token counts** for full numbers.
+Daily figures are also available in a table.
 
 - **Input** includes the prompt and context. Cached-input counts are a subset, not
   tokens to add again. Anthropic's separate cache-read/cache-creation input fields
@@ -69,11 +73,7 @@ authoritative billing record.
 
 ## Upgrade and rollback
 
-Token usage is stored by forward migration **3 — token_usage_ledger**. Existing
-messages and session settings are preserved when that migration is first applied.
-The current application schema continues through migration **9**; migrations
-7–9 add message identity and durable delivery/recovery state but do not change the
-usage-ledger data model. Older bridge versions reject schema versions they do not
-know, so rollback across any newer migration boundary requires restoring a
-matching pre-upgrade database backup. Do not delete migration records to bypass
-the guard.
+The usage ledger is created by a forward database migration. Historical token
+counts are not reconstructed from old messages. If you roll back across a newer
+schema boundary, restore a matching pre-upgrade database backup instead of
+deleting migration records. See [backup and restore](operations.md#database-migrations-backup-and-restore).

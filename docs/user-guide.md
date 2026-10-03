@@ -1,840 +1,446 @@
 # User guide
 
-## ✨ What it does
+[Back to README](../README.md) · [Installation](installation.md) ·
+[Configuration](configuration.md) · [Troubleshooting](operations.md#troubleshooting)
 
-### 💬 Chat with your characters from Telegram
+Start with a normal conversation. Add memory, images, voice or group controls
+when they solve a problem for your story.
 
-Send a message like you would to any contact. The bridge pulls together your
-character card, Persona, World Info, System Prompt, conversation history, memory,
-and any relevant documents — builds the prompt — and sends it to your model
-provider. The reply comes back as a normal Telegram message.
+- [Your first conversation](#your-first-conversation)
+- [Everyday controls](#everyday-controls)
+- [Sessions and recovery](#sessions-and-recovery)
+- [Models, context and memory](#models-context-and-memory)
+- [Light Novel choices](#light-novel-mode)
+- [Characters and native data](#characters-and-native-data)
+- [Images, voice and documents](#images-voice-and-documents)
+- [Live Sync and groups](#live-sync-and-groups)
 
-If your provider supports streaming, you'll even see a live preview while it
-generates. Pretty satisfying, honestly.
+## Your first conversation
 
-You can run multiple named sessions in the same chat. Each one keeps its own
-transcript, model, settings, Persona, World Info, notes, variants, and group
-state. Panel buttons are tied to the session that opened them, so an old menu
-can't accidentally mess with a different session.
+After [installing the bridge](installation.md), open your bot's private chat.
 
-### 📂 Reads your native SillyTavern data
+1. Send `/character` and choose a PNG character card.
+2. Choose **Normal** for ordinary chat, or **Light Novel** for action choices.
+   Light Novel adds an A/B/C strategy selection.
+3. Select an optional Persona, World Info and System Prompt. **Off/Skip** is
+   available, and you can select more than one lorebook.
+4. Choose an unstarted session or create a named one, then tap **Apply**.
+5. Open `/providers` and check the **Story** model. This model writes the replies.
+6. Send `/start`, preview the character's Default or Alternate greetings, and
+   choose one. Then send your first message.
 
-No duplicate catalogs. No sync conflicts. The bridge works directly with the
-files SillyTavern already uses:
+Setup is a draft until you tap Apply. Applying setup does not start the story;
+`/start` sends the card's opening message. That greeting does not need a Story
+generation request. Light Novel mode then makes a separate request for its first
+choices.
 
-| What | Where |
+A new or reset standard session answers conversational input with
+`Please use /start command.` until you choose its greeting. Setup commands still
+work. After a session starts, `/start` reports that it has already started. To try
+a different opening, create another session or confirm a reset.
+
+### A few terms
+
+| Term | Meaning |
 |---|---|
-| Character cards (PNG) | `data/default-user/characters/` |
-| World Info / lorebooks | `data/default-user/worlds/` |
-| System Prompts | `data/default-user/sysprompt/` |
-| Persona names & descriptions | `settings.json` |
-| Persona avatars | `data/default-user/User Avatars/` |
-| Expression sprites | Tied to the active character |
+| **Character** | The card for the character the model plays. |
+| **Persona** | The identity and description you use in the story. |
+| **World Info** | Lorebooks containing setting or character facts. |
+| **System Prompt** | Instructions that guide how the model responds. |
+| **Session** | One story, with its own transcript and selected settings. |
+| **Story model** | The model that writes the roleplay. |
+| **Utility model** | The model used for summaries, choices and other helpers. It can inherit Story. |
 
-Persona review and editing happen from `/persona`. The description appears in
-Telegram's copyable code block above the edit buttons — handy when you're
-tweaking a description on mobile.
+## Everyday controls
 
-When you swap characters or Personas, the bridge validates everything, checks
-for protected targets, makes a backup, and confirms the change before reporting
-success. **No silent overwrites. Ever.**
+Most commands open a panel. Tap its buttons to make a choice. If it asks for
+text, your next message completes that step; `/cancel` backs out. If a panel has
+expired or belongs to a previous session, reopen the command.
 
-### 🔌 Providers and generation
-
-A private provider catalog drives model selection. You can use
-OpenAI-compatible Chat Completions, native OpenAI Codex OAuth, Anthropic
-Messages, the keyless OpenCode Muse `/responses` transport, or an opt-in image
-provider — all from the same panel. `/providers` starts with a block-quoted
-snapshot of the active session's Story and Utility models and their reasoning
-budgets. Both Story and Utility reasoning are configured from `/providers` and
-remain independent per session. Story reasoning applies to Story-model replies;
-Utility reasoning applies to Utility-model tasks such as summaries, curated and
-episodic memory, NPC-state extraction, scene state, Light Novel strategy B
-choices, and character ranking/optimization.
-
-Beyond basic generation, the bridge handles:
-
-- 🎲 Response variants and branches
-- ✏️ Editing your last message and regenerating
-- 🔁 Retrying failed turns
-- ➡️ Auto-continuation when output hits the token limit
-- 🌐 Per-session reply language
-- 🧠 Reasoning budgets
-- 💾 Presets
-
-Health checks, model discovery, endpoint validation, and streaming configuration
-are all built in. Provider catalogs can keep `discover_models: false` to pin the
-model list while enabling `discover_model_metadata: true` to learn context-window
-metadata only for those configured models. Explicit provider or per-model context
-values override discovered metadata; unknown context safely falls back to 32K.
-Recognized provider rate limits, authentication/credit failures, timeouts,
-unavailable models, upstream outages, and network failures are converted to
-bounded actionable messages. Raw upstream response bodies, URLs, credentials,
-and local paths are never shown in those user-facing errors.
-
-### 🧠 Memory and retrieval
-
-Memory is layered and session-scoped. Hindsight provides external recall for the
-active session only; `/remember` stores an explicit fact there. A rolling
-continuity summary answers “what is happening now”, while curated memory keeps a
-small editable set of durable facts.
-
-The bridge also keeps local episodic memories extracted from completed summary
-segments. These records preserve durable events, facts, goals, relationship/world
-changes and secrets with source-row tracking, importance filtering and
-deduplication. Restricted records carry explicit `known_by` character names and
-fail closed when that boundary is missing.
-
-The NPC Bank separately maintains structured supporting-character state and field
-history. Its prompt context is selected from the current query/history/scene and
-respects restricted `known_by` fields for the active story character.
-
-The Data Bank adds local full-text search and optional embeddings for PDF,
-DOCX, TXT, Markdown, JSON, YAML, CSV, HTML, and XML files. Everything is
-bounded — file sizes, page counts, extraction limits and prompt context — so a
-large upload can't run away with resources.
-
-### 🎨 Media and groups
-
-Send photos, documents, or voice messages and the bridge routes them where they
-need to go — vision analysis, Data Bank ingestion, card validation, or
-transcription. Automatic TTS can speak quoted dialogue from both your messages
-and character replies. Expression sprites can be sent automatically.
-
-And Telegram Forum Topics can host multi-character group sessions with
-round-robin, contextual, Director, manual, or autonomous turn modes.
-
----
-
-## 🤖 Using the bot
-
-The bot is built around panels. Send a command, get a menu, then tap buttons or
-send the next message to complete the action. It keeps things predictable and
-prevents accidental changes.
-
-### 📋 Everyday commands
-
-| Command | What it does |
+| When you want to… | Use |
 |---|---|
-| `/start` | Choose the opening greeting once after `/new` or `/reset` |
-| `/help` | Open the interactive command guide |
-| `/status` | Show formatted read-only session status |
-| `/new` | Create and activate a named isolated session |
-| `/reset` | Confirm an active-session reset and memory purge |
-| `/session` | Switch, create, or delete inactive sessions |
-| `/cancel` | Cancel the current scoped text-input step |
-| `/character` | Manage cards and configure a Normal/Light Novel session |
-| `/lightnovel` | Dedicated A/B/C mode controls and current-choice recovery |
-| `/persona` | Choose, create, edit, or disable a native Persona |
-| `/world` | Choose or disable World Info/lorebooks |
-| `/systemprompt` | Choose a native JSON/TXT SillyTavern System Prompt |
-| `/note` | Configure the session Author's Note |
-| `/providers` | Choose Story or Utility provider/model |
-| `/update` | Check for a release update and confirm before applying it |
+| Start a fresh story | `/new`, then `/character` and `/start` |
+| Switch between existing stories | `/session` |
+| Check the active session and context budget | `/status` |
+| Choose Story/Utility models or reasoning | `/providers` |
+| Adjust sampling, reply length or optional style controls | `/settings` |
+| Enable or disable live reply previews | `/stream` |
+| Change the reply language or save generation settings | `/language` or `/preset` |
+| Change the Persona, lorebooks, prompt or Author's Note | `/persona`, `/world`, `/systemprompt`, `/note` |
+| Inspect the assembled prompt and context budget | `/prompt` |
+| Find every command and its accepted arguments | `/help` |
 
-### 🔄 Replies and generation
+`/help` is the canonical command reference. Try `/help databank search` or
+`/help scene refresh` for one action. Some typed forms act directly, while
+others open a panel: for example, `/language English` sets a language, but
+`/stream on` still asks you to use the panel buttons.
 
-| Command | What it does |
-|---|---|
-| `/settings` | Open sampling, token, stop-sequence, Humanizer, and Grounded User controls |
-| `/stream` | Open streaming preview controls |
-| `/preset` | Apply, save, or delete generation presets |
-| `/prompt` | Open the read-only prompt inspector |
-| `/regen` | Generate another response variant |
-| `/swipe` | Browse stored response variants |
-| `/branch` | Choose the active response branch |
-| `/continue` | Continue the latest assistant response |
-| `/edit` | Edit the latest user turn and regenerate |
-| `/retry` | Recover a failed response or incomplete saved delivery |
-| `/language` | Choose the model reply language |
-| `/expression` | Choose native expression behavior |
-| `/macro` | Preview supported SillyTavern macros |
-| `/stscript` | Open allowlisted STscript actions |
+### Narration and dialogue
 
-### 🎙️ Voice, files, memory, and groups
+Replies use italic actions/narration and normal spoken dialogue. For example:
 
-| Command | What it does |
-|---|---|
-| `/voice` | Open automatic quote-driven TTS controls |
-| `/voice_input` | Configure transcription, STT model, and language |
-| `/imagine` | Open the image panel for Current Scene or Custom Prompt generation |
-| `/memory` | Open active-session Hindsight/curated-memory controls |
-| `/remember` | Store one explicit long-term fact |
-| `/summarize` | Confirm active-session summary regeneration |
-| `/npc` | Open the active session's persistent NPC Bank |
-| `/databank` | Open Data Bank RAG controls |
-| `/sync` | Open Live API Sync controls |
-| `/group` | Open Forum Topic group controls |
-| `/scene` | Open structured scene-state controls |
+> *She turns toward the doorway.* "I heard something outside."
 
-The README intentionally keeps this list to top-level commands. `/help` is the
-canonical command reference for direct typed forms and subcommands. For example,
-`/help databank search`, `/help group mode`, `/help group goal`, and
-`/help scene refresh` open the matching detailed entry.
+The bridge normalizes reply formatting before saving and sending it. It also
+formats opening greetings while preserving valid card-authored action markup
+and unquoted dialogue. Inline and fenced code are protected from this formatting.
 
-> `/tts` is not a command. Automatic voice is controlled from `/voice`.
-
-
-### How to format your messages
-
-When you send a message, you can use a couple of markers to tell the bridge
-what's action and what's dialogue:
+For your own messages:
 
 ```text
-*She walks toward the doorway.*    → Action/narration
-"I heard something outside."        → Dialogue (also queued for TTS)
-I heard something outside.          → Plain dialogue, no markers
-**bold text**                       → Literal text, not an action marker
+*I open the door slowly.*
+"Is anyone there?"
 ```
 
-Here's how it works:
+Single-star spans tell the model that you are describing an action. Your original
+input remains unchanged in the stored transcript. Double-star text is not an
+action marker.
 
-- `*text*` (single stars) → sent to the model as an action. The stored
-  transcript stays unchanged.
-- `"text"` (straight double quotes) → treated as dialogue and queued for TTS
-  when automatic voice is enabled from `/voice`. Works for both your messages
-  and character replies.
-- `**text**` (double stars) → preserved literally. Not an action, not spoken.
-- Curly or "smart" quotes → not recognized as TTS delimiters. Use straight
-  quotes.
+If you enable automatic voice, only dialogue inside **straight double quotes**
+is queued for speech. Curly quotes, actions and unquoted text remain text-only.
+This applies to both your messages and character replies.
 
-### Panels and cancellation
+## Sessions and recovery
 
-Some commands need you to type something — a session name, a memory fact, an
-image prompt. When that happens, the bot opens a scoped input step and waits
-for your next message.
+### Keep separate stories
 
-Send `/cancel` to back out. Invalid input keeps the prompt open with feedback.
-Valid input applies the change and returns you to the panel. Pending inputs
-expire after a while, and stale callbacks are rejected rather than applied to
-the wrong session.
+`/new` asks for a name of 1–80 characters and switches to the new session. It
+keeps the previous story and its Telegram messages. `/session` lets you return
+to that story later.
 
-Dynamic panel choices use random, chat-scoped handles stored in SQLite. They
-expire after 15 minutes, survive service restarts while valid, and are rejected
-when their chat or panel ownership does not match. A failed database write does
-not issue a memory-only handle. Expired handles are pruned when new handles are
-created; token resolution itself never commits or mutates a request transaction.
+Each session keeps its transcript, character setup, Story/Utility selections,
+reasoning and generation settings, response language, variants, notes, summary
+and derived memory. Queued work stays attached to the session that submitted it;
+switching sessions does not redirect an unfinished reply or edit.
 
-`/stscript` only exposes allowlisted bridge actions. It can't run shell
-commands, touch the filesystem, or make network requests. Its Reset action goes
-through the normal confirmation flow.
+### Retry, regenerate or continue?
 
----
-
-## 🗂️ Sessions and memory
-
-### Session lifecycle
-
-`/new` asks for a name (1–80 characters), creates a fresh session, and switches
-to it. Starting the flow closes your previous unclosed management panel in the
-same chat/topic, but does **not** delete the previous session's Telegram messages
-or stored conversation. `/session` lists all sessions and lets you switch, create,
-or delete inactive ones. Both the custom name and the internal session ID show up
-in `/status`.
-
-New standard sessions are **unstarted**. Use `/character` to configure the story,
-then `/start` to choose the character's Default or Alternate opening message.
-Before that opening is committed, dialogue and conversational media return
-`Please use /start command.` without a story-model call or transcript entry.
-Setup commands and scoped management input remain usable. After starting,
-`/start` returns `This session has already started.`; the plain word `start` is
-no longer a command alias. `/start` does not launch setup or probe the model.
-
-The conversation-state migration marks existing non-empty sessions as started
-once; empty sessions require `/start`. Runtime decisions use the explicit state,
-not the current number of messages. Group-session orchestration is unchanged.
-
-Each session carries its own:
-
-```text
-Conversation transcript
-Selected Story/Utility models and reasoning settings
-Response language
-Persona and World Info
-Author's Note and System Prompt
-Response variants and branch state
-Continuity summary, curated/episodic memory and NPC Bank state
-Failed-turn and durable delivery-recovery state
-Forum Topic group state, when applicable
-```
-
-### Reset and deletion
-
-`/reset` clears the active session **without deleting it**:
-
-1. Opens a confirmation panel — nothing is touched yet.
-2. On confirm, purges Hindsight documents for that session only.
-3. Best-effort deletes the current session's tracked Telegram user inputs,
-   assistant replies, and Light Novel choice/selection messages.
-4. Clears the local conversation, variants, failed turns, continuity summary,
-   curated-memory state, episodic memories, and NPC Bank state.
-5. The session stays available, now empty.
-6. Preserves Character, Normal/Light Novel mode, A/B/C strategy, Persona, World
-   and System Prompt, but invalidates old choices and returns the standard session
-   to unstarted. Use `/start` to choose the opening greeting again.
-
-The confirmation text spells out exactly what gets deleted. Telegram deletion is
-best-effort because Telegram can reject old messages or group deletions without
-sufficient permissions; such failures do not roll back the durable reset. Cleanup
-is scoped to the active session and chat/topic, so other sessions/topics are not
-touched.
-
-`/session` deletion is stricter. It only targets inactive sessions, refuses
-sessions with running or queued jobs, and requires Hindsight cleanup to succeed
-before removing local data. If cleanup can't be verified, the session is kept.
-Other sessions and their memories are never touched.
-
-### Light Novel mode
-
-`/character` is the setup entrypoint for standard sessions:
-
-```text
-Character → Normal / Light Novel
-                       └─ A / B / C (Light Novel only)
-          → Persona → World → System Prompt → Session → Apply
-```
-
-Normal skips the A/B/C step. Persona, World and System Prompt offer Off/Skip;
-World permits multiple lorebooks. The final step selects an unstarted session
-or creates a named session. Selections remain an actor-scoped draft until Apply
-validates the references and commits all configuration together. An already
-started session must be reset first or replaced with a new session. Applying
-setup does not start the story: run `/start` afterward.
-
-`/lightnovel` is the dedicated mode/status command; there is no Light Novel entry
-in `/settings`. It offers A, B, C or Normal while the session is unstarted. During
-a story it restores the current choice/retry panel without regenerating the story.
-
-| Strategy | Story generation | Choices |
+| Situation | Action | Does it make a new model request? |
 |---|---|---|
-| A — Story Inline | Story and choices in one structured response | Extracted before visible prose is rendered |
-| B — Utility Model | Normal Story-model request | A separate Utility-model request |
-| C — Story Second Pass | Normal Story-model request | A second request to the Story model |
+| A response failed, or a saved reply was not fully delivered | `/retry` | A generation failure may need one; valid saved-output recovery reuses the answer. |
+| The answer arrived, but you want a different version | `/regen` | Yes. It creates another response variant. |
+| You want to choose an existing version | `/swipe` | Selecting a stored variant does not generate a new one. |
+| You want to change the active response branch | `/branch` | It selects an existing branch. |
+| The answer stopped and you want more | `/continue` | Yes. |
+| You want to replace your latest user message | `/edit` | Yes, after you submit the replacement. |
+| The story arrived but Light Novel choices are missing | **Retry Choices**; `/lightnovel` reopens the panel | It retries the choices, leaving the saved story in place. |
 
-After `/start` commits the card-authored greeting, every Light Novel strategy
-schedules its first choice-only request immediately: A/C use the Story model;
-B uses the configured Utility route. Subsequent successful A turns need no
-additional choice-generation request. If A returns usable narrative but its inline
-choices are missing or invalid, the story remains committed and the existing
-durable choice worker automatically performs one choice-only Story-model repair
-pass. While that repair is pending, the panel says that choices are being
-prepared; **Retry Choices** appears only if automatic recovery finishes without
-valid choices. A's raw structured response is not streamed to Telegram. B/C
-retain ordinary story streaming when other settings allow it. Response language
-and Humanizer still apply to visible narrative; choices are not passed through
-Humanizer.
+For a failed turn, return to the original session before using `/retry`. When
+the answer has already been saved, automatic delivery recovery has three total
+attempts, including interrupted attempts across restarts. It skips Telegram
+chunks whose acknowledgements were recorded. A deleted or replaced answer can
+no longer be recovered.
 
-Choice generation remains grounded in the configured session, but each strategy
-uses that context differently:
+A crash between Telegram accepting a message and the bridge recording the
+acknowledgement can leave delivery uncertain. Recovery reduces duplicate delivery;
+it cannot guarantee that every message is delivered exactly once.
 
-- **A — Story Inline** generates the narrative and choices together in one
-  Story-model request. The choice contract is added to the same assembled prompt
-  that is sent for the narrative after normal context compaction. Choices therefore
-  see the Character, Persona, selected System Prompt, active World Info,
-  conversation history, Author's Note, post-history instructions,
-  response-language rules, and any session summary, memory, or RAG context that
-  remains in the final prompt. When the prompt is over budget, optional context may
-  be trimmed by the same compaction rules used for ordinary narrative generation.
-- **B — Utility Model** and **C — Story Second Pass** generate choices after the
-  narrative is committed. Both receive the same bounded snapshot: Persona name
-  and description, Character name/description/personality/scenario, relevant
-  World Info, the macro-expanded selected System Prompt and Author's Note, the
-  continuity summary, relevant NPC state, the six most recent messages, and the
-  current story. B sends that snapshot to the Utility model; C sends it to the
-  Story model. Strategy A uses the same snapshot when its inline choices need the
-  durable choice-only recovery pass.
-- The choice snapshot limits each Persona field to 4,000 characters, each
-  Character field to 2,000, World Info to 6,000, the System Prompt to 4,000,
-  Author's Note to 2,000, continuity summary and NPC state to 6,000 each, each
-  recent message to 1,600, and the current story to its final 10,000 characters.
-  World Info activation considers the current story, recent messages, Persona
-  name and Character name. The separate choice pass does not resend post-history
-  instructions, Hindsight recall, episodic memory, or Data Bank/RAG context.
+### Streaming and long replies
 
-Every strategy asks the model to propose actions for the **user**, not actions
-for the assistant Character. The dedicated B/C choice prompt additionally treats
-the supplied snapshot as story data that cannot override the bounded output
-contract. When Grounded User is enabled, the main narrative uses its normal
-grounding policy and separate choice generation avoids actions that presume
-success, unearned authority, automatic admiration, bypassed obstacles, or
-unestablished abilities.
+With streaming enabled, a temporary preview updates during generation. The bridge
+removes it when the completed reply is ready and splits long messages at natural
+breaks within Telegram's length limit.
 
-Each new story turn requests a uniformly random **2, 3 or 4** distinct actions.
-The count is reserved before generation; retries/restarts do not reroll it, and
-ready choices are reused unchanged. The panel message shows every generated
-action in full with a numbered label; compact `1`–`4` selector buttons sit below
-it, followed by a permanent **⏭ Next Scene** row. Tapping a numbered choice submits
-the exact stored action as the next user turn. Next Scene instead submits a fixed
-narrative instruction to advance without speaking, deciding, or acting for the
-user character until that character can meaningfully participate again. Both use
-the normal history, memory, RAG, provider and durable-worker pipeline. After a
-button is consumed, Telegram replaces the panel with a bot-owned block quote of
-the selected action; the internal Next Scene instruction is never shown.
+If the provider reports an output-token limit, the bridge can make up to three
+automatic continuation requests. These can consume additional tokens. `/continue`
+is available when you deliberately want another segment. Light Novel strategy A
+and Humanizer have different preview behavior, described below.
 
-You may type your own reply after `/start`. That reply or conversational media
-invalidates old choices before admission; stale panels cannot create another
-branch. Choices are bound to the originating user, chat, session, reset epoch,
-assistant revision and panel. Consumption and durable enqueue share a transaction,
-so double taps or process recovery cannot create two committed user turns.
+### Reset or delete a session
 
-When automatic choice generation finally fails, the committed story remains
-available with **Retry Choices**. Retrying repairs choices only; A uses the same
-Story-model repair path, B the Utility route, and C the Story model. Missing panel
-delivery can be restored with `/lightnovel`. Telegram cleanup is best effort;
-invalidation in SQLite remains authoritative even if an old button is still
-visible.
+`/reset` opens a confirmation before clearing the active conversation and its
+memory. It keeps the session and selected Character, mode, Persona, World and
+System Prompt, then returns it to an unstarted state. Send `/start` again.
 
-Normal mode generates no Light Novel choices or additional choice-model calls.
-`/swipe` remains a selector for alternate assistant responses, not user actions.
-Light Novel mode currently applies only to standard sessions; group orchestration remains unchanged.
+Reset clears variants, failed turns, summaries, curated/episodic memory, NPC state
+and old choices. It attempts to remove tracked Telegram conversation messages;
+Telegram may refuse old messages or deletions without sufficient permissions.
 
-### Memory boundaries
+Delete an **inactive** session through `/session`. Sessions with running or
+queued work cannot be deleted. When required Hindsight cleanup cannot be
+verified, destructive local cleanup is refused. Other sessions are unaffected.
 
-All automatic Hindsight recall and `/memory search` are scoped to the active
-`session:<session_id>` tag. `/remember` stores one fact at a time through a
-scoped prompt. `/memory curated` shows the small durable-fact list and
-`/memory curated refresh` rebuilds it with the configured Utility model.
-`/summarize` rebuilds the active session's rolling continuity summary from the
-stored transcript.
+## Models, context and memory
 
-Episodic memory is local SQLite state, separate from Hindsight and the rolling
-summary. Successful summary segments can yield up to a bounded set of durable
-events; low-importance, malformed or duplicate candidates are ignored. Relevant
-records are recalled by query, and restricted records are shown only when the
-active story character appears in their explicit `known_by` list.
+### Choosing models
 
-When an edit rewrites history, derived episodic memories from the rewritten
-range are invalidated and NPC state is read/rolled back to the applicable story
-revision before regeneration. Reset and session deletion purge their session's
-derived memory state. Memory, NPC state and retrieved documents enter generation
-as bounded untrusted context, never as executable instructions.
+Use `/providers` to choose Story and Utility independently for the current
+session. Both Story and Utility reasoning are configured from `/providers`.
+Reasoning support depends on the provider; a zero budget can mean the backend
+default rather than disabled reasoning.
 
-### NPC Bank
+The provider list also offers **Provider health** and **Refresh models**. Manual
+inference probes may use quota. **Reset runtime** clears the bridge's local
+cooldown so another request can be tried; it does not fix credentials, add credit
+or change your selected model. See
+[provider diagnostics](configuration.md#provider-diagnostics-and-catalog-maintenance).
 
-`/npc` opens the active session's persistent supporting-character catalog.
-Each dossier can hold fixed descriptive fields such as appearance, voice,
-background and canon, plus mutable role/location/agenda/relationship/mood,
-secrets and status. Refresh runs the bounded Utility-model extractor without
-replacing the transcript.
+### Long conversations and context limits
 
-Dossiers expose only fields visible to the active character. Visible field
-history can be reviewed, and only the latest visible revision of a field offers
-Undo. The confirmation is bound to the exact change revision you reviewed; if a
-background refresh changes that field first, the stale undo is refused instead
-of reverting newer state.
+Open `/prompt` → **Budget** to see the resolved context window, output reserve,
+safety margin, estimated input budget and what was reduced in the last prompt.
+`/status` already includes a compact input/window/compaction summary. These are
+planning estimates; billed usage comes from provider counters.
 
----
+The bridge keeps recent history and reduces older history or optional retrieved
+context when a prompt grows too large. It preserves the current user turn and
+fixed character/system instructions. If those fixed parts still cannot fit, it
+refuses the request before calling the provider and explains what to shorten.
+The saved transcript remains available even when older turns are omitted from
+the next prompt.
 
-## 📝 Generation and delivery
+Operators can keep a pinned model list with `discover_models: false` and enable
+`discover_model_metadata: true` to learn context sizes for those models. Explicit
+configured context values override discovery. Unknown sizes use the configured
+fallback, 32K by default; this is a planning fallback, not proof that every model
+accepts 32K. See [context configuration](configuration.md#context-planning-and-diagnostics).
 
-### What goes into a prompt
+### Choose the memory tool for the job
 
-When you send a message, the bridge assembles the prompt from:
+| Tool | What it keeps | Where to manage it |
+|---|---|---|
+| Continuity summary | A condensed account of the current story | `/summarize`; Mini App Memory |
+| Hindsight recall | External long-term facts for the active session | `/memory`, `/remember` |
+| Curated memory | A small editable list of durable facts | `/memory curated`; Mini App Memory |
+| Episodic memory | Local durable events extracted from completed summary segments | Recalled automatically when relevant |
+| NPC Bank | Supporting-character descriptions, relationships, goals and field history | `/npc` |
+| Data Bank | Uploaded reference documents | `/databank` |
 
-```text
-Character card fields and example dialogue
-Native Persona description
-Active World Info entries
-Selected System Prompt
-Session Author's Note
-Conversation history and continuity summary
-Active-session Hindsight recall
-Relevant episodic memories
-Relevant NPC Bank state
-Data Bank references
-Grounded User policy, when enabled
-Response-language instruction
-Provider-specific generation settings
-```
+Hindsight is optional and requires a configured service. Curated facts can be
+edited locally in the Mini App; publishing the reviewed list to Hindsight is a
+separate action. Ordinary summaries, episodic records and NPC state are local
+derived data. Their extraction/refresh work uses the configured Utility route.
 
-Your original user text is stored as entered. Single-star action formatting
-is added only to its prompt representation. Assistant replies are stored after
-any selected response-language rendering, optional Humanizer pass, and final
-Telegram-safe output normalization.
+NPC and episodic records can restrict knowledge to named characters using
+`known_by`. The active character sees only permitted fields. NPC field history
+offers Undo for the latest visible revision; a newer update makes an old
+confirmation stale. Editing earlier conversation invalidates derived events and
+rolls NPC state back to the applicable revision before regeneration.
 
-### Streaming and long responses
+### Model calls and token use
 
-With streaming on, the bot posts a temporary preview that updates as the model
-generates. Once the full response is ready, the preview is removed and the
-final message is sent through the normal splitter.
-
-Long messages are split at Telegram's UTF-16 limit. The splitter looks for
-natural break points in this order:
-
-1. Paragraph boundaries
-2. Newlines
-3. Sentence boundaries
-4. Whitespace
-5. A hard UTF-16-safe cut
-
-When a provider stops at the token limit (`finish_reason: length`), the
-bridge tries bounded auto-continuation. Streaming continuation stays streaming,
-keeps the preview cumulative across segments, honors cancellation between and
-during continuation requests, and makes at most three automatic continuation
-requests after the initial visible segment. Reasoning-only length stops can
-retry with a larger output budget. `/continue` is always available for a
-deliberate additional segment.
-
-### Optional Humanizer response style
-
-Open `/settings` and tap the single **Humanizer: ON/OFF** button to toggle an
-additional prose rewrite after response-language rendering. It is **off by default**, scoped to
-the selected session, and reset by **Reset all** in the generation settings
-panel. It uses the response's selected provider/model, so enabling it can add
-latency and token charges. Native transcript sync preserves the setting.
-
-With Humanizer enabled, normal replies do not expose an intermediate raw
-streaming preview. The rewrite receives at most 24,000 source characters, has
-an output-token request capped at 4,096, and uses a 30-second **per-request**
-provider timeout. Existing bounded provider recovery/continuation may involve
-additional requests; this is not a 30-second whole-turn deadline. Longer source
-texts bypass the rewrite rather than sending a truncated source.
-
-Provider failure, an empty rewrite, excessive shortening, or changes to protected
-code, numbers, quoted dialogue, action spans, links, or citations keep the
-original rendered reply. These conservative structural checks are not a proof
-of semantic equivalence: review important prose as with any model-generated text.
-The setting applies to normal replies, regeneration, continuation, edited-message
-regeneration, and image replies through their shared rendering paths.
-
-No weekly Humanizer reference sync, timer, or automatic prompt promotion is installed. The active prompt changes only through reviewed source changes and the normal release process. Prompt attribution is retained in [third-party notices](../THIRD_PARTY_NOTICES.md).
-
-### Optional Grounded User mode
-
-Open `/settings` and toggle **Grounded User: ON/OFF**. It is **off by default**
-and scoped to the selected session. Unlike Humanizer, it does not make a second
-provider request: it adds a compact policy to the Story prompt.
-
-When enabled, explicit Persona/story advantages remain valid, but the model is
-asked not to invent extra competence, authority, knowledge, admiration,
-attraction, protection, or plot importance merely because the user is the
-protagonist. NPCs keep independent goals, loyalties and preferences, and
-success/failure/consequences should follow established abilities, preparation,
-circumstances and prior events. The policy also explicitly rejects the opposite
-failure mode: it must not punish, humiliate, weaken, or force failure simply to
-be "anti-player."
-
-Normal replies, regeneration, edits, continuation, image-context replies and
-Light Novel inline narrative share the main grounded Story prompt. Separate
-Light Novel choice generation additionally avoids choices that presume success
-or unearned authority, and Group Director speaker selection avoids choosing an
-NPC merely to make the user the center of attention.
-
-### Telegram-safe model output
-
-Completed model replies are normalized for Telegram before they are stored and
-delivered. Presentation HTML such as `<div>`, `<span>`, headings, lists and
-`<br>` is converted to readable plain text; HTML entities are decoded. HTTP(S)
-HTML links retain their destination, and Markdown URL/email autolinks remain
-unchanged. Fenced and inline code are protected so literal HTML examples remain
-copyable. This is
-a final-output compatibility step rather than Telegram `parse_mode=HTML`, whose
-limited tag set cannot safely render arbitrary model-generated web markup.
-
-### Variants and recovery
-
-| Command | Action |
+| Feature | Extra work to expect |
 |---|---|
-| `/regen` | New response variant |
-| `/swipe` | Browse and pick from stored variants |
-| `/branch` | Switch the active response branch |
-| `/edit` | Replace your last message and regenerate |
-| `/retry` | Recover a failed response or incomplete saved delivery |
+| Normal reply | A Story request; retries, continuation or language rendering can add calls. |
+| Light Novel A | Usually story and choices together; the greeting needs a choice request, and invalid choices can need repair. |
+| Light Novel B / C | A separate choice request after the story, using Utility / Story respectively. |
+| Humanizer | An additional prose rewrite using the reply's model. |
+| Summaries, memory/NPC/scene refresh, optimizer and ranking | Utility-model work. |
+| Current Scene image | Utility preparation of the visual prompt, then an image-provider request. |
+| Director / autonomous groups | Director selection can call a model; autonomous turns generate more replies. |
 
-Queued `/edit`, `/regen` and `/continue` commands keep the session selected when
-they were queued. Switching the active session does not redirect their work or
-their restart recovery.
+Review reported counts in the Mini App's **Manage → Advanced settings → Usage**.
+A failed request can still consume tokens. The tracker is not an invoice or a
+remaining-quota display, and some task types are outside its coverage. See
+[Token usage](token-usage.md).
 
-When an answer has been saved but Telegram delivery fails, durable jobs allow
-three total delivery attempts, including interrupted attempts across restarts.
-Recovery uses the saved answer and skips chunks
-whose Telegram acknowledgements were recorded; it does not generate another
-answer. If automatic attempts are exhausted, the original actor can use `/retry`
-in the original session. A deleted or replaced answer cannot be recovered.
+### Optional style controls
 
-A saved greeting can resume delivery even after its selection panel expires or
-you switch the active session. Light Novel choices leave pending greeting
-delivery with its original job and retry limit.
+**I am not MC** in `/settings` is the Grounded User option. It is off by default.
+It asks the model to respect established abilities, obstacles and NPC motives,
+without inventing special treatment for the user or unfairly weakening them.
+Explicit Persona advantages still apply. It adds instructions to the existing
+prompt; it does not make a separate rewrite request.
 
-Telegram delivery and the local database are separate systems. A crash after
-Telegram accepts a chunk but before its acknowledgement is saved can still
-leave delivery uncertain. Recorded acknowledgements prevent those known chunks
-from being resent; the bridge cannot promise exactly-once delivery across an
-unrecorded external response.
+**Humanizer** is also off by default. It rewrites completed prose after language
+rendering and adds latency and token use. With it enabled, ordinary replies do
+not show the raw streaming preview. Replies over 24,000 characters bypass the
+rewrite; requests are capped at 4,096 output tokens and use a 30-second
+per-request timeout. Recovery can add requests, so this is not a whole-turn
+deadline.
 
----
+If the rewrite fails or changes protected fragments such as code, numbers,
+dialogue or links, the original rendered reply is kept. These checks cannot prove
+that meaning is unchanged. There is no automatic weekly reference refresh or
+prompt promotion. Attribution remains in [Third-party notices](../THIRD_PARTY_NOTICES.md).
 
-## 🎭 Native SillyTavern data
+## Light Novel mode
 
-### Characters
+Choose Light Novel during `/character` setup. `/lightnovel` changes its strategy
+while the session is unstarted, or restores the current choice panel during a
+story. Use a new session or reset before changing an already-started mode.
 
-`/character` lets you pick from native PNG cards, view metadata, get upload
-guidance, and delete cards through a protected flow. Character Info displays the
-selected card PNG directly in Telegram with its metadata summary and panel
-controls; if Telegram cannot render the PNG, the bridge falls back to the text-only
-info view. Uploaded cards are validated as real SillyTavern PNGs. Backups are made
-before any replacement or deletion.
+| Strategy | How it works | When to consider it |
+|---|---|---|
+| **A — Story Inline** | Story and choices come from one structured Story response. | Fewer routine requests, if the model follows the format reliably. |
+| **B — Utility Model** | The Story model writes prose; Utility makes the choices. | Separate the writing model from the helper model. |
+| **C — Story Second Pass** | The Story model writes prose, then receives a second choice request. | Use the same model for both tasks without inline structured output. |
 
-The active card and any cards referenced by sessions or groups are protected —
-you can't accidentally delete a card that's in use.
+All strategies make a choice-only request after the card-authored greeting.
+Strategy A hides raw structured streaming and can run one automatic choice-only
+repair when usable prose arrives without valid choices. B/C retain ordinary story
+streaming when other settings allow it.
 
-Ranked character buttons in the main Character Menu, Character Info picker and
-Optimizer picker reuse Telegram's registered custom-emoji icons from
-`sttb_ranks_by_SillyTavernPunzmeBot`; the current session character keeps the
-main picker's `✅` prefix, while unranked characters keep a plain name button.
-The selected Character Info and Optimizer details also show an explicit
-`Rank: S/A/B/C/D` label, or `Rank: —` when no valid cached rank exists. The
-checked-in [rank asset manifest](../assets/character-ranks/README.md) contains
-public GIF/WEBM references, SHA-256 provenance, and the exact hardcoded mapping.
+The panel offers 2–4 full-text actions with numbered buttons. **Next Scene** asks
+the narrative to advance until your character can meaningfully participate again,
+without choosing dialogue or actions for you. You can always type your own reply;
+doing so invalidates the old choices. Double taps and stale buttons cannot submit
+another committed user turn from the same choice.
 
-#### Re-uploading and optimizing a card
+If generation fails, **Retry Choices** repairs only the choices. It does not
+regenerate the saved story. `/lightnovel` restores a missing panel.
 
-A first upload installs a validated card with a verified backup. Re-uploading
-an existing name opens **Overwrite / New version / Keep existing** instead of
-silently replacing it. The pending file stays outside the visible character
-catalog. Confirmations belong to the initiating user and session, expire after
-10 minutes, and are single-use. A newer proposal supersedes that user's prior
-proposal of the same type. Changes to the installed card after preview require
-a new preview rather than overwriting the changed file.
+Choice context differs by strategy. A sees the assembled Story prompt. B/C and
+A's repair pass use a bounded snapshot of Character, Persona, relevant World
+Info, System Prompt, Author's Note, summary, NPC state, recent messages and the
+current story. That separate pass does not resend post-history instructions,
+Hindsight/episodic recall or Data Bank context. Grounded User instructions also
+apply to choice generation when enabled.
 
-The **Optimizer** entry in `/character` first opens **Auto Optimize** and
-**Manual Suggestion**. Auto uses the configured utility-model route directly.
-Manual Suggestion first shows the current editable card values in readable
-Telegram sections and ends with an explicit **Please input your revision prompt now.** instruction. The first preview uses **Revise** instead of Manual Suggestion; each Revise action reopens the prompt against the current temporary values. Prompts are limited to 2,000 characters, for example “make her more sarcastic, preserve the backstory, and shorten the first message”. The guidance goes to the same utility model without overriding the
-optimizer field whitelist or character-identity rules. Suggestions are bound to
-the initiating user, session, character file and original file digest, expire
-after 10 minutes, and are not written into the installed card until Apply. Users
-in the same Telegram chat keep independent pending Manual Suggestions. Choosing
-**Revise** from a preview is a true revision: the displayed base and
-the next LLM request use that temporary preview's values, while the final staged
-proposal keeps the cumulative effective diff relative to the unchanged installed
-card. This preserves the existing checksum and exact-byte Apply verification.
+Normal mode makes no choice requests. Light Novel applies to standard sessions;
+Forum Topic groups use their own turn controls.
 
-The Optimizer is a model-assisted editing tool, not a character-quality
-guarantee. Review all pages of the proposed fields before applying; the preview
-includes system prompt and post-history instructions when changed. Application
-verifies that the exact approved fields produce the staged card bytes, preserves
-name/avatar/other metadata, backs up the original bytes, and atomically replaces
-the file. Consistent duplicate `chara` chunks and paired v2 `chara`/v3 `ccv3`
-metadata are updated together while preserving each schema's unrelated fields;
-conflicting or malformed embedded copies are refused rather than partially
-rewritten. Character display remains compatible with the canonical `chara`
-payload, while every Optimizer write validates all `chara` and `ccv3` copies
-before staging a preview. A failed or interrupted application may require generating
-a new preview; it never replays an already consumed confirmation automatically.
-After a successful optimizer Apply, the installed card is reranked immediately
-with the Utility model. If reranking is unavailable, the changed file revision
-invalidates the previous cached rank instead of showing a stale grade.
+## Characters and native data
 
-New installations and applied card changes also request an optional S–D quality
-tier from the utility-model route. Badges are model-generated assessments, not
-objective scores. Unavailable ranking leaves the card usable without a new badge.
-Stored badges are invalidated when the card's file revision changes. Ranking
-and optimization do not enter the roleplay transcript, but they send card text
-to the selected utility provider and can incur token charges. Utility tasks use
-bounded inputs and per-request timeouts.
+### Uploading or editing a character
 
-### Personas
+Use `/character` to browse cards, inspect their information or open the Optimizer.
+Send a character PNG as a Telegram **Document/File** so its embedded SillyTavern
+metadata is preserved. A portrait sent as a compressed photo is not a card upload.
 
-`/persona` reads and writes native SillyTavern Persona settings and avatar
-storage. There's no second Persona catalog — the bridge uses what SillyTavern
-already has. The active Persona and any Personas referenced by other sessions
-are protected from the inactive-delete picker.
+A new validated card is installed with a verified backup. If the filename already
+exists, the bridge offers **Overwrite**, **New version** or **Keep existing**.
+Review that choice before confirming. Active/default cards and cards referenced
+by sessions or groups are protected from deletion.
 
-If a session has no valid Persona selected, the bridge tries to resolve
-SillyTavern's native default. If there's no explicit default but exactly one
-Persona exists, that one is used. If nothing safe can be found, the bridge
-falls back to a generic label rather than exposing a private identity.
+For model-assisted editing:
 
-### World Info and System Prompts
+1. Open **Optimizer** and choose **Auto Optimize** or **Manual Suggestion**.
+2. For Manual Suggestion, describe the change in up to 2,000 characters, for
+   example: "Shorten the first message and keep the backstory."
+3. Review every proposed field. **Revise** works from the temporary preview.
+4. Tap **Apply** to save, or discard the proposal to keep the installed card.
 
-`/world` selects or disables one or more native World Info JSON files. Active
-lorebooks are path-validated and merged deterministically at prompt time. The
-panel also supports uploading a `.json` World Info document. Uploads must use
-SillyTavern's `{ "entries": { ... } }` format, are limited to 10 MB, and refuse
-to overwrite an existing filename. The trash button deletes only inactive
-World Info files; files referenced by any session are protected.
+Telegram proposals expire after ten minutes and belong to the originating user,
+session and card revision. Apply makes a backup and verifies that the installed
+card still matches the preview's starting point. If the card changes meanwhile,
+generate a fresh preview. An interrupted application may also require a new one.
 
-`/systemprompt` reads native System Prompts from:
+The optimizer preserves card identity and unrelated metadata, and validates
+embedded `chara`/`ccv3` copies together. It is still a model-assisted editor:
+review system prompt and post-history instruction changes as carefully as prose.
+Invalid previews leave the installed card unchanged.
 
-```text
-$SILLYTAVERN_DIR/data/default-user/sysprompt/
-```
+S–D rank badges are model opinions, not objective quality scores. Ranking and
+optimization send card text to the Utility provider and can use tokens. Applied
+changes request a new rank; an unavailable rank leaves the card usable. The
+[rank asset manifest](../assets/character-ranks/README.md) holds asset provenance.
 
-JSON files use `name` and `content` fields. TXT files in that directory are
-also supported. The directory is the sole System Prompt source; the bridge no
-longer supports a separate single-file prompt fallback. The bridge currently
-ignores native `post_history` fields. Prompt bodies stay private — menus and
-`/status` only show labels or status.
+### Personas, Worlds and prompts
 
-### Expressions
+`/persona` uses native SillyTavern Persona settings and avatars. A new Persona
+requires an existing native avatar; fresh installations include a starter avatar.
+The active Persona and those referenced by other sessions cannot be deleted.
+If none is selected, the bridge tries the native default or a sole available
+Persona, then falls back to a generic label.
 
-`/expression` supports automatic classification, manual sprite selection, and
-off mode. Sprites are sent only when the effective expression actually changes.
-If a matching sprite isn't available, the bridge falls back to a neutral
-sprite, then the character avatar, and finally text-only.
+`/world` selects one or more native lorebooks. Telegram imports accept World Info
+JSON in `{ "entries": { ... } }` form, up to 10 MB, without overwriting an existing
+filename. The Mini App editor has its own smaller limits. In-use worlds are
+protected from deletion.
 
----
+`/systemprompt` selects native JSON or TXT files in the configured `sysprompt`
+directory. JSON uses `name` and `content`; native `post_history` fields are
+currently ignored. `/note` sets a session Author's Note. Menus and status show
+prompt labels rather than their bodies. Paths and example configuration are in
+[Configuration](configuration.md#paths-and-native-sillytavern-data).
 
-## 🎙️ Voice, images, and documents
+`/expression` controls automatic or manual sprites. If a selected sprite is
+unavailable, the bridge tries neutral, then the character avatar, then text-only.
+Automatic expressions are sent only when the effective expression changes.
 
-### Automatic TTS
+`/macro` previews supported macros. `/stscript` exposes a limited set of bridge
+actions, including confirmed reset; it cannot run arbitrary shell commands,
+filesystem operations or network requests.
 
-Open `/voice` and enable automatic voice; the bridge will speak dialogue wrapped
-in straight double quotes — from both your messages and character replies:
+## Images, voice and documents
 
-```text
-You send:     "Please wait for me."
-Character:    *turns to look* "I will wait."
-```
+### Generate an image
 
-Both quoted lines get queued for TTS. Actions, narration, and unquoted text
-stay text-only. Ordinary text messages also disable Telegram link previews, so
-a character card URL can't turn into a footer image. The transcript is always
-stored as plain text, and TTS jobs run in the utility queue with idempotent
-operation IDs so retries never duplicate audio.
+Configure an image provider first, then open `/imagine`:
 
-### Voice input
+- **Current Scene** uses the latest saved assistant turn and structured scene
+  state to prepare a visual prompt with Utility, then calls the image model.
+- **Custom Prompt** asks you to type a one-off image description.
+- **Options** selects the session's image model and size preference.
 
-`/voice_input` sets up transcription for Telegram voice messages using
-Faster-Whisper. Pick a STT model and choose:
+If the catalog supplies valid text and reference targets, **Auto** uses the active
+character PNG as one visual reference when available; otherwise it uses the text
+model. The PNG is read in memory when you generate. A manually selected model
+overrides Auto, and a manually selected reference model needs a usable PNG.
 
-```text
-Auto
-A fixed 2–8 letter language code
-Scoped User input
-```
+Size presets are Square (`1024x1024`), Landscape (`1536x1024`) and Portrait
+(`1024x1536`). A reference model may use provider-controlled sizing instead of
+the exact preset. Reset selects Auto when configured, or the provider's first
+image model, and restores Square.
 
-Transcription runs as a durable background job, then enters the session as a
-normal text turn.
+Generation leaves the story transcript unchanged. Successful delivery contains
+only the image, with no source or revised prompt caption. A provider failure
+does not automatically try another image model. Typing `/imagine <text>` opens
+the panel; it does not bypass it.
 
-### Images
+Photos with captions can be analyzed by a vision-capable Story model. If the
+selected model does not support vision, the bridge refuses the turn without
+changing the transcript.
 
-`/imagine` stays disabled until you explicitly configure an image provider.
-The command always opens a session-scoped panel: **Current Scene** builds a
-bounded visual prompt from the latest committed assistant turn plus structured
-scene state using the session Utility-model route, while **Custom Prompt** asks
-for a bounded one-off prompt after you select it.
+### Voice
 
-When the provider catalog defines valid `image_auto.text_model` and
-`image_auto.reference_model` targets, **Auto** becomes the session default.
-If the active character has a usable native SillyTavern PNG card, Auto reads that
-PNG in memory and sends it as the single visual-identity reference to the
-configured reference-capable model. If no usable character image is available,
-Auto uses only the configured text model. Switching characters changes the
-reference on the next generation. The bridge does not create a persistent copy of
-the portrait.
+`/voice_input` configures Faster-Whisper transcription and its model/language.
+Transcription runs in the background, then enters the session as a text turn.
+Local speech models need additional resources when used.
 
-A manually selected image model always overrides Auto: text-only models stay
-text-only even when a character portrait exists, while a manually selected
-reference model requires a usable active character PNG. A provider failure never
-silently triggers a second paid request on another model.
-
-**Options** also stores Square (`1024x1024`), Landscape (`1536x1024`), or
-Portrait (`1024x1536`) as the session output-size preference. Text routes use
-the existing size setting; a reference/edit model may show provider-controlled
-Auto sizing when it cannot honor the selected exact preset. Reset returns to Auto
-when both Auto targets are valid, otherwise to the provider's first concrete
-image model, plus `1024x1024`.
-
-Typing `/imagine <text>` does not send that text directly to an image provider;
-it opens the same panel. Image generation never appends or rewrites roleplay
-transcript rows, and Current Scene never advances the story. Successful Telegram
-delivery remains image-only: source prompts and provider-revised prompts are not
-added as captions. Chat-only models are never silently reused for image
-generation.
-
-Telegram photos with captions are queued for vision analysis when the active
-model supports vision. If it doesn't, the bridge fails closed — no changes to
-the transcript.
+`/voice` enables spoken dialogue through the configured TTS tool and voice.
+Use straight double quotes, as described under [narration and dialogue](#narration-and-dialogue).
+There is no `/tts` command. See [voice configuration](configuration.md#voice)
+if the bot reports a missing voice or executable.
 
 ### Documents and Data Bank
 
-Telegram Documents are routed to either character-card validation or Data Bank
-ingestion. The Data Bank accepts PDF, DOCX, TXT, Markdown, JSON, YAML, CSV,
-HTML, and XML. File size, PDF page count, DOCX expansion, extracted text
-length, and embedding work are all bounded.
+The Data Bank accepts PDF, DOCX, TXT, Markdown, JSON, YAML, CSV, HTML and XML.
+Upload as a Telegram Document or through the Mini App. Character PNGs follow the
+separate card-validation flow.
 
----
+Use `/databank` to search, review versions, activate an older version, remove a
+filename's versions, or reindex. Documents belong to the bot chat, so sessions in
+that chat share this library. Full-text search works without an embedding service;
+semantic search needs [embedding configuration](configuration.md#data-bank-semantic-embeddings).
+Reindex after changing embedding model, dimensions or revision.
 
-## 🔄 Live Sync and Forum Topic groups
+## Live Sync and groups
 
 ### Live Sync
 
-Live Sync is off by default. It uses SillyTavern's loopback API and processes
-the API's chat-record response directly. The bridge performs an initial
-reconciliation before turning on realtime updates. If anything looks wrong —
-auth errors, schema mismatches, sync-ID mismatches, two-sided conflicts, or
-oversized records — **sync stops rather than silently picking a side**.
+Live Sync is off until a SillyTavern loopback API is configured. `/sync` reconciles
+the selected session before enabling realtime updates. Conflicts, authentication
+failures or invalid responses stop sync for review.
 
-```dotenv
-SILLYTAVERN_SYNC_API_URL=http://127.0.0.1:8000
-SILLYTAVERN_SYNC_API_INTERVAL_SECONDS=2
-SILLYTAVERN_SYNC_API_TIMEOUT_SECONDS=10
-SILLYTAVERN_SYNC_API_HANDLE=
-SILLYTAVERN_SYNC_API_PASSWORD=
-```
-
-Live API Sync is the only conversation synchronization path. The bridge does
-not install extensions, poll chat files, import/export JSONL transcripts, or
-expose Live Sync credentials in Telegram.
+It uses the Live API, not chat-file polling or JSONL import/export. The bridge
+does not install SillyTavern extensions. See [Live Sync configuration](configuration.md#live-sync)
+for the endpoint, credentials and polling interval.
 
 ### Forum Topic groups
 
-In manual mode, native Telegram message edits, photos, image documents and voice
-messages obey the same user-turn rule as new text. The rule is checked before
-enqueue and again before downloading, transcription or generation, including
-recovered jobs. An edit targets the session containing its original message.
-Delivery of an already saved answer can recover after the turn owner changes.
+Open `/group` inside a Telegram Forum Topic. Each topic has its own session and
+group state. The wizard selects characters, World Info and a turn mode:
 
-A PNG document might be a character card or a conversation image, so it must
-pass the turn check before downloading, including uploads reported as generic
-binary files. This also restricts out-of-turn PNG character-card uploads. JSON
-management uploads remain available under their existing policies.
-
-`/group` only works inside a Telegram Forum Topic. Each topic gets its own
-isolated session and group state. The setup wizard lets you create a group
-session, pick characters and World Info, and choose a turn mode:
-
-| Mode | How it works |
+| Mode | Behavior |
 |---|---|
-| **Round-robin** | Characters speak in a set order |
-| **Contextual** | The bridge picks the next speaker based on context |
-| **Director** | A hidden bounded model call chooses a known next speaker plus a short scene direction; failures fall back safely |
-| **Manual** | An owner claims or passes the turn; ownership is verified server-side |
-| **Autonomous** | Characters continue on their own within configured bounds |
+| Round-robin | Characters speak in a set order. |
+| Contextual | The next speaker is selected from context. |
+| Director | A bounded model call chooses a known speaker and short scene direction. |
+| Manual | A user claims or passes the turn. |
+| Autonomous | Characters continue within configured bounds. |
 
-Group state changes and generated turns are durable. Topic IDs are kept
-internal for isolation and only attached to Telegram payloads when sending.
+Manual turn ownership applies to text, message edits, photos, PNG documents and
+voice input before processing. PNG card uploads also pass that check. Recovery
+of an already-saved answer can finish even after ownership changes.
 
----
+In Director mode, `/group goal <objective>` sets a hidden scene objective of up
+to 1,200 characters. `/group goal status` reviews it and `/group goal clear`
+removes it. The objective guides the Director without entering the transcript.
 
-## 🎬 Director goals and scene state
+### Scene state
 
-Director mode can keep a hidden, session-local objective for a Forum Topic group:
-
-```text
-/group goal <objective>   Set or replace the objective
-/group goal               Show the current objective
-/group goal status        Show the current objective
-/group goal clear         Remove it
-```
-
-The objective helps the invisible Director choose the next speaker and guide the
-scene without entering the roleplay transcript or being revealed to the
-characters. The operator can inspect it with `/group goal status`. It is bounded
-to 1,200 characters and applies only while the session is in Director mode.
-
-The bridge also maintains structured scene state — location, weather, participants,
-known facts, and other bounded continuity details — outside the transcript:
-
-```text
-/scene          Show the current structured state
-/scene refresh  Rebuild it with the configured utility model
-/scene clear    Remove it
-```
-
-Scene refresh is a background utility-model task. It is optional, session-scoped,
-and never replaces the original conversation history.
-
----
+`/scene` shows structured location, weather, participants and continuity facts.
+`/scene refresh` rebuilds that state with Utility; `/scene clear` removes it.
+Scene state is optional, belongs to the session and leaves the transcript intact.

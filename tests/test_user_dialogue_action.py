@@ -21,6 +21,44 @@ class UserDialogueActionTests(SettingsTestCase):
     def test_plain_text_and_double_stars_are_preserved(self):
         self.assertEqual(_m_generation.format_user_dialogue_action("I am **ready**"), "I am **ready**")
 
+    def test_builder_appends_mandatory_roleplay_transport_contract_after_custom_prompt(self):
+        session = {
+            "persona_id": "",
+            "system_prompt": "Use plain prose paragraphs without Markdown formatting.",
+            "author_note": "",
+            "world_file": "",
+            "response_language": "auto",
+        }
+        fields = {
+            "name": "Character",
+            "description": "",
+            "personality": "",
+            "scenario": "",
+            "first_mes": "",
+            "mes_example": "",
+            "system_prompt": "",
+            "post_history_instructions": "",
+        }
+
+        messages = _m_message_commands.build_chat_messages(
+            session,
+            fields,
+            "Hello",
+            [],
+            persona_service=make_test_persona_service(),
+            app_settings=self.app_settings_builder.build(),
+        )
+
+        system = messages[0]["content"]
+        self.assertIn("Use plain prose paragraphs without Markdown formatting.", system)
+        self.assertIn("## Telegram Roleplay Output Contract", system)
+        self.assertIn("single asterisks", system)
+        self.assertIn("Spoken dialogue must remain outside", system)
+        self.assertGreater(
+            system.index("## Telegram Roleplay Output Contract"),
+            system.index("Use plain prose paragraphs without Markdown formatting."),
+        )
+
     def test_builder_formats_current_and_historical_user_messages(self):
         session = {
             "persona_id": "",

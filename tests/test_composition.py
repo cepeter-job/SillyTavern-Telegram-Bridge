@@ -113,6 +113,7 @@ class CompositionConfigTests(SettingsTestCase):
         )
         background = BackgroundRuntime(
             submit_chat=lambda *_args, **_kwargs: True,
+            submit=lambda *_args, **_kwargs: True,
             register_backlog_dispatcher=lambda _callback: None,
             begin_shutdown=lambda: None,
         )
@@ -346,6 +347,7 @@ class WorkerInjectionTests(SettingsTestCase):
             ),
             background=BackgroundRuntime(
                 submit_chat=lambda *_args, **_kwargs: True,
+                submit=lambda *_args, **_kwargs: True,
                 register_backlog_dispatcher=lambda _callback: None,
                 begin_shutdown=lambda: None,
             ),
@@ -966,6 +968,7 @@ class RecoveryCompositionTests(SettingsTestCase):
         )
         self.background = BackgroundRuntime(
             submit_chat=self._submit,
+            submit=lambda *_args, **_kwargs: True,
             register_backlog_dispatcher=lambda _callback: None,
             begin_shutdown=lambda: None,
         )
@@ -1317,6 +1320,7 @@ class StartupCompositionTests(SettingsTestCase):
             ),
             background=BackgroundRuntime(
                 submit_chat=lambda *_args, **_kwargs: True,
+                submit=lambda *_args, **_kwargs: True,
                 register_backlog_dispatcher=lambda _callback: None,
                 begin_shutdown=lambda: None,
             ),
@@ -1566,6 +1570,7 @@ class StartupCompositionTests(SettingsTestCase):
             ),
             background=BackgroundRuntime(
                 submit_chat=lambda *_args, **_kwargs: True,
+                submit=lambda *_args, **_kwargs: True,
                 register_backlog_dispatcher=lambda _callback: None,
                 begin_shutdown=lambda: None,
             ),
@@ -1630,6 +1635,7 @@ class StartupCompositionTests(SettingsTestCase):
             ),
             background=BackgroundRuntime(
                 submit_chat=lambda *_args, **_kwargs: True,
+                submit=lambda *_args, **_kwargs: True,
                 register_backlog_dispatcher=lambda _callback: None,
                 begin_shutdown=lambda: None,
             ),

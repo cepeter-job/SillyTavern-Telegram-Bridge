@@ -83,6 +83,7 @@ class JobWorkerServiceTests(SettingsTestCase):
             ),
             background=BackgroundRuntime(
                 submit_chat=lambda *_args, **_kwargs: True,
+                submit=lambda *_args, **_kwargs: True,
                 register_backlog_dispatcher=lambda _callback: None,
                 begin_shutdown=lambda: None,
             ),

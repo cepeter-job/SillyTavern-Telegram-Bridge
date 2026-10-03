@@ -53,10 +53,11 @@ def tokens():
 def test_force_refresh_acknowledges_before_network_and_redraws_without_discovery(context, monkeypatch):
     calls = []
     monkeypatch.setattr(callbacks, "refresh_model_catalog", lambda **kw: calls.append(("refresh", kw)) or ({}, 0, 1))
-    monkeypatch.setattr(callbacks, "send_text", lambda *a: None)
+    monkeypatch.setattr(callbacks, "send_text", lambda _token, _chat, text: calls.append(("text", text)))
     monkeypatch.setattr(callbacks, "send_model_menu", lambda *a, **kw: calls.append(("menu", kw)))
     handle(context, "provider:refresh", answer=lambda *a: calls.append(("ack", {})))
-    assert [name for name, _ in calls] == ["ack", "refresh", "menu"]
+    assert [name for name, _ in calls] == ["ack", "refresh", "text", "menu"]
+    assert calls[2][1] == "Provider catalog refreshed: 0 providers updated; 1 failed."
     assert calls[-1][1]["refresh_catalog"] is False
 
 
@@ -74,12 +75,14 @@ def test_targeted_refresh_does_not_refresh_other_providers(context, monkeypatch)
     module = tokens()
     token = module.provider_action_token("refresh", "alpha", "chat", request_context=context)
     calls = []
+    sent = []
     monkeypatch.setattr(callbacks, "refresh_model_catalog", lambda **kw: calls.append(kw) or ({}, 1, 0))
-    monkeypatch.setattr(callbacks, "send_text", lambda *a: None)
+    monkeypatch.setattr(callbacks, "send_text", lambda _token, _chat, text: sent.append(text))
     monkeypatch.setattr(callbacks, "send_model_menu", lambda *a, **kw: None)
     assert handle(context, f"provider:maint:refresh:{token}")
     assert calls[0]["provider_id"] == "alpha"
     assert calls[0]["force"] is True
+    assert sent == ["Provider catalog refreshed: 1 providers updated; 0 failed."]
 
 
 def test_replayed_action_from_other_actor_does_not_mutate_or_probe(context, monkeypatch):

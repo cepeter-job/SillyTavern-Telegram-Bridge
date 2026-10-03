@@ -36,6 +36,7 @@ class TelegramRuntime:
 @dataclass(frozen=True)
 class BackgroundRuntime:
     submit_chat: ChatSubmit
+    submit: Callable[..., bool]
     register_backlog_dispatcher: Callable[[Callable[[], None]], None]
     begin_shutdown: Callable[[], None]
 

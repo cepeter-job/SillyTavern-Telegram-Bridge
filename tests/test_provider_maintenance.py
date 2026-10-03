@@ -229,6 +229,117 @@ def test_concurrent_cache_updates_preserve_both_providers_with_private_permissio
     assert not list(settings.model_cache_file.parent.glob(".models-*"))
 
 
+
+def test_cache_sanitizes_model_context_metadata_and_metadata_timestamps(configured):
+    from bridge.provider_catalog_cache import read_model_cache
+
+    settings = configured({"alpha": spec()})
+    settings.model_cache_file.write_text(
+        json.dumps(
+            {
+                "alpha": {
+                    "models": ["seed"],
+                    "model_context_window_tokens": {
+                        "minimum": 4096,
+                        "maximum": 1_000_000,
+                        "numeric-string": "131072",
+                        "float-value": 262144.0,
+                        "boolean": True,
+                        "too-small": 4095,
+                        "too-large": 1_000_001,
+                        "not numeric": "nope",
+                        "bad model id": 65536,
+                    },
+                    "metadata_refreshed_at": 20,
+                    "metadata_last_attempt_at": 21,
+                    "metadata_last_error": "timeout",
+                }
+            }
+        )
+    )
+
+    entry = read_model_cache(app_settings=settings)["alpha"]
+    assert entry["model_context_window_tokens"] == {
+        "minimum": 4096,
+        "maximum": 1_000_000,
+        "numeric-string": 131072,
+        "float-value": 262144,
+    }
+    assert entry["metadata_refreshed_at"] == 20
+    assert entry["metadata_last_attempt_at"] == 21
+    assert entry["metadata_last_error"] == "timeout"
+
+
+def test_older_metadata_cache_writer_does_not_replace_newer_metadata(configured):
+    from bridge.provider_catalog_cache import read_model_cache, update_model_cache
+
+    settings = configured({"alpha": spec()})
+    update_model_cache(
+        {
+            "alpha": {
+                "model_context_window_tokens": {"seed": 262144},
+                "metadata_last_attempt_at": 20,
+                "metadata_refreshed_at": 20,
+            }
+        },
+        app_settings=settings,
+    )
+    update_model_cache(
+        {
+            "alpha": {
+                "model_context_window_tokens": {"seed": 65536},
+                "metadata_last_attempt_at": 10,
+                "metadata_refreshed_at": 10,
+            }
+        },
+        app_settings=settings,
+    )
+
+    entry = read_model_cache(app_settings=settings)["alpha"]
+    assert entry["model_context_window_tokens"] == {"seed": 262144}
+    assert entry["metadata_last_attempt_at"] == 20
+    assert entry["metadata_refreshed_at"] == 20
+
+
+def test_model_and_metadata_cache_writers_do_not_clobber_each_other(configured):
+    from bridge.provider_catalog_cache import read_model_cache, update_model_cache
+
+    settings = configured({"alpha": spec()})
+    update_model_cache(
+        {"alpha": {"models": ["catalog-new"], "last_attempt_at": 20, "refreshed_at": 20}},
+        app_settings=settings,
+    )
+    update_model_cache(
+        {
+            "alpha": {
+                "model_context_window_tokens": {"seed": 262144},
+                "metadata_last_attempt_at": 30,
+                "metadata_refreshed_at": 30,
+            }
+        },
+        app_settings=settings,
+    )
+    update_model_cache(
+        {"alpha": {"models": ["catalog-old"], "last_attempt_at": 10, "refreshed_at": 10}},
+        app_settings=settings,
+    )
+    update_model_cache(
+        {
+            "alpha": {
+                "model_context_window_tokens": {"seed": 65536},
+                "metadata_last_attempt_at": 15,
+                "metadata_refreshed_at": 15,
+            }
+        },
+        app_settings=settings,
+    )
+
+    entry = read_model_cache(app_settings=settings)["alpha"]
+    assert entry["models"] == ["catalog-new"]
+    assert entry["last_attempt_at"] == 20
+    assert entry["model_context_window_tokens"] == {"seed": 262144}
+    assert entry["metadata_last_attempt_at"] == 30
+
 def test_older_cache_writer_does_not_replace_newer_results(configured):
     from bridge.provider_catalog_cache import read_model_cache, update_model_cache
 

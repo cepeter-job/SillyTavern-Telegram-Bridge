@@ -169,6 +169,25 @@ class HumanizerGenerationWiringTests(unittest.TestCase):
         self.assertEqual(result, "*raw*")
         self.assertEqual(calls, [])
 
+    def test_render_session_response_preserves_valid_action_and_unquoted_dialogue(self):
+        from bridge.generation import render_session_response
+
+        session = {
+            "session_id": "s",
+            "model_id": "model",
+            "response_language": "auto",
+            "humanizer": "off",
+        }
+        result = render_session_response(
+            "key",
+            session,
+            "*She waves.* Hello there!",
+            "chat",
+            {},
+            provider_port=make_test_provider_port(),
+        )
+        self.assertEqual(result, "*She waves.* Hello there!")
+
     def test_render_session_response_normalizes_narration_and_dialogue_transport(self):
         from bridge.generation import render_session_response
 

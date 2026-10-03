@@ -72,11 +72,12 @@ def normalize_roleplay_transport(
         return value
 
     source = _CODE.sub(protect_code, str(text or ""))
+    single_stars = list(_SINGLE_STAR.finditer(source))
+    valid_spans = list(_ROLEPLAY_ITALIC.finditer(source))
+    if valid_spans and len(single_stars) == 2 * len(valid_spans):
+        return restore_code(source)
+
     if preserve_authored_unquoted_dialogue:
-        single_stars = list(_SINGLE_STAR.finditer(source))
-        valid_spans = list(_ROLEPLAY_ITALIC.finditer(source))
-        if valid_spans and len(single_stars) == 2 * len(valid_spans):
-            return restore_code(source)
         stripped = _SINGLE_STAR.sub("", source)
         if not _quoted_speech_ranges(stripped):
             return restore_code(source)

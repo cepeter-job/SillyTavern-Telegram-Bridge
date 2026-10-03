@@ -1,155 +1,223 @@
-# Operations, updates, and troubleshooting
+# Operations, updates and troubleshooting
 
-## 🔒 Reliability, privacy, and safety
+[Back to README](../README.md) · [Installation](installation.md) ·
+[Configuration](configuration.md) · [Mini App](miniapp.md)
 
-- **🔐 Keep secrets out of Git.** That includes `.env`, provider YAML, SQLite
-  files, logs, cards, Personas, and private prompts.
-- **👥 Lock down access** with the required numeric
-  `SILLYTAVERN_TELEGRAM_ALLOWED_USERS` allowlist.
-- **🌐 HTTPS for anything external.** Loopback is fine for local services.
-- **🚫 Credentials are never displayed.** Provider hosts are validated before
-  keys are attached. Health output never shows them.
-- **📦 Everything from outside is untrusted.** Provider catalogs, model
-  responses, uploaded documents, memories, and RAG references are all treated
-  as untrusted input and bounded before use.
-- **📤 Uploads are bounded.** File sizes, document expansion, PDF pages,
-  extracted text, image prompts, memory context, and embedding work all have
-  limits.
-- **💾 Persistence before acknowledgment.** Updates are saved before the bot
-  acknowledges Telegram, and update IDs are deduplicated.
-- **📨 Saved-output delivery recovery.** Once a reply/greeting is committed,
-  recovery stays bound to its original actor, session, job and rendered payload.
-  Acknowledged Telegram chunks are checkpointed, and retry does not make another
-  model call when the saved output is still valid.
-- **📋 FIFO ordering per chat and topic.** Failed turns are stored before
-  offset advancement so `/retry` can replay them.
-- **🧹 Panels clean up after themselves.** Keyboards close and bindings are
-  removed on Cancel, Close, expiry, or stale callbacks.
-- **⚠️ Unknown commands are rejected** before normal generation — no accidental
-  messages to the character.
-- **✅ `/stscript` is allowlisted** and cannot execute arbitrary commands.
-- **🧱 Architecture is CI-enforced.** The repository rejects import cycles and
-  reverse imports from the isolated service/port layer. Ruff linting, security
-  rules, and formatting cover the complete Python tree. Mypy checks a progressively
-  typed surface emitted by `python tools/static_analysis.py --print-type-targets`;
-  CI reports `--print-type-target-count` and refuses to shrink below the versioned
-  `tools/type_surface_baseline.json` minimum.
-- **🛡️ Use the systemd hardening template** for production deployments.
+Run these commands as the Linux user who owns the bridge. The default checkout
+is `~/sillytavern-telegram-bridge`; use your chosen location if it differs.
 
----
+- [Service controls](#service-controls)
+- [Troubleshooting](#troubleshooting)
+- [Memory diagnostics](#memory-oom-diagnostics)
+- [Signed updates](#automatic-signed-update)
+- [Manual update](#manual-update)
+- [Backup and restore](#database-migrations-backup-and-restore)
 
-## 🚀 Downloads, updates, and database compatibility
+## Service controls
+
+Check configuration and recent service activity:
+
+```bash
+cd ~/sillytavern-telegram-bridge
+./.venv/bin/python sillytavern_telegram_bridge.py --check
+systemctl --user status sillytavern-telegram.service
+journalctl --user -u sillytavern-telegram.service -n 100 --no-pager
+```
+
+Restart after editing `.env`:
+
+```bash
+systemctl --user restart sillytavern-telegram.service
+```
+
+For maintenance, use `systemctl --user stop sillytavern-telegram.service` and
+`systemctl --user start sillytavern-telegram.service`. Stop the service before
+replacing Python dependencies or restoring a database.
+
+To check whether the user service can remain active after logout:
+
+```bash
+loginctl show-user "$USER" -p Linger
+```
+
+If it reports `Linger=no`, an administrator can enable it with
+`sudo loginctl enable-linger "$USER"`. The installer also offers lingering setup.
+
+## Troubleshooting
+
+Start with the configuration check and service log above, then use the row that
+matches the symptom. When reporting an issue, include the failure time and
+session/model details from `/status`. If you use the Mini App, include the
+**System → Running** version too. Without it, report the release you installed
+and recent redacted service logs; installed files alone do not identify a running
+process.
+
+| Symptom | Next step |
+|---|---|
+| Bot does not answer | Check that the service is active, the bot token is correct, and your numeric ID is in `SILLYTAVERN_TELEGRAM_ALLOWED_USERS`. |
+| `Please use /start command.` | The standard session is unstarted. Complete `/character` setup and choose a greeting with `/start`. |
+| Story response failed or delivery stopped | Return to its session and use `/retry`. Valid saved-output recovery reuses the reply; a failed generation may need another model request. |
+| Story arrived but choices are unavailable | Reopen `/lightnovel` and use **Retry Choices**. This repairs the choices without regenerating the story. |
+| Current Scene image failed | Reopen `/imagine`, check the selected image model and retry there. `/providers` controls text models, not image configuration. |
+| Provider timed out, rate-limited or rejected credentials | Open `/providers` and inspect provider health. Fix the reported cause or select another model. **Reset runtime** only clears local cooldowns. |
+| Prompt cannot fit | Open `/prompt` → Budget. Shorten fixed card/world/system instructions or select a model with a verified larger context window. |
+| Provider or embedding endpoint is refused | Check its exact hostname allowlist. Private/LAN hosts also require the corresponding `*_PRIVATE_HOSTS` opt-in. |
+| Hindsight endpoint is refused | Use a numeric loopback origin. Reach a remote service through a separately trusted local tunnel/proxy. |
+| `.env` permission error | Ensure it is owned by the bridge user and, on POSIX, has mode `600`. |
+| `.env` changes appear ignored | Restart the service. Process/systemd values override file values. |
+| Alternate environment file is ignored | Set `SILLYTAVERN_ENV_FILE` in the process/systemd environment, not only inside that alternate file. |
+| TTS reports a missing voice | Set `SILLYTAVERN_TTS_VOICE` and verify the configured `SILLYTAVERN_TTS_BIN` executable. |
+| Mini App will not open or rejects a form | Use the [Mini App troubleshooting table](miniapp.md#troubleshooting). |
+
+Some failed provider requests still consume tokens. Repeated retries are not a
+substitute for checking an authentication, credit or model-availability error.
+See [provider diagnostics](configuration.md#provider-diagnostics-and-catalog-maintenance)
+for the difference between model discovery, manual probes and runtime health.
+
+### Memory OOM diagnostics
+
+Memory diagnostics are off by default. To investigate unexplained bridge memory
+growth, add this to the private `.env`, then restart:
+
+```dotenv
+SILLYTAVERN_MEMORY_DIAGNOSTICS=1
+```
+
+The sampler checks process RSS every 20 seconds:
+
+| RSS threshold | Action |
+|---|---|
+| 256 MiB | Arm a warning incident. |
+| 320 MiB | Start temporary one-frame Python allocation tracing. |
+| 384 MiB | Save a private incident report and stop tracing if this subsystem started it. |
+
+Reports live under
+`$SILLYTAVERN_BRIDGE_HOME/diagnostics/memory/memory-*.json`. The directory is
+private (`0700`), files are `0600`, and the newest three reports are retained.
+They contain memory aggregates, thread counts and allocation-site information,
+not prompts, responses, credentials, database contents or Python object values.
+The Mini App can show sanitized summaries of retained incidents.
+
+Compare RSS/private-memory growth with `traced_current_bytes` and
+`traced_peak_bytes`. Low traced memory does not by itself prove a native leak:
+tracing starts only after the threshold, so earlier Python allocations may be
+missing too. Treat a report as evidence for investigation, not a diagnosis by itself.
+
+After collecting useful reports, remove the setting and restart. Monitoring is
+for diagnosis, not a RAM limit. It measures the bridge process; separately running
+Hindsight, speech/embedding services and other programs need their own resource
+checks.
+
+## Updates
 
 ### Release downloads
 
-The latest GitHub release includes a real downloadable archive:
+The maintained assets are `SillyTavern-Telegram-Bridge-vX.Y.Z.zip` and its
+`.sha256` file. Verify the checksum and authenticate the corresponding signed tag
+before using an archive. Extract into a fresh directory.
+
+The repository retains only the latest GitHub release and tag. Earlier release
+history remains in [CHANGELOG.md](../CHANGELOG.md) and Git history; keep local
+backups needed for recovery.
+
+### Automatic signed /update
+
+Open `/update` in Telegram or the Mini App's System page. Review the release and
+confirm installation. The updater requires:
+
+- A clean Git checkout on `main` and an SSH-signed annotated release tag.
+- An external allowed-signers file containing trusted public release keys.
+- User-owned source/live parent directories without group/other write access.
+- An empty managed live directory or its `.bridge-deployment.json` marker.
+- Git, `ssh-keygen`, `systemctl`, `systemd-run` and the configured user service.
+
+The installer prepares the standard trust file at
+`~/.config/sillytavern-telegram/trusted-maintainers`. For manual setup, the current
+public signer record is:
 
 ```text
-SillyTavern-Telegram-Bridge-vX.Y.Z.zip
-SillyTavern-Telegram-Bridge-vX.Y.Z.zip.sha256
-```
-
-The ZIP is produced directly from the signed release tag and contains only
-tracked repository content. Verify the checksum before manual installation.
-GitHub's automatically generated source archives may also appear, but the named
-ZIP above is the maintained release asset.
-
-This repository intentionally keeps **only the latest GitHub release and tag**.
-Release history remains available in `CHANGELOG.md` and Git history.
-
-### Automatic signed `/update`
-
-Automatic installation is fail-closed. `/update` requires:
-
-1. a clean Git checkout on branch `main`;
-2. an SSH-signed annotated release tag;
-3. a trusted public key in an allowed-signers file outside the source/live trees;
-4. user-owned source/live parent directories that are not group/other-writable;
-5. an empty managed live directory or one containing the bridge's
-   `.bridge-deployment.json` marker;
-6. Git, `ssh-keygen`, `systemctl`, `systemd-run`, and the configured user systemd service.
-
-Create the trust directory/file on Linux:
-
-```bash
-mkdir -p ~/.config/sillytavern-telegram
-chmod 700 ~/.config/sillytavern-telegram
-cat > ~/.config/sillytavern-telegram/trusted-maintainers <<'EOF'
 cepeter namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGRaxgobK+D+zdXdUzLb1xTQ2EPs9iYkeQGOOlepl+35 cepeter-release-signing
-EOF
-chmod 600 ~/.config/sillytavern-telegram/trusted-maintainers
 ```
 
-Verify that key's fingerprint independently before trusting it:
+Its fingerprint is:
 
 ```text
 SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI
 ```
 
-Then configure:
+Verify the fingerprint through an independent trusted channel when provisioning
+trust manually. Preserve existing authorized signer entries during a planned
+rotation. Keep the directory mode `700`, file mode `600`, and only public keys in
+this file. The guided install's first-key trust is explained in
+[Installation](installation.md#trust-model).
+
+Manual environment settings are:
 
 ```dotenv
 SILLYTAVERN_UPDATE_ALLOWED_SIGNERS=/home/you/.config/sillytavern-telegram/trusted-maintainers
 SILLYTAVERN_UPDATE_SERVICE=sillytavern-telegram.service
 ```
 
-and restart the bridge once so it loads the setting.
+A successful update verifies the tag, checks and compiles the staged tree, takes
+an online database snapshot, advances the source checkout, replaces the managed
+live mirror and requests a service restart. It retains the previous mirror for
+recovery. Confirm the running version and resumed polling afterward.
 
-A successful update verifies the exact signed tag, checks ancestry and archive
-safety, compiles the staged Python tree, fast-forwards the unchanged source
-checkout, replaces the managed live mirror, retains the previous mirror for
-recovery, and requests a nonblocking user-service restart.
+Changed `requirements.lock` dependencies require a manual update. Use the table
+below if automatic installation refuses to continue:
 
-If `requirements.lock` changed, automatic installation refuses the update; use a
-manual reviewed install so dependency changes are explicit.
+| Updater code | What to check |
+|---|---|
+| `trust` / `signature` | Trusted signer path, ownership/permissions and the signed release tag. |
+| `target` | Source/live paths must be real, non-overlapping, user-owned and not group/other-writable. |
+| `unmanaged_target` | An old live code mirror lacks the deployment marker; see the recovery note below. |
+| `dirty` / `branch` | Save/review local changes and restore a clean source checkout on `main`. |
+| `dependencies` | Use the manual procedure to install reviewed locked dependencies. |
 
-#### Release-signing key redundancy, rotation, and revocation
+#### Release-signing key rotation and revocation
 
-Maintain a **second offline signing key** under separate custody from the primary key. Never place either private key on the bridge host, in Git, in release assets, or in the allowed-signers file. Only independently verified public keys belong in the external trust file.
+This section is for release maintainers. Keep a **second offline signing key**
+under separate custody. Private signing keys belong outside the bridge host,
+repository, release assets and public trust file.
 
-The updater accepts **multiple public signer entries**. Use that capability as an overlap mechanism, not as a requirement for multi-signature tags: each release tag still needs one valid authorized SSH signature. A planned rotation is:
+The updater accepts **multiple public signer entries**. For a planned rotation:
 
-1. Generate the next signing key offline and record its fingerprint through an independent maintainer channel.
-2. Add the next **public** key as a second line in every installation's external `trusted-maintainers` file while retaining the current public key. This is the **overlap period**.
-3. Verify both public fingerprints locally and deploy the updated trust file before any release is signed only by the next key.
-4. Sign a reviewed release with the next private key and confirm a representative installation accepts it while both public keys are trusted.
-5. After all active installations trust the next key and the cutover release is verified, sign future releases with the next key.
-6. End the overlap by **remove the old public key** from each installation's allowed-signers file. Keep any historical trust-policy record offline if you need archival verification; **do not rewrite historical tags**.
+1. Verify the new public key's fingerprint through an independent channel.
+2. Add it alongside the current public key on each installation. This is the
+   **overlap period**; a release still needs one authorized signature.
+3. Sign a reviewed release with the new key and verify that installations accept it.
+4. Complete deployment of the new trust entry before switching future releases.
+5. **Remove the old public key** after the cutover; **do not rewrite historical tags**.
 
-For emergency revocation, treat a suspected **compromised** signing key differently from a planned rotation: remove its public key from the trust file immediately, distribute an uncompromised public key through an independent channel, and resume releases only with that uncompromised key. Never “repair” trust by force-moving or re-signing an existing release tag. If every trusted private key is lost or compromised, automatic update must remain unavailable until operators manually provision a new independently verified public trust anchor.
-
-The repository intentionally does not publish or invent a production backup public key until a real second offline key exists and its fingerprint has been verified out of band.
+For a suspected **compromised** key, remove its public entry immediately and
+provision an uncompromised key through an independent channel. If all trusted
+private keys are lost or compromised, automatic updates remain unavailable until
+operators establish a new trusted signer. No production backup public key is
+published until an actual second key exists and is independently verified.
 
 #### First update from a pre-hardening installation
 
-If your old `live` directory is a nonempty code copy without
-`.bridge-deployment.json`, `/update` returns `unmanaged_target`. Stop the service,
-archive **only that old live code mirror**, create an empty private live directory,
-and leave the `.env` and SQLite database in place:
+If a nonempty `live` code mirror has no `.bridge-deployment.json`, stop the service
+and archive only that code mirror. Inspect your service configuration first if
+its paths differ from the installer defaults. Leave `.env` and the database under
+`~/.local/share/sillytavern-telegram/scripts/` in place.
 
 ```bash
 systemctl --user stop sillytavern-telegram.service
-mv ~/.local/share/sillytavern-telegram/live    ~/.local/share/sillytavern-telegram/prehardening-live-backup
+mv ~/.local/share/sillytavern-telegram/live ~/.local/share/sillytavern-telegram/prehardening-live-backup
 mkdir ~/.local/share/sillytavern-telegram/live
 chmod 700 ~/.local/share/sillytavern-telegram/live
 chmod go-w ~/sillytavern-telegram-bridge ~/.local/share/sillytavern-telegram
 systemctl --user start sillytavern-telegram.service
 ```
 
-Do not move/delete:
-
-```text
-~/.local/share/sillytavern-telegram/.env
-~/.local/share/sillytavern-telegram/scripts/sillytavern_telegram.sqlite3
-```
+Use a fresh backup destination if `prehardening-live-backup` already exists.
 
 ### Manual update
 
-Use this only when the signed `/update` flow refuses automatic installation—for
-example, because `requirements.lock` changed—or when you intentionally want a
-reviewed offline update. Keep the same external trust anchor used by `/update`.
-
-For a Git installation:
+Use this when the signed updater refuses a dependency change or when you need a
+reviewed offline installation. Back up private configuration and native data as
+well as the database. For an installer-managed Git checkout:
 
 ```bash
 set -euo pipefail
@@ -166,6 +234,7 @@ git -c gpg.format=ssh \
   -c "gpg.ssh.allowedSignersFile=$signers" \
   -c gpg.minTrustLevel=fully verify-tag "$tag"
 
+./.venv/bin/python sillytavern_telegram_bridge.py --backup-database
 systemctl --user stop sillytavern-telegram.service
 git checkout -B main "$tag^{commit}"
 ./install.sh --no-start
@@ -173,135 +242,73 @@ git checkout -B main "$tag^{commit}"
 systemctl --user start sillytavern-telegram.service
 ```
 
-Signature verification occurs before the checkout moves. Do not substitute
-`git pull origin main`: the branch can contain commits newer than the latest
-published signed release.
+The signature is verified before the checkout moves. Do not substitute
+`git pull origin main`; it may include unpublished changes. If a command fails
+after the stop, inspect the error before restarting. Verify the running revision
+and a short bot exchange after the update.
 
-For a release ZIP installation, download the latest ZIP and `.sha256`, verify the
-checksum, and establish authenticity from the corresponding signed release/tag
-before extraction. Extract to a fresh directory, install the locked dependencies,
-run `--check`, then point your service at the new directory. Do not overlay a new
-ZIP onto an old source tree.
+For a release ZIP, verify the checksum and signed-release authenticity, extract
+to a fresh directory, install locked dependencies, run `--check`, and point your
+service at the new directory. An archive install does not support automatic
+Git-based `/update`.
 
 ### Database migrations, backup and restore
 
-The operational SQLite database uses an ordered transactional migration ledger
-(`schema_migrations`). New releases append forward migrations; unknown or
-inconsistent migration history fails closed instead of being rewritten silently.
+New releases apply ordered forward migrations recorded in `schema_migrations`.
+The [schema definition](../bridge/schema.py) is the current migration reference.
+Do not delete migration rows to make an older binary accept newer data. A rollback
+across schema changes needs the matching pre-upgrade database snapshot.
 
-The current schema contains migrations **1–9**. In addition to the earlier
-conversation, token-usage, episodic-memory and NPC Bank migrations, the current
-delivery/recovery boundary adds:
+Signed self-update snapshots the database after verifying/compiling the release
+and before changing source or live code. Snapshots use SQLite's online backup API,
+are integrity-checked, stored with mode `0600`, and retain the newest ten matching
+files under `$SILLYTAVERN_BRIDGE_HOME/backups/database`.
 
-- **7 — `message_identity`**: non-reusable explicit message identity while
-  preserving existing row IDs and indexes.
-- **8 — `assistant_delivery_progress`**: committed rendered payload,
-  acknowledged Telegram chunk IDs and completion state.
-- **9 — `job_delivery_intents`**: immutable job-bound delivery intent used to
-  reject stale or mismatched recovery.
-
-These are forward migrations. Restoring a binary that predates them requires the
-matching pre-upgrade database snapshot rather than deleting migration rows.
-
-Verified self-update takes an online SQLite snapshot **after** the signed release has been verified and compiled but **before** the source checkout or live mirror is changed. Snapshots use SQLite's online backup API, are integrity-checked, stored mode 0600 under `$SILLYTAVERN_BRIDGE_HOME/backups/database`, and retain the newest ten matching snapshots.
-
-Create an additional online snapshot at any time:
+To make an additional snapshot while the bot runs:
 
 ```bash
+cd ~/sillytavern-telegram-bridge
 ./.venv/bin/python sillytavern_telegram_bridge.py --backup-database
 ```
 
-Restore is deliberately offline. Stop the configured user service first; the restore command refuses to replace the database while that service is active. It validates the selected snapshot, takes a `pre-restore` snapshot of the current database, clears stale WAL/SHM sidecars, and atomically replaces the database only with the verified copy:
+A database snapshot is **not a complete installation backup**. Separately preserve
+private `.env`, the provider catalog, native cards/Personas/Worlds/prompts and the
+external public signer file. If using Hindsight, back up that service's data too.
+Keep backups private and retain a copy outside the VPS you are protecting.
+
+Restore is offline. Replace `snapshot-file.sqlite3` with the filename of the
+snapshot you reviewed:
 
 ```bash
+set -euo pipefail
+cd ~/sillytavern-telegram-bridge
+snapshot="$HOME/.local/share/sillytavern-telegram/backups/database/snapshot-file.sqlite3"
 systemctl --user stop sillytavern-telegram.service
-./.venv/bin/python sillytavern_telegram_bridge.py --restore-database \
-  ~/.local/share/sillytavern-telegram/backups/database/<snapshot>.sqlite3
+./.venv/bin/python sillytavern_telegram_bridge.py --restore-database "$snapshot"
 ./.venv/bin/python sillytavern_telegram_bridge.py --check
 systemctl --user start sillytavern-telegram.service
 ```
 
-Do not delete migration records to force an older binary onto a newer schema. Rollback across schema changes requires restoring the matching pre-upgrade database snapshot.
+Restore refuses to replace a database while the configured service is active.
+It validates the snapshot, saves a pre-restore snapshot of the current database,
+clears stale WAL/SHM sidecars and atomically installs the verified copy. If an
+operation was interrupted, inspect its state before submitting it again.
 
-## 🧰 Troubleshooting
+## Privacy and maintenance boundaries
 
-Start with the built-in check:
+Use the numeric Telegram allowlist and protect private files. Character, Persona
+and World edits affect shared native data. Providers receive the context and
+media needed for selected tasks. Logs and stored failures may contain external
+text, so inspect and redact them before sharing an issue; never publish secrets,
+private cards or a database as a diagnostic shortcut.
 
-```bash
-cd ~/sillytavern-telegram-bridge
-./.venv/bin/python sillytavern_telegram_bridge.py --check
-```
+The bridge validates outbound provider/embedding hosts and bounds uploads,
+retrieval and background work. Helper subprocesses receive a minimal environment
+instead of the bot/provider credentials. Their own network behavior is separate
+from the bridge's hardened HTTP transport. See [Security](../SECURITY.md).
 
-For a systemd installation:
-
-```bash
-systemctl --user status sillytavern-telegram.service
-journalctl --user -u sillytavern-telegram.service -n 100 --no-pager
-```
-
-### Memory OOM diagnostics
-
-Memory diagnostics are disabled by default and are never added to the service
-automatically. Enable them only while investigating unexplained process growth:
-
-```dotenv
-SILLYTAVERN_MEMORY_DIAGNOSTICS=1
-```
-
-Restart the bridge after changing the environment. While enabled, the bridge
-samples process RSS every 20 seconds with no Python allocation tracing below
-320 MiB. The fixed incident thresholds are:
-
-- 256 MiB RSS: arm a warning incident;
-- 320 MiB RSS: start one-frame `tracemalloc` allocation tracing;
-- 384 MiB RSS: write one private incident report and stop tracing when the
-  diagnostics subsystem owns the tracing session.
-
-Reports are stored at:
-
-```text
-$SILLYTAVERN_BRIDGE_HOME/diagnostics/memory/memory-*.json
-```
-
-The directory is mode 0700, report files are mode 0600, and only the newest
-three reports are retained. Reports contain process-level aggregates such as
-RSS, selected `smaps_rollup` totals, Python traced current/peak bytes, thread
-count, and top allocation sites. They never include prompts, model responses,
-credentials, provider bodies, database contents, Python object values, or
-arbitrary exception messages.
-
-For interpretation, compare `rss_kib` and `smaps_kib` with
-`traced_current_bytes` / `traced_peak_bytes`. Large traced growth that tracks
-RSS points toward Python allocations; large RSS/private-memory growth with
-relatively small traced growth points toward native or otherwise untraced
-memory.
-
-After collecting useful incidents, remove `SILLYTAVERN_MEMORY_DIAGNOSTICS=1`
-and restart the bridge. Do not leave diagnostic tracing enabled as a normal
-production setting.
-
-Common configuration/update failures:
-
-| Symptom / updater code | What to check |
-|---|---|
-| Provider is refused before a request | Add the exact external host to `SILLYTAVERN_PROVIDER_ALLOWED_HOSTS`; private/LAN hosts also need `SILLYTAVERN_PROVIDER_PRIVATE_HOSTS`. |
-| RAG external endpoint refused | Add the exact embedding host to `SILLYTAVERN_RAG_ALLOWED_HOSTS`; private/LAN hosts also need `SILLYTAVERN_RAG_PRIVATE_HOSTS`. |
-| Hindsight endpoint refused | Hindsight must use a numeric loopback origin. For a remote service, expose it through a separately trusted local loopback tunnel/proxy. |
-| `.env` permission error | On POSIX, ensure the file is owned by the bridge user and `chmod 600`. |
-| Changed `.env` appears ignored | Restart the service; settings are captured at application startup. |
-| `SILLYTAVERN_ENV_FILE` appears ignored | Set it in systemd/process environment, not only inside the alternate file. |
-| `/update` → `trust` or `signature` | Check `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS`, file ownership/mode, and that the GitHub tag displays **Verified**. |
-| `/update` → `target` | Source/live paths must be real, non-overlapping, user-owned, and not group/other-writable. |
-| `/update` → `unmanaged_target` | Archive the old pre-hardening live code mirror and create an empty managed `live` directory. |
-| `/update` → `dirty` / `branch` | Restore a clean source checkout and switch to `main`. |
-| `/update` → `dependencies` | `requirements.lock` changed; perform a manual locked-dependency update. |
-| TTS says voice is missing | Set `SILLYTAVERN_TTS_VOICE` and ensure `SILLYTAVERN_TTS_BIN` points to a working `edge-tts`. |
-
-Never paste real bot/provider passwords or private signing keys into issues,
-README files, release assets, or Telegram messages.
-
----
-
-### Helper subprocess environment
-
-The bridge launches trusted helper binaries with a minimal environment instead of inheriting the full bridge process environment. Provider keys, the Telegram bot token, Hindsight credentials, Live Sync passwords and other application secrets are not passed to TTS/ffmpeg, document parser workers, runtime-health Git commands, Tailscale CLI operations or self-update supervisor commands. Only process plumbing such as PATH/HOME/locale, temporary-directory settings, user-systemd bus variables and explicit TLS CA paths is retained.
+Contributor checks cover import direction, resource ownership and a growing typed
+surface. `python tools/static_analysis.py --print-type-target-count` reports the
+current typed count; [Contributing](../CONTRIBUTING.md) describes the verification
+workflow. These checks are useful evidence, not a guarantee against every leak
+or operational failure.

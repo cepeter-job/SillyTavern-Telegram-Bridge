@@ -1,165 +1,145 @@
 # Telegram Mini App
 
-The optional Mini App manages the bridge inside Telegram. Chat continues through the bot. The supported public deployment is Tailscale Funnel directly to `127.0.0.1:8787`. Use `--with-tailscale-funnel` to discover and save the node's public `/miniapp/` URL. Without that flag, an empty `SILLYTAVERN_MINIAPP_PUBLIC_URL` disables the listener. Never expose its HTTP port directly.
+[Back to README](../README.md) · [Installation](installation.md) ·
+[User guide](user-guide.md) · [Token usage](token-usage.md)
 
-Only IDs in `SILLYTAVERN_TELEGRAM_ALLOWED_USERS` are admitted. Open the Bridge menu from the private bot chat. The API validates signed Telegram initData on every request (default lifetime one hour); reopen from Telegram when expired. Direct browser access intentionally has no login bypass. Credentials stay server-side and must not be included in the public URL. Main Mini App profile/deep links additionally require configuration through BotFather.
+The Mini App is an optional management interface inside Telegram. You still chat
+with characters through the bot. Use the app when a larger screen makes it easier
+to browse cards, edit settings or review usage.
 
-Private sessions use the authenticated user ID. Group chats and forum topics are not implicitly authorized by a launch link. Allowed users administer shared native character, persona and world files; use separate bridge instances for mutually untrusted users.
+## Open the Mini App
 
-The static UI uses native ES modules and needs no Node runtime or build. It ships inside `bridge/miniapp_assets` and is included in verified live-mirror updates. The responsive presentation uses a compact Telegram-themed status header, desktop sidebar and five-item mobile bottom navigation. Home leads with the active story, real persona/world/memory state, recent sessions and quick actions; loading states use skeletons instead of replacing the page with a generic loading card.
+After setup, open your bot's **private chat** and use its Bridge menu. Launching
+from Telegram supplies the signed identity the app needs. Only users listed in
+`SILLYTAVERN_TELEGRAM_ALLOWED_USERS` can open it.
 
-## Navigation and usage
+A copied browser URL is not a separate login. If the session expires, reopen the
+app from Telegram. The default signed-launch lifetime is one hour. Main Mini App
+profile/deep links also need BotFather configuration.
 
-The primary destinations are **Home, Characters, Sessions, Manage and System**.
-Manage groups Models, Personas, Worlds, Generation, Memory, NPC Bank, Data Bank
-and Advanced settings. Usage remains available under Advanced settings. Home puts the current
-story first, with a direct return to Telegram, recent sessions and quick controls.
-Pages load on demand; a slower previous navigation cannot replace the page you just
-selected. Native theme/safe-area updates, labeled local SVG icons, keyboard focus
-and reduced-motion preferences are supported without an icon font or external font
-download.
+The app manages private-chat sessions. Group chats and Forum Topics are not
+authorized by a launch link. Allowed users can edit shared native characters,
+Personas and Worlds; use separate bridge instances for mutually untrusted users.
 
-**Usage** reports actual provider counters for the selected private session or
-all sessions in that private chat. See [Token usage](token-usage.md) for coverage,
-missing counters, UTC time windows, retention and the migration/rollback note.
-No historical token totals, currency costs or subscription quotas are invented.
+## Find what you need
 
-## Characters and optimizer
+| Page | Use it for |
+|---|---|
+| **Home** | Return to the current story, open recent sessions and check bridge health. |
+| **Characters** | Browse/search cards, upload, review optimizer proposals, restore backups or create a conversation. |
+| **Sessions** | Create, rename, switch or delete inactive sessions. |
+| **Manage** | Models, Personas, Worlds, Generation, Memory, NPC Bank, Data Bank and Advanced settings. |
+| **System** | Running/installed version, operations, retained memory diagnostics and signed updates. |
 
-Use Characters to browse/search PNG cards, view portraits/info, upload cards,
-restore verified backups and create a new normal conversation session. Ranked
-cards show the canonical S/A/B/C/D WEBM animation from
-`assets/character-ranks/telegram`; reduced-motion clients and media failures
-fall back to the static tier badge. Empty or failed portrait loads show the
-explicit portrait-unavailable state instead of a broken image. Selecting a
-character creates a new session instead of changing existing conversation
-history; send `/start` in Telegram for its opening. Active/default/referenced
-characters cannot be deleted. Restore and deletion both validate the reviewed
-revision, and restore refuses a no-op when the installed card already matches
-the selected backup.
+For token counts, open **Manage → Advanced settings → Usage**. It reports
+provider counters for the selected private session or all sessions in that chat.
+See [Token usage](token-usage.md) for missing counters and coverage limits.
 
-Optimizer uses the configured Utility model and supports an optional Manual suggestion. It returns an original/proposed preview. Apply consumes the actor/session-bound proposal once and verifies the original digest; Discard leaves the card untouched. Existing-filename uploads similarly require an explicit replacement preview. Simple upload filenames must not contain path or wildcard characters.
+### Characters and optimizer
 
-Slow work is admitted to the existing bounded utility executor and has an actor-owned operation ID. Identical retries return the existing operation rather than spending twice. Interrupted operations are marked after restart, never silently replayed.
+Choose a character to create a new normal session, then send `/start` in Telegram
+for its opening. This leaves your existing conversation intact.
 
-## Models and generation
+The Optimizer uses Utility to prepare an original/proposed preview. You can add
+a Manual suggestion, review changes, then **Apply** or **Discard**. Apply checks
+the original card revision and consumes the proposal once. An existing-filename
+upload also needs a replacement preview. Active/default/referenced cards cannot
+be deleted, and restores check the reviewed revision.
 
-Models displays provider/model names only, never private provider configuration. Story and Utility selections are scoped to the current session; Utility can inherit Story. Search filters up to 500 results. Generation uses the same canonical limits as Telegram: temperature 0–2, top-p 0–1, output tokens 1–16000, frequency/presence penalties -2–2, reasoning budget 0–32000 and at most four stop sequences of 100 characters. Reasoning provides the same named levels as Telegram—None (0), Low (1024), Medium (4096), High (8192) and Max (16384)—plus Custom for any other valid budget. A stored non-preset value automatically reopens as Custom. Settings are fully validated before mutation. Presets are private to your chat; replacing/deleting a preset requires confirmation.
+S–D badges are model-generated assessments. They use the shared
+[rank assets](../assets/character-ranks/README.md); a static badge is used when
+animation is unavailable or reduced motion is enabled.
 
-## Sessions, personas and worlds
+### Models and generation
 
-Sessions can be searched, created, renamed, selected and deleted. Deletion is a background operation and refuses the active session or sessions with pending work. Persona creation/editing/selection/deletion uses the native integrity-checked PersonaService. An existing native avatar is required for new personas; the installer creates a starter avatar for fresh installations.
+Story and Utility selections belong to the current session. Utility can inherit
+Story. Provider credentials stay on the server.
 
-Worlds offers a JSON editor/file import limited to 1 MB and 2000 entries, multi-file session selection, revision-checked save and backed-up deletion. Files active in any session cannot be deleted. Native personas and World Info are shared administrator-managed resources, not tenant-private files.
+Generation uses the same limits as Telegram: temperature 0–2, top-p 0–1, output
+tokens 1–16,000, frequency/presence penalties −2–2, reasoning budget 0–32,000,
+and up to four stop sequences of 100 characters. Reasoning offers named levels
+plus Custom; provider support determines how a budget is applied. Presets belong
+to your chat, and replacement/deletion requires confirmation.
 
-## Memory, NPC Bank and Data Bank
+### Personas, Worlds and memory
 
-Memory is session-scoped. Continuity summaries and curated facts can be reviewed
-and edited locally with revision checks. Save local list does not silently alter
-Hindsight: Sync reviewed list explicitly publishes the saved list, and Clear
-session Hindsight memory performs a confirmed external purge. Curate new messages
-and summary regeneration use the configured Utility model. Provider/connection
-failures are not treated as successful synchronization.
+Personas use native settings and avatars. Creating one requires an existing
+avatar; fresh installations include a starter. The World editor accepts JSON
+or a file up to 1 MB and 2,000 entries. In-use native resources are protected from
+deletion.
 
-The **NPC Bank** page is also session-scoped. It provides searchable supporting-
-character dossiers, aliases, structured visible fields, field history and a
-background **Refresh** operation. Undo is offered only for the latest visible
-revision of each field and sends the reviewed change ID back to the server; a
-concurrent extraction makes that confirmation stale instead of reverting newer
-state. Restricted fields stay hidden unless the active story character is in
-their `known_by` audience.
+On Memory, **Save local list** edits curated facts locally. **Sync reviewed list**
+publishes them to Hindsight, while **Clear session Hindsight memory** requests a
+confirmed external purge. A failed connection is not treated as a successful
+sync. Summary regeneration and curation use Utility.
 
-Data Bank documents are private to the authenticated bot chat. Uploading the same
-filename creates a version; users can search, activate an older version, remove
-all copies of a filename, or reindex. Upload and provider work run as
-durable-status operations outside database transactions. Supported file types
-match the bridge document parser, with a 10 MB input limit. The app reports
-indexed/total counts without claiming an unavailable embedding backend is
-healthy.
+NPC Bank shows supporting characters, visible fields and their history. **Refresh**
+runs background extraction. Undo applies only to the latest visible field revision;
+a concurrent update requires a fresh review. Restricted fields respect the active
+character's `known_by` audience.
 
-## System and verified updates
+Data Bank documents belong to the private bot chat and can be shared by sessions
+in that chat. Uploading the same filename creates a version. Search, activate an
+older version, remove all versions of a filename, or reindex as needed. The input
+limit is 10 MB. Full-text search remains available without embeddings.
 
-The Home **Bridge health** panel shows Bridge, Telegram, Database and Memory. The Memory card uses only the lightweight `/status` summary: current RSS when sampled, the diagnostics state, the next fixed threshold, retained-report count after capture, and no raw incident payload. Opening Home never fetches detailed memory reports.
+### Slow operations and stale forms
 
-System adds a read-only **Memory diagnostics** card. When diagnostics are enabled with the operator-controlled `SILLYTAVERN_MEMORY_DIAGNOSTICS=1` setting, it can show the newest three retained incidents: selected process-memory aggregates, Python traced current/peak bytes, thread count and at most ten sanitized allocation-site labels per incident. Repository paths stay relative; external paths are reduced to a basename label, so absolute host paths are not exposed to the Mini App. The interpretation text is a diagnostic hint only: tracing starts after the high-memory threshold, so memory not visible to `tracemalloc` can include pre-existing Python allocations as well as native allocations.
+Long tasks have an operation ID and a queued/running/completed outcome under
+**System → Operations**. Identical retries reuse an admitted operation. Check its
+status before submitting another task. After a restart, interrupted work is
+marked for review rather than silently replayed.
 
-Disabling diagnostics does not delete retained incident reports. Home reports monitoring as Disabled while preserving the latest incident/count, and System can still review retained sanitized reports. The Mini App cannot enable/disable diagnostics, change thresholds, force captures, start/stop `tracemalloc`, or delete reports; those controls remain outside the Mini App in process/service configuration.
+A completed optimizer preview can be reopened from Operations without another
+model call. Apply still checks the originating user/session and card revision.
+Forms keep the session they were opened for; changing the active session does not
+redirect an old confirmation. Refresh and review again when a form is stale.
 
-The dashboard distinguishes immutable running-version/commit evidence from the version of installed files. Telegram status comes from successful polling observations, not a guessed connected flag. Operations show actor-owned queued/running/succeeded/failed/interrupted outcomes. Release review produces a five-minute actor-bound confirmation; applying consumes it once and calls the canonical signed-release updater, not arbitrary commands. Dependency changes still require manual installation.
+## Setup with Tailscale Funnel
 
-Before restart is scheduled, a protected pending notification binds the target version and verified commit. The newly started process acknowledges only after its first successful Telegram poll. Invalid or older-than-one-day state is discarded; delivery failure can retry while polling. A process crash between send and marker deletion can duplicate a notification: this is best-effort one-shot delivery, not an exactly-once network guarantee. The Mini App similarly waits for a new boot, matching revision and resumed polling before claiming update completion.
+The supported public deployment uses Tailscale Funnel to proxy HTTPS to the
+loopback listener at `127.0.0.1:8787`. Keep the HTTP port private. The app ships
+with the bridge and needs no separate Node runtime or frontend build.
 
-## Installer options and external prerequisites
+For a new installation, choose **Install + Tailscale Mini App** in the
+[guided installer](installation.md). First install Tailscale **1.52+**, sign in
+the device, and enable the required MagicDNS, HTTPS and Funnel policy. See the
+[official Linux setup](https://tailscale.com/download/linux) and
+[Funnel guide](https://tailscale.com/docs/features/tailscale-funnel).
 
-Follow the canonical [Installation](installation.md) guide through the generated private `.env` and installer-managed user service. For Mini App discovery, leave `SILLYTAVERN_MINIAPP_PUBLIC_URL` blank. Install Tailscale **1.52+**, authenticate the device, then run:
+To add the app to an existing installer-managed bridge with a working Python
+environment, leave `SILLYTAVERN_MINIAPP_PUBLIC_URL` blank for URL discovery, then run:
 
 ```bash
-./install.sh --with-tailscale-funnel --linger
+cd ~/sillytavern-telegram-bridge
+./install.sh --with-tailscale-funnel --linger --no-deps
 ```
 
-The installer prepares user-local uv/Python, locked runtime packages, a starter
-PNG/avatar, native directories and a user systemd unit. It does not install
-Tailscale, a separate SillyTavern frontend or a Hindsight server. `--system-deps`
-uses the same distro/package-manager detection as the guided installer and
-supports `apt-get`, `dnf`/`yum`, `pacman`, and `zypper` for the bridge's
-base prerequisites. Tailscale needs external setup:
+`--no-deps` reuses the compatible environment so this step does not try to replace
+packages while the service is active. If dependencies need repair or updating,
+stop the service and follow the [manual update procedure](operations.md#manual-update).
+Custom service units require an explicit `--replace-service` and are backed up.
 
-- Follow [official Linux installation](https://tailscale.com/download/linux), then
-  use `sudo tailscale up` if the device has not been authenticated.
-- Enable MagicDNS, HTTPS certificates and the `funnel` node attribute for this
-  device. A tailnet administrator must authorize policy changes.
-- Allow the bridge user to manage the local `tailscaled` daemon when needed. An administrator can set `sudo tailscale set --operator="$USER"`; this local operator permission does not itself grant Funnel authorization. Do not run the bridge installer as root.
+An administrator can grant local daemon access with
+`sudo tailscale set --operator="$USER"`. This does not grant Funnel policy
+authorization. Run the bridge installer as the bridge user.
 
-Funnel terminates TLS in `tailscaled` and uses the node's `*.ts.net` name, without
-custom DNS or inbound public ports. Certificate names are public in transparency
-logs, so avoid sensitive device names. Funnel is public even for clients without
-Tailscale; Serve is tailnet-only. Funnel remains beta with non-configurable bandwidth
-limits. See the [Funnel guide](https://tailscale.com/docs/features/tailscale-funnel)
-and [CLI reference](https://tailscale.com/docs/reference/tailscale-cli/funnel).
+### URL and listener handling
 
-### Safe discovery and activation
+Funnel is public; authentication comes from Telegram, not membership in your
+tailnet. The installer discovers a `/miniapp/` URL when the configured URL is
+blank. With no public URL and no Funnel setup, the listener stays disabled.
 
-The installer reads node identity and Serve/Funnel status. A blank URL reuses only
-an exact already-public root proxy to the Mini App, or selects the first unused
-HTTPS port from **443, 8443, 10000**. It never converts private Serve services into
-public services or knowingly overwrites another root/path/TCP/foreground listener.
-An explicit URL selects its exact port and a conflict is refused. Clear only the
-URL assignment to request fresh discovery; changing the backend port does not
-silently overwrite an old Funnel. Review that exact listener first.
+Discovery reuses an exact existing public mapping or selects an unused HTTPS
+port from **443, 8443, 10000**. An explicit URL selects its port. Conflicting
+listeners are refused; the installer does not convert an unrelated private Serve
+service into a public one. Review the existing mapping before changing a URL or
+backend port.
 
-Only a blank URL is filled; other `.env` assignments and private permissions are preserved.
-Both paths pass unchanged through the same direct root proxy:
-
-```text
-https://device.tailnet.ts.net[:port]/miniapp/ → http://127.0.0.1:8787/miniapp/
-https://device.tailnet.ts.net[:port]/api/v1/… → http://127.0.0.1:8787/api/v1/…
-```
-
-After service startup, the installer requires the expected shell and a 401 from
-`/api/v1/me` without credentials, rechecks listener conflicts, then runs
-`tailscale funnel --bg --https=PORT http://127.0.0.1:BACKEND` and verifies the exact
-public mapping. Tailscale may require interactive HTTPS/Funnel approval. A failure
-exits with an error, never a false completion. No Serve/Funnel reset or unrelated
-service removal is attempted. Avoid concurrent manual Serve changes during setup.
-Mapping verification does not prove public DNS propagation or every Telegram
-client's connectivity. Public DNS propagation can delay access after provisioning.
-
-The script never sources `.env`. It preserves private settings and native files;
-generated provider YAML changes only while its recorded digest matches. Custom
-service units require `--replace-service` and are backed up. Dependencies cannot
-be modified while the service is active. `--no-deps` reuses a compatible venv;
-`--no-start` leaves the bridge and existing Funnel unchanged, but can prepare a
-blank URL. `--env-file PATH` selects another private configuration file.
-
-### Upgrades
-
-Use the bridge's verified `/update` flow for normal releases. The Mini App System page uses the same canonical signed updater as Telegram and does not bypass signature, source-cleanliness, dependency, or deployment guards.
-
-If a signed release changes `requirements.lock`, automatic update refuses it. Follow the [manual signed update procedure](operations.md#manual-update), which verifies the release tag against the same external trust anchor before moving the checkout. Do not substitute `git pull origin main`; `main` may contain commits that are not a published signed release.
-
-Do not reset the database or replace the generated `.env` during an upgrade. If a prior explicit Mini App URL should be replaced by Funnel discovery, review and clear only `SILLYTAVERN_MINIAPP_PUBLIC_URL` before rerunning the installer with `--with-tailscale-funnel`.
-
-### Status and targeted shutdown
+The installer checks the local page, expects unauthenticated API requests to be
+refused, activates the selected Funnel listener, and verifies the mapping. Public
+DNS propagation or a particular Telegram client's connectivity may still need
+time or separate checking.
 
 ```bash
 tailscale funnel status
@@ -167,21 +147,60 @@ systemctl --user status sillytavern-telegram.service
 journalctl --user -u sillytavern-telegram.service -n 80 --no-pager
 ```
 
-Funnel `--bg` persists through reboot and Tailscale restart. To turn off only this
-listener, use its printed HTTPS port; 443 is an example, not necessarily your port:
+To turn off this listener, use the HTTPS port shown by `tailscale funnel status`.
+For example, only if its port is 443:
 
 ```bash
 tailscale funnel --https=443 off
 ```
 
-Do not use `funnel reset` or `serve reset`; they can disrupt unrelated services.
+Avoid `funnel reset` or `serve reset`; they also affect unrelated listeners.
+Background Funnel mappings persist across restarts. `--no-start` can prepare a
+blank URL but leaves the bridge and existing Funnel unchanged.
 
-## Verification and troubleshooting
+## Health, diagnostics and updates
 
-Use `journalctl --user -u sillytavern-telegram.service -n 80 --no-pager` for operational errors. A 401 means the signed launch expired or is not authorized; reopen from Telegram. A 409 indicates a stale session/revision or missing confirmation; refresh before retrying. A 429 means one of your operations is still pending; inspect System → Operations rather than resubmitting. “Interrupted” means the process restarted, not that side effects were automatically rolled back.
+Home shows bridge, Telegram, database and memory status. It uses lightweight
+memory summaries, not full incident reports. System can show up to three retained
+sanitized memory incidents. You can review retained reports even after monitoring
+is disabled; the app cannot enable tracing, change thresholds or delete reports.
+See [memory diagnostics](operations.md#memory-oom-diagnostics) for operator setup.
 
-The UI smoke harness is a development-only DOM test. Run `npm ci --prefix tests/miniapp-ui --ignore-scripts`, set `MINIAPP_JSDOM_ROOT=tests/miniapp-ui` and `PYTHON` to the project test interpreter, then run `node --experimental-vm-modules tools/miniapp_ui_smoke.mjs` with Node 24 or newer. CI runs this locked, development-only test harness automatically. It starts a temporary authenticated loopback fixture, renders all 13 pages and verifies model/session mutations plus saved optimizer-preview resumption and application, token/empty states, exact large counts and out-of-order navigation. No Node runtime is needed for production. It does not replace testing the deployment on actual Telegram mobile/desktop clients.
+System distinguishes the running process from installed files. For updates, it
+uses the same signed-release flow as `/update`, with an expiring confirmation.
+It checks for a new process, the expected revision and resumed Telegram polling
+before reporting completion. A restart request alone is not a completed update.
 
-Completed optimizer previews can be reopened from System → Operations without making another model call. Apply still enforces the originating actor/session and card revision; a switched or expired session fails closed. Update notifications preserve the existing bot's forum-topic scope even though the Mini App itself only manages private chats.
+Changed runtime dependencies require the [manual signed update](operations.md#manual-update).
+Keep the existing database and private `.env`; upgrading does not require a reset.
+Update notifications are best effort and can be duplicated if a crash happens
+between delivery and recording the acknowledgement.
 
-Every rendered management page owns a separate session snapshot for mutations. Navigating, refreshing or changing the global active-session display cannot silently redirect an older form or pending confirmation to a different session. The server rejects stale snapshots; refresh and review before trying again.
+## Troubleshooting
+
+| What you see | What to do |
+|---|---|
+| The app will not open | Check service status and the exact Funnel mapping; launch from the private bot chat. |
+| **401** | Reopen from Telegram; check that your numeric user ID is allowed. |
+| **409** | The session, revision or confirmation changed. Refresh and review before trying again. |
+| **429** | Check System → Operations for pending work before resubmitting. |
+| **Interrupted** | The process restarted. Inspect the result; some actions may already have happened. |
+| An optimizer preview will not apply | Check the original session/card revision and generate a new preview if it changed or expired. |
+| Update appears installed but not running | Inspect the service log and running revision; a successful file update does not prove a successful restart. |
+
+For service logs, provider failures and backups, see [Operations](operations.md).
+For development-only UI checks, see [Contributing](../CONTRIBUTING.md#mini-app-ui-tests).
+
+## Design previews
+
+These are design references, not screenshots of your running bot. The app fills
+names, portraits and status from the authenticated bridge.
+
+<table>
+  <tr><th>Home</th><th>Characters</th><th>Manage</th></tr>
+  <tr>
+    <td><img src="assets/miniapp-concept/home.webp" alt="Mini App Home design preview" width="280"></td>
+    <td><img src="assets/miniapp-concept/characters.webp" alt="Mini App Characters design preview" width="280"></td>
+    <td><img src="assets/miniapp-concept/manage.webp" alt="Mini App Manage design preview" width="280"></td>
+  </tr>
+</table>

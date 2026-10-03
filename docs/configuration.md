@@ -1,10 +1,19 @@
 # Configuration and providers
 
-## Environment-file parsing
+[Back to README](../README.md) · [Installation](installation.md) ·
+[User guide](user-guide.md) · [Troubleshooting](operations.md#troubleshooting)
 
-Duplicate keys inside the private environment file are rejected as configuration errors. Existing process environment variables still take precedence over file values. A `#` starts a comment only when it is the first non-whitespace character on a line; `#` inside an assignment value is preserved literally.
+For a guided installation, edit the private files the installer created. You
+usually need only the bot settings and one provider to start. The reference
+tables below cover optional services and advanced controls.
 
-## ⚙️ Configuration
+- [Minimum settings](#minimum-required-configuration)
+- [Environment reference](#environment-variable-reference)
+- [Context limits](#context-planning-and-diagnostics)
+- [Provider catalog](#provider-catalog)
+- [Provider health and fallback](#provider-runtime-health-and-fallback)
+
+## Configuration file
 
 The bridge is configured primarily through a private environment file. The
 recommended location is:
@@ -52,7 +61,12 @@ SILLYTAVERN_MODEL=provider-one::provider-one/model-a
 `SILLYTAVERN_TELEGRAM_ALLOWED_USERS` must contain comma-separated **numeric**
 Telegram user IDs. `SILLYTAVERN_DEFAULT_CHARACTER` must name an existing card in
 the configured character directory. `SILLYTAVERN_MODEL` uses
-`provider-id::model-id` from the private provider catalog. A bare model ID is accepted only when it exactly matches one provider; ambiguous or unknown IDs are refused. Qualified IDs must exist in the provider’s configured `models` or its opted-in discovery cache. Startup validates the route, endpoint policy, and credential before polling; seed the default model in YAML for a first install without a discovery cache.
+`provider-id::model-id` from the private provider catalog. In the example,
+`provider-one` is the YAML entry and `provider-one/model-a` is the model's own ID.
+A bare model ID works only when it matches exactly one provider. List the starting
+model explicitly in YAML: a fresh installation has no discovery cache. Startup
+checks the route, endpoint policy and required credential before polling Telegram.
+See the [minimal provider example](#provider-catalog).
 
 `SILLYTAVERN_DIR` defaults to `~/.local/share/SillyTavern`; set it when your
 SillyTavern installation lives elsewhere.
@@ -151,8 +165,10 @@ Metadata discovery is best-effort and never runs inside story generation.
 Context-window precedence is: explicit `model_context_window_tokens`, then
 explicit provider `context_window_tokens`, then discovered metadata for the
 configured model, then the global fallback. Explicit YAML therefore always
-overrides discovered metadata. When no usable value is available, the default
-`SILLYTAVERN_CONTEXT_WINDOW_TOKENS=32768` remains the conservative fallback.
+overrides discovered metadata. When no usable value is available,
+`SILLYTAVERN_CONTEXT_WINDOW_TOKENS=32768` is the default fallback. This does not
+guarantee that an unknown model accepts 32K. Configure a verified smaller limit
+explicitly when necessary.
 
 Memory diagnostics sample process RSS every 20 seconds. They warn at 256 MiB,
 start temporary Python allocation tracing at 320 MiB, and capture an incident
@@ -161,10 +177,22 @@ report at 384 MiB. Reports are private files under
 retained. See [operations](operations.md#memory-oom-diagnostics) for the
 enable/collect/disable workflow and privacy boundary.
 
-The prompt input budget is approximately context window minus output reserve.
+The input budget subtracts **both** the output reserve and safety margin:
+
+```text
+input budget = context window − output reserve − safety margin
+default      = 32,768 − 4,096 − 656 = 28,016 estimated input tokens
+```
+
+For small windows, the reserve is clamped to leave room for input. Open `/prompt`
+→ **Budget** to inspect the resolved values, their source and the last prompt's
+compaction. Token estimates guide request planning; they are not billed usage.
+
 When over budget, older history, Data Bank context, Hindsight/episodic recall,
 NPC state and continuity summary are reduced before fixed character/system
-instructions or the current user turn.
+instructions or the current user turn. If the fixed prompt still cannot fit, the
+bridge refuses the request before contacting the provider. This limits what is
+sent to the model; it does not delete the stored conversation.
 
 #### Hindsight memory
 
@@ -238,29 +266,19 @@ not chat-file polling or JSONL transfer.
 | `SILLYTAVERN_BRIDGE_SOURCE_DIR` | repository root | Clean `main` checkout that the updater fast-forwards. |
 | `SILLYTAVERN_LIVE_BRIDGE_DIR` | `$SILLYTAVERN_BRIDGE_HOME/live` | Managed mirror replaced after verification/staging. |
 
-The current maintainer release-signing key has fingerprint:
-
-```text
-SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI
-```
-
-Its public allowed-signers record is:
-
-```text
-cepeter namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGRaxgobK+D+zdXdUzLb1xTQ2EPs9iYkeQGOOlepl+35 cepeter-release-signing
-```
-
-Verify the fingerprint against a GitHub **Verified** release tag or another
-independent maintainer channel before installing it as trust material. Do not use
-a private key as an allowed-signers file and do not store the trust file inside
-the source checkout or managed live mirror.
+The [signed-update runbook](operations.md#automatic-signed-update) contains the
+public signer record, fingerprint and rotation procedure. Keep the allowed-signers
+file outside the source checkout and live mirror; it contains public keys only.
 
 ### Environment syntax and validation
 
 The parser accepts `KEY=VALUE` and optional `export KEY=VALUE`. Matching single or
 double quotes are removed. Existing process variables win over file values.
-Integer/float/boolean validation reports the variable name without printing the
-supplied secret value.
+Duplicate keys are rejected. A `#` starts a comment only at the beginning of a
+line after optional whitespace; inside an assignment it is literal text.
+For example, `KEY=value # comment` includes ` # comment` in the value, so put
+comments on their own lines. Invalid numeric/boolean settings report the variable
+name without printing the supplied value.
 
 Use the maintained `.env.example` as the configuration template for new/manual setups. Installer-managed deployments should preserve their generated private file. The template also exposes installer-bootstrap inputs documented below.
 
@@ -277,7 +295,7 @@ These variables are consumed by `install.sh`/`bridge.install_support` while prep
 
 ---
 
-## 🌐 Provider catalog
+## Provider catalog
 
 The bridge uses its own **private YAML provider catalog**; it does not import SillyTavern provider credentials/settings. For a manual/custom setup, start from the maintained example without overwriting an existing private catalog:
 
@@ -304,6 +322,8 @@ providers:
     streaming: true
     models:
       - provider-one/model-a
+    discover_models: false
+    discover_model_metadata: true
 ```
 
 Then place the referenced credential in your private environment file:
@@ -313,8 +333,12 @@ PROVIDER_ONE_API_KEY=replace-me
 SILLYTAVERN_PROVIDER_ALLOWED_HOSTS=provider.example
 ```
 
-For native OpenAI Codex OAuth, use an explicit static model list and the Codex
-Responses endpoint:
+### Native OpenAI Codex OAuth
+
+This transport uses a separate bridge login instead of a provider API key. Keep
+an explicit list of models available to your account. The following names and
+aliases match the bridge's example catalog; their presence here does not grant
+account access to those models.
 
 ```yaml
 providers:
@@ -333,13 +357,12 @@ providers:
       - gpt-5.6-luna-900k
 ```
 
-The `-900k` entries are bridge picker aliases, not OpenAI model IDs. They opt
-Sol, Terra, or Luna into a conservative 900,000-token bridge planning ceiling inside the model's larger supported context window; the bridge preserves
-the alias in session state for budgeting and strips it only from the Codex wire
-request. Other models—including invented `-900k` names—keep the configured
-`SILLYTAVERN_CONTEXT_WINDOW_TOKENS` budget and are sent unchanged so invalid
-names fail honestly. The output reserve is still subtracted, so the default
-900K input budget is 895,904 tokens.
+The listed `-900k` entries are bridge picker aliases. They select a 900,000-token
+planning window for the `openai-codex` route; the suffix is removed from those
+recognized names when sending the request. Use them only when your actual model
+supports that window. Other names are sent unchanged and use the normal context
+metadata/fallback rules. With the default reserve, the 900K input budget is
+`900,000 − 4,096 − 8,192 = 887,712` estimated tokens.
 
 `SILLYTAVERN_CONTEXT_HISTORY_CANDIDATES` remains an independent resource cap.
 Increase it, up to 512, if a long-running 900K session should load more than the
@@ -400,14 +423,21 @@ configuration error before any network request or credential attachment.
 | `adapter` | `transport` | Model-menu capability label; normally match the transport. |
 | `models` | empty | Explicit model IDs for this provider. Required when discovery is disabled/unavailable. |
 | `discover_models` | false | When true, refresh model IDs from `GET /models` and cache them. |
+| `discover_model_metadata` | false | Discover context sizes for explicitly configured models without adding models to the picker. |
+| `models_endpoint` | `<api_endpoint>/models` | Optional catalog URL when the provider publishes metadata elsewhere; normal host policy still applies. |
+| `context_window_tokens` | discovery / global fallback | Explicit provider-wide context window. |
+| `model_context_window_tokens` | empty | Per-model context-window overrides; these take priority over provider defaults and discovery. |
+| `token_estimate_chars_per_token` | `4.0` | Character/token ratio for prompt estimates; does not change billed counts. |
+| `model_token_estimate_chars_per_token` | empty | Per-model estimation-ratio overrides. |
 | `streaming` | false | Enable SSE streaming for compatible Chat Completions providers. `stream` is also accepted. |
+| `stream_usage` | true | Request usage counters in compatible streams; set false if the provider rejects the extension. Missing counters remain unknown. |
 | `health_check` | `GET /models` | Set `chat_completion` for providers without a useful `/models` endpoint. |
 | `extra_headers` | `{}` | Additional HTTP headers merged into provider requests. Do not put secrets here if the YAML might be shared. |
 | `anthropic_version` | `2023-06-01` | Anthropic `anthropic-version` header for `anthropic_messages`. |
 | `image_enabled` | false | Opt this provider into `/imagine`. |
 | `image_endpoint` | `<api_endpoint>/images/generations` | Explicit OpenAI-compatible text-to-image endpoint override. |
 | `image_edit_endpoint` | `<api_endpoint>/images/edits` | OpenAI-compatible multipart reference/edit endpoint. It is derived from `api_endpoint`, never by rewriting a custom `image_endpoint`. |
-| `image_models` | empty | Image model IDs; first item remains the legacy/default concrete selection when Auto is not configured. |
+| `image_models` | empty | Image model IDs; the first is the default when Auto is not configured. |
 | `image_model_capabilities` | empty | Optional per-model map. `mode` is `text`, `reference`, or `both`; reference-capable entries may set `edit_route: openai`. |
 | `edit_route` | `openai` | Nested reference-model capability field selecting the supported image-edit transport. |
 | `image_auto` | absent | Catalog-level map with fully-qualified `text_model` and `reference_model` selections used by the session Auto option. |

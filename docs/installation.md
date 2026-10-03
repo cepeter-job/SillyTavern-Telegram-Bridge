@@ -1,25 +1,30 @@
 # Installation
 
+[Back to README](../README.md) · [First conversation](user-guide.md#your-first-conversation) ·
+[Configuration](configuration.md) · [Operations](operations.md)
+
+The supported installer runs the bridge as your normal Linux user and keeps it
+running through a user systemd service. Run the installer as that user, not as
+root. It may ask for administrator access to install missing system packages.
+
 ## Before you start
 
-The maintained installer targets Linux with user systemd and must run as the
-intended non-root user. The guided path detects the distribution and installs
-only missing bridge prerequisites. Supported package managers are:
+Have these ready:
 
-- Debian/Ubuntu: `apt-get`
-- Fedora/RHEL-family: `dnf` or `yum`
-- Arch-family: `pacman`
-- openSUSE/SUSE-family: `zypper`
+| Item | What to enter |
+|---|---|
+| Telegram bot token | The token for your bot from [BotFather](https://t.me/BotFather). |
+| Allowed users | Your numeric Telegram user ID; use commas for multiple IDs, not usernames. |
+| Story model | A route such as `provider-one::model-a`. The first part identifies the provider; the second is its exact model ID. |
+| Provider connection | Its API endpoint and credential, when the chosen transport needs one. |
+| Existing SillyTavern data | The application location and native user to use, if you already have an installation. |
 
-Have these application values ready if this is a new bridge configuration:
+You do not need Hindsight, an embedding server or the Mini App to begin text
+chat. If there is no SillyTavern installation, the installer prepares isolated
+starter data and a PNG card. It does not install the SillyTavern web frontend.
 
-- Telegram bot token from BotFather.
-- Numeric Telegram user ID(s) allowed to use the bot.
-- Default Story model in `provider::model` form.
-- For the built-in OpenAI-compatible setup: provider endpoint and API key.
-
-An existing private `.env` is preserved. The wizard asks only for missing
-required values and does not echo secret prompts.
+Supported system package managers are `apt-get` (Debian/Ubuntu), `dnf` or `yum`
+(Fedora/RHEL family), `pacman` (Arch family), and `zypper` (SUSE family).
 
 ## Guided install
 
@@ -33,169 +38,134 @@ chmod 700 /tmp/sillytavern-telegram-install.sh
 /tmp/sillytavern-telegram-install.sh
 ```
 
-With no arguments, the installer shows:
+With no arguments, it offers:
 
-```text
-1) Standard install                 [recommended]
-2) Install + Tailscale Mini App
-3) Prepare only, do not start
-4) Repair/reinstall dependencies
-5) Advanced options
-0) Exit
-```
+| Choice | Use it when… |
+|---|---|
+| **Standard install** | You want the normal bot setup. Start here. |
+| **Install + Tailscale Mini App** | You also want the management interface and already have Tailscale configured. |
+| **Prepare only, do not start** | You want files and dependencies ready without starting the service. |
+| **Repair/reinstall dependencies** | You need to repair the bridge's Python environment. |
+| **Advanced options** | You need custom paths or installation controls. |
 
 ### Standard install
 
-The recommended option performs the normal user-scope setup:
+The wizard installs missing prerequisites, prepares Python 3.11+ with locked
+dependencies, verifies the newest signed release and creates the user service.
+It keeps a Git checkout on local branch `main` so signed `/update` can work later.
+The standard trust file lives outside the checkout; see [Trust model](#trust-model).
 
-1. Detect the Linux family and package manager.
-2. Detect missing bridge prerequisites and install only those packages.
-3. Create the standard external trust file at
-   `~/.config/sillytavern-telegram/trusted-maintainers` when absent.
-4. Verify the pinned maintainer key fingerprint.
-5. Clone without checkout, discover the newest `v*` release tag, verify the
-   signed tag, then create local branch `main` at that exact release commit.
-6. Provision user-local Python/uv and hash-locked bridge dependencies.
-7. Detect an existing SillyTavern installation and native user data.
-8. Collect any missing minimum bridge configuration.
-9. Prepare and start the user systemd service and enable lingering.
+It asks only for missing required settings and hides secret input. Existing
+private `.env` values and custom service units are preserved. Choose
+**Configure later** to leave incomplete configuration in place with the service
+stopped; rerun the installer when you have the missing values.
 
-The resulting source tree remains a real Git checkout on branch `main`, so the
-built-in signed `/update` flow continues to use the same external trust anchor.
-
-### SillyTavern autodetection
-
-The installer preserves an already configured `SILLYTAVERN_DIR` first. When
-none is configured, it checks common user-scope locations and a bounded set of
-home-directory application/repository folders.
-
-A candidate must contain SillyTavern markers such as `server.js`,
-`package.json`, and `config.yaml`. The installer reads `config.yaml`
-`dataRoot` instead of assuming `./data`, then discovers native users beneath
-that data root. If multiple valid installations or users exist, the wizard asks
-which one to use.
-
-For the selected user, the bridge records explicit native paths for character
-cards, World Info, System Prompts, Persona settings, and Persona avatars. If
-character PNGs already exist, one is selected as the initial default instead of
-forcing the starter card.
-
-The menu also reports whether Node/npm and `node_modules` are present for the
-detected SillyTavern installation. The bridge installer does **not** run
-`npm install`, upgrade Node, or otherwise manage SillyTavern's own dependencies.
-
-If no installation is detected, the bridge keeps its isolated starter data
-under the normal user-local SillyTavern fallback path.
-
-### Minimal configuration prompts
-
-For a fresh bridge configuration, the wizard asks only for:
-
-```text
-Telegram bot token
-Allowed Telegram user ID(s)
-Default model (provider::model)
-OpenAI-compatible API endpoint
-Provider API key
-```
-
-The endpoint hostname is written automatically to
-`SILLYTAVERN_PROVIDER_ALLOWED_HOSTS`; it is not requested separately. The
-guided installer does not ask for a model context-window size. New generated
-custom-provider catalogs keep `discover_models: false` so the selected model
-list stays pinned, while `discover_model_metadata: true` lets the bridge
-best-effort discover context sizes for those configured models. If the provider
-does not publish usable metadata, the bridge safely uses its 32K fallback.
-
-If a provider catalog/model is already configured, those values are preserved.
-If all required Telegram/model values are already valid, the installer does not
-re-prompt for existing secrets.
-
-Choose **Configure later** to write the installation files but leave required
-configuration incomplete and keep the service stopped. Rerun `./install.sh`
-later to finish setup.
-
-The generated private environment remains:
+Keep the generated file at:
 
 ```text
 ~/.local/share/sillytavern-telegram/.env
 ```
 
-Do not replace it with `.env.example`; existing values, custom provider
-configuration, and custom service units are preserved.
+Edit this file for later changes. Copying `.env.example` over it would replace
+your private settings.
+
+### Finding your SillyTavern data
+
+An existing `SILLYTAVERN_DIR` setting takes priority. Otherwise, the wizard checks
+common locations and a bounded set of folders in your home directory. It reads
+SillyTavern's `config.yaml` and `dataRoot`, then asks which installation/native
+user to use if there is more than one.
+
+The selected user's character, World Info, System Prompt, Persona settings and
+avatar paths are recorded explicitly. An existing PNG card can become the initial
+default. The wizard reports Node/npm dependency status for SillyTavern, but it
+leaves SillyTavern's packages and Node installation alone.
+
+### Provider and context setup
+
+For a new OpenAI-compatible route, enter the model, endpoint and API key. The
+wizard adds the endpoint hostname to `SILLYTAVERN_PROVIDER_ALLOWED_HOSTS` for you.
+An existing provider catalog is preserved.
+
+The installer does not ask you to guess a context-window size. A generated
+catalog pins the chosen model list with `discover_models: false` and enables
+`discover_model_metadata: true` to learn published context sizes for those models.
+If metadata is unavailable, the configured fallback is used, 32K by default.
+For a model with a smaller limit or missing metadata, set its explicit value in
+[context configuration](configuration.md#context-planning-and-diagnostics).
 
 ### Install + Tailscale Mini App
 
-This option uses the same guided setup and additionally prepares Tailscale
-Funnel. Tailscale itself must already be installed and signed in. The project
-supports the current Serve/Funnel CLI and requires Tailscale 1.52+.
+This uses the same setup and adds a public HTTPS endpoint through Tailscale
+Funnel. Tailscale 1.52+ must already be installed and signed in. MagicDNS, HTTPS
+and Funnel authorization also need to be available for the device.
 
-An administrator can allow the bridge user to manage the local daemon with:
+If the bridge user needs permission to manage the local daemon, an administrator
+can run:
 
 ```bash
 sudo tailscale set --operator="$USER"
 ```
 
-Funnel authorization still depends on the tailnet's MagicDNS, HTTPS, and Funnel
-policy. Public Mini App requests remain protected by Telegram `initData`
-validation and `SILLYTAVERN_TELEGRAM_ALLOWED_USERS`.
+That grants local operator access, not Funnel authorization. The Mini App still
+requires a signed Telegram launch and an allowed Telegram user ID. Follow the
+[Mini App setup guide](miniapp.md#setup-with-tailscale-funnel) for listener handling
+and troubleshooting.
 
-### Prepare and dependency repair choices
+## Verify the service
 
-**Prepare only** provisions the verified checkout, environment, dependencies,
-and service definition without starting the bridge.
+From the installed checkout:
 
-**Repair/reinstall dependencies** re-checks missing system prerequisites and the
-bridge Python environment. The installer never uses that option to modify an
-existing SillyTavern Node/npm installation.
+```bash
+cd ~/sillytavern-telegram-bridge
+./.venv/bin/python sillytavern_telegram_bridge.py --check
+systemctl --user status sillytavern-telegram.service
+journalctl --user -u sillytavern-telegram.service -n 80 --no-pager
+```
+
+The configuration check should finish successfully and systemd should report
+`active (running)`. Then open the bot and follow the
+[first conversation walkthrough](user-guide.md#your-first-conversation).
+A running process alone does not verify your model account: send a short message
+after `/start` to check the complete path.
+
+The installer enables the user service and can enable lingering so it continues
+after you log out. See [service controls](operations.md#service-controls) for
+restart, stop and lingering checks.
+
+## Updates
+
+Use `/update` for normal releases. It verifies the signed tag and requires a clean
+checkout on `main`. If runtime dependencies changed, follow the
+[manual signed update procedure](operations.md#manual-update).
+
+Avoid updating an installed release with `git pull origin main`: `main` may
+contain changes that have not been published as a signed release. Keep your
+database and native-data backups before upgrades.
 
 ## Trust model
 
-The easy guided path uses trust on first use (TOFU): the downloaded installer
-contains the pinned release-signing public key, verifies its expected fingerprint
-locally, creates the external allowed-signers file, and then verifies the signed
-release tag before checking out repository code.
-
-The expected current fingerprint is:
+The guided download uses **trust on first use (TOFU)**. The installer contains a
+pinned public release-signing key, checks its fingerprint, writes the external
+allowed-signers file and verifies the release tag before checking out its code.
+The expected fingerprint is:
 
 ```text
 SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI
 ```
 
-If your deployment requires an **independent first-key trust boundary**, obtain
-and verify the maintainer signer through a separate trusted channel and use the
-[advanced independently trusted bootstrap](#independently-trusted-bootstrap)
-instead of relying on TOFU.
-
-## Verify the service
-
-```bash
-systemctl --user status sillytavern-telegram.service
-journalctl --user -u sillytavern-telegram.service -n 80 --no-pager
-cd ~/sillytavern-telegram-bridge
-./.venv/bin/python sillytavern_telegram_bridge.py --check
-```
-
-## Updates
-
-Use the bridge's signed `/update` flow for normal upgrades. It requires a clean
-Git checkout on branch `main`, verifies the target signed release tag against
-the external trust file, and refuses automatic installation when
-`requirements.lock` changed.
-
-When dependency changes require a reviewed manual update, use the
-[manual signed update procedure](operations.md#manual-update). Do **not** replace
-release verification with `git pull origin main`; `main` can contain commits
-that are not a published signed release.
+This trusts the installer you downloaded for the first key. If you need independent
+authentication of that key, obtain the installer and signer through separately
+trusted channels and use the [bootstrap below](#independently-trusted-bootstrap).
+The [update runbook](operations.md#automatic-signed-update) explains the trust file
+and key rotation.
 
 ## Advanced / development installation
 
-These paths are intentionally outside the primary user installation flow.
-
 ### Independently trusted bootstrap
 
-Keep `--release TAG` for cases where a separately authenticated copy of
-`install.sh` must clone the repository itself:
+With an independently authenticated installer and public allowed-signers file,
+choose the exact release tag:
 
 ```bash
 ./install.sh --release vX.Y.Z \
@@ -203,31 +173,33 @@ Keep `--release TAG` for cases where a separately authenticated copy of
   --system-deps --no-start
 ```
 
-### Unsigned development `main`
+Replace `vX.Y.Z` with the release you reviewed.
 
-Use this only for development when signature-pinned bootstrap is deliberately
-not required:
+### Unsigned development main
+
+For development without signed-release bootstrap:
 
 ```bash
 ./install.sh --unsafe-main --system-deps --no-start
 ```
 
+Use an isolated checkout and test data. Contributor setup is in
+[Contributing](../CONTRIBUTING.md).
+
 ### Manual/offline release ZIP
 
-GitHub releases include `SillyTavern-Telegram-Bridge-vX.Y.Z.zip` and a matching
-`.sha256`. Verify the checksum before extraction and never overlay an archive
-onto an existing source tree.
+Releases include `SillyTavern-Telegram-Bridge-vX.Y.Z.zip` and its `.sha256` file.
+Verify the checksum and authenticate the corresponding signed release/tag using
+your trusted maintainer key. A checksum alone detects file changes; it does not
+authenticate the publisher.
 
-The checksum detects corruption or accidental modification; it does **not**
-independently authenticate the publisher. Establish release authenticity from
-the corresponding signed release/tag and independently trusted maintainer key
-before trusting the archive. ZIP installations also do not satisfy the
-Git-checkout-on-`main` requirement for automatic `/update`.
+Extract into a fresh directory. Overlaying an archive can leave obsolete code
+behind. ZIP installations do not meet the Git-checkout requirement for automatic
+`/update`; follow the manual release procedure for future upgrades.
 
-For customized manual environments, use [Configuration](configuration.md) and
-the repository's systemd example as references. Do not run manual copy steps on
-top of an installer-managed deployment unless you intentionally want to replace
-installer-managed state.
+For custom environments, use [Configuration](configuration.md) and
+[the systemd example](../systemd/sillytavern-telegram.service.example) as references.
+Keep an installer-managed deployment's existing private files and service settings.
 
 ## Generated locations
 
@@ -235,22 +207,17 @@ installer-managed state.
 |---|---|
 | Verified Git checkout | `~/sillytavern-telegram-bridge` |
 | Private environment | `~/.local/share/sillytavern-telegram/.env` |
-| Installer state/live data | `~/.local/share/sillytavern-telegram` |
+| Bridge state/data | `~/.local/share/sillytavern-telegram` |
 | User systemd unit | `~/.config/systemd/user/sillytavern-telegram.service` |
-| Default SillyTavern user data | `~/.local/share/SillyTavern/data/default-user` |
+| Starter SillyTavern user data | `~/.local/share/SillyTavern/data/default-user` |
 | External update trust file | `~/.config/sillytavern-telegram/trusted-maintainers` |
 
 ## Troubleshooting
 
-Run the built-in configuration check and inspect the user service:
+If the bot does not answer, check the user service and its recent log with the
+commands above. Verify the bot token and numeric allowed user ID, then run
+`--check` again. Restart after changing `.env`.
 
-```bash
-cd ~/sillytavern-telegram-bridge
-./.venv/bin/python sillytavern_telegram_bridge.py --check
-systemctl --user status sillytavern-telegram.service
-journalctl --user -u sillytavern-telegram.service -n 100 --no-pager
-```
-
-For signed-update failures, database recovery, network policy, and operational
-diagnostics, see [Operations](operations.md). For Mini App/Funnel problems, see
-[Mini App](miniapp.md).
+For provider failures, memory growth, backups and refused updates, use
+[Operations](operations.md#troubleshooting). For a Mini App that will not open,
+use [Mini App troubleshooting](miniapp.md#troubleshooting).

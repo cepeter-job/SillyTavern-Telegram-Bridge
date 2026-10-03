@@ -82,6 +82,52 @@ required check names aligned with the checks that report on pull requests and
 preserve strict up-to-date branch protection. Do not force a merge if a head
 changes during review or checks.
 
+## Documentation changes
+
+Write for the person doing the task. Start with what they want to achieve, give
+the shortest working path, and put advanced details in the relevant reference
+guide. Use the actual button/command names and explain unfamiliar terms once.
+Prefer direct sentences over promotional claims, forced chatty asides, repeated
+emoji headings or descriptions of internal implementation in everyday workflows.
+
+The README is the entrypoint, `docs/user-guide.md` explains workflows, and
+Telegram `/help` remains the full command reference. Installation instructions
+belong in `docs/installation.md`; configuration tables and operational runbooks
+have separate owners. Link to detailed guidance instead of maintaining several
+copies. Keep relative links and heading anchors valid when moving sections.
+
+Verify behavior against source and the executable command catalog. Distinguish
+current behavior, examples, estimates and proposed features. Document additional
+model calls when they affect a user's choice. Use generic public values and keep
+private configuration out of examples.
+
+For documentation changes, run the existing focused checks and review the rendered
+Markdown. The normal GitHub checks still apply to the PR:
+
+```bash
+python -m pytest -q tests/test_installation_docs.py tests/test_governance.py
+git diff --check
+```
+
+Keep completed implementation plans in Git history instead of shipping them as
+current user instructions. Dated audits should name their baseline, evidence and
+limitations. A feature proposal in an audit is not a commitment that it is shipped.
+
+## Mini App UI tests
+
+These are development-only checks; production does not need Node. With Node 24+
+and the project test environment active:
+
+```bash
+npm ci --prefix tests/miniapp-ui --include=dev --ignore-scripts --no-audit --no-fund
+MINIAPP_JSDOM_ROOT=tests/miniapp-ui PYTHON=python \
+  node --experimental-vm-modules tools/miniapp_ui_smoke.mjs
+```
+
+The DOM harness uses a temporary authenticated loopback fixture to exercise page
+navigation, session/model mutations, optimizer previews and usage states. CI runs
+it automatically. Deployment still needs checking in actual Telegram clients.
+
 ## Dependency maintenance
 
 Dependabot is configured for weekly `pip` and `github-actions` checks. It proposes
@@ -329,6 +375,5 @@ processes do not participate in the bridge's in-process mutation lock.
 Document jobs and recovery preserve the queued session and initiating actor.
 Do not re-resolve the active session after a queued upload has begun.
 
-Humanizer reference refresh is specification-only. Any implementation requires
-its own bounded, pinned, tested administrative path and must not become a
-runtime dependency or automatically replace the shipped prompt.
+The Humanizer prompt changes through reviewed source changes. There is no weekly
+reference fetch or automatic prompt promotion in the runtime.

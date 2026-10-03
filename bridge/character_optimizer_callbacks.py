@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 
 from bridge.callback_tokens import resolve_dynamic_callback_token
 from bridge.card_content import safe_character_path
@@ -17,6 +18,19 @@ from bridge.character_proposals import load_character_proposal
 from bridge.provider_errors import ProviderRequestError
 from bridge.provider_port import ProviderPort
 from bridge.telegram import send_panel_request
+
+
+def _safe_preview_failure_reason(exc: BaseException) -> str:
+    text = str(exc).casefold()
+    if "invalid json" in text:
+        return "invalid optimizer JSON response"
+    if "png" in text:
+        return "character PNG metadata failed validation"
+    if "changed" in text:
+        return "character changed during optimization"
+    if "size" in text or "limit" in text:
+        return "optimized card exceeded a safety limit"
+    return "preview validation rejected the generated result"
 
 
 def _handle_optimizer_menu(token, callback, answer_callback, chat_id, message, session, *, request_context) -> bool:
@@ -121,14 +135,20 @@ def _handle_prepare(
             },
             request_context=request_context,
         )
-    except (ValueError, OSError):
+    except (ValueError, OSError) as exc:
+        logging.warning("Character optimizer preview rejected: %s", exc, exc_info=True)
+        reason = _safe_preview_failure_reason(exc)
         send_panel_request(
             token,
             "editMessageText",
             {
                 "chat_id": chat_id,
                 "message_id": message.get("message_id"),
-                "text": "Optimization could not produce a safe preview. The installed card is unchanged.",
+                "text": (
+                    "Optimization response was received, but the preview could not be validated.\n\n"
+                    f"Reason: {reason}.\n\n"
+                    "The installed card is unchanged."
+                ),
                 "reply_markup": {"inline_keyboard": [[{"text": "Back", "callback_data": "character:optimize"}]]},
             },
             request_context=request_context,

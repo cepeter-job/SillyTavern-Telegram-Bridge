@@ -297,18 +297,25 @@ class CharacterQualityModelTests(SettingsTestCase):
             )
         self.assertEqual(result, {"description": "new", "personality": "refined"})
 
-    def test_optimize_character_returns_none_on_invalid_output(self):
-        port = make_test_provider_port(generate_backend=lambda *a, **k: "no json here")
+    def test_optimize_character_rejects_invalid_output_after_one_repair_attempt(self):
+        calls = []
+
+        def backend(*a, **k):
+            calls.append((a, k))
+            return "no json here"
+
+        port = make_test_provider_port(generate_backend=backend)
         with mock.patch.object(quality, "task_model_for_session", return_value="test-model"):
-            result = quality.optimize_character(
-                self.db,
-                "chat",
-                self.session,
-                {"name": "Alice"},
-                provider_port=port,
-                app_settings=self.app_settings,
-            )
-        self.assertIsNone(result)
+            with self.assertRaisesRegex(ValueError, "invalid JSON after one repair attempt"):
+                quality.optimize_character(
+                    self.db,
+                    "chat",
+                    self.session,
+                    {"name": "Alice"},
+                    provider_port=port,
+                    app_settings=self.app_settings,
+                )
+        self.assertEqual(len(calls), 2)
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@
 
 ## Global Constraints
 
+- Narrative presets are exactly Player-centric, Ensemble, World-driven, Observer, plus Custom for advanced overrides.
 - Player-centric is the compatibility/default preset for existing and new sessions unless explicitly changed.
 - Personal Narrative Style defaults are setup-prefill only; Apply writes a session-owned `narrative_settings` row.
 - World-driven and Observer allow free off-screen storytelling with no forced return-to-user rule.

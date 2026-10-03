@@ -230,6 +230,7 @@ git commit -m "feat: add narrative style to conversation setup"
   - `queue_narrative_reconciliation(db, chat_id: str, session: dict[str, str], *, provider_port: ProviderPort, app_settings: AppSettings) -> bool`
   - `ensure_narrative_state_current(..., through_rowid: int) -> NarrativeState`
   - `narrative_context_for_session(db, chat_id: str, session_id: str, consumer: str) -> str`
+- Reconciliation provider calls use `provider_port.for_usage(chat_id, session_id, "director_reconcile")` so the extra Utility work is visible in usage reporting from its first shipped phase.
 
 - [ ] **Step 1: Write reconciliation tests**
 
@@ -275,6 +276,7 @@ git commit -m "feat: track narrative scenes and threads"
 - Modify: `bridge/regeneration.py`
 - Modify: `bridge/continuation.py`
 - Modify: `bridge/edit_messages.py`
+- Modify: `bridge/image_messages.py`
 - Modify: `bridge/light_novel_service.py`
 - Modify: `bridge/group_director_service.py`
 - Modify: `bridge/status_panels.py`
@@ -282,6 +284,7 @@ git commit -m "feat: track narrative scenes and threads"
 - Test: `tests/test_light_novel_flow.py`
 - Test: `tests/test_group_director.py`
 - Test: `tests/test_grounded_user.py`
+- Test: `tests/test_image_generation.py`
 
 **Interfaces:**
 - Consumes: `narrative_context_for_session(...)`.
@@ -305,9 +308,9 @@ Assert:
 Run: `python -m pytest -q tests/test_narrative_generation.py tests/test_light_novel_flow.py tests/test_group_director.py`  
 Expected: FAIL because consumers do not inject Narrative Policy.
 
-- [ ] **Step 3: Wire Story/edit/regen/continue consumers**
+- [ ] **Step 3: Wire Story/edit/regen/continue/image-story consumers**
 
-Compute narrative context before prompt assembly and pass it through the new optional `build_chat_messages` parameter. Keep image-analysis behavior unchanged; Phase 1 does not add closed-story media guards.
+Compute narrative context before prompt assembly and pass it through the new optional `build_chat_messages` parameter from normal text, edit, regeneration, continuation, and photo/image-message Story turns. Narrative Style governs image-backed roleplay Story generation too; Phase 1 does not add closed-story media guards.
 
 - [ ] **Step 4: Wire Light Novel and Group**
 
@@ -319,13 +322,13 @@ Show preset, POV, active scene/thread, and whether narrative state is current/st
 
 - [ ] **Step 6: Run focused and regression tests**
 
-Run: `python -m pytest -q tests/test_narrative_generation.py tests/test_light_novel_flow.py tests/test_light_novel_generation.py tests/test_group_director.py tests/test_grounded_user.py tests/test_context_window_hardening.py`  
+Run: `python -m pytest -q tests/test_narrative_generation.py tests/test_light_novel_flow.py tests/test_light_novel_generation.py tests/test_group_director.py tests/test_grounded_user.py tests/test_image_generation.py tests/test_context_window_hardening.py`  
 Expected: PASS.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add bridge/generation.py bridge/message_commands.py bridge/regeneration.py bridge/continuation.py bridge/edit_messages.py bridge/light_novel_service.py bridge/group_director_service.py bridge/status_panels.py tests/test_narrative_generation.py tests/test_light_novel_flow.py tests/test_group_director.py
+git add bridge/generation.py bridge/message_commands.py bridge/regeneration.py bridge/continuation.py bridge/edit_messages.py bridge/image_messages.py bridge/light_novel_service.py bridge/group_director_service.py bridge/status_panels.py tests/test_narrative_generation.py tests/test_light_novel_flow.py tests/test_group_director.py tests/test_image_generation.py
 git commit -m "feat: apply narrative policy across story flows"
 ```
 

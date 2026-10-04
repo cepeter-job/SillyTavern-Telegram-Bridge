@@ -309,3 +309,36 @@ def clear_narrative_story_state(db: sqlite3.Connection, chat_id: str, session_id
             f"DELETE FROM {table} WHERE chat_id=? AND session_id=?",  # noqa: S608 -- fixed internal table names
             (chat_id, session_id),
         )
+
+
+def narrative_snapshot_rows(
+    db: sqlite3.Connection, chat_id: str, session_id: str, through_rowid: int
+) -> dict[str, list[dict[str, Any]]]:
+    """Read coherent current narrative entities, bounded without silently dropping history."""
+    queries = {
+        "scenes": (
+            "SELECT * FROM narrative_scenes WHERE chat_id=? AND session_id=? "
+            "AND source_revision<=? ORDER BY scene_id LIMIT 2049"
+        ),
+        "threads": (
+            "SELECT * FROM narrative_threads WHERE chat_id=? AND session_id=? "
+            "AND source_revision<=? ORDER BY thread_id LIMIT 257"
+        ),
+        "arcs": (
+            "SELECT * FROM narrative_arcs WHERE chat_id=? AND session_id=? "
+            "AND source_revision<=? ORDER BY arc_id LIMIT 257"
+        ),
+    }
+    limits = {"scenes": 2048, "threads": 256, "arcs": 256}
+    result = {}
+    for name, query in queries.items():
+        cursor = db.execute(query, (chat_id, session_id, through_rowid))
+        try:
+            columns = [item[0] for item in cursor.description]
+            rows = [dict(zip(columns, row, strict=True)) for row in cursor]
+        finally:
+            cursor.close()
+        if len(rows) > limits[name]:
+            raise ValueError("Narrative history is too large for a bounded pre-finale snapshot")
+        result[name] = rows
+    return result

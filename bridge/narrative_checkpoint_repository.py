@@ -81,3 +81,15 @@ def delete_rolling_checkpoints_after(
         "AND source_revision>?",
         (chat_id, session_id, source_revision),
     )
+
+
+def load_pre_finale_checkpoint_row(
+    db: sqlite3.Connection, chat_id: str, session_id: str, checkpoint_id: str
+) -> dict[str, Any] | None:
+    return _checkpoint(
+        db.execute(
+            "SELECT checkpoint_id,kind,source_revision,through_rowid,format_version,payload_json "
+            "FROM narrative_checkpoints WHERE chat_id=? AND session_id=? AND kind='pre_finale' AND checkpoint_id=?",
+            (chat_id, session_id, checkpoint_id),
+        ).fetchone()
+    )

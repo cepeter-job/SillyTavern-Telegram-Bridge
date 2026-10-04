@@ -40,3 +40,15 @@ def delete_meta_value(
         "DELETE FROM meta WHERE key=?",
         (str(key),),
     )
+
+
+def session_task_models(db: sqlite3.Connection, chat_id: str, session_id: str) -> dict[str, str]:
+    """Read only task-model preferences; never copy arbitrary session-suffixed metadata."""
+    suffix = f":{chat_id}:{session_id}"
+    rows = db.execute(
+        "SELECT key,value FROM meta WHERE substr(key,1,11)='task_model:' AND substr(key,-length(?))=? LIMIT 33",
+        (suffix, suffix),
+    ).fetchall()
+    if len(rows) > 32:
+        raise ValueError("Too many task model settings for a bounded narrative snapshot")
+    return {str(key)[11 : -len(suffix)]: str(value) for key, value in rows}

@@ -22,6 +22,7 @@ SESSION_COLUMNS = (
 _SESSION_COLUMN_SQL = ", ".join(SESSION_COLUMNS)
 _MUTABLE_COLUMNS = frozenset(SESSION_COLUMNS) - {"chat_id", "session_id"}
 _SESSION_OWNED_TABLES = (
+    "sessions",
     "messages",
     "response_variants",
     "session_summaries",
@@ -35,7 +36,6 @@ _SESSION_OWNED_TABLES = (
     "episodic_memories",
     "npc_extraction_state",
     "npc_entities",
-    "sessions",
 )
 
 

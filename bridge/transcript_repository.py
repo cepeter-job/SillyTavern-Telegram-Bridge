@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
 
@@ -67,3 +68,25 @@ def story_row_by_id(db: sqlite3.Connection, chat_id: str, session_id: str, rowid
         "SELECT role,content FROM messages WHERE chat_id=? AND session_id=? AND id=?",
         (chat_id, session_id, rowid),
     ).fetchone()
+
+
+def transcript_prefix_fingerprint(
+    db: sqlite3.Connection, chat_id: str, session_id: str, through_rowid: int
+) -> dict[str, int | str]:
+    """Hash a transcript prefix incrementally; delivery metadata is deliberately excluded."""
+    import hashlib
+
+    digest = hashlib.sha256()
+    count = 0
+    cursor = db.execute(
+        "SELECT id,role,content,created_at FROM messages WHERE chat_id=? AND session_id=? AND id<=? ORDER BY id",
+        (chat_id, session_id, through_rowid),
+    )
+    try:
+        for row in cursor:
+            digest.update(json.dumps(row, ensure_ascii=False, separators=(",", ":")).encode())
+            digest.update(b"\n")
+            count += 1
+    finally:
+        cursor.close()
+    return {"count": count, "sha256": digest.hexdigest()}

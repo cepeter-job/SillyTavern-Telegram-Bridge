@@ -228,7 +228,8 @@ def test_retry_choices_enqueues_only_choice_job_with_unchanged_count(novel_db):
 
     record = attached_choice(novel_db, ready=False)
     db, _session, settings = novel_db
-    services = bridge_services(settings, [])
+    sent = []
+    services = bridge_services(settings, sent)
     with write_transaction(db):
         bind_choice_panel(db, record.nonce, 81)
         db.execute(
@@ -238,6 +239,9 @@ def test_retry_choices_enqueues_only_choice_job_with_unchanged_count(novel_db):
         db.execute("UPDATE jobs SET state='done'")
     callback = {"id": "cb", "data": f"lnretry:{record.nonce}", "message": {"message_id": 81}}
     route_light_novel_callback(services, db, callback, 105, "chat", "owner", message_worker=lambda *a: None)
+    pending_edits = [payload for method, payload in sent if method == "editMessageText"]
+    assert pending_edits[-1]["text"] == "Preparing choices for your saved story. You may also type your own reply."
+    assert pending_edits[-1]["reply_markup"] == {"inline_keyboard": []}
     route_light_novel_callback(services, db, callback, 106, "chat", "owner", message_worker=lambda *a: None)
     rows = db.execute("SELECT kind,payload_json FROM jobs WHERE state='queued'").fetchall()
     assert len(rows) == 1 and rows[0][0] == "novel_choices"

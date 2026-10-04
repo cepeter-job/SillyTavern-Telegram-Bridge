@@ -228,3 +228,12 @@ Director settings offer Adaptive, 4/6/10-turn and custom 1–100-turn cadence, p
 reasoning budget separate from Utility. **Choose models** opens Story/Utility/
 Director routing. Text is rendered safely; saving a long objective preserves the
 full supported 4,000 characters even when Telegram shows a shorter preview.
+
+### Ending controls
+
+Director Room includes the story's ending mode, optional goal, finale-confirmation
+preference and current lifecycle. **Begin finale** requires explicit consent and
+checks the displayed story revision. **Recover saved ending** is a bounded job
+that resumes only unfinished epilogue work or delivery. **View ending** reads the
+saved prose without a provider call. Completed sessions offer **New Story** and
+keep their original ending immutable.

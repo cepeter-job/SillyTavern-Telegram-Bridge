@@ -152,6 +152,7 @@ def handle_primary_panel_callback(
         session_id,
         operation_id,
         provider_port=provider_port,
+        delivery_port=delivery_port,
         persona_service=persona_service,
         request_context=request_context,
     ):

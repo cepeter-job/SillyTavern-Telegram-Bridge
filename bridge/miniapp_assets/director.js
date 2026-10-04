@@ -57,6 +57,34 @@ async function renderDirector() {
         })));
     }
     if(data.ending) {
+      const progress=card('Story ending',el('p',{},'Mode: '+(data.ending.mode==='closed_story'?'Closed Story':'Open-ended')),
+        el('p',{},'Progress: '+data.ending.lifecycle.replaceAll('_',' ')),
+        el('p',{class:'muted'},'Closed Story ends with a separate epilogue. The completed original cannot be reopened or rewritten.'));
+      if(data.ending.editable) {
+        const mode=el('select',{},el('option',{value:'open_ended'},'Open-ended'),el('option',{value:'closed_story'},'Closed Story'));
+        mode.value=data.ending.mode;
+        const consent=el('select',{},el('option',{value:'false'},'Automatic when ready'),el('option',{value:'true'},'Ask before finale'));
+        consent.value=String(data.ending.require_confirmation);
+        progress.append(field('Story ending',mode),field('Finale entry',consent),button('Save ending settings',async()=>{
+          await api('/director/ending-controls',{method:'PATCH',body:body({mode:mode.value,require_confirmation:consent.value==='true'})});
+          await load();notice('Ending settings saved for this story.');
+        }));
+      }
+      if(data.ending.lifecycle==='finale_ready')progress.append(el('p',{},data.ending.reason),button('Begin finale',async()=>{
+        if(!await confirmAction('Save the pre-finale checkpoint and begin the finale? Earlier story events will be frozen.'))return;
+        const result=await api('/director/begin-finale',{method:'POST',body:body({confirm:true,operation_id:crypto.randomUUID()})});
+        await load();notice(result.message);
+      }));
+      if(data.ending.recovery_needed||data.ending.delivery_pending)progress.append(button('Recover saved ending',async()=>{
+        if(!await confirmAction('Resume only the unfinished epilogue or delivery? Committed scenes will not be generated again.'))return;
+        const result=await runJob('/director/recover-ending',body({confirm:true}),root);await load();notice(result.message);
+      }));
+      if(data.ending.has_resolution||data.ending.has_epilogue)progress.append(button('View ending',async()=>{
+        const saved=await api('/director/ending');
+        progress.append(el('div',{class:'saved-ending'},el('h3',{},'Saved ending'),el('p',{},saved.epilogue||saved.resolution)));
+      },'secondary'));
+      if(data.ending.lifecycle==='closed')progress.append(button('New Story',()=>navigate('characters'),'secondary'));
+      views.push(progress);
       const ending=card('Ending goal',el('p',{class:'muted'},'A hidden destination, not a predetermined script. A blank goal lets the ending emerge from the story.'));
       if(data.mutable&&data.ending.editable) {
         const goal=el('textarea',{value:data.ending.goal||'',maxlength:4000,rows:4});

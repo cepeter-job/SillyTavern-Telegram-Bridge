@@ -58,6 +58,9 @@ def director_panel(
         lines = [
             "<b>Ending goal</b>",
             "A hidden destination, not a script. Leave it blank for an emergent ending.",
+            "<b>Mode</b>: " + ("Closed Story" if ending["mode"] == "closed_story" else "Open-ended"),
+            "<b>Progress</b>: " + _escape(ending["lifecycle"].replace("_", " "), 100),
+            "Finale confirmation: " + ("Required" if ending["require_confirmation"] else "Automatic when ready"),
             "<b>Current goal</b>\n" + _escape(ending["goal"] or "Emergent ending", 1300),
         ]
         if not ending["editable"]:
@@ -71,6 +74,32 @@ def director_panel(
             if view["mutable"] and ending["editable"]
             else []
         )
+        if ending["editable"]:
+            rows.append(
+                [
+                    button("Open-ended", "ending_mode", mode="open_ended"),
+                    button("Closed Story", "ending_mode", mode="closed_story"),
+                ]
+            )
+            rows.append(
+                [
+                    button(
+                        "Make finale automatic" if ending["require_confirmation"] else "Ask before finale",
+                        "ending_confirmation",
+                        required=not ending["require_confirmation"],
+                    )
+                ]
+            )
+        if ending["lifecycle"] == "finale_ready":
+            lines.append(_escape(ending["reason"], 400))
+            rows.append([button("Begin finale", "begin_finale")])
+        if ending["recovery_needed"] or ending["delivery_pending"]:
+            lines.append("Your resolution is saved. Recovery retries only the unfinished epilogue or its delivery.")
+            rows.append([button("Recover saved ending", "recover_ending")])
+        if ending["has_resolution"] or ending["has_epilogue"]:
+            rows.append([button("View ending", "view_ending")])
+        if ending["lifecycle"] == "closed":
+            rows.append([button("New Story", "new_story")])
         rows.append([button("Back", "open")])
         return "\n\n".join(lines), {"inline_keyboard": rows}
     if page == "arcs":

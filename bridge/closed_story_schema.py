@@ -26,6 +26,7 @@ def _parent(scope: str) -> str:
 def migrate_closed_story_guards(db: sqlite3.Connection) -> None:
     if not db.in_transaction:
         raise RuntimeError("Closed-story migration requires an active transaction")
+    db.execute("CREATE INDEX ending_recovery_due_idx ON ending_state(lifecycle,last_attempt_at,updated_at)")
     db.execute(
         "CREATE TRIGGER closing_story_insert BEFORE INSERT ON messages WHEN "
         + _ending("NEW", "e.lifecycle IN " + _CLOSING)

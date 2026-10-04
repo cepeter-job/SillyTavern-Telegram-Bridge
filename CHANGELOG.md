@@ -28,6 +28,9 @@ not publish a release or change an installed deployment.
   plus separate persistent user guidance in Director Room.
 - Ending Goal revisions, finale-readiness checks and atomic immutable pre-finale
   snapshots as the storage foundation for Closed Story.
+- Full Closed Story execution with multi-turn finales, a separate Story-model
+  epilogue, bounded restart recovery and immutable completed originals.
+- Ending controls and explicit finale confirmation in Telegram and the Mini App.
 
 ### Fixed
 

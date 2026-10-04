@@ -14,6 +14,8 @@ from bridge.director_room import (
     steer_thread,
 )
 from bridge.director_service import DirectorService
+from bridge.ending_controls import configure_ending, confirm_finale, require_ending_revision, saved_ending
+from bridge.ending_runtime import maybe_enter_finale, recover_ending_workflow
 from bridge.miniapp_auth import MiniAppIdentity
 from bridge.miniapp_context import digest, require_confirmation, session_scope, text
 from bridge.miniapp_types import ApiRoute
@@ -58,6 +60,7 @@ def reassess(services: Any, who: MiniAppIdentity, values: dict) -> dict:
             persona_service=services.persona,
             app_settings=services.config,
         )
+        maybe_enter_finale(scope.db, scope.chat_id, scope.session["session_id"])
         return {"accepted": result.result == "accepted", "message": result.reason}
 
 
@@ -111,9 +114,67 @@ def edit_arc_guidance(services: Any, who: MiniAppIdentity, values: dict) -> dict
         return {"saved": result.result == "accepted", "message": result.reason}
 
 
+def save_ending_controls(services: Any, who: MiniAppIdentity, values: dict) -> dict:
+    revision = digest(values, "revision")
+    with session_scope(services, who, values, write=True) as scope:
+        configure_ending(
+            scope.db,
+            scope.chat_id,
+            scope.session["session_id"],
+            revision,
+            mode=values.get("mode"),
+            require_confirmation=values.get("require_confirmation"),
+        )
+        return {"saved": True}
+
+
+def begin_finale(services: Any, who: MiniAppIdentity, values: dict) -> dict:
+    require_confirmation(values)
+    revision = digest(values, "revision")
+    operation = text(values, "operation_id", 100)
+    with session_scope(services, who, values, write=True) as scope:
+        checkpoint = confirm_finale(
+            scope.db, scope.chat_id, scope.session["session_id"], revision, operation_id="finale-" + operation
+        )
+        return {
+            "saved": True,
+            "checkpoint_id": checkpoint.checkpoint_id,
+            "message": "Checkpoint saved. Continue the story in Telegram to play its finale.",
+        }
+
+
+def recover_ending(services: Any, who: MiniAppIdentity, values: dict) -> dict:
+    require_confirmation(values)
+    revision = digest(values, "revision")
+    with session_scope(services, who, values, write=True) as scope:
+        require_ending_revision(scope.db, scope.chat_id, scope.session["session_id"], revision)
+        result = recover_ending_workflow(
+            scope.db,
+            services.config.bot_token,
+            services.config.api_key,
+            scope.chat_id,
+            scope.session,
+            provider_port=services.provider,
+            delivery_port=services.delivery,
+            persona_service=services.persona,
+            app_settings=services.config,
+            manual=True,
+        )
+        return {"completed": result.completed, "delivered": result.delivered, "message": result.message}
+
+
+def get_ending(services: Any, who: MiniAppIdentity, values: dict) -> dict:
+    with session_scope(services, who, values) as scope:
+        return saved_ending(scope.db, scope.chat_id, scope.session["session_id"])
+
+
 def routes() -> list[ApiRoute]:
     return [
         ApiRoute("GET", "/director", get_director),
+        ApiRoute("GET", "/director/ending", get_ending),
+        ApiRoute("PATCH", "/director/ending-controls", save_ending_controls),
+        ApiRoute("POST", "/director/begin-finale", begin_finale),
+        ApiRoute("POST", "/director/recover-ending", recover_ending, "ending_recovery"),
         ApiRoute("PATCH", "/director/ending-goal", edit_ending_goal),
         ApiRoute("PATCH", "/director/arc-guidance", edit_arc_guidance),
         ApiRoute("PATCH", "/director/direction", edit_direction),

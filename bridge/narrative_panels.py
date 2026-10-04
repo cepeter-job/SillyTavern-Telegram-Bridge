@@ -19,6 +19,8 @@ PRESET_LABELS = {
     "custom": "Custom",
 }
 FIELD_LABELS = {
+    "ending_mode": "Story ending",
+    "require_finale_confirmation": "Finale confirmation",
     "pov_mode": "Point of view",
     "user_role": "Your role",
     "scene_focus": "Scene focus",
@@ -26,6 +28,8 @@ FIELD_LABELS = {
     "user_control": "Control of your character",
 }
 FIELD_OPTIONS = {
+    "ending_mode": (("open_ended", "Open-ended"), ("closed_story", "Closed Story")),
+    "require_finale_confirmation": (("false", "Automatic when ready"), ("true", "Ask before finale")),
     "pov_mode": (
         ("first_person", "First-person, AI viewpoint"),
         ("third_person_user", "Third-person limited, user-anchored"),
@@ -63,7 +67,7 @@ def narrative_style_summary(settings: NarrativeSettings) -> str:
     values = settings.to_dict()
     lines = [f"Narrative: {PRESET_LABELS[settings.preset]}"]
     for name in NARRATIVE_EDIT_FIELDS:
-        label = dict(FIELD_OPTIONS[name]).get(str(values[name]), str(values[name]))
+        label = dict(FIELD_OPTIONS[name]).get(str(values[name]).lower(), str(values[name]))
         lines.append(f"{FIELD_LABELS[name]}: {label}")
     lines.append("Your dialogue, thoughts, commitments, and important decisions remain yours.")
     if settings.preset in {"world_driven", "observer"}:

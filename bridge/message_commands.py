@@ -23,6 +23,7 @@ from bridge.conversation_lifecycle import (
 )
 from bridge.delivery_progress import bind_committed_turn
 from bridge.edit_messages import edit_last_user
+from bridge.ending_runtime import recover_ending_workflow
 from bridge.episodic_memory import purge_episodic_memories
 from bridge.failed_turns import clear_failed_turn
 from bridge.generation import build_chat_messages, render_response_language
@@ -440,6 +441,21 @@ def prepare_message(
     session_id = session["session_id"]
     request_context = RequestContext(db, session_id, actor_id, app_settings=app_settings)
     closing_notice = story_mutation_message(db, chat_id, session_id)
+    if closing_notice and command == "/retry":
+        result = recover_ending_workflow(
+            db,
+            token,
+            api_key,
+            chat_id,
+            session,
+            provider_port=provider_port,
+            delivery_port=delivery_port,
+            persona_service=persona_service,
+            app_settings=app_settings,
+            manual=True,
+        )
+        delivery_port.send_text(token, chat_id, result.message)
+        return None
     if closing_notice and not closed_session_allows_input(db, chat_id, session_id, actor_id, command):
         delivery_port.send_text(token, chat_id, closing_notice)
         return None

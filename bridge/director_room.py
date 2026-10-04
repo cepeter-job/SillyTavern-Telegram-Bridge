@@ -8,6 +8,7 @@ import sqlite3
 import time
 from typing import Any
 
+from bridge.delivery_progress import delivery_complete
 from bridge.director_repository import (
     append_director_decision,
     director_decision_history,
@@ -99,6 +100,14 @@ def director_room(db: sqlite3.Connection, chat_id: str, session_id: str) -> dict
             "editable": ending.lifecycle in {"open", "finale_ready"},
             "require_confirmation": settings.require_finale_confirmation,
             "reason": ending.readiness_reason,
+            "has_resolution": ending.resolution_rowid is not None,
+            "has_epilogue": ending.epilogue_committed_rowid is not None,
+            "delivery_pending": any(
+                rowid is not None and not delivery_complete(db, rowid)
+                for rowid in (ending.resolution_rowid, ending.epilogue_committed_rowid)
+            ),
+            "recovery_needed": ending.lifecycle in {"resolution_committed", "epilogue_pending", "epilogue_committed"},
+            "error": bool(ending.last_error),
             "history": [
                 {
                     "revision": row.goal_revision,

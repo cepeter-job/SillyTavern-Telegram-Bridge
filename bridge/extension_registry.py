@@ -12,6 +12,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from bridge.delivery_port import DeliveryPort
 from bridge.extension_context import PostRetainContext
 from bridge.persona_service import PersonaService
 from bridge.settings import AppSettings
@@ -77,8 +78,11 @@ def run_post_retain_hooks(
     *,
     app_settings: AppSettings,
     persona_service: PersonaService | None = None,
+    delivery_port: DeliveryPort | None = None,
 ) -> None:
-    context = PostRetainContext(db, chat_id, session, fields, provider_port, app_settings, persona_service)
+    context = PostRetainContext(
+        db, chat_id, session, fields, provider_port, app_settings, persona_service, delivery_port
+    )
     for name, handler in tuple(_POST_RETAIN_HOOKS.items()):
         try:
             handler(context)

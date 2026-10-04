@@ -293,6 +293,36 @@ keeps valid guidance and otherwise continues conservatively from committed state
 Stale or malformed plans are not applied. The Mini App and Telegram controls reject
 edits from an old panel rather than silently overwrite a newer decision.
 
+## Closed Story and the epilogue
+
+Choose **Closed Story** in the Advanced step after selecting a character, or open
+**Director Room → Ending settings** for an existing story. The default remains
+Open-ended. An optional Ending Goal gives the Director a destination without
+scripting your character's decisions. Its revisions and reasons remain visible.
+
+A finale starts automatically when current story evidence supports it. Turn on
+**Ask before finale** to review the Director's reason and press **Begin finale**
+yourself. Continuing the story first expires that old confirmation. The bridge
+saves an immutable pre-finale checkpoint before entering the finale.
+
+The finale can span several turns. Once its actual resolution is committed and
+reconciled, the Director prepares a brief and the Story model writes a **separate
+epilogue**. Its time jump may show the immediate aftermath or a later future, but
+must preserve your agency and deliberately unresolved facts.
+
+A completed story is read-only. New story messages receive:
+
+> This story has ended. Please start new story.
+
+Editing, regeneration, choices, `/reset`, new images and other creative work cannot
+reopen the original. Status, history, usage and Director Room remain available.
+Choose **New Story** or `/character` to start a different session.
+
+When an epilogue or its delivery is interrupted, use `/retry` or **Recover saved
+ending**. The bridge retries the unfinished stage, not the already committed
+resolution or epilogue. A Telegram outage does not undo a saved ending. A provider
+failure pauses automatic retries to avoid repeatedly spending tokens.
+
 ## Narrative Style
 
 Open `/narrative` to choose how the **current story** is told. You also choose

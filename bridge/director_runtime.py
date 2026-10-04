@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import time
 from dataclasses import asdict
 from functools import partial
 from typing import Any
 
+from bridge import ending_runtime
 from bridge.background import chat_job_lock, submit_background
 from bridge.director_cadence import director_due, director_event_key
 from bridge.director_guidance import active_director_plan
@@ -24,7 +26,7 @@ from bridge.extension_context import PostRetainContext
 from bridge.extension_registry import register_post_retain_hook
 from bridge.narrative_arc_repository import list_arc_rows
 from bridge.narrative_context import load_narrative_state, narrative_clock_is_current
-from bridge.narrative_reconciliation import queue_narrative_reconciliation
+from bridge.narrative_reconciliation import ensure_narrative_state_current, queue_narrative_reconciliation
 from bridge.narrative_repository import list_narrative_threads, load_narrative_clock
 from bridge.narrative_settings import load_session_narrative_settings
 from bridge.persona_service import PersonaService
@@ -107,6 +109,7 @@ def _director_worker(
                     persona_service=persona_service,
                     reason=event or "adaptive",
                 )
+                ending_runtime.maybe_enter_finale(db, chat_id, session_id)
         finally:
             db.close()
     finally:
@@ -150,7 +153,37 @@ def queue_director_reassessment(
 
 
 def _post_retain(context: PostRetainContext) -> None:
-    # Capture ports per admitted call, not in a process-wide app/service registry.
+    sid = context.session["session_id"]
+    ending = load_ending_state(context.db, context.chat_id, sid)
+    if ending.lifecycle == "finale":
+        clock = load_narrative_clock(context.db, context.chat_id, sid)
+        if clock is not None:
+            try:
+                ensure_narrative_state_current(
+                    context.db,
+                    context.app_settings.api_key,
+                    context.chat_id,
+                    context.session,
+                    clock["latest_rowid"],
+                    provider_port=context.provider_port,
+                    app_settings=context.app_settings,
+                )
+            except (ValueError, RuntimeError):
+                logging.warning("Finale is committed; current reconciliation must finish before epilogue work")
+                return
+        ending = load_ending_state(context.db, context.chat_id, sid)
+    if ending.lifecycle in {"resolution_committed", "epilogue_pending", "epilogue_committed", "closed"}:
+        if context.delivery_port is not None and context.persona_service is not None:
+            ending_runtime.queue_ending_recovery(
+                context.db,
+                context.chat_id,
+                context.session,
+                provider_port=context.provider_port,
+                delivery_port=context.delivery_port,
+                persona_service=context.persona_service,
+                app_settings=context.app_settings,
+            )
+        return
     queue_narrative_reconciliation(
         context.db,
         context.chat_id,

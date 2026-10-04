@@ -234,7 +234,14 @@ def _build_startup_services(
         summary_state=get_session_summary,
         retain_session=(
             lambda db, chat_id, session, fields: retain_session_memory(
-                db, chat_id, session, fields, provider_port=provider, app_settings=config, persona_service=persona
+                db,
+                chat_id,
+                session,
+                fields,
+                provider_port=provider,
+                app_settings=config,
+                persona_service=persona,
+                delivery_port=delivery,
             )
         ),
         purge_session_memory=_partial(purge_hindsight_session, app_settings=config),

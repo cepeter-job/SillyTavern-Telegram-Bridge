@@ -161,3 +161,25 @@ def clear_ending_error(db: sqlite3.Connection, chat_id: str, session_id: str) ->
         "UPDATE ending_state SET last_error='' WHERE chat_id=? AND session_id=? AND last_error<>''",
         (chat_id, session_id),
     )
+
+
+def recoverable_ending_rows(db: sqlite3.Connection, now: float, *, limit: int = 32) -> list[tuple[str, str]]:
+    """Bounded runtime lookup; failed model work requires an explicit retry, not a token loop."""
+    return list(
+        db.execute(
+            "SELECT e.chat_id,e.session_id FROM ending_state e JOIN sessions s "
+            "ON s.chat_id=e.chat_id AND s.session_id=e.session_id "
+            "WHERE e.last_attempt_at<? AND e.last_error='' AND (e.work_token='' OR e.work_started_at<?) "
+            "AND ((e.lifecycle='finale' AND e.finale_committed_rowid IS NOT NULL AND EXISTS ("
+            "SELECT 1 FROM narrative_state n WHERE n.chat_id=e.chat_id AND n.session_id=e.session_id "
+            "AND (n.history_revision<>n.reconciled_history_revision OR n.invalidated_from_rowid IS NOT NULL))) "
+            "OR e.lifecycle IN ('resolution_committed','epilogue_pending','epilogue_committed') "
+            "OR (e.lifecycle='closed' AND ("
+            "(e.epilogue_committed_rowid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM assistant_delivery_progress d "
+            "WHERE d.assistant_rowid=e.epilogue_committed_rowid AND d.complete=1)) "
+            "OR (e.resolution_rowid IS NOT NULL AND NOT EXISTS (SELECT 1 FROM assistant_delivery_progress d "
+            "WHERE d.assistant_rowid=e.resolution_rowid AND d.complete=1))))) "
+            "ORDER BY e.last_attempt_at,e.updated_at,e.chat_id,e.session_id LIMIT ?",
+            (now - 60, now - 600, max(1, min(64, int(limit)))),
+        ).fetchall()
+    )

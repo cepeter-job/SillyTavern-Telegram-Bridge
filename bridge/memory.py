@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from functools import partial as _partial
 
 from bridge.background import submit_background
+from bridge.delivery_port import DeliveryPort
 from bridge.episodic_extraction import extract_episodic_memories
 from bridge.extension_registry import apply_summary_context_hooks as _apply_summary_context_hooks
 from bridge.extension_registry import run_post_retain_hooks as _run_post_retain_hooks
@@ -52,7 +53,12 @@ from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect, write_transaction
 
 
-def _make_hindsight_stale_guard(*, app_settings: AppSettings, persona_service: PersonaService | None = None):
+def _make_hindsight_stale_guard(
+    *,
+    app_settings: AppSettings,
+    persona_service: PersonaService | None = None,
+    delivery_port: DeliveryPort | None = None,
+):
     return _HindsightStaleGuard(
         open_db=lambda: db_connect(app_settings=app_settings),
         session_lock=lambda chat_id, session_id: hindsight_session_lock(
@@ -75,7 +81,10 @@ def _make_hindsight_stale_guard(*, app_settings: AppSettings, persona_service: P
         purge_backend=_partial(_purge_hindsight_session_backend, app_settings=app_settings),
         write_successful_purge_state=(_write_hindsight_successful_purge_state),
         run_post_retain_hooks=_partial(
-            _run_post_retain_hooks, app_settings=app_settings, persona_service=persona_service
+            _run_post_retain_hooks,
+            app_settings=app_settings,
+            persona_service=persona_service,
+            delivery_port=delivery_port,
         ),
     )
 
@@ -89,8 +98,11 @@ def retain_session_memory(
     provider_port: ProviderPort,
     app_settings: AppSettings,
     persona_service: PersonaService | None = None,
+    delivery_port: DeliveryPort | None = None,
 ) -> None:
-    _make_hindsight_stale_guard(app_settings=app_settings, persona_service=persona_service).retain(
+    _make_hindsight_stale_guard(
+        app_settings=app_settings, persona_service=persona_service, delivery_port=delivery_port
+    ).retain(
         db,
         chat_id,
         session,

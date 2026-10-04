@@ -185,3 +185,38 @@ def test_long_objective_is_not_truncated_before_edit_round_trip(tmp_path):
         },
     )
     assert api.get_director(services, who, {})["objective"] == objective.strip()
+
+
+def test_ending_preferences_share_canonical_revision_and_private_scope(tmp_path):
+    services, who, _data, body = setup(tmp_path)
+    result = api.save_ending_controls(services, who, body | {"mode": "closed_story", "require_confirmation": True})
+    assert result["saved"]
+    current = api.get_director(services, who, {})
+    assert current["ending"]["mode"] == "closed_story" and current["ending"]["require_confirmation"]
+    with pytest.raises(MiniAppError):
+        api.save_ending_controls(services, who, body | {"mode": "open_ended", "require_confirmation": False})
+    with pytest.raises(MiniAppError):
+        api.save_ending_controls(
+            services, identity("67890"), body | {"mode": "closed_story", "require_confirmation": True}
+        )
+    other = api.get_director(services, identity("67890"), {})
+    assert other["ending"]["mode"] == "open_ended"
+
+
+def test_ending_recovery_requires_consent_and_uses_the_background_job_route(tmp_path, monkeypatch):
+    services, who, _data, body = setup(tmp_path)
+    calls = []
+    monkeypatch.setattr(
+        api,
+        "recover_ending_workflow",
+        lambda *a, **k: (
+            calls.append((a, k)) or SimpleNamespace(completed=True, delivered=True, message="Saved ending recovered")
+        ),
+    )
+    with pytest.raises(MiniAppError):
+        api.recover_ending(services, who, body | {"confirm": False})
+    assert not calls
+    assert api.recover_ending(services, who, body | {"confirm": True})["completed"]
+    assert calls[0][1]["delivery_port"] is services.delivery
+    match = [route for route in api_routes() if route.path == "/director/recover-ending"]
+    assert len(match) == 1 and match[0].background_kind == "ending_recovery"

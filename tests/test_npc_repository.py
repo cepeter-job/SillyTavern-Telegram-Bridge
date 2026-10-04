@@ -41,7 +41,7 @@ def test_migration_6_creates_npc_tables():
     try:
         migrations = db.execute("SELECT version,name FROM schema_migrations ORDER BY version").fetchall()
         assert migrations[5] == (6, "npc_bank_core")
-        assert migrations[-9:] == [
+        assert migrations[-10:] == [
             (8, "assistant_delivery_progress"),
             (9, "job_delivery_intents"),
             (10, "narrative_engine_foundation"),
@@ -51,8 +51,9 @@ def test_migration_6_creates_npc_tables():
             (14, "ending_readiness"),
             (15, "finale_checkpoint_guards"),
             (16, "ending_workflow"),
+            (17, "closed_story_guards"),
         ]
-        assert len(migrations) == 16
+        assert len(migrations) == 17
         names = {
             row[0]
             for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'npc_%'").fetchall()

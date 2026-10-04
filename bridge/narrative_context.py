@@ -6,6 +6,7 @@ import sqlite3
 from typing import Any
 
 from bridge.director_guidance import director_guidance_for_session
+from bridge.ending_repository import load_ending_row
 from bridge.narrative_policy import choice_policy_text, group_policy_text, narrative_policy, story_policy_text
 from bridge.narrative_repository import load_narrative_clock, load_narrative_state_row
 from bridge.narrative_settings import load_session_narrative_settings
@@ -40,6 +41,14 @@ def narrative_context_for_session(
     state = load_narrative_state(db, chat_id, session_id) if current else None
     text = renderers[consumer](policy, state)
     guidance = director_guidance_for_session(db, chat_id, session_id, through_rowid=through_rowid)
+    ending = load_ending_row(db, chat_id, session_id)
+    if ending is not None and ending["lifecycle"] == "finale" and consumer == "story":
+        text += (
+            "\n\nFinale phase: resolve the established dramatic conflicts through plausible committed events. "
+            "The finale may take several turns; do not force the user's decisions to reach an ending. "
+            "Do not write the separate epilogue in this response or declare the session closed. "
+            "The bridge commissions a separate epilogue only after the actual resolution is reconciled."
+        )
     return text + ("\n\n" + guidance if guidance else "")
 
 

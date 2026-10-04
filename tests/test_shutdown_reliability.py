@@ -49,6 +49,7 @@ def _exercise_shutdown(monkeypatch, tmp_path, *, drained: bool):
         "capture_deployment",
         lambda _config: SimpleNamespace(version="0.2.057", commit="a" * 40),
     )
+    monkeypatch.setattr(lifecycle, "_queue_ending_recovery", lambda *_args: 0)
     monkeypatch.setattr(lifecycle, "install_bridge_signal_handlers", lambda *_args: None)
     monkeypatch.setattr(lifecycle, "start_live_sync_worker", lambda **_kwargs: None)
     monkeypatch.setattr(lifecycle, "stop_live_sync_worker", lambda **_kwargs: True)

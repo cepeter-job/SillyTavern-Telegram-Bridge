@@ -138,13 +138,26 @@ def save_session_narrative_settings(
         invalidate_choice_sets(db, chat_id, session_id)
 
 
-NARRATIVE_EDIT_FIELDS = ("pov_mode", "user_role", "scene_focus", "offscreen_policy", "user_control")
+NARRATIVE_EDIT_FIELDS = (
+    "pov_mode",
+    "user_role",
+    "scene_focus",
+    "offscreen_policy",
+    "user_control",
+    "ending_mode",
+    "require_finale_confirmation",
+)
 
 
 def change_narrative_setting(settings: NarrativeSettings, field: str, value: str) -> NarrativeSettings:
     if field not in NARRATIVE_EDIT_FIELDS:
         raise ValueError("Choose an available Narrative Style field.")
-    return normalize_narrative_settings(settings.to_dict() | {"preset": "custom", field: value})
+    choice: str | bool = value
+    if field == "require_finale_confirmation":
+        if value not in {"true", "false"}:
+            raise ValueError("Choose whether the finale requires confirmation.")
+        choice = value == "true"
+    return normalize_narrative_settings(settings.to_dict() | {"preset": "custom", field: choice})
 
 
 def apply_narrative_preference(

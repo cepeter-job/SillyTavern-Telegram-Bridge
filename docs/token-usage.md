@@ -89,3 +89,11 @@ visible as actual usage, not a fabricated billing amount.
 Group speaker selection consumes the accepted plan locally and makes no second
 planning request. Opening Director Room, viewing its history or changing a manual
 objective also makes no provider call.
+
+### Ending calls
+
+The separate planning brief uses `director_epilogue`; epilogue prose uses
+`epilogue` on the Story model. Committed-story reconciliation continues to use
+`director_reconcile`. Viewing a saved ending, a blocked closed-session message,
+and retrying already committed delivery make no new model calls. Provider-reported
+usage may still be incomplete; no subscription balance or cost is inferred.

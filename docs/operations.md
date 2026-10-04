@@ -312,3 +312,21 @@ surface. `python tools/static_analysis.py --print-type-target-count` reports the
 current typed count; [Contributing](../CONTRIBUTING.md) describes the verification
 workflow. These checks are useful evidence, not a guarantee against every leak
 or operational failure.
+
+## Closed-story recovery
+
+The ending lifecycle and explicit committed message IDs are durable. Runtime
+startup and bounded periodic scans admit unfinished ending work only after
+service composition; migrations never call a provider. Normal reply delivery
+keeps its existing owner and acknowledgements. The recovery worker acquires a
+per-chat lock and a durable ending lease; expired leases can be reclaimed.
+
+`RESOLUTION_COMMITTED` resumes epilogue preparation. A committed epilogue resumes
+reconciliation and closure without another Story call. `CLOSED` resumes only
+missing delivery. Inspect Director Room and use `/retry` after a provider error;
+a failed model call is not an unlimited automatic retry loop. Read-only ending
+recovery never generates new expressions, speech or images. Database guards also
+reject stale queued writes that try to alter a completed original.
+
+Keep a database backup before an upgrade. Recovery tests cover transaction
+rollback and simulated restarts, not physical host power-loss behavior.

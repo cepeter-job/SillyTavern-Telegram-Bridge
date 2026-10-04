@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+from dataclasses import asdict
 from functools import partial
 from typing import Any
 
@@ -18,8 +19,10 @@ from bridge.director_repository import (
     observe_director_event_key,
 )
 from bridge.director_service import DirectorService
+from bridge.ending_service import load_ending_state
 from bridge.extension_context import PostRetainContext
 from bridge.extension_registry import register_post_retain_hook
+from bridge.narrative_arc_repository import list_arc_rows
 from bridge.narrative_context import load_narrative_state, narrative_clock_is_current
 from bridge.narrative_reconciliation import queue_narrative_reconciliation
 from bridge.narrative_repository import list_narrative_threads, load_narrative_clock
@@ -45,8 +48,16 @@ def _due(db: sqlite3.Connection, chat_id: str, session_id: str, event: str) -> b
     if not state.active_scene_id:
         return False
     threads = list_narrative_threads(db, chat_id, session_id, limit=64)
-    key = director_event_key(state, clock, threads)
     current = load_director_state(db, chat_id, session_id)
+    key = director_event_key(
+        state,
+        clock,
+        threads,
+        arcs=list_arc_rows(db, chat_id, session_id, limit=128),
+        ending=asdict(load_ending_state(db, chat_id, session_id)),
+        manual_objective=current["goal"],
+        arc_guidance=current.get("arc_guidance_json", "{}"),
+    )
     if not current["last_event_key"]:
         with write_transaction(db):
             if load_narrative_clock(db, chat_id, session_id) != clock:

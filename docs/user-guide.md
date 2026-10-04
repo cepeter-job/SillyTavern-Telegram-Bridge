@@ -173,8 +173,8 @@ verified, destructive local cleanup is refused. Other sessions are unaffected.
 
 Use `/providers` to choose Story, Utility and Director independently for the current
 session. Story writes the prose. Utility handles summaries and extraction. Director
-plans the next scene. An unset Director model inherits Utility, then Story. Each
-route has its own reasoning control in `/providers`.
+plans the next scene. An unset Director model inherits Utility, then Story. Both Story and Utility reasoning are configured from `/providers`. Director adds
+its own independent reasoning control there and in Director Room.
 Reasoning support depends on the provider; a zero budget can mean the backend
 default rather than disabled reasoning.
 

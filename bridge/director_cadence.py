@@ -24,6 +24,11 @@ def director_event_key(
     state: NarrativeState,
     clock: Mapping[str, Any],
     threads: Sequence[Mapping[str, Any]] = (),
+    *,
+    arcs: Sequence[Mapping[str, Any]] = (),
+    ending: Mapping[str, Any] | None = None,
+    manual_objective: str = "",
+    arc_guidance: str = "{}",
 ) -> str:
     material = [
         state.active_scene_id,
@@ -35,6 +40,18 @@ def director_event_key(
         clock.get("settings_revision", 0),
         clock.get("rewrite_revision", 0),
         sorted((str(row.get("thread_id", "")), str(row.get("status", ""))) for row in threads),
+        sorted(
+            (
+                str(row.get("arc_id", "")),
+                str(row.get("status", "")),
+                str(row.get("phase", "")),
+                str(row.get("importance", "")),
+            )
+            for row in arcs
+        ),
+        ((ending or {}).get("lifecycle", "open"), (ending or {}).get("goal_revision", 0)),
+        manual_objective[:4000],
+        arc_guidance[:32768],
     ]
     return hashlib.sha256(json.dumps(material, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
 
@@ -66,7 +83,7 @@ def director_due(
         and now - float(current.get("last_attempt_at", 0)) < DIRECTOR_FAILURE_BACKOFF_SECONDS
     ):
         return False
-    if event in {"scene", "thread", "arc", "style", "rewrite", "major", "stale"}:
+    if event in {"scene", "thread", "arc", "style", "rewrite", "major", "stale", "ending"}:
         return True
     previous = str(current.get("last_event_key", ""))
     if event_key and previous and event_key != previous:

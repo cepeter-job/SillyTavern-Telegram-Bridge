@@ -210,3 +210,49 @@ def mark_finale_ready(
             readiness_reason=reason.strip(),
         )
         return publish_ending_state(db, chat_id, session_id, current, changed)
+
+
+def apply_ending_proposal(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    *,
+    expected: EndingState,
+    story_revision: int,
+    direction_revision: int,
+    goal_update: str | None,
+    goal_reason: str,
+    finale_ready: bool | None,
+    finale_reason: str,
+) -> EndingState:
+    """Publish validated planning changes inside the caller's Director transaction."""
+    with write_transaction(db):
+        current = load_ending_state(db, chat_id, session_id)
+        if current != expected:
+            raise ValueError("The ending plan changed while the Director was working.")
+        if goal_update is not None:
+            current = set_ending_goal(
+                db,
+                chat_id,
+                session_id,
+                goal_update,
+                source="director",
+                story_revision=story_revision,
+                expected_lifecycle_revision=current.lifecycle_revision,
+                expected_goal_revision=current.goal_revision,
+                reason=goal_reason,
+            )
+        if finale_ready is True:
+            current = mark_finale_ready(
+                db,
+                chat_id,
+                session_id,
+                story_revision=story_revision,
+                expected_lifecycle_revision=current.lifecycle_revision,
+                expected_goal_revision=current.goal_revision,
+                direction_revision=direction_revision,
+                reason=finale_reason,
+            )
+        elif finale_ready is False and current.lifecycle == "finale_ready":
+            current = publish_ending_state(db, chat_id, session_id, current, without_readiness(current))
+        return current

@@ -9,6 +9,8 @@ from typing import Any
 
 from bridge.card_content import build_world_info, card_fields_from_file, replace_macros
 from bridge.director_repository import director_group_files, director_npc_names, director_recent_story
+from bridge.ending_service import load_ending_state
+from bridge.narrative_arc_repository import list_arc_rows
 from bridge.narrative_repository import list_narrative_threads
 from bridge.narrative_values import NarrativeSettings, NarrativeState
 from bridge.persona_service import PersonaService
@@ -30,7 +32,15 @@ DIRECTOR_INSTRUCTION = (
     "non-continue transition. A cinematic/omniscient camera may omit viewpoint. A genuinely new thread needs "
     "new_thread:{thread_id,title}; this proposes a thread and does not declare that its events have happened. "
     "IDs use ASCII letters, digits, hyphens or underscores. Optional location/time_scope/speaker must fit "
-    "established continuity. Do not rewrite history or claim an arc is resolved merely because you plan to resolve it."
+    "established continuity. Do not rewrite history or claim an arc is resolved merely because you plan to resolve it. "
+    "Optional arc_updates:[{arc_id,direction,status}] may guide up to eight existing arcs; status, if included, "
+    "must match its established status. Direction describes an intention, never a new fact. Optional story_phase "
+    "is pacing intent, not a persisted phase change. In Closed Story mode, before FINALE only, you may adapt "
+    "ending_goal_update with a nonempty ending_goal_reason when committed events make the old destination implausible. "
+    "Do not retcon to force an obsolete goal. A blank goal means an emergent ending. "
+    "Propose finale_ready:true only from sufficiently developed escalation/climax/resolution with a finale_reason. "
+    "The bridge saves a pre-finale checkpoint and handles confirmation/closure. Never mark the story CLOSED yourself. "
+    "Omit ending fields for an open-ended story and once FINALE has begun. Respect persistent manual arc guidance."
 )
 
 
@@ -79,7 +89,29 @@ def build_director_input(
     history = director_recent_story(db, chat_id, session_id, state.updated_through_rowid)
     context = "\n".join(str(row[2]) for row in history)[-16000:]
     world = build_world_info(session.get("world_file") or "", context, fields, user_name, app_settings=app_settings)
+    ending = load_ending_state(db, chat_id, session_id)
+    arc_context: list[dict[str, Any]] = []
+    for arc in list_arc_rows(db, chat_id, session_id, limit=32):
+        item = {key: arc[key] for key in ("arc_id", "title", "status", "phase", "importance")}
+        item.update(
+            summary=arc["summary"][:250],
+            open_questions=[q[:150] for q in arc["open_questions"][:3]],
+            related_threads=arc["related_threads"][:4],
+        )
+        if len(json.dumps([*arc_context, item], ensure_ascii=False)) > 6000:
+            break
+        arc_context.append(item)
     data = {
+        "ending": {
+            "mode": settings.ending_mode,
+            "lifecycle": ending.lifecycle,
+            "goal": ending.current_goal,
+            "goal_revision": ending.goal_revision,
+            "requires_confirmation": settings.require_finale_confirmation,
+            "required_arcs": list(ending.required_arcs),
+        },
+        "arcs": arc_context,
+        "persistent_arc_guidance": json.loads(director.get("arc_guidance_json", "{}")),
         "expected_revision": state.state_revision,
         "narrative_policy": settings.to_dict(),
         "committed_state": asdict(state),

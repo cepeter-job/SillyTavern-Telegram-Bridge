@@ -132,3 +132,17 @@ def test_group_goal_panel_is_bounded_in_telegram_utf16_units():
     text, _ = director_goal_panel("🌍" * 4000)
     assert len(text.encode("utf-16-le")) // 2 < 4096
     assert "/director" in text
+
+
+@pytest.mark.parametrize("source", ["ai", "user"])
+def test_persistent_objective_supersedes_ai_plan_but_preserves_explicit_user_scene_plan(session_db, source):
+    _, db, _ = session_db
+    set_director_goal(db, "chat", "s1", "Old objective")
+    with write_transaction(db):
+        db.execute(
+            "UPDATE director_state SET active_direction='Old scene',active_proposal_json='{}',direction_source=?",
+            (source,),
+        )
+    set_director_goal(db, "chat", "s1", "A new objective that may contradict an old AI direction")
+    current = load_director_state(db, "chat", "s1")
+    assert current["active_direction"] == ("Old scene" if source == "user" else "")

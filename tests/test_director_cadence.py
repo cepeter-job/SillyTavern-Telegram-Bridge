@@ -284,3 +284,36 @@ def test_stale_manual_direction_cannot_suppress_reassessment(directed, change):
     run_reconciliation(directed)
     assert active_director_plan(db, "chat", "s1") is None
     assert director_runtime._due(db, "chat", "s1", "")
+
+
+def test_arc_milestones_and_manual_objectives_are_material_cadence_events():
+    from bridge.director_cadence import director_event_key
+    from bridge.narrative_values import NarrativeState
+
+    state = NarrativeState(active_scene_id="gate", active_thread_id="rebellion")
+    clock = {"settings_revision": 1, "rewrite_revision": 0}
+    old = director_event_key(
+        state,
+        clock,
+        arcs=[{"arc_id": "arc", "status": "active", "phase": "development"}],
+        manual_objective="Protect Mara",
+    )
+    same = director_event_key(
+        state,
+        clock,
+        arcs=[{"arc_id": "arc", "status": "active", "phase": "development"}],
+        manual_objective="Protect Mara",
+    )
+    changed = director_event_key(
+        state,
+        clock,
+        arcs=[{"arc_id": "arc", "status": "resolved", "phase": "resolution"}],
+        manual_objective="Protect Mara",
+    )
+    new_goal = director_event_key(
+        state,
+        clock,
+        arcs=[{"arc_id": "arc", "status": "active", "phase": "development"}],
+        manual_objective="Protect the governor",
+    )
+    assert old == same and len({old, changed, new_goal}) == 3

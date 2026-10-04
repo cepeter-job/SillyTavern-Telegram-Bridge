@@ -37,7 +37,10 @@ def store_director_goal(
         )
     cursor = db.execute(
         "UPDATE director_state SET goal=?,state_revision=state_revision+1,updated_at=?,inflight_token='',"
-        "inflight_started_at=0 WHERE chat_id=? AND session_id=? AND state_revision=?",
+        "inflight_started_at=0,"
+        "active_direction=CASE WHEN direction_source='ai' THEN '' ELSE active_direction END,"
+        "active_proposal_json=CASE WHEN direction_source='ai' THEN '{}' ELSE active_proposal_json END "
+        "WHERE chat_id=? AND session_id=? AND state_revision=?",
         (goal, updated_at, chat_id, session_id, expected_revision),
     )
     return cursor.rowcount == 1

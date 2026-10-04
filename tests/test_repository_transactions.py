@@ -135,6 +135,9 @@ class RepositoryPrimitiveTests(SettingsTestCase):
                 state_revision INTEGER NOT NULL DEFAULT 0,
                 inflight_token TEXT NOT NULL DEFAULT '',
                 inflight_started_at REAL NOT NULL DEFAULT 0,
+                active_direction TEXT NOT NULL DEFAULT '',
+                active_proposal_json TEXT NOT NULL DEFAULT '{}',
+                direction_source TEXT NOT NULL DEFAULT 'ai',
                 updated_at REAL NOT NULL,
                 PRIMARY KEY(chat_id, session_id)
             );

@@ -28,6 +28,13 @@ class ProposedThread:
 
 
 @dataclass(frozen=True, slots=True)
+class ArcDirection:
+    arc_id: str
+    direction: str
+    status: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class DirectorProposal:
     schema_version: int
     action: str
@@ -45,16 +52,24 @@ class DirectorProposal:
     speaker: str = ""
     direction_ttl: int | None = None
     new_thread: ProposedThread | None = None
+    arc_updates: tuple[ArcDirection, ...] = ()
+    story_phase: str = ""
+    ending_goal_update: str | None = None
+    ending_goal_reason: str = ""
+    finale_ready: bool | None = None
+    finale_reason: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
-def _text(data: dict, field: str, maximum: int, *, identifier: bool = False) -> str:
+def _text(data: dict, field: str, maximum: int, *, identifier: bool = False, required: bool = False) -> str:
     value = data.get(field, "")
     if not isinstance(value, str) or len(value) > maximum:
         raise DirectorProposalError("parse", "Director text field is invalid or oversized", repairable=True)
     value = value.strip()
+    if required and not value:
+        raise DirectorProposalError("parse", "Director required text field is missing", repairable=True)
     if identifier and value and not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", value):
         raise DirectorProposalError("parse", "Director identifier is invalid", repairable=True)
     return value
@@ -112,7 +127,36 @@ def parse_director_proposal(raw: str) -> DirectorProposal:
         if not thread_id or not title:
             raise DirectorProposalError("parse", "A proposed thread needs identity and title", repairable=True)
         new_thread = ProposedThread(thread_id, title)
-    return DirectorProposal(
+    raw_arcs = data.get("arc_updates", [])
+    if not isinstance(raw_arcs, list) or len(raw_arcs) > 8:
+        raise DirectorProposalError("parse", "Director arc plans are limited to eight objects", repairable=True)
+    arcs = []
+    seen_arcs = set()
+    for item in raw_arcs:
+        if not isinstance(item, dict):
+            raise DirectorProposalError("parse", "Director arc plans must be objects", repairable=True)
+        identifier = _text(item, "arc_id", 100, required=True)
+        status = _text(item, "status", 16)
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", identifier) or identifier in seen_arcs:
+            raise DirectorProposalError("parse", "Director arc references are invalid or duplicated", repairable=True)
+        if status not in {"", "planned", "active", "dormant", "resolved", "abandoned"}:
+            raise DirectorProposalError("parse", "Director arc status is invalid", repairable=True)
+        seen_arcs.add(identifier)
+        arcs.append(ArcDirection(identifier, _text(item, "direction", 500, required=True), status))
+    phase = _text(data, "story_phase", 24)
+    if phase not in {"", "setup", "development", "escalation", "climax", "resolution"}:
+        raise DirectorProposalError("parse", "Director pacing phase is invalid", repairable=True)
+    goal_update = data.get("ending_goal_update")
+    if goal_update is not None and not isinstance(goal_update, str):
+        raise DirectorProposalError("parse", "Ending goal must be text or omitted", repairable=True)
+    if isinstance(goal_update, str) and len(goal_update) > 4000:
+        raise DirectorProposalError("parse", "Ending goal is too long", repairable=True)
+    goal_reason = _text(data, "ending_goal_reason", 1000, required=goal_update is not None)
+    ready = data.get("finale_ready")
+    if ready is not None and type(ready) is not bool:
+        raise DirectorProposalError("parse", "Finale readiness must be boolean or omitted", repairable=True)
+    finale_reason = _text(data, "finale_reason", 1000, required=ready is not None)
+    proposal = DirectorProposal(
         schema_version=1,
         action=action,
         expected_revision=revision,
@@ -129,4 +173,13 @@ def parse_director_proposal(raw: str) -> DirectorProposal:
         speaker=_text(data, "speaker", 200),
         direction_ttl=ttl,
         new_thread=new_thread,
+        arc_updates=tuple(arcs),
+        story_phase=phase,
+        ending_goal_update=goal_update,
+        ending_goal_reason=goal_reason,
+        finale_ready=ready,
+        finale_reason=finale_reason,
     )
+    if len(json.dumps(proposal.to_dict(), ensure_ascii=False, separators=(",", ":"))) > MAX_DIRECTOR_OUTPUT:
+        raise DirectorProposalError("size", "Normalized Director proposal exceeds its storage budget")
+    return proposal

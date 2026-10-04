@@ -88,10 +88,13 @@ def test_scene_thread_identity_is_scoped_and_stale_updates_do_not_win(db):
     assert len(repo.list_narrative_threads(db, "chat", "story")) == 1
 
 
-def test_director_goal_changes_preserve_plans_and_caller_transaction(db):
+def test_director_goal_changes_preserve_manual_plans_and_caller_transaction(db):
     from bridge.director_goal_repository import load_director_goal, store_director_goal
 
-    db.execute("INSERT INTO director_state(chat_id,session_id,active_direction) VALUES('chat','story','Stay at gate')")
+    db.execute(
+        "INSERT INTO director_state(chat_id,session_id,active_direction,direction_source) "
+        "VALUES('chat','story','Stay at gate','user')"
+    )
     db.commit()
     with pytest.raises(RuntimeError, match="caller-owned transaction"):
         store_director_goal(db, "chat", "story", "Resolve rebellion", 1.0, 0)

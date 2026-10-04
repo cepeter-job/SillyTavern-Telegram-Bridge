@@ -7,7 +7,7 @@ import logging
 import sqlite3
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from bridge.director_cadence import DIRECTOR_LEASE_SECONDS, director_event_key, director_interval
@@ -27,8 +27,11 @@ from bridge.director_repository import (
     write_manual_direction,
 )
 from bridge.director_validation import validate_director_proposal
+from bridge.ending_service import apply_ending_proposal, load_ending_state
+from bridge.ending_values import EndingState
 from bridge.generation_settings import get_generation_settings
 from bridge.model_selection import director_reasoning_for_session, task_model_for_session
+from bridge.narrative_arc_repository import list_arc_rows, load_arc_row
 from bridge.narrative_context import load_narrative_state, narrative_clock_is_current
 from bridge.narrative_policy import narrative_policy
 from bridge.narrative_reconciliation import ensure_narrative_state_current
@@ -58,7 +61,14 @@ def _rejected(revision: int, reason: str, source: str = "ai") -> DirectorDecisio
 
 
 def _record_failure(
-    db: sqlite3.Connection, chat: str, session: str, token: str, source: dict[str, Any], revision: int, category: str
+    db: sqlite3.Connection,
+    chat: str,
+    session: str,
+    token: str,
+    source: dict[str, Any],
+    revision: int,
+    category: str,
+    expected_ending: EndingState | None = None,
 ) -> DirectorDecision:
     message = f"Director could not update ({category}). The saved story and accepted direction are unchanged."
     decision_id = None
@@ -66,6 +76,7 @@ def _record_failure(
         if (
             load_narrative_clock(db, chat, session) is not None
             and director_ending_lifecycle(db, chat, session) not in _TERMINAL
+            and (expected_ending is None or load_ending_state(db, chat, session) == expected_ending)
         ):
             if mark_director_degraded(
                 db,
@@ -133,6 +144,7 @@ class DirectorService:
                 return _rejected(clock["state_revision"], "A Director reassessment is already running.")
         source = load_director_state(db, chat_id, session_id)
         revision = clock["state_revision"]
+        ending_before: EndingState | None = None
         try:
             state = ensure_narrative_state_current(
                 db,
@@ -156,6 +168,7 @@ class DirectorService:
             if source["inflight_token"] != token or director_ending_lifecycle(db, chat_id, session_id) in _TERMINAL:
                 return _rejected(revision, "This Director operation was superseded during reconciliation.")
             settings = load_session_narrative_settings(db, chat_id, session_id)
+            ending_before = load_ending_state(db, chat_id, session_id)
             data, cast, users, threads = build_director_input(
                 db,
                 chat_id,
@@ -181,13 +194,17 @@ class DirectorService:
                 reasoning_budget=director_reasoning_for_session(db, chat_id, session_id),
             )
             model = task_model_for_session(db, chat_id, session, "director", app_settings=app_settings)
-            port = provider_port.for_usage(chat_id, session_id, "director")
+            ending_work = reason in {"ending", "finale", "finale_readiness"} or (
+                settings.ending_mode == "closed_story" and state.story_phase in {"escalation", "climax", "resolution"}
+            )
+            port = provider_port.for_usage(chat_id, session_id, "director_ending" if ending_work else "director")
             proposal = None
             for attempt in range(2):
                 if (
                     load_director_state(db, chat_id, session_id)["inflight_token"] != token
                     or load_narrative_clock(db, chat_id, session_id) != clock
                     or director_ending_lifecycle(db, chat_id, session_id) in _TERMINAL
+                    or load_ending_state(db, chat_id, session_id) != ending_before
                 ):
                     return _rejected(revision, "This Director request was superseded.")
                 raw = port.generate(
@@ -202,6 +219,11 @@ class DirectorService:
                     proposal = parse_director_proposal(raw)
                     if proposal.thread_id and load_narrative_thread(db, chat_id, session_id, proposal.thread_id):
                         threads.add(proposal.thread_id)
+                    arc_states = {}
+                    for update in proposal.arc_updates:
+                        arc = load_arc_row(db, chat_id, session_id, update.arc_id)
+                        if arc is not None:
+                            arc_states[update.arc_id] = str(arc["status"])
                     validate_director_proposal(
                         proposal,
                         policy=narrative_policy(settings),
@@ -209,6 +231,7 @@ class DirectorService:
                         valid_characters=cast,
                         user_characters=users,
                         valid_threads=threads,
+                        arc_states=arc_states,
                         ending_state=director_ending_lifecycle(db, chat_id, session_id),
                     )
                     break
@@ -230,13 +253,35 @@ class DirectorService:
             default_ttl = director_interval(settings, state.story_phase)
             ttl = min(proposal.direction_ttl or default_ttl, default_ttl)
             encoded = json.dumps(proposal.to_dict(), ensure_ascii=False, separators=(",", ":"))
-            event_key = director_event_key(state, clock, list_narrative_threads(db, chat_id, session_id, limit=64))
             with write_transaction(db):
                 if (
                     load_narrative_clock(db, chat_id, session_id) != clock
                     or director_ending_lifecycle(db, chat_id, session_id) in _TERMINAL
                 ):
                     return _rejected(revision, "Director proposal became stale before publication.")
+                if load_ending_state(db, chat_id, session_id) != ending_before:
+                    return _rejected(revision, "The ending goal changed while the Director was working.")
+                ending_after = apply_ending_proposal(
+                    db,
+                    chat_id,
+                    session_id,
+                    expected=ending_before,
+                    story_revision=revision,
+                    direction_revision=source["state_revision"] + 1,
+                    goal_update=proposal.ending_goal_update,
+                    goal_reason=proposal.ending_goal_reason,
+                    finale_ready=proposal.finale_ready,
+                    finale_reason=proposal.finale_reason,
+                )
+                event_key = director_event_key(
+                    state,
+                    clock,
+                    list_narrative_threads(db, chat_id, session_id, limit=64),
+                    arcs=list_arc_rows(db, chat_id, session_id, limit=128),
+                    ending=asdict(ending_after),
+                    manual_objective=source["goal"],
+                    arc_guidance=source.get("arc_guidance_json", "{}"),
+                )
                 if not publish_director_plan(
                     db,
                     chat_id,
@@ -254,7 +299,7 @@ class DirectorService:
                     event_key=event_key,
                     now=now,
                 ):
-                    return _rejected(revision, "A newer Director or manual decision won publication.")
+                    raise DirectorProposalError("stale", "A newer Director or manual decision won publication.")
                 decision_id = append_director_decision(
                     db,
                     chat_id,
@@ -270,7 +315,7 @@ class DirectorService:
             return DirectorDecision(decision_id, revision, "ai", "accepted", "Direction updated.", proposal)
         except (ValueError, RuntimeError) as exc:
             category = exc.category if isinstance(exc, (DirectorProposalError, ProviderRequestError)) else "unavailable"
-            return _record_failure(db, chat_id, session_id, token, source, revision, category)
+            return _record_failure(db, chat_id, session_id, token, source, revision, category, ending_before)
         finally:
             with write_transaction(db):
                 release_director_run(db, chat_id, session_id, token)

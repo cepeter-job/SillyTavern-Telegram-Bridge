@@ -18,6 +18,7 @@ def validate_director_proposal(
     ending_state: str = "open",
     valid_threads: set[str] | None = None,
     user_characters: set[str] | None = None,
+    arc_states: dict[str, str] | None = None,
 ) -> None:
     # UI-authored values and future callers use the same bounded contract as model output.
     try:
@@ -28,6 +29,19 @@ def validate_director_proposal(
         raise DirectorProposalError("lifecycle", "Ordinary Director planning is unavailable during story closure")
     if proposal.expected_revision != state.state_revision:
         raise DirectorProposalError("stale", "Director proposal used an outdated story revision")
+    for update in proposal.arc_updates:
+        established = (arc_states or {}).get(update.arc_id)
+        if established is None:
+            raise DirectorProposalError("reference", "Director arc reference is not established")
+        if update.status and update.status != established:
+            raise DirectorProposalError("policy", "Director plans cannot replace committed arc outcomes")
+    if proposal.ending_goal_update is not None or proposal.finale_ready is not None:
+        if policy.settings.ending_mode != "closed_story":
+            raise DirectorProposalError("policy", "Ending proposals require Closed Story mode")
+        if ending_state not in {"open", "finale_ready"}:
+            raise DirectorProposalError("lifecycle", "The ending goal and finale path are locked after finale entry")
+    if proposal.finale_ready is True and state.story_phase not in {"escalation", "climax", "resolution"}:
+        raise DirectorProposalError("policy", "Finale readiness needs developed, reconciled story state")
     users = {name.casefold() for name in (user_characters or set())} | {"user", "{{user}}"}
     cast = {name.casefold() for name in valid_characters}
     speaker = proposal.speaker.casefold()

@@ -183,3 +183,19 @@ def parse_director_proposal(raw: str) -> DirectorProposal:
     if len(json.dumps(proposal.to_dict(), ensure_ascii=False, separators=(",", ":"))) > MAX_DIRECTOR_OUTPUT:
         raise DirectorProposalError("size", "Normalized Director proposal exceeds its storage budget")
     return proposal
+
+
+def bounded_arc_guidance(notes: dict, arc_ids: list[str], *, budget: int = 4000) -> dict[str, str]:
+    """Select bounded known-arc plans for a prompt without discarding stored user notes."""
+    selected: dict[str, str] = {}
+    for identifier in arc_ids[:128]:
+        value = notes.get(identifier)
+        if not isinstance(value, str) or not value:
+            continue
+        candidate = selected | {identifier: value[:1000]}
+        if len(json.dumps(candidate, ensure_ascii=False)) > budget:
+            break
+        selected = candidate
+        if len(selected) >= 8:
+            break
+    return selected

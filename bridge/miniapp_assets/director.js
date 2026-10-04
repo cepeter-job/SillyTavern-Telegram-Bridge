@@ -56,6 +56,31 @@ async function renderDirector() {
           await load();notice('Director settings saved.');
         })));
     }
+    if(data.ending) {
+      const ending=card('Ending goal',el('p',{class:'muted'},'A hidden destination, not a predetermined script. A blank goal lets the ending emerge from the story.'));
+      if(data.mutable&&data.ending.editable) {
+        const goal=el('textarea',{value:data.ending.goal||'',maxlength:4000,rows:4});
+        ending.append(field('Optional ending goal',goal),button('Save ending goal',async()=>{
+          await api('/director/ending-goal',{method:'PATCH',body:body({goal:goal.value})});await load();notice('Ending goal saved.');
+        }));
+      } else ending.append(el('p',{},data.ending.goal||'Emergent ending'),el('p',{class:'muted'},'The goal is locked once the finale starts.'));
+      for(const item of data.ending.history)ending.append(el('details',{},el('summary',{},'Revision '+item.revision+' · '+item.source),
+        el('p',{},'Before: '+(item.previous||'Emergent ending')),el('p',{},'After: '+(item.goal||'Emergent ending')),el('p',{},item.reason)));
+      views.push(ending);
+    }
+    const arcs=card('Story arcs',el('p',{class:'muted'},'Statuses reflect committed story events. Your guidance changes plans, not facts.'));
+    for(const arc of data.arcs||[]) {
+      const item=card(arc.title,el('p',{},arc.status+' · '+arc.phase+' · '+arc.importance),el('p',{},arc.summary));
+      if(data.mutable) {
+        const note=el('textarea',{value:arc.guidance||'',maxlength:1000,rows:3});
+        item.append(field('Guidance for '+arc.title,note),button('Save arc guidance',async()=>{
+          await api('/director/arc-guidance',{method:'PATCH',body:body({arc_id:arc.arc_id,direction:note.value})});await load();notice('Arc guidance saved.');
+        }));
+      } else item.append(el('p',{},arc.guidance||'No manual guidance.'));
+      arcs.append(item);
+    }
+    if(!(data.arcs||[]).length)arcs.append(empty('No story arcs have been established yet.'));
+    views.push(arcs);
     views.push(history);root.replaceChildren(...views);
   }
   await load();return root;

@@ -54,12 +54,20 @@ def handle_director_callback(
         elif action == "narrative":
             send_narrative_menu(token, chat_id, session, message.get("message_id"), request_context=request_context)
         else:
-            if action not in {"open", "history"}:
+            if action not in {"open", "history", "arcs", "ending"}:
                 revision = str(values.get("revision", ""))
                 require_room_revision(db, chat_id, session_id, revision)
                 if action == "edit":
                     scope = str(values.get("scope", ""))
-                    begin_director_input(db, chat_id, session_id, request_context.actor_id, revision, scope)
+                    begin_director_input(
+                        db,
+                        chat_id,
+                        session_id,
+                        request_context.actor_id,
+                        revision,
+                        scope,
+                        arc_id=str(values.get("arc_id", "")),
+                    )
                     prompt = (
                         "Send the direction for the next scene."
                         if scope == "next_scene"
@@ -67,6 +75,15 @@ def handle_director_callback(
                     )
                     if scope == "cadence":
                         prompt = "Send a whole-number Director interval from 1 to 100 completed Story turns."
+                    if scope == "ending_goal":
+                        prompt = (
+                            "Send the optional ending goal (up to 4,000 characters), or /clear for an emergent ending."
+                        )
+                    elif scope == "arc_note":
+                        prompt = (
+                            "Send future guidance for this arc (up to 1,000 characters), or /clear to remove it. "
+                            "This does not change its established outcome."
+                        )
                     send_text(token, chat_id, prompt + " Use /cancel to keep the current plan.")
                 elif action == "clear_objective":
                     apply_direction(db, chat_id, session_id, revision, "", "persistent")
@@ -110,8 +127,8 @@ def handle_director_callback(
                         send_text(token, chat_id, result.reason)
                 else:
                     raise ValueError("This Director action expired. Reopen /director.")
-            if action == "history":
-                page = "history"
+            if action in {"history", "arcs", "ending"}:
+                page = action
             send_director_menu(
                 token, chat_id, session, message.get("message_id"), request_context=request_context, page=page
             )

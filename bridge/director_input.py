@@ -6,7 +6,13 @@ import json
 import sqlite3
 import time
 
-from bridge.director_room import apply_controls, apply_direction, require_room_revision
+from bridge.director_room import (
+    apply_arc_guidance,
+    apply_controls,
+    apply_direction,
+    apply_ending_goal,
+    require_room_revision,
+)
 from bridge.metadata import get_meta, set_meta
 from bridge.model_selection import director_reasoning_for_session
 from bridge.request_types import RequestContext
@@ -19,9 +25,16 @@ def _key(chat_id: str, actor_id: str) -> str:
 
 
 def begin_director_input(
-    db: sqlite3.Connection, chat_id: str, session_id: str, actor_id: str, revision: str, scope: str
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    actor_id: str,
+    revision: str,
+    scope: str,
+    *,
+    arc_id: str = "",
 ) -> None:
-    if not actor_id or scope not in {"next_scene", "persistent", "cadence"}:
+    if not actor_id or scope not in {"next_scene", "persistent", "cadence", "ending_goal", "arc_note"}:
         raise ValueError("Choose a valid Director edit scope.")
     with write_transaction(db):
         require_room_revision(db, chat_id, session_id, revision)
@@ -34,6 +47,7 @@ def begin_director_input(
                     "actor_id": actor_id,
                     "revision": revision,
                     "scope": scope,
+                    "arc_id": arc_id,
                     "expires_at": time.time() + 300,
                 }
             ),
@@ -45,7 +59,7 @@ def handle_director_input(
 ) -> bool:
     key = _key(chat_id, request_context.actor_id)
     raw = get_meta(db, key, "")
-    if not raw or (text.startswith("/") and text.strip().casefold() != "/cancel"):
+    if not raw or (text.startswith("/") and text.strip().casefold() not in {"/cancel", "/clear"}):
         return False
     try:
         values = json.loads(raw)
@@ -56,7 +70,26 @@ def handle_director_input(
         elif values["session_id"] != session["session_id"] or float(values["expires_at"]) < time.time():
             notice = "This Director edit expired or belongs to another story. Reopen /director."
         else:
-            if values["scope"] == "cadence":
+            if values["scope"] == "ending_goal":
+                apply_ending_goal(
+                    db,
+                    chat_id,
+                    session["session_id"],
+                    values["revision"],
+                    "" if text.strip().casefold() == "/clear" else text,
+                )
+                notice = "Ending goal saved."
+            elif values["scope"] == "arc_note":
+                apply_arc_guidance(
+                    db,
+                    chat_id,
+                    session["session_id"],
+                    values["revision"],
+                    str(values.get("arc_id", "")),
+                    "" if text.strip().casefold() == "/clear" else text,
+                )
+                notice = "Arc guidance saved."
+            elif values["scope"] == "cadence":
                 if not text.strip().isascii() or not text.strip().isdigit():
                     raise ValueError("Use a whole-number interval from 1 to 100 turns.")
                 apply_controls(
@@ -71,13 +104,14 @@ def handle_director_input(
             else:
                 apply_direction(db, chat_id, session["session_id"], values["revision"], text, values["scope"])
 
-            notice = (
-                "Director direction saved for the next scene."
-                if values["scope"] == "next_scene"
-                else ("Persistent Director objective saved. It remains in effect until you change or clear it.")
-            )
-            if values["scope"] == "cadence":
-                notice = "Director cadence saved."
+            notice = {
+                "next_scene": "Director direction saved for the next scene.",
+                "persistent": "Persistent Director objective saved. It remains in effect until you change or clear it.",
+                "cadence": "Director cadence saved.",
+                "ending_goal": "Ending goal saved.",
+                "arc_note": "Arc guidance saved.",
+            }[values["scope"]]
+
     except (ValueError, KeyError, TypeError):
         notice = "The Director Room changed or the edit was invalid. Reopen /director and try again."
     with write_transaction(db):

@@ -8,6 +8,7 @@ from dataclasses import asdict
 from typing import Any
 
 from bridge.card_content import build_world_info, card_fields_from_file, replace_macros
+from bridge.director_contracts import bounded_arc_guidance
 from bridge.director_repository import director_group_files, director_npc_names, director_recent_story
 from bridge.ending_service import load_ending_state
 from bridge.narrative_arc_repository import list_arc_rows
@@ -111,7 +112,9 @@ def build_director_input(
             "required_arcs": list(ending.required_arcs),
         },
         "arcs": arc_context,
-        "persistent_arc_guidance": json.loads(director.get("arc_guidance_json", "{}")),
+        "persistent_arc_guidance": bounded_arc_guidance(
+            json.loads(director.get("arc_guidance_json", "{}")), [arc["arc_id"] for arc in arc_context]
+        ),
         "expected_revision": state.state_revision,
         "narrative_policy": settings.to_dict(),
         "committed_state": asdict(state),

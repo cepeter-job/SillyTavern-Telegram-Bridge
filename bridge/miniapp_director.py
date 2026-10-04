@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from typing import Any
 
-from bridge.director_room import apply_controls, apply_direction, director_room, require_room_revision, steer_thread
+from bridge.director_room import (
+    apply_arc_guidance,
+    apply_controls,
+    apply_direction,
+    apply_ending_goal,
+    director_room,
+    require_room_revision,
+    steer_thread,
+)
 from bridge.director_service import DirectorService
 from bridge.miniapp_auth import MiniAppIdentity
 from bridge.miniapp_context import digest, require_confirmation, session_scope, text
@@ -84,9 +92,30 @@ def save_controls(services: Any, who: MiniAppIdentity, values: dict) -> dict:
         return {"saved": True}
 
 
+def edit_ending_goal(services: Any, who: MiniAppIdentity, values: dict) -> dict:
+    revision = digest(values, "revision")
+    goal = text(values, "goal", 4000, required=False)
+    with session_scope(services, who, values, write=True) as scope:
+        apply_ending_goal(scope.db, scope.chat_id, scope.session["session_id"], revision, goal)
+        return {"saved": True}
+
+
+def edit_arc_guidance(services: Any, who: MiniAppIdentity, values: dict) -> dict:
+    revision = digest(values, "revision")
+    identifier = text(values, "arc_id", 100)
+    direction = text(values, "direction", 1000, required=False)
+    with session_scope(services, who, values, write=True) as scope:
+        result = apply_arc_guidance(
+            scope.db, scope.chat_id, scope.session["session_id"], revision, identifier, direction
+        )
+        return {"saved": result.result == "accepted", "message": result.reason}
+
+
 def routes() -> list[ApiRoute]:
     return [
         ApiRoute("GET", "/director", get_director),
+        ApiRoute("PATCH", "/director/ending-goal", edit_ending_goal),
+        ApiRoute("PATCH", "/director/arc-guidance", edit_arc_guidance),
         ApiRoute("PATCH", "/director/direction", edit_direction),
         ApiRoute("POST", "/director/reassess", reassess, "director_reassess"),
         ApiRoute("POST", "/director/thread", choose_thread),

@@ -7,6 +7,7 @@ import time
 from dataclasses import asdict, replace
 from typing import Any
 
+from bridge.director_repository import invalidate_ai_direction
 from bridge.ending_repository import (
     append_ending_goal_revision,
     list_ending_goal_revisions,
@@ -156,6 +157,8 @@ def set_ending_goal(
                 "created_at": now,
             },
         )
+        if source == "user":
+            invalidate_ai_direction(db, chat_id, session_id, now)
         return saved
 
 

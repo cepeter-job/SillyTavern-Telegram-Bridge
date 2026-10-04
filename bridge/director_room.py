@@ -5,11 +5,20 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import time
 from typing import Any
 
-from bridge.director_repository import director_decision_history, director_ending_lifecycle, load_director_state
+from bridge.director_repository import (
+    append_director_decision,
+    director_decision_history,
+    load_director_state,
+    store_arc_guidance,
+)
 from bridge.director_service import DirectorDecision, DirectorService
+from bridge.ending_service import ending_goal_history, load_ending_state, set_ending_goal
+from bridge.ending_values import EndingState
 from bridge.model_selection import director_reasoning_for_session, set_director_reasoning
+from bridge.narrative_arc_repository import list_arc_rows, load_arc_row
 from bridge.narrative_repository import list_narrative_threads, load_narrative_clock, load_narrative_state_row
 from bridge.narrative_settings import (
     load_session_narrative_settings,
@@ -28,13 +37,15 @@ def director_room(db: sqlite3.Connection, chat_id: str, session_id: str) -> dict
         raise ValueError("This story no longer exists. Open /director for the current story.")
     director = load_director_state(db, chat_id, session_id)
     state = load_narrative_state_row(db, chat_id, session_id) or {}
-    ending = director_ending_lifecycle(db, chat_id, session_id)
+    ending = load_ending_state(db, chat_id, session_id)
+    settings = load_session_narrative_settings(db, chat_id, session_id)
+    notes = json.loads(director.get("arc_guidance_json", "{}"))
     identity = (
         chat_id,
         session_id,
         clock,
         director["state_revision"],
-        ending,
+        (ending.lifecycle, ending.lifecycle_revision, ending.goal_revision),
         director_reasoning_for_session(db, chat_id, session_id),
     )
     revision = hashlib.sha256(json.dumps(identity, sort_keys=True, default=str).encode()).hexdigest()
@@ -51,8 +62,8 @@ def director_room(db: sqlite3.Connection, chat_id: str, session_id: str) -> dict
     return {
         "session_id": session_id,
         "revision": revision,
-        "mutable": ending not in {"resolution_committed", "epilogue_pending", "epilogue_committed", "closed"},
-        "lifecycle": ending,
+        "mutable": ending.lifecycle not in {"resolution_committed", "epilogue_pending", "epilogue_committed", "closed"},
+        "lifecycle": ending.lifecycle,
         "phase": str(state.get("story_phase", "setup")),
         "scene": {
             "scene_id": str(state.get("active_scene_id", "")),
@@ -68,6 +79,37 @@ def director_room(db: sqlite3.Connection, chat_id: str, session_id: str) -> dict
             {"thread_id": row["thread_id"], "title": row["title"], "status": row["status"]}
             for row in list_narrative_threads(db, chat_id, session_id)[:16]
         ],
+        "arcs": [
+            {
+                "arc_id": row["arc_id"],
+                "title": row["title"],
+                "status": row["status"],
+                "phase": row["phase"],
+                "importance": row["importance"],
+                "summary": row["summary"][:500],
+                "open_questions": row["open_questions"],
+                "guidance": notes.get(row["arc_id"], ""),
+            }
+            for row in list_arc_rows(db, chat_id, session_id, limit=32)
+        ],
+        "ending": {
+            "mode": settings.ending_mode,
+            "lifecycle": ending.lifecycle,
+            "goal": ending.current_goal,
+            "editable": ending.lifecycle in {"open", "finale_ready"},
+            "require_confirmation": settings.require_finale_confirmation,
+            "reason": ending.readiness_reason,
+            "history": [
+                {
+                    "revision": row.goal_revision,
+                    "source": row.source,
+                    "reason": row.reason[:300],
+                    "previous": row.previous_goal[:500],
+                    "goal": row.new_goal[:500],
+                }
+                for row in ending_goal_history(db, chat_id, session_id, limit=10)
+            ],
+        },
         "history": history,
         "cadence": load_session_narrative_settings(db, chat_id, session_id).director_cadence_mode,
     }
@@ -198,3 +240,66 @@ def apply_controls(
         )
         save_session_narrative_settings(db, chat_id, session_id, revised)
         set_director_reasoning(db, chat_id, session_id, reasoning)
+
+
+def apply_ending_goal(db: sqlite3.Connection, chat_id: str, session_id: str, revision: str, goal: str) -> EndingState:
+    with write_transaction(db):
+        view = require_room_revision(db, chat_id, session_id, revision)
+        if not view["ending"]["editable"]:
+            raise ValueError("The ending goal is locked once the finale begins.")
+        clock = load_narrative_clock(db, chat_id, session_id)
+        ending = load_ending_state(db, chat_id, session_id)
+        if clock is None:
+            raise ValueError("This story no longer exists.")
+        return set_ending_goal(
+            db,
+            chat_id,
+            session_id,
+            goal,
+            source="user",
+            story_revision=clock["state_revision"],
+            expected_lifecycle_revision=ending.lifecycle_revision,
+            expected_goal_revision=ending.goal_revision,
+        )
+
+
+def apply_arc_guidance(
+    db: sqlite3.Connection, chat_id: str, session_id: str, revision: str, arc_id: str, direction: str
+) -> DirectorDecision:
+    if not isinstance(direction, str) or len(direction) > 1000 or not isinstance(arc_id, str) or len(arc_id) > 100:
+        raise ValueError("Use an established arc and at most 1,000 characters of guidance.")
+    with write_transaction(db):
+        require_room_revision(db, chat_id, session_id, revision)
+        if load_arc_row(db, chat_id, session_id, arc_id) is None:
+            raise ValueError("This arc is no longer part of the current story. Refresh Director Room.")
+        director = load_director_state(db, chat_id, session_id)
+        clock = load_narrative_clock(db, chat_id, session_id)
+        if clock is None:
+            raise ValueError("This story no longer exists.")
+        notes = json.loads(director.get("arc_guidance_json", "{}"))
+        direction = direction.strip()
+        if direction:
+            notes[arc_id] = direction
+        else:
+            notes.pop(arc_id, None)
+        encoded = json.dumps(notes, ensure_ascii=False, separators=(",", ":"))
+        if len(notes) > 32 or len(encoded) > 32768:
+            raise ValueError("Keep at most 32 concise arc directions; clear older notes before adding more.")
+        now = time.time()
+        if not store_arc_guidance(
+            db, chat_id, session_id, encoded, expected_revision=director["state_revision"], now=now
+        ):
+            raise ValueError("The Director Room changed. Refresh before editing arc guidance.")
+        identifier = append_director_decision(
+            db,
+            chat_id,
+            session_id,
+            source="user",
+            result="accepted",
+            expected_revision=clock["state_revision"],
+            proposal_json=json.dumps({"arc_id": arc_id, "guidance": direction}),
+            accepted_direction=direction,
+            reason="Persistent arc guidance" if direction else "Arc guidance cleared",
+            created_at=now,
+        )
+        return DirectorDecision(identifier, clock["state_revision"], "user", "accepted", "Arc guidance saved.")

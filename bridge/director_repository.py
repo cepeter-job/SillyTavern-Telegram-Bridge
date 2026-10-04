@@ -28,6 +28,7 @@ _EMPTY: dict[str, Any] = {
     "last_attempt_at": 0,
     "last_attempt_turn": 0,
     "last_event_key": "",
+    "arc_guidance_json": "{}",
 }
 
 
@@ -258,3 +259,36 @@ def observe_director_event_key(db: sqlite3.Connection, chat_id: str, session_id:
         "WHERE director_state.last_event_key=''",
         (chat_id, session_id, event_key),
     )
+
+
+def invalidate_ai_direction(db: sqlite3.Connection, chat_id: str, session_id: str, now: float) -> None:
+    """A newer manual plan supersedes AI guidance, not another explicit user scene instruction."""
+    require_active_transaction(db)
+    db.execute(
+        "UPDATE director_state SET state_revision=state_revision+1,updated_at=?,"
+        "inflight_token='',inflight_started_at=0,"
+        "active_direction=CASE WHEN direction_source='ai' THEN '' ELSE active_direction END,"
+        "active_proposal_json=CASE WHEN direction_source='ai' THEN '{}' ELSE active_proposal_json END "
+        "WHERE chat_id=? AND session_id=?",
+        (now, chat_id, session_id),
+    )
+
+
+def store_arc_guidance(
+    db: sqlite3.Connection, chat_id: str, session_id: str, encoded: str, *, expected_revision: int, now: float
+) -> bool:
+    require_active_transaction(db)
+    if expected_revision == 0:
+        db.execute(
+            "INSERT INTO director_state(chat_id,session_id) VALUES(?,?) ON CONFLICT(chat_id,session_id) DO NOTHING",
+            (chat_id, session_id),
+        )
+    cursor = db.execute(
+        "UPDATE director_state SET arc_guidance_json=?,state_revision=state_revision+1,updated_at=?,"
+        "inflight_token='',inflight_started_at=0,"
+        "active_direction=CASE WHEN direction_source='ai' THEN '' ELSE active_direction END,"
+        "active_proposal_json=CASE WHEN direction_source='ai' THEN '{}' ELSE active_proposal_json END "
+        "WHERE chat_id=? AND session_id=? AND state_revision=?",
+        (encoded, now, chat_id, session_id, expected_revision),
+    )
+    return cursor.rowcount == 1

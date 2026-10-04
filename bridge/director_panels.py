@@ -53,6 +53,44 @@ def director_panel(
             lines.append("No Director decisions yet.")
         rows.append([button("Back", "open")])
         return "\n\n".join(lines), {"inline_keyboard": rows}
+    if page == "ending":
+        ending = view["ending"]
+        lines = [
+            "<b>Ending goal</b>",
+            "A hidden destination, not a script. Leave it blank for an emergent ending.",
+            "<b>Current goal</b>\n" + _escape(ending["goal"] or "Emergent ending", 1300),
+        ]
+        if not ending["editable"]:
+            lines.append("The ending goal is locked because the finale has begun.")
+        for item in ending["history"][:3]:
+            lines.append(
+                _escape(f"Revision {item['revision']} · {item['source']}\n{item['goal']}\n{item['reason']}", 550)
+            )
+        rows = (
+            [[button("Edit ending goal", "edit", scope="ending_goal")]]
+            if view["mutable"] and ending["editable"]
+            else []
+        )
+        rows.append([button("Back", "open")])
+        return "\n\n".join(lines), {"inline_keyboard": rows}
+    if page == "arcs":
+        lines = ["<b>Story arcs</b>", "Statuses come from committed story events. Guidance changes future plans only."]
+        for arc in view["arcs"][:5]:
+            lines.append(
+                _escape(
+                    f"{arc['title']} · {arc['status']} · {arc['phase']}\n{arc['summary']}\n"
+                    f"Guidance: {arc['guidance'] or 'None'}",
+                    550,
+                )
+            )
+            if view["mutable"]:
+                rows.append([button("Guide " + str(arc["title"])[:30], "edit", scope="arc_note", arc_id=arc["arc_id"])])
+        if not view["arcs"]:
+            lines.append("No story arcs have been established yet.")
+        if len(view["arcs"]) > 5:
+            lines.append("Open the Mini App Director Room to review additional arcs.")
+        rows.append([button("Back", "open")])
+        return "\n\n".join(lines), {"inline_keyboard": rows}
     if page == "cadence" and view["mutable"]:
         rows = [[button("Adaptive", "set_cadence", cadence="adaptive", interval=6)]]
         rows.extend(
@@ -95,6 +133,7 @@ def director_panel(
             rows.append([button("Clear persistent objective", "clear_objective")])
     else:
         lines.append("This story is closing or has ended. Its Director Room is read-only.")
+    rows.append([button("Story arcs", "arcs"), button("Ending goal", "ending")])
     rows.append([button("Decision history", "history"), button("Narrative Style", "narrative")])
     rows.append([button("Refresh", "open"), button("Close", "close")])
     if page == "threads" and view["mutable"]:

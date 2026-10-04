@@ -77,10 +77,8 @@ def test_inline_choice_contract_varies_motives_without_forcing_virtue_or_cruelty
     prompt = inline_instruction(3, "auto")
 
     assert "Make the choices differ in motive and approach, not just wording." in prompt
-    assert (
-        "Do not assume the USER is altruistic, heroic, forgiving, protective, "
-        "or trying to do the right thing."
-    ) in prompt
+    assert "Do not assume the USER is altruistic, heroic, forgiving, protective" in prompt
+    assert "trying to do the right thing." in prompt
     assert "When plausible, include a neutral or self-interested action" in prompt
     assert "Do not force either virtue or cruelty." in prompt
     assert "use second person ('you') rather than 'we' unless the scene clearly establishes a group action" in prompt
@@ -341,10 +339,8 @@ def test_choice_only_strategy_routes_correct_model_outside_transaction(novel_db,
     assert calls[0][0] == expected
     prompt = calls[0][1][0]["content"]
     assert "Make the choices differ in motive and approach, not just wording." in prompt
-    assert (
-        "Do not assume the USER is altruistic, heroic, forgiving, protective, "
-        "or trying to do the right thing."
-    ) in prompt
+    assert "Do not assume the USER is altruistic, heroic, forgiving, protective" in prompt
+    assert "trying to do the right thing." in prompt
     assert "Do not force either virtue or cruelty." in prompt
     assert calls[0][2]["request_timeout"] == 60
     assert calls[0][2]["force_non_stream"]

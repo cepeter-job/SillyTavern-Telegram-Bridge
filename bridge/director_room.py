@@ -9,8 +9,13 @@ from typing import Any
 
 from bridge.director_repository import director_decision_history, director_ending_lifecycle, load_director_state
 from bridge.director_service import DirectorDecision, DirectorService
+from bridge.model_selection import director_reasoning_for_session, set_director_reasoning
 from bridge.narrative_repository import list_narrative_threads, load_narrative_clock, load_narrative_state_row
-from bridge.narrative_settings import load_session_narrative_settings
+from bridge.narrative_settings import (
+    load_session_narrative_settings,
+    normalize_narrative_settings,
+    save_session_narrative_settings,
+)
 from bridge.persona_service import PersonaService
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
@@ -24,7 +29,14 @@ def director_room(db: sqlite3.Connection, chat_id: str, session_id: str) -> dict
     director = load_director_state(db, chat_id, session_id)
     state = load_narrative_state_row(db, chat_id, session_id) or {}
     ending = director_ending_lifecycle(db, chat_id, session_id)
-    identity = (chat_id, session_id, clock, director["state_revision"], ending)
+    identity = (
+        chat_id,
+        session_id,
+        clock,
+        director["state_revision"],
+        ending,
+        director_reasoning_for_session(db, chat_id, session_id),
+    )
     revision = hashlib.sha256(json.dumps(identity, sort_keys=True, default=str).encode()).hexdigest()
     history = [
         {
@@ -151,3 +163,38 @@ def steer_thread(
             user_characters=users,
             valid_threads=threads | {thread_id},
         )
+
+
+def apply_controls(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    revision: str,
+    *,
+    cadence: Any,
+    interval: Any,
+    reasoning: Any,
+) -> None:
+    """Apply cadence and independent reasoning atomically with stale-panel protection."""
+    if (
+        not isinstance(cadence, str)
+        or cadence not in {"adaptive", "fixed"}
+        or type(interval) is not int
+        or not 1 <= interval <= 100
+    ):
+        raise ValueError("Choose Adaptive or a whole-number interval from 1 to 100 turns.")
+    if type(reasoning) is not int or not 0 <= reasoning <= 32000:
+        raise ValueError("Director reasoning must be a whole number from 0 to 32000.")
+    with write_transaction(db):
+        require_room_revision(db, chat_id, session_id, revision)
+        current = load_session_narrative_settings(db, chat_id, session_id)
+        revised = normalize_narrative_settings(
+            current.to_dict()
+            | {
+                "preset": "custom",
+                "director_cadence_mode": cadence,
+                "director_fixed_interval": interval,
+            }
+        )
+        save_session_narrative_settings(db, chat_id, session_id, revised)
+        set_director_reasoning(db, chat_id, session_id, reasoning)

@@ -8,9 +8,9 @@ async function renderModels() {
     scope.set(generation.session);
     const search=el('input',{type:'search',placeholder:'Provider or model name',value:query,maxlength:120});
     const models=card('Models',el('p',{class:'muted'},'Selections apply only to '+state.session.title+'. Provider credentials remain on the server.'),field('Search configured models',search),button('Search',()=>load(search.value),'secondary'));
-    for(const [key,label] of [['story','Story model'],['utility','Utility model']]) {
+    for(const [key,label] of [['story','Story model'],['utility','Utility model'],['director','Director model']]) {
       const select=el('select');
-      if(key==='utility')select.append(el('option',{value:''},'Inherit Story model'));
+      if(key!=='story')select.append(el('option',{value:''},key==='director'?'Inherit Utility model':'Inherit Story model'));
       const list=[...catalog.models];
       if(catalog[key]&&!list.some(x=>x.id===catalog[key]))list.unshift({id:catalog[key],name:catalog[key],provider:'Current'});
       for(const item of list)select.append(el('option',{value:item.id},item.provider+' / '+item.name));

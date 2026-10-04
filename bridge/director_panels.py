@@ -53,6 +53,20 @@ def director_panel(
             lines.append("No Director decisions yet.")
         rows.append([button("Back", "open")])
         return "\n\n".join(lines), {"inline_keyboard": rows}
+    if page == "cadence" and view["mutable"]:
+        rows = [[button("Adaptive", "set_cadence", cadence="adaptive", interval=6)]]
+        rows.extend(
+            [
+                [button(f"Every {interval} turns", "set_cadence", cadence="fixed", interval=interval)]
+                for interval in (4, 6, 10)
+            ]
+        )
+        rows.extend([[button("Custom interval", "edit", scope="cadence")], [button("Back", "open")]])
+        return (
+            "<b>Director cadence</b>\n\nAdaptive reacts to meaningful events and checks more often near a finale. "
+            "Fixed intervals use 1–100 completed Story turns.",
+            {"inline_keyboard": rows},
+        )
     lines = [
         "<b>Director Room</b>",
         "Hidden plans are shown here only. They are not part of the story.",
@@ -74,7 +88,7 @@ def director_panel(
                     button("Edit next scene", "edit", scope="next_scene"),
                     button("Edit persistent objective", "edit", scope="persistent"),
                 ],
-                [button("Choose thread", "threads")],
+                [button("Choose thread", "threads"), button("Cadence", "cadence")],
             ]
         )
         if view["objective"]:

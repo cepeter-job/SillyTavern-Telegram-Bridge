@@ -243,3 +243,24 @@ def test_thread_selection_only_changes_next_scene_plan(directed):
     proposed = json.loads(load_director_state(db, "chat", "s1")["active_proposal_json"])
     assert proposed["thread_id"] == "palace" and proposed["transition_type"] == "thread_switch"
     assert load_narrative_state_row(db, "chat", "s1") == old
+
+
+def test_cadence_presets_and_custom_input_preserve_user_control(directed, monkeypatch):
+    from bridge.model_selection import director_reasoning_for_session
+    from bridge.narrative_settings import load_session_narrative_settings
+
+    _, db, session = directed
+    view = room.director_room(db, "chat", "s1")
+    room.apply_controls(db, "chat", "s1", view["revision"], cadence="fixed", interval=4, reasoning=0)
+    text, markup = panels.director_panel(db, "chat", session, "alice", page="cadence")
+    assert "cadence" in text.lower()
+    labels = [button["text"] for row in markup["inline_keyboard"] for button in row]
+    assert {"Adaptive", "Every 4 turns", "Every 6 turns", "Every 10 turns", "Custom interval"} <= set(labels)
+    revision = room.director_room(db, "chat", "s1")["revision"]
+    director_input.begin_director_input(db, "chat", "s1", "alice", revision, "cadence")
+    monkeypatch.setattr(director_input, "send_text", lambda *a, **k: None)
+    assert director_input.handle_director_input(db, "token", "chat", session, "9", context(directed))
+    saved = load_session_narrative_settings(db, "chat", "s1")
+    assert saved.director_fixed_interval == 9 and saved.director_cadence_mode == "fixed"
+    assert saved.user_control == "physical_continuity"
+    assert director_reasoning_for_session(db, "chat", "s1") == 0

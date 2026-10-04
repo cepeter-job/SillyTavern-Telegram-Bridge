@@ -6,8 +6,9 @@ import json
 import sqlite3
 import time
 
-from bridge.director_room import apply_direction, require_room_revision
+from bridge.director_room import apply_controls, apply_direction, require_room_revision
 from bridge.metadata import get_meta, set_meta
+from bridge.model_selection import director_reasoning_for_session
 from bridge.request_types import RequestContext
 from bridge.sqlite_store import write_transaction
 from bridge.telegram import send_text
@@ -20,7 +21,7 @@ def _key(chat_id: str, actor_id: str) -> str:
 def begin_director_input(
     db: sqlite3.Connection, chat_id: str, session_id: str, actor_id: str, revision: str, scope: str
 ) -> None:
-    if not actor_id or scope not in {"next_scene", "persistent"}:
+    if not actor_id or scope not in {"next_scene", "persistent", "cadence"}:
         raise ValueError("Choose a valid Director edit scope.")
     with write_transaction(db):
         require_room_revision(db, chat_id, session_id, revision)
@@ -55,12 +56,28 @@ def handle_director_input(
         elif values["session_id"] != session["session_id"] or float(values["expires_at"]) < time.time():
             notice = "This Director edit expired or belongs to another story. Reopen /director."
         else:
-            apply_direction(db, chat_id, session["session_id"], values["revision"], text, values["scope"])
+            if values["scope"] == "cadence":
+                if not text.strip().isascii() or not text.strip().isdigit():
+                    raise ValueError("Use a whole-number interval from 1 to 100 turns.")
+                apply_controls(
+                    db,
+                    chat_id,
+                    session["session_id"],
+                    values["revision"],
+                    cadence="fixed",
+                    interval=int(text.strip()),
+                    reasoning=director_reasoning_for_session(db, chat_id, session["session_id"]),
+                )
+            else:
+                apply_direction(db, chat_id, session["session_id"], values["revision"], text, values["scope"])
+
             notice = (
                 "Director direction saved for the next scene."
                 if values["scope"] == "next_scene"
                 else ("Persistent Director objective saved. It remains in effect until you change or clear it.")
             )
+            if values["scope"] == "cadence":
+                notice = "Director cadence saved."
     except (ValueError, KeyError, TypeError):
         notice = "The Director Room changed or the edit was invalid. Reopen /director and try again."
     with write_transaction(db):

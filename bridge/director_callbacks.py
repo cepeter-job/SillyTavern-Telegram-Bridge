@@ -10,8 +10,9 @@ from bridge.callback_tokens import resolve_dynamic_callback_token
 from bridge.callbacks import close_panel_message
 from bridge.director_input import begin_director_input
 from bridge.director_panels import send_director_menu
-from bridge.director_room import apply_direction, require_room_revision, steer_thread
+from bridge.director_room import apply_controls, apply_direction, require_room_revision, steer_thread
 from bridge.director_service import DirectorService
+from bridge.model_selection import director_reasoning_for_session
 from bridge.narrative_panels import send_narrative_menu
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
@@ -64,9 +65,24 @@ def handle_director_callback(
                         if scope == "next_scene"
                         else ("Send a persistent Director objective. It stays active until you change or clear it.")
                     )
+                    if scope == "cadence":
+                        prompt = "Send a whole-number Director interval from 1 to 100 completed Story turns."
                     send_text(token, chat_id, prompt + " Use /cancel to keep the current plan.")
                 elif action == "clear_objective":
                     apply_direction(db, chat_id, session_id, revision, "", "persistent")
+                elif action == "cadence":
+                    page = "cadence"
+                elif action == "set_cadence":
+                    apply_controls(
+                        db,
+                        chat_id,
+                        session_id,
+                        revision,
+                        cadence=values.get("cadence"),
+                        interval=values.get("interval"),
+                        reasoning=director_reasoning_for_session(db, chat_id, session_id),
+                    )
+                    page = "cadence"
                 elif action == "threads":
                     page = "threads"
                 elif action == "thread":

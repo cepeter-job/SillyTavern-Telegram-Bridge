@@ -56,6 +56,9 @@ def model_catalog(services: Any, who: MiniAppIdentity, values: dict) -> dict:
             "models": models,
             "story": scope.session.get("model_id") or services.config.default_model,
             "utility": task_model_for_session(scope.db, scope.chat_id, scope.session, app_settings=services.config),
+            "director": task_model_for_session(
+                scope.db, scope.chat_id, scope.session, "director", app_settings=services.config
+            ),
             "session": scope.session,
             "limit": 500,
         }
@@ -64,8 +67,8 @@ def model_catalog(services: Any, who: MiniAppIdentity, values: dict) -> dict:
 def select_model(services: Any, who: MiniAppIdentity, values: dict) -> dict:
     target = text(values, "target", 20)
     model = text(values, "model", 200, required=target == "story")
-    if target not in {"story", "utility"}:
-        raise MiniAppError("Choose Story or Utility model.")
+    if target not in {"story", "utility", "director"}:
+        raise MiniAppError("Choose Story, Utility, or Director model.")
     try:
         if model:
             resolved = services.model_router.route(model)
@@ -76,7 +79,7 @@ def select_model(services: Any, who: MiniAppIdentity, values: dict) -> dict:
         if target == "story":
             services.session.update(scope.db, scope.chat_id, scope.session["session_id"], model_id=model)
         else:
-            set_task_model(scope.db, scope.chat_id, scope.session["session_id"], model)
+            set_task_model(scope.db, scope.chat_id, scope.session["session_id"], model, target)
         return {"saved": True, "target": target, "model": model}
 
 

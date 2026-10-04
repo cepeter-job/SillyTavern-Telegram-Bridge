@@ -255,3 +255,32 @@ def test_production_memory_composition_carries_its_own_persona_port(session_db):
         services.memory.retain(db, "chat", session, {"name": "Mara"})
     assert seen[0].persona_service is services.persona
     assert seen[0].provider_port is services.provider
+
+
+@pytest.mark.parametrize("change", ["style", "rewrite"])
+def test_stale_manual_direction_cannot_suppress_reassessment(directed, change):
+    from bridge.director_guidance import active_director_plan
+    from bridge.director_service import DirectorService
+    from bridge.narrative_settings import save_session_narrative_settings
+
+    _settings, db, _session = directed
+    clock = load_narrative_clock(db, "chat", "s1")
+    result = DirectorService().accept_manual_direction(
+        db,
+        "chat",
+        "s1",
+        direction="Remain at the gate.",
+        scope="next_scene",
+        expected_revision=clock["state_revision"],
+        expected_director_revision=0,
+    )
+    assert result.result == "accepted"
+    assert not director_runtime._due(db, "chat", "s1", "")
+    if change == "style":
+        save_session_narrative_settings(db, "chat", "s1", preset_narrative_settings("observer"))
+    else:
+        with write_transaction(db):
+            db.execute("UPDATE messages SET content='The gate scene was revised.' WHERE role='assistant'")
+    run_reconciliation(directed)
+    assert active_director_plan(db, "chat", "s1") is None
+    assert director_runtime._due(db, "chat", "s1", "")

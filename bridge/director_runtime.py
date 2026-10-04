@@ -10,6 +10,7 @@ from typing import Any
 
 from bridge.background import chat_job_lock, submit_background
 from bridge.director_cadence import director_due, director_event_key
+from bridge.director_guidance import active_director_plan
 from bridge.director_repository import (
     director_ending_lifecycle,
     director_story_turns,
@@ -52,6 +53,14 @@ def _due(db: sqlite3.Connection, chat_id: str, session_id: str, event: str) -> b
                 return False
             observe_director_event_key(db, chat_id, session_id, key)
         current = load_director_state(db, chat_id, session_id)
+    if (
+        current["direction_source"] == "user"
+        and current["active_direction"]
+        and active_director_plan(db, chat_id, session_id) is None
+    ):
+        # A manual plan which no longer governs Story cannot pause the Director.
+        current = current | {"active_direction": ""}
+        event = event or "stale"
     return director_due(
         current,
         state,

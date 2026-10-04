@@ -66,7 +66,7 @@ def director_due(
         and now - float(current.get("last_attempt_at", 0)) < DIRECTOR_FAILURE_BACKOFF_SECONDS
     ):
         return False
-    if event in {"scene", "thread", "arc", "style", "rewrite", "major"}:
+    if event in {"scene", "thread", "arc", "style", "rewrite", "major", "stale"}:
         return True
     previous = str(current.get("last_event_key", ""))
     if event_key and previous and event_key != previous:

@@ -243,7 +243,7 @@ def store_narrative_settings_if_revision(
 def load_narrative_clock(db: sqlite3.Connection, chat_id: str, session_id: str) -> dict[str, Any] | None:
     cursor = db.execute(
         "SELECT s.created_at AS session_created_at,COALESCE(n.state_revision,0) AS state_revision,"
-        "COALESCE(n.history_revision,0) AS history_revision,"
+        "COALESCE(n.history_revision,0) AS history_revision,COALESCE(n.rewrite_revision,0) AS rewrite_revision,"
         "COALESCE(n.reconciled_history_revision,0) AS reconciled_history_revision,"
         "COALESCE(n.updated_through_rowid,0) AS updated_through_rowid,n.invalidated_from_rowid,"
         "COALESCE(p.settings_revision,-1) AS settings_revision,"

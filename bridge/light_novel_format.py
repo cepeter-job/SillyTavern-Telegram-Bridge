@@ -23,6 +23,15 @@ CHOICE_MATURITY_POLICY = (
     "Do not introduce or escalate mature content beyond what the current context supports."
 )
 
+CHOICE_MOTIVE_POLICY = (
+    "Make the choices differ in motive and approach, not just wording. "
+    "Do not assume the USER is altruistic, heroic, forgiving, protective, or trying to do the right thing. "
+    "When plausible, include a neutral or self-interested action; do not make all options helpful or cooperative. "
+    "Do not force either virtue or cruelty. "
+    "Phrase each action from the USER's perspective; use second person ('you') rather than 'we' "
+    "unless the scene clearly establishes a group action."
+)
+
 
 def validate_choices(value: object, requested_count: int) -> list[str]:
     if requested_count not in {2, 3, 4} or not isinstance(value, list) or len(value) != requested_count:
@@ -247,6 +256,8 @@ def inline_instruction(count: int, language: str) -> str:
         "Do not choose for the user, predict outcomes, put menu text inside the story, or include slash commands. "
         "Preserve the character, persona, world and all established story context. "
         + CHOICE_MATURITY_POLICY
+        + " "
+        + CHOICE_MOTIVE_POLICY
         + " "
         + f"Both narrative and actions must match response language {language or 'auto (the conversation language)'}. "
         "No markdown fences, explanations or extra keys."

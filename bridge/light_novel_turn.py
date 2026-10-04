@@ -11,6 +11,7 @@ from bridge.job_store import job_actor_id
 from bridge.light_novel_format import add_inline_contract, light_novel_response_shape, parse_story_response_diagnostic
 from bridge.light_novel_repository import ChoiceSet
 from bridge.light_novel_service import attach_turn, prepare_turn
+from bridge.narrative_context import narrative_context_for_session
 from bridge.sqlite_store import write_transaction
 
 
@@ -18,11 +19,12 @@ from bridge.sqlite_store import write_transaction
 class NovelTurn:
     record: ChoiceSet
     choices: list[str] | None = None
+    choice_policy: str = ""
 
     def messages(self, messages: list[dict], language: str) -> list[dict]:
         if self.record.strategy != "a":
             return messages
-        return add_inline_contract(messages, self.record.requested_count, language)
+        return add_inline_contract(messages, self.record.requested_count, language, narrative_policy=self.choice_policy)
 
     def extract(self, raw: str) -> str:
         if self.record.strategy != "a":
@@ -89,4 +91,8 @@ def begin_novel_turn(
     if not actor_id and isinstance(operation_id, int):
         actor_id = job_actor_id(db, operation_id)
     record = prepare_turn(db, chat_id, session, f"{kind}:{identity}", actor_id)
-    return NovelTurn(record) if record is not None else None
+    return (
+        NovelTurn(record, choice_policy=narrative_context_for_session(db, chat_id, session["session_id"], "choices"))
+        if record is not None
+        else None
+    )

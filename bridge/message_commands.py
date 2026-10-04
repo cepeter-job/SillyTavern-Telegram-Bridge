@@ -38,6 +38,7 @@ from bridge.memory_backend import hindsight_session_lock
 from bridge.memory_curator import clear_curated_memory_state
 from bridge.memory_service import MemoryService
 from bridge.metadata import get_meta, set_meta
+from bridge.narrative_context import narrative_context_for_session
 from bridge.npc_service import NpcService
 from bridge.operations import (
     begin_operation,
@@ -222,6 +223,7 @@ def generate_and_store_reply(
             session_summary=session_summary,
             rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
             group_context=group_context,
+            narrative_context=narrative_context_for_session(db, chat_id, session_id, "story"),
             persona_service=persona_service,
             app_settings=app_settings,
             context_stats=context_stats,
@@ -237,7 +239,11 @@ def generate_and_store_reply(
     )
     actor_id = str(session.get("_actor_id") or job_actor_id(db, operation_id))
     choice_record = prepare_turn(db, chat_id, session, f"message:{identity}", actor_id)
-    novel_turn = NovelTurn(choice_record) if choice_record is not None else None
+    novel_turn = (
+        NovelTurn(choice_record, choice_policy=narrative_context_for_session(db, chat_id, session_id, "choices"))
+        if choice_record is not None
+        else None
+    )
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
     send_typing(token, chat_id)

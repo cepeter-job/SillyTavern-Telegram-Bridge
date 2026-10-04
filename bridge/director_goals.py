@@ -20,6 +20,7 @@ from bridge.extension_registry import extension_registry_snapshot as _extension_
 from bridge.extension_registry import register_command_route as _register_command_route
 from bridge.group_director_service import DirectorCustomization
 from bridge.model_selection import task_model_for_session
+from bridge.narrative_context import narrative_context_for_session
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
 from bridge.topic_scope import parse_topic_scope
@@ -60,10 +61,12 @@ def director_goal_policy(
     db: sqlite3.Connection, chat_id: str, session: dict[str, str], *, app_settings: AppSettings
 ) -> DirectorCustomization:
     goal = get_director_goal(db, chat_id, session["session_id"])
+    narrative_context = narrative_context_for_session(db, chat_id, session["session_id"], "group")
     model = task_model_for_session(db, chat_id, session, "director", app_settings=app_settings)
     if not goal:
         return DirectorCustomization(
             model=model,
+            narrative_context=narrative_context,
             max_tokens=220,
         )
 
@@ -80,6 +83,7 @@ def director_goal_policy(
     )
     return DirectorCustomization(
         model=model,
+        narrative_context=narrative_context,
         hidden_instructions=hidden_instructions,
         max_tokens=220,
         speaker_context=speaker_context,

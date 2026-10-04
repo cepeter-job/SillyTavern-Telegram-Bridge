@@ -5,6 +5,7 @@ import sqlite3
 import time
 from dataclasses import replace
 
+from bridge.light_novel_repository import invalidate_choice_sets
 from bridge.narrative_repository import (
     load_narrative_default_row,
     load_narrative_settings_row,
@@ -131,6 +132,7 @@ def save_session_narrative_settings(
     payload = _encode_settings(settings)
     with write_transaction(db):
         store_narrative_settings_row(db, chat_id, session_id, payload, time.time())
+        invalidate_choice_sets(db, chat_id, session_id)
 
 
 NARRATIVE_EDIT_FIELDS = ("pov_mode", "user_role", "scene_focus", "offscreen_policy", "user_control")
@@ -173,4 +175,5 @@ def apply_narrative_preference(
             db, chat_id, session_id, _encode_settings(changed), expected_revision, time.time()
         ):
             raise ValueError("Narrative Style changed. Reopen /narrative to use the latest settings.")
+        invalidate_choice_sets(db, chat_id, session_id)
         return changed

@@ -15,6 +15,10 @@ from bridge.memory import get_session_summary
 from bridge.memory_backend import memory_mode, memory_scope
 from bridge.metadata import get_meta
 from bridge.model_selection import task_model_for_session
+from bridge.narrative_context import load_narrative_state, narrative_clock_is_current
+from bridge.narrative_panels import FIELD_OPTIONS, PRESET_LABELS
+from bridge.narrative_repository import load_narrative_clock
+from bridge.narrative_settings import load_session_narrative_settings
 from bridge.persona_sync import persona_name
 from bridge.rag_query import rag_mode
 from bridge.rag_repository import data_bank_documents
@@ -82,6 +86,16 @@ def status_text(
     context_status = _context_status_text(
         context_diagnostics_snapshot(db, str(chat_id), session, app_settings=app_settings)
     )
+    narrative = load_session_narrative_settings(db, chat_id, session["session_id"])
+    narrative_state = load_narrative_state(db, chat_id, session["session_id"])
+    narrative_current = narrative_clock_is_current(load_narrative_clock(db, chat_id, session["session_id"]))
+    narrative_status = (
+        f"Narrative: {PRESET_LABELS[narrative.preset]}\n"
+        f"POV: {dict(FIELD_OPTIONS['pov_mode'])[narrative.pov_mode]}\n"
+        f"Narrative state: {'current' if narrative_current else 'stale'}\n"
+        f"Scene / thread: {narrative_state.active_scene_id[:60] or 'not established'} / "
+        f"{narrative_state.active_thread_id[:60] or 'not established'}"
+    )
     return (
         "📊 Session status\n"
         "━━━━━━━━━━━━━━━━━━\n"
@@ -93,6 +107,7 @@ def status_text(
         f"🌐 Response language: {response_language_label(session.get('response_language') or 'auto')}\n"
         f"🖋️ Humanizer: {humanizer_label(session.get('humanizer'))}\n\n"
         f"{context_status}\n\n"
+        f"{narrative_status}\n\n"
         "📚 Native context\n"
         f"• Persona: {persona}\n"
         f"• World Info: {world}\n"

@@ -218,6 +218,8 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.light_novel_callbacks": frozenset(
         [
+            "bridge.narrative_context",
+            "bridge.narrative_values",
             "bridge.light_novel_contracts",
             "bridge.conversation_lifecycle",
             "bridge.job_service",
@@ -252,6 +254,7 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.light_novel_panels": frozenset(
         [
+            "bridge.narrative_context",
             "bridge.conversation_lifecycle",
             "bridge.light_novel_repository",
             "bridge.light_novel_service",
@@ -265,6 +268,7 @@ LOW_LEVEL_IMPORTS = {
     "bridge.light_novel_repository": frozenset(["bridge.repository_contracts"]),
     "bridge.light_novel_service": frozenset(
         [
+            "bridge.narrative_context",
             "bridge.card_content",
             "bridge.persona_service",
             "bridge.conversation_lifecycle",
@@ -280,6 +284,7 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.light_novel_turn": frozenset(
         [
+            "bridge.narrative_context",
             "bridge.job_store",
             "bridge.light_novel_format",
             "bridge.light_novel_repository",

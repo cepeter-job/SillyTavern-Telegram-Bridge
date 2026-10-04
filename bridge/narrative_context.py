@@ -25,11 +25,27 @@ def narrative_clock_is_current(clock: dict[str, Any] | None, through_rowid: int 
     )
 
 
-def narrative_context_for_session(db: sqlite3.Connection, chat_id: str, session_id: str, consumer: str) -> str:
+def narrative_context_for_session(
+    db: sqlite3.Connection, chat_id: str, session_id: str, consumer: str, *, through_rowid: int | None = None
+) -> str:
     renderers = {"story": story_policy_text, "choices": choice_policy_text, "group": group_policy_text}
     if consumer not in renderers:
         raise ValueError("Unknown narrative context consumer")
     policy = narrative_policy(load_session_narrative_settings(db, chat_id, session_id))
     clock = load_narrative_clock(db, chat_id, session_id)
-    state = load_narrative_state(db, chat_id, session_id) if narrative_clock_is_current(clock) else None
+    current = narrative_clock_is_current(clock)
+    if through_rowid is not None and clock is not None and clock["updated_through_rowid"] > through_rowid:
+        current = False
+    state = load_narrative_state(db, chat_id, session_id) if current else None
     return renderers[consumer](policy, state)
+
+
+def narrative_choice_is_steering(db: sqlite3.Connection, chat_id: str, session_id: str) -> bool:
+    """A current off-screen scene is steering; world-focused unknown scenes stay conservative."""
+    clock = load_narrative_clock(db, chat_id, session_id)
+    if narrative_clock_is_current(clock):
+        present = load_narrative_state(db, chat_id, session_id).user_present
+        if present is not None:
+            return not present
+    settings = load_session_narrative_settings(db, chat_id, session_id)
+    return settings.scene_focus != "user" or settings.offscreen_policy == "free"

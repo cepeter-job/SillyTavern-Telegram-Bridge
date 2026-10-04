@@ -239,23 +239,27 @@ def parse_choice_response(source: str, requested_count: int) -> list[str]:
     return validate_choices(value.get("choices") if isinstance(value, dict) else value, requested_count)
 
 
-def inline_instruction(count: int, language: str) -> str:
+def inline_instruction(count: int, language: str, *, narrative_policy: str = "") -> str:
     return (
         "Light Novel response contract: return a JSON object with exactly two keys: "
         '"story" (the complete narrative as a JSON string) and "choices" (an array of '
-        f"exactly {count} distinct next actions for the USER, each 1–{MAX_CHOICE_CHARS} characters). "
+        f"exactly {count} distinct next choices, each 1–{MAX_CHOICE_CHARS} characters). "
+        "Use plausible user actions when the user is present in the scene; otherwise use narrative steering "
+        "such as following an AI-controlled thread or a scene cut, never fabricated off-screen user participation. "
         "Do not choose for the user, predict outcomes, put menu text inside the story, or include slash commands. "
         "Preserve the character, persona, world and all established story context. "
         + CHOICE_MATURITY_POLICY
         + " "
         + f"Both narrative and actions must match response language {language or 'auto (the conversation language)'}. "
         "No markdown fences, explanations or extra keys."
+        + ("\n\nNarrative choice policy:\n" + narrative_policy if narrative_policy else "")
+        + "\nApply that policy to the final scene you actually write. A planned scene change is not a committed fact."
     )
 
 
-def add_inline_contract(messages: list[dict], count: int, language: str) -> list[dict]:
+def add_inline_contract(messages: list[dict], count: int, language: str, *, narrative_policy: str = "") -> list[dict]:
     result = [dict(message) for message in messages]
-    instruction = inline_instruction(count, language)
+    instruction = inline_instruction(count, language, narrative_policy=narrative_policy)
     if result and result[0].get("role") == "system":
         result[0]["content"] = str(result[0].get("content") or "") + "\n\n" + instruction
     else:

@@ -56,3 +56,6 @@ class NarrativeThread:
     summary: str = ""
     last_scene_id: str = ""
     source_revision: int = 0
+
+
+NARRATIVE_STEERING_PREFIX = "[Narrative steering]\n"

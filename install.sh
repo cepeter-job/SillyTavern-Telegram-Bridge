@@ -4,8 +4,8 @@ set -Eeuo pipefail
 umask 077
 
 REPO_URL="https://github.com/cepeter/SillyTavern-Telegram-Bridge.git"
-TRUST_LINE='cepeter namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGRaxgobK+D+zdXdUzLb1xTQ2EPs9iYkeQGOOlepl+35 cepeter-release-signing'
-TRUST_FINGERPRINT='SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI'
+TRUST_LINE='cepeter namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA+L6kUwaC94495CdAyZWyocRT5u951D4YnXhtceVKky cepeter-release-signing-2026-10-04'
+TRUST_FINGERPRINT='SHA256:Au9pahLKr9Wj1ayrHyXAZEO48y/xuVY88dk6zATqYqU'
 DEFAULT_SIGNERS="$HOME/.config/sillytavern-telegram/trusted-maintainers"
 
 usage() {

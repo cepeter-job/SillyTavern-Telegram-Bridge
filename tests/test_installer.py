@@ -224,7 +224,7 @@ def _bootstrap_installer_fixture(tmp_path):
         "ssh-keygen",
         'if [ "${1:-}" = -lf ]; then '
         "cat >/dev/null; "
-        'echo "256 SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI cepeter-release-signing (ED25519)"; '
+        'echo "256 SHA256:Au9pahLKr9Wj1ayrHyXAZEO48y/xuVY88dk6zATqYqU cepeter-release-signing (ED25519)"; '
         "fi\nexit 0\n",
     )
     executable(
@@ -332,7 +332,7 @@ def test_release_clone_bootstraps_standard_pinned_trust_file(tmp_path):
     signers = home / ".config/sillytavern-telegram/trusted-maintainers"
     assert signers.is_file()
     assert signers.stat().st_mode & 0o077 == 0
-    assert "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGRaxgobK+D+zdXdUzLb1xTQ2EPs9iYkeQGOOlepl+35" in signers.read_text()
+    assert "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA+L6kUwaC94495CdAyZWyocRT5u951D4YnXhtceVKky" in signers.read_text()
     assert "verify-tag v0.2.039" in git_log.read_text(encoding="utf-8")
 
 
@@ -379,3 +379,51 @@ def test_release_latest_discovers_and_verifies_newest_signed_tag(tmp_path):
     assert "tag --list v* --sort=-version:refname" in calls
     assert "verify-tag v0.2.999" in calls
     assert calls.index("tag --list v*") < calls.index("verify-tag v0.2.999")
+
+
+def test_release_bootstrap_pins_the_approved_rotated_public_signer(tmp_path):
+    import re
+    import shutil
+
+    source = (ROOT / "install.sh").read_text(encoding="utf-8")
+    fingerprint = re.search(r"^TRUST_FINGERPRINT='([^']+)'$", source, re.MULTILINE).group(1)
+    assert fingerprint == "SHA256:Au9pahLKr9Wj1ayrHyXAZEO48y/xuVY88dk6zATqYqU"
+    record = re.search(r"^TRUST_LINE='([^']+)'$", source, re.MULTILINE).group(1)
+    public_key = tmp_path / "maintainer.pub"
+    public_key.write_text(" ".join(record.split()[2:]) + "\n", encoding="utf-8")
+    keygen = shutil.which("ssh-keygen")
+    assert keygen
+    result = subprocess.run([keygen, "-lf", str(public_key)], capture_output=True, text=True, check=True)
+    assert fingerprint in result.stdout
+    for document in ("installation.md", "operations.md"):
+        assert fingerprint in (ROOT / "docs" / document).read_text(encoding="utf-8")
+
+
+def test_release_rotation_never_replaces_an_existing_old_only_trust_file(tmp_path):
+    import shlex
+    import shutil
+
+    script, home, git_log, env = _bootstrap_installer_fixture(tmp_path)
+    real_keygen = shutil.which("ssh-keygen")
+    assert real_keygen
+    (tmp_path / "bin" / "ssh-keygen").write_text(
+        "#!/bin/sh\nexec " + shlex.quote(real_keygen) + ' "$@"\n', encoding="utf-8"
+    )
+    signers = home / ".config/sillytavern-telegram/trusted-maintainers"
+    signers.parent.mkdir(parents=True)
+    old_record = (
+        'cepeter namespaces="git" ssh-ed25519 '
+        "AAAAC3NzaC1lZDI1NTE5AAAAIGRaxgobK+D+zdXdUzLb1xTQ2EPs9iYkeQGOOlepl+35 cepeter-release-signing\n"
+    )
+    signers.write_text(old_record, encoding="utf-8")
+    signers.chmod(0o600)
+    result = subprocess.run(
+        ["/bin/bash", str(script), "--release", "v0.3.000", "--no-deps", "--no-start"],
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "refusing to overwrite" in result.stderr
+    assert signers.read_text(encoding="utf-8") == old_record
+    assert not git_log.exists()

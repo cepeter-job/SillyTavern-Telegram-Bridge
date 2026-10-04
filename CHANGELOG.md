@@ -39,6 +39,12 @@ and independent alternate endings.
 - Light Novel choices vary motive and approach without assuming altruism or
   forcing cruelty. Off-screen scenes retain narrative-steering choices.
 
+### Release signing
+
+- Rotate the fresh-install public signer pin for `v0.3.000`. Existing operators
+  must independently verify and add the new public key before updating. Existing
+  trust files and historical tags are preserved.
+
 ### Fixed
 
 - Provider-escaped roleplay paragraph breaks render as real Telegram newlines

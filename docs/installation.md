@@ -151,7 +151,7 @@ allowed-signers file and verifies the release tag before checking out its code.
 The expected fingerprint is:
 
 ```text
-SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI
+SHA256:Au9pahLKr9Wj1ayrHyXAZEO48y/xuVY88dk6zATqYqU
 ```
 
 This trusts the installer you downloaded for the first key. If you need independent
@@ -159,6 +159,10 @@ authentication of that key, obtain the installer and signer through separately
 trusted channels and use the [bootstrap below](#independently-trusted-bootstrap).
 The [update runbook](operations.md#automatic-signed-update) explains the trust file
 and key rotation.
+
+For an existing installation that trusts the pre-0.3 signer, complete the
+[public-key rotation step](operations.md#upgrading-to-the-03-release-signer) before
+updating. The installer will not replace your existing trust file automatically.
 
 ## Advanced / development installation
 

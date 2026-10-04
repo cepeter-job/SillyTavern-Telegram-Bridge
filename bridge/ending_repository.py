@@ -28,13 +28,21 @@ _COLUMNS = (
     "ready_through_rowid",
     "readiness_reason",
     "required_arcs_json",
+    "resolution_evidence_json",
+    "epilogue_brief_json",
+    "work_token",
+    "work_started_at",
+    "work_stage",
+    "last_error",
+    "last_attempt_at",
 )
 _SELECT = (
     "SELECT lifecycle_revision,lifecycle,current_goal,goal_revision,finale_ready_revision,"
     "finale_direction_revision,checkpoint_id,finale_operation_id,finale_committed_rowid,resolution_rowid,"
     "epilogue_operation_id,epilogue_committed_rowid,updated_at,ready_history_revision,"
     "ready_settings_revision,ready_rewrite_revision,ready_through_rowid,readiness_reason,"
-    "required_arcs_json"
+    "required_arcs_json,resolution_evidence_json,epilogue_brief_json,work_token,work_started_at,"
+    "work_stage,last_error,last_attempt_at"
     " FROM ending_state WHERE chat_id=? AND session_id=?"
 )
 _UPDATE = (
@@ -42,7 +50,9 @@ _UPDATE = (
     "goal_revision=?,finale_ready_revision=?,finale_direction_revision=?,checkpoint_id=?,"
     "finale_operation_id=?,finale_committed_rowid=?,resolution_rowid=?,epilogue_operation_id=?,"
     "epilogue_committed_rowid=?,updated_at=?,ready_history_revision=?,ready_settings_revision=?,"
-    "ready_rewrite_revision=?,ready_through_rowid=?,readiness_reason=?,required_arcs_json=?"
+    "ready_rewrite_revision=?,ready_through_rowid=?,readiness_reason=?,required_arcs_json=?,"
+    "resolution_evidence_json=?,epilogue_brief_json=?,work_token=?,work_started_at=?,work_stage=?,"
+    "last_error=?,last_attempt_at=?"
     " WHERE chat_id=? AND session_id=? AND lifecycle_revision=?"
 )
 _GOAL_COLUMNS = (

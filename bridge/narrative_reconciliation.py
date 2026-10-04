@@ -12,6 +12,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from bridge.background import chat_job_lock, submit_background
+from bridge.ending_reconciliation import reconcile_finale_outcome
+from bridge.ending_service import load_ending_state
 from bridge.generation_settings import get_generation_settings
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.narrative_arc_repository import clear_arc_rows, delete_arc_row, list_arc_rows, load_arc_row, store_arc_row
@@ -132,6 +134,8 @@ def _source_prompt(
         "state": asdict(base.state),
         "scene": current_scene,
         "arcs": arc_context,
+        "ending_lifecycle": load_ending_state(db, chat, session).lifecycle,
+        "required_resolution_arcs": list(load_ending_state(db, chat, session).required_arcs),
         "threads": [
             {key: value for key, value in row.items() if key != "summary"} | {"summary": row["summary"][:500]}
             for row in threads[:8]
@@ -301,6 +305,16 @@ def _publish(
             payload_json=payload,
             created_at=time.time(),
         )
+        if extracted is not None:
+            reconcile_finale_outcome(
+                db,
+                chat,
+                session,
+                extracted.resolution,
+                first_rowid=first_rowid,
+                through_rowid=through,
+                story_phase=extracted.story_phase,
+            )
     return state
 
 
@@ -355,6 +369,12 @@ def reconcile_narrative_state_now(
         "and 8 established thread IDs. A resolved or abandoned arc MUST cite evidence from the newly supplied "
         "committed transcript rows: evidence:[{rowid,quote}] with 1–4 exact quotes of at most 500 characters. "
         "A plan, rumor or expectation is not evidence that its intended outcome happened. "
+        "When ending_lifecycle is finale, additionally return resolution:{resolved:boolean,evidence:[{rowid,quote}]}. "
+        "Set resolved true only when the latest committed assistant turn actually resolves the central conflict, "
+        "all required major arcs have established outcomes, and no major unresolved arc remains. "
+        "Resolution evidence must quote the latest committed assistant turn exactly; do not use user intent or "
+        "a suggested future ending as evidence. A finale may need many turns; normally resolved is false until "
+        "the story itself establishes its resolution. Do not generate epilogue prose in this extraction. "
         "Keep existing IDs stable. New scenes need new IDs and an explicit cut/pov_switch/time_jump/thread_switch; "
         "continue preserves the scene, thread and viewpoint. IDs use letters, numbers, underscore or hyphen. "
         "POV is first_person/third_person_user/third_person_rotating/omniscient/cinematic. "

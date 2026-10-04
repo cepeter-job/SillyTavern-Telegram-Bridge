@@ -38,6 +38,13 @@ class EndingState:
     ready_through_rowid: int | None = None
     readiness_reason: str = ""
     required_arcs: tuple[str, ...] = ()
+    resolution_evidence_json: str = "[]"
+    epilogue_brief_json: str = ""
+    work_token: str = ""
+    work_started_at: float = 0.0
+    work_stage: str = ""
+    last_error: str = ""
+    last_attempt_at: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)

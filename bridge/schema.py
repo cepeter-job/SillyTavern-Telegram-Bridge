@@ -5,6 +5,7 @@ from bridge.conversation_schema import migrate_conversation_modes
 from bridge.delivery_schema import migrate_delivery_progress, migrate_job_delivery_intents
 from bridge.director_schema import migrate_director_runtime
 from bridge.ending_schema import migrate_ending_readiness
+from bridge.ending_work_schema import migrate_ending_workflow
 from bridge.finale_checkpoint_schema import migrate_finale_checkpoint_guards
 from bridge.migrations import Migration as _Migration
 from bridge.migrations import run_migrations as _run_migrations
@@ -497,6 +498,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(13, "narrative_arc_evidence", migrate_narrative_arc_evidence),
     _Migration(14, "ending_readiness", migrate_ending_readiness),
     _Migration(15, "finale_checkpoint_guards", migrate_finale_checkpoint_guards),
+    _Migration(16, "ending_workflow", migrate_ending_workflow),
 )
 
 

@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from bridge.ending_reconciliation import ResolutionEvidence, parse_resolution_evidence
 from bridge.narrative_arcs import NarrativeArc, parse_arc_updates
 from bridge.narrative_values import NarrativeScene, NarrativeThread
 
@@ -21,6 +22,7 @@ class NarrativeExtraction:
     scene: NarrativeScene
     threads: tuple[NarrativeThread, ...]
     arcs: tuple[NarrativeArc, ...] = ()
+    resolution: ResolutionEvidence | None = None
 
 
 def _text(value: Any, field: str, maximum: int, *, required: bool = False) -> str:
@@ -102,4 +104,10 @@ def parse_narrative_extraction(raw: str) -> NarrativeExtraction:
                 summary=_text(thread.get("summary", ""), "thread summary", 2000),
             )
         )
-    return NarrativeExtraction(phase, parsed_scene, tuple(parsed_threads), parse_arc_updates(data.get("arcs", [])))
+    return NarrativeExtraction(
+        phase,
+        parsed_scene,
+        tuple(parsed_threads),
+        parse_arc_updates(data.get("arcs", [])),
+        parse_resolution_evidence(data.get("resolution")),
+    )

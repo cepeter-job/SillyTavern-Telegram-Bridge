@@ -7,11 +7,11 @@ import json
 import logging
 import sqlite3
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from bridge.background import chat_job_lock, submit_background
-from bridge.extension_registry import register_post_retain_hook
 from bridge.generation_settings import get_generation_settings
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.narrative_checkpoint_repository import (
@@ -352,7 +352,12 @@ def ensure_narrative_state_current(
 
 
 def _reconciliation_worker(
-    chat_id: str, session_id: str, provider_port: ProviderPort, app_settings: AppSettings, admission: Any
+    chat_id: str,
+    session_id: str,
+    provider_port: ProviderPort,
+    app_settings: AppSettings,
+    admission: Any,
+    on_current: Callable[[sqlite3.Connection, str, dict[str, str]], object] | None = None,
 ) -> None:
     worker_db = None
     continue_work = False
@@ -379,8 +384,16 @@ def _reconciliation_worker(
         try:
             if continue_work and worker_db is not None and session is not None:
                 queue_narrative_reconciliation(
-                    worker_db, chat_id, session, provider_port=provider_port, app_settings=app_settings
+                    worker_db,
+                    chat_id,
+                    session,
+                    provider_port=provider_port,
+                    app_settings=app_settings,
+                    on_current=on_current,
                 )
+            elif worker_db is not None and session is not None and on_current is not None:
+                if narrative_clock_is_current(load_narrative_clock(worker_db, chat_id, session_id)):
+                    on_current(worker_db, chat_id, session)
         finally:
             if worker_db is not None:
                 worker_db.close()
@@ -393,12 +406,17 @@ def queue_narrative_reconciliation(
     *,
     provider_port: ProviderPort,
     app_settings: AppSettings,
+    on_current: Callable[[sqlite3.Connection, str, dict[str, str]], object] | None = None,
 ) -> bool:
     if db.in_transaction:
         return False
     session_id = session["session_id"]
     clock = load_narrative_clock(db, chat_id, session_id)
-    if clock is None or narrative_clock_is_current(clock):
+    if clock is None:
+        return False
+    if narrative_clock_is_current(clock):
+        if on_current is not None:
+            on_current(db, chat_id, session)
         return False
     key = json.dumps(["narrative-reconciliation", str(app_settings.db_file.resolve()), chat_id, session_id])
     admission = chat_job_lock(key)
@@ -406,7 +424,14 @@ def queue_narrative_reconciliation(
         return False
     try:
         accepted = submit_background(
-            "narrative_reconcile", _reconciliation_worker, chat_id, session_id, provider_port, app_settings, admission
+            "narrative_reconcile",
+            _reconciliation_worker,
+            chat_id,
+            session_id,
+            provider_port,
+            app_settings,
+            admission,
+            on_current,
         )
     except BaseException:
         admission.release()
@@ -414,19 +439,3 @@ def queue_narrative_reconciliation(
     if not accepted:
         admission.release()
     return accepted
-
-
-def _post_retain(
-    db: sqlite3.Connection,
-    chat_id: str,
-    session: dict[str, str],
-    fields: dict[str, str],
-    provider_port: ProviderPort,
-    *,
-    app_settings: AppSettings,
-) -> None:
-    queue_narrative_reconciliation(db, chat_id, session, provider_port=provider_port, app_settings=app_settings)
-
-
-def register_narrative_extensions() -> None:
-    register_post_retain_hook("narrative", _post_retain)

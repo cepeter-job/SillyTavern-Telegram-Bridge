@@ -19,6 +19,7 @@ from functools import partial as _partial
 from bridge.background import submit_background
 from bridge.curated_memory_panel import curated_memory_panel
 from bridge.delivery_port import DeliveryPort
+from bridge.extension_context import PostRetainContext
 from bridge.extension_registry import extension_registry_snapshot as _extension_registry_snapshot
 from bridge.extension_registry import register_command_route as _register_command_route
 from bridge.extension_registry import register_post_retain_hook as _register_post_retain_hook
@@ -343,15 +344,9 @@ def queue_memory_curator(
     return True
 
 
-def _memory_curator_post_retain(
-    db: sqlite3.Connection,
-    chat_id: str,
-    session: dict[str, str],
-    fields: dict[str, str],
-    provider_port: ProviderPort,
-    *,
-    app_settings: AppSettings,
-) -> None:
+def _memory_curator_post_retain(context: PostRetainContext) -> None:
+    db, chat_id, session, fields = context.db, context.chat_id, context.session, context.fields
+    provider_port, app_settings = context.provider_port, context.app_settings
     try:
         queue_memory_curator(
             db,

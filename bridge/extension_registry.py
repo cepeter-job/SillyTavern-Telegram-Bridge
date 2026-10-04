@@ -12,10 +12,12 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from bridge.extension_context import PostRetainContext
+from bridge.persona_service import PersonaService
 from bridge.settings import AppSettings
 
 CommandRoute = Callable[..., bool]
-PostRetainHook = Callable[..., None]
+PostRetainHook = Callable[[PostRetainContext], None]
 SummaryContextHook = Callable[[str, Any, str, dict[str, str]], str | None]
 SummaryClearHook = Callable[[Any, str, str], None]
 
@@ -74,10 +76,12 @@ def run_post_retain_hooks(
     provider_port: Any,
     *,
     app_settings: AppSettings,
+    persona_service: PersonaService | None = None,
 ) -> None:
+    context = PostRetainContext(db, chat_id, session, fields, provider_port, app_settings, persona_service)
     for name, handler in tuple(_POST_RETAIN_HOOKS.items()):
         try:
-            handler(db, chat_id, session, fields, provider_port, app_settings=app_settings)
+            handler(context)
         except Exception:
             logging.exception("Post-retain extension hook failed: %s", name)
 

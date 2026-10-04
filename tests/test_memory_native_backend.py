@@ -478,14 +478,14 @@ class MemoryNativeBackendTests(SettingsTestCase):
     def test_direct_guard_runs_post_retain_hook_when_memory_off(self):
         calls = []
 
-        def hook(db, chat_id, session, fields, provider_port, *, app_settings):
+        def hook(context):
             calls.append(
                 (
-                    db,
-                    chat_id,
-                    session["session_id"],
-                    fields["name"],
-                    provider_port,
+                    context.db,
+                    context.chat_id,
+                    context.session["session_id"],
+                    context.fields["name"],
+                    context.provider_port,
                 )
             )
 

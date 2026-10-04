@@ -49,6 +49,9 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
+    "bridge/director_cadence.py",
+    "bridge/director_runtime.py",
+    "bridge/extension_context.py",
     "bridge/director_schema.py",
     "bridge/director_repository.py",
     "bridge/director_guidance.py",

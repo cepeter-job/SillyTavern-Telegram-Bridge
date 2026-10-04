@@ -26,11 +26,11 @@ class ExtensionRegistryTests(SettingsTestCase):
     def test_post_retain_failure_does_not_block_later_hook(self):
         calls = []
 
-        def fail(*_args, app_settings):
+        def fail(context):
             calls.append("first")
             raise RuntimeError("boom")
 
-        def succeed(*_args, app_settings):
+        def succeed(context):
             calls.append("second")
 
         with patch.dict(registry._POST_RETAIN_HOOKS, clear=True):

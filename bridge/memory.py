@@ -46,12 +46,13 @@ from bridge.memory_backend import remember_fact as remember_fact
 from bridge.metadata import set_meta
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.narrative_repository import load_narrative_clock
+from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect, write_transaction
 
 
-def _make_hindsight_stale_guard(*, app_settings: AppSettings):
+def _make_hindsight_stale_guard(*, app_settings: AppSettings, persona_service: PersonaService | None = None):
     return _HindsightStaleGuard(
         open_db=lambda: db_connect(app_settings=app_settings),
         session_lock=lambda chat_id, session_id: hindsight_session_lock(
@@ -73,7 +74,9 @@ def _make_hindsight_stale_guard(*, app_settings: AppSettings):
         retain_backend=_partial(_retain_session_memory_backend, app_settings=app_settings),
         purge_backend=_partial(_purge_hindsight_session_backend, app_settings=app_settings),
         write_successful_purge_state=(_write_hindsight_successful_purge_state),
-        run_post_retain_hooks=_partial(_run_post_retain_hooks, app_settings=app_settings),
+        run_post_retain_hooks=_partial(
+            _run_post_retain_hooks, app_settings=app_settings, persona_service=persona_service
+        ),
     )
 
 
@@ -85,8 +88,9 @@ def retain_session_memory(
     *,
     provider_port: ProviderPort,
     app_settings: AppSettings,
+    persona_service: PersonaService | None = None,
 ) -> None:
-    _make_hindsight_stale_guard(app_settings=app_settings).retain(
+    _make_hindsight_stale_guard(app_settings=app_settings, persona_service=persona_service).retain(
         db,
         chat_id,
         session,

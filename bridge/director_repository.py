@@ -271,3 +271,13 @@ def write_manual_direction(
         ),
     )
     return cursor.rowcount == 1
+
+
+def observe_director_event_key(db: sqlite3.Connection, chat_id: str, session_id: str, event_key: str) -> None:
+    require_active_transaction(db)
+    db.execute(
+        "INSERT INTO director_state(chat_id,session_id,last_event_key) VALUES(?,?,?) "
+        "ON CONFLICT(chat_id,session_id) DO UPDATE SET last_event_key=excluded.last_event_key "
+        "WHERE director_state.last_event_key=''",
+        (chat_id, session_id, event_key),
+    )

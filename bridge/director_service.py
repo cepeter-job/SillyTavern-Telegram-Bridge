@@ -10,6 +10,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
+from bridge.director_cadence import DIRECTOR_LEASE_SECONDS, director_event_key, director_interval
 from bridge.director_contracts import DirectorProposal, DirectorProposalError, parse_director_proposal
 from bridge.director_guidance import active_director_plan
 from bridge.director_prompt import DIRECTOR_INSTRUCTION, build_director_input
@@ -31,7 +32,7 @@ from bridge.model_selection import director_reasoning_for_session, task_model_fo
 from bridge.narrative_context import load_narrative_state, narrative_clock_is_current
 from bridge.narrative_policy import narrative_policy
 from bridge.narrative_reconciliation import ensure_narrative_state_current
-from bridge.narrative_repository import load_narrative_clock, load_narrative_thread
+from bridge.narrative_repository import list_narrative_threads, load_narrative_clock, load_narrative_thread
 from bridge.narrative_settings import load_session_narrative_settings
 from bridge.persona_service import PersonaService
 from bridge.provider_errors import ProviderRequestError
@@ -39,7 +40,6 @@ from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
 
-DIRECTOR_LEASE_SECONDS = 600.0
 _TERMINAL = frozenset({"resolution_committed", "epilogue_pending", "epilogue_committed", "closed"})
 
 
@@ -227,28 +227,10 @@ class DirectorService:
                 raise DirectorProposalError("parse", "Director returned no valid proposal")
             now = time.time()
             turns = director_story_turns(db, chat_id, session_id)
-            default_ttl = (
-                settings.director_fixed_interval
-                if settings.director_cadence_mode == "fixed"
-                else {
-                    "setup": 10,
-                    "development": 6,
-                    "escalation": 4,
-                    "climax": 2,
-                }.get(state.story_phase, 6)
-            )
+            default_ttl = director_interval(settings, state.story_phase)
             ttl = min(proposal.direction_ttl or default_ttl, default_ttl)
             encoded = json.dumps(proposal.to_dict(), ensure_ascii=False, separators=(",", ":"))
-            event_key = json.dumps(
-                [
-                    state.active_scene_id,
-                    state.active_thread_id,
-                    state.story_phase,
-                    clock["settings_revision"],
-                    clock["rewrite_revision"],
-                ],
-                separators=(",", ":"),
-            )
+            event_key = director_event_key(state, clock, list_narrative_threads(db, chat_id, session_id, limit=64))
             with write_transaction(db):
                 if (
                     load_narrative_clock(db, chat_id, session_id) != clock

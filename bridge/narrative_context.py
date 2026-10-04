@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from bridge.director_guidance import director_guidance_for_session
 from bridge.narrative_policy import choice_policy_text, group_policy_text, narrative_policy, story_policy_text
 from bridge.narrative_repository import load_narrative_clock, load_narrative_state_row
 from bridge.narrative_settings import load_session_narrative_settings
@@ -37,7 +38,9 @@ def narrative_context_for_session(
     if through_rowid is not None and clock is not None and clock["updated_through_rowid"] > through_rowid:
         current = False
     state = load_narrative_state(db, chat_id, session_id) if current else None
-    return renderers[consumer](policy, state)
+    text = renderers[consumer](policy, state)
+    guidance = director_guidance_for_session(db, chat_id, session_id, through_rowid=through_rowid)
+    return text + ("\n\n" + guidance if guidance else "")
 
 
 def narrative_choice_is_steering(db: sqlite3.Connection, chat_id: str, session_id: str) -> bool:

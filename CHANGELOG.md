@@ -24,6 +24,11 @@ not publish a release or change an installed deployment.
   with temporary scene directions, persistent objectives and decision history.
 - Groups consume canonical plans without a second planning-model request.
 
+- Revision-aware story arcs with committed-text evidence for resolved outcomes,
+  plus separate persistent user guidance in Director Room.
+- Ending Goal revisions, finale-readiness checks and atomic immutable pre-finale
+  snapshots as the storage foundation for Closed Story.
+
 ### Fixed
 
 - Reset clears derived narrative state while preserving Narrative Style and

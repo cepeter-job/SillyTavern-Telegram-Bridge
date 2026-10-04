@@ -1,6 +1,6 @@
 # Narrative Engine Phase 3: Arcs and Closed Story Foundation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Add revision-aware arc tracking, Ending Goal/history, finale-readiness evaluation, and atomic pre-finale checkpoints without enabling hard closure or epilogue generation yet.
 
@@ -48,7 +48,7 @@
   - `apply_reconciled_arcs(db, chat_id: str, session_id: str, arcs: list[NarrativeArc], *, expected_state_revision: int, through_rowid: int) -> bool`
 - Initial statuses: `planned | active | dormant | resolved | abandoned`.
 
-- [ ] **Step 1: Write arc reconciliation tests**
+- [x] **Step 1: Write arc reconciliation tests**
 
 Assert:
 - Utility reconciliation can create/update arcs from committed transcript;
@@ -57,21 +57,21 @@ Assert:
 - stale reconciliation cannot overwrite newer arc revision;
 - edit invalidation removes/rebuilds only state derived after the valid boundary.
 
-- [ ] **Step 2: Run tests**
+- [x] **Step 2: Run tests**
 
 Run: `python -m pytest -q tests/test_narrative_arcs.py tests/test_narrative_reconciliation.py`  
 Expected: FAIL because arc reconciliation is absent.
 
-- [ ] **Step 3: Implement arc values/repository use case**
+- [x] **Step 3: Implement arc values/repository use case**
 
 Keep model parsing in reconciliation owner and SQL in repository owner. Bound arc count/input sizes in tests and implementation.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `python -m pytest -q tests/test_narrative_arcs.py tests/test_narrative_reconciliation.py`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add bridge/narrative_arcs.py bridge/narrative_repository.py bridge/narrative_reconciliation.py tests/test_narrative_arcs.py tests/test_narrative_reconciliation.py
@@ -97,7 +97,7 @@ git commit -m "feat: track narrative arcs"
 - Phase 3 exposes transitions only through `FINALE`; later lifecycle values exist in schema/type validation for future phases.
 - History prune: newest 100 rows per session in append transaction.
 
-- [ ] **Step 1: Write lifecycle/goal tests**
+- [x] **Step 1: Write lifecycle/goal tests**
 
 Assert:
 - legal `OPEN → FINALE_READY → FINALE`;
@@ -107,21 +107,21 @@ Assert:
 - 101st history row prunes oldest without losing current goal;
 - stale lifecycle revision CAS fails without mutation.
 
-- [ ] **Step 2: Run tests**
+- [x] **Step 2: Run tests**
 
 Run: `python -m pytest -q tests/test_ending_state.py tests/test_repository_transactions.py`  
 Expected: FAIL.
 
-- [ ] **Step 3: Implement repository/service**
+- [x] **Step 3: Implement repository/service**
 
 Keep all transition validation deterministic. No model calls in repository/service transition methods.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `python -m pytest -q tests/test_ending_state.py tests/test_repository_transactions.py`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add bridge/ending_repository.py bridge/ending_service.py bridge/ending_values.py tests/test_ending_state.py tests/test_repository_transactions.py
@@ -148,7 +148,7 @@ git commit -m "feat: add ending state and goal history"
 - Director may propose; `EndingService` and reconciliation decide whether state changes are legal/current.
 - Use usage purpose `director_ending` only for explicit ending reassessment; ordinary cadence remains `director`.
 
-- [ ] **Step 1: Write proposal tests**
+- [x] **Step 1: Write proposal tests**
 
 Assert:
 - arc IDs/statuses validate against canonical state;
@@ -157,21 +157,21 @@ Assert:
 - finale-ready proposal is rejected if Narrative State is stale;
 - malformed ending proposal follows one-repair maximum.
 
-- [ ] **Step 2: Run tests**
+- [x] **Step 2: Run tests**
 
 Run: `python -m pytest -q tests/test_director_ending.py tests/test_director_validation.py tests/test_director_service.py`  
 Expected: FAIL.
 
-- [ ] **Step 3: Implement proposal extensions**
+- [x] **Step 3: Implement proposal extensions**
 
 Keep accepted Director decision separate from committed arc/ending facts. Delegate actual writes to arc/ending owners.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `python -m pytest -q tests/test_director_ending.py tests/test_director_validation.py tests/test_director_service.py`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add bridge/director_contracts.py bridge/director_validation.py bridge/director_service.py tests/test_director_ending.py tests/test_director_validation.py tests/test_director_service.py
@@ -196,7 +196,7 @@ git commit -m "feat: let director plan arcs and endings"
 - Readiness stores exact story revision/rowid that produced it.
 - With `require_finale_confirmation`, Story may continue; any later committed story invalidates old `FINALE_READY` back to `OPEN`.
 
-- [ ] **Step 1: Write readiness tests**
+- [x] **Step 1: Write readiness tests**
 
 Assert:
 - current reconciled state can become FINALE_READY;
@@ -205,21 +205,21 @@ Assert:
 - edit/regen before readiness revision invalidates readiness;
 - repeated evaluation on unchanged revision is idempotent.
 
-- [ ] **Step 2: Run tests**
+- [x] **Step 2: Run tests**
 
 Run: `python -m pytest -q tests/test_finale_readiness.py tests/test_native_message_edit.py`  
 Expected: FAIL.
 
-- [ ] **Step 3: Implement readiness owner/invalidation hooks**
+- [x] **Step 3: Implement readiness owner/invalidation hooks**
 
 Do not enter FINALE yet except through Task 5 atomic checkpoint service.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `python -m pytest -q tests/test_finale_readiness.py tests/test_native_message_edit.py tests/test_npc_branch_safety.py`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add bridge/finale_service.py bridge/narrative_reconciliation.py bridge/edit_messages.py bridge/regeneration.py tests/test_finale_readiness.py tests/test_native_message_edit.py tests/test_npc_branch_safety.py
@@ -243,7 +243,7 @@ git commit -m "feat: evaluate finale readiness safely"
 - Checkpoint payload includes NarrativePolicy, NarrativeState, DirectorState, EndingState, scene/thread/POV, arcs, Ending Goal history, accepted direction, exact transcript revision, `format_version=1`.
 - Checkpoint insert + EndingState `FINALE` transition occur in one `write_transaction`.
 
-- [ ] **Step 1: Write checkpoint/crash-window tests**
+- [x] **Step 1: Write checkpoint/crash-window tests**
 
 Assert:
 - successful call creates exactly one immutable checkpoint and enters FINALE;
@@ -253,21 +253,21 @@ Assert:
 - checkpoint JSON is versioned and bounded;
 - no provider calls occur inside checkpoint transaction.
 
-- [ ] **Step 2: Run tests**
+- [x] **Step 2: Run tests**
 
 Run: `python -m pytest -q tests/test_narrative_checkpoints.py tests/test_ending_recovery.py`  
 Expected: FAIL.
 
-- [ ] **Step 3: Implement atomic checkpoint/transition**
+- [x] **Step 3: Implement atomic checkpoint/transition**
 
 Use only already-current committed state; no reconciliation/model work inside transaction.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `python -m pytest -q tests/test_narrative_checkpoints.py tests/test_ending_recovery.py`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add bridge/narrative_checkpoints.py bridge/ending_repository.py bridge/ending_service.py tests/test_narrative_checkpoints.py tests/test_ending_recovery.py
@@ -288,25 +288,25 @@ git commit -m "feat: checkpoint stories before finale"
 - Closed Story execution controls remain hidden/disabled until Phase 4.
 - Finale-ready status may be shown only as internal/diagnostic state if needed; no button enters incomplete ending pipeline from production UI.
 
-- [ ] **Step 1: Write panel tests**
+- [x] **Step 1: Write panel tests**
 
 Assert Ending Goal/history and arcs are visible/editable only to authenticated actor; raw hidden model prompts are absent; Closed Story start/finale controls are not exposed yet.
 
-- [ ] **Step 2: Run tests**
+- [x] **Step 2: Run tests**
 
 Run: `python -m pytest -q tests/test_director_panels.py tests/test_miniapp_director.py`  
 Expected: FAIL on missing arc/goal surfaces.
 
-- [ ] **Step 3: Implement bounded views/mutations**
+- [x] **Step 3: Implement bounded views/mutations**
 
 Reuse EndingService and DirectorService; no direct SQL from adapters.
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `python -m pytest -q tests/test_director_panels.py tests/test_miniapp_director.py`  
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add bridge/director_panels.py bridge/director_callbacks.py bridge/miniapp_director.py tests/test_director_panels.py tests/test_miniapp_director.py
@@ -320,11 +320,11 @@ git commit -m "feat: expose story arcs and ending goals"
 - Modify: `CHANGELOG.md`
 - Do not advertise Closed Story in user docs yet.
 
-- [ ] **Step 1: Document developer lifecycle contracts**
+- [x] **Step 1: Document developer lifecycle contracts**
 
 Document checkpoint atomicity, revision invalidation, and the fact that Phase 3 foundation is not yet a complete user-facing Closed Story feature.
 
-- [ ] **Step 2: Run Phase 3 gates**
+- [x] **Step 2: Run Phase 3 gates**
 
 Run:
 ```bash
@@ -336,9 +336,20 @@ git diff --check
 ```
 Expected: all pass.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add CONTRIBUTING.md CHANGELOG.md
 git commit -m "docs: record closed story foundation"
 ```
+
+## Native execution record
+
+Readiness evaluation is integrated into the canonical Director proposal pipeline
+and EndingService, rather than a second model-calling service. All ending plans,
+arc references and readiness writes share the accepted Director CAS transaction.
+Forward migrations 13–15 add arc evidence, readiness clocks and immutable
+pre-finale boundaries without modifying already-applied migrations.
+
+The full phase gate passed 3,101 tests and 796 subtests, plus 14 Mini App pages
+with no browser errors. Closure execution remains gated until Phase 4.

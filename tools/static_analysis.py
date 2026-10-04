@@ -49,6 +49,13 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
+    "bridge/narrative_values.py",
+    "bridge/narrative_schema.py",
+    "bridge/narrative_repository.py",
+    "bridge/narrative_settings.py",
+    "bridge/narrative_policy.py",
+    "bridge/narrative_panels.py",
+    "bridge/narrative_callbacks.py",
     "bridge/provider_health_store.py",
     "bridge/provider_probe_service.py",
     "bridge/provider_catalog_cache.py",
@@ -166,6 +173,7 @@ LOW_LEVEL_IMPORTS = {
     "bridge.conversation_schema": frozenset([]),
     "bridge.conversation_setup": frozenset(
         [
+            "bridge.narrative_settings",
             "bridge.card_content",
             "bridge.conversation_lifecycle",
             "bridge.limits",
@@ -191,6 +199,8 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.conversation_setup_panels": frozenset(
         [
+            "bridge.narrative_panels",
+            "bridge.narrative_settings",
             "bridge.callback_tokens",
             "bridge.card_content",
             "bridge.conversation_lifecycle",

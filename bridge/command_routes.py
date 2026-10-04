@@ -16,6 +16,7 @@ from bridge.greetings import send_greeting_menu
 from bridge.help_details import send_help_command, send_help_menu
 from bridge.light_novel_panels import send_light_novel_menu
 from bridge.model_selection import task_model_for_session
+from bridge.narrative_panels import send_narrative_menu
 from bridge.npc_service import NpcService
 from bridge.prompt_diagnostics import prompt_diagnostics
 from bridge.prompt_panels import send_prompt_menu
@@ -305,6 +306,9 @@ def _handle_entities(
     persona_service,
 ):
     """Handle character, session, persona, world, prompt, and provider panels."""
+    if command == "/narrative":
+        send_narrative_menu(token, chat_id, session, request_context=request_context)
+        return True
     if command == "/systemprompt":
         send_system_prompt_menu(token, chat_id, session.get("system_prompt") or "", request_context=request_context)
         return True

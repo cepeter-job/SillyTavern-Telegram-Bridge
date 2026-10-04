@@ -8,7 +8,9 @@ from dataclasses import replace
 from bridge.narrative_repository import (
     load_narrative_default_row,
     load_narrative_settings_row,
+    narrative_settings_revision,
     store_narrative_default_row,
+    store_narrative_settings_if_revision,
     store_narrative_settings_row,
 )
 from bridge.narrative_values import NarrativeSettings
@@ -129,3 +131,46 @@ def save_session_narrative_settings(
     payload = _encode_settings(settings)
     with write_transaction(db):
         store_narrative_settings_row(db, chat_id, session_id, payload, time.time())
+
+
+NARRATIVE_EDIT_FIELDS = ("pov_mode", "user_role", "scene_focus", "offscreen_policy", "user_control")
+
+
+def change_narrative_setting(settings: NarrativeSettings, field: str, value: str) -> NarrativeSettings:
+    if field not in NARRATIVE_EDIT_FIELDS:
+        raise ValueError("Choose an available Narrative Style field.")
+    return normalize_narrative_settings(settings.to_dict() | {"preset": "custom", field: value})
+
+
+def apply_narrative_preference(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    *,
+    actor_id: str,
+    expected_revision: int,
+    action: str,
+    value: str = "",
+    field: str = "",
+) -> NarrativeSettings:
+    """Apply one current-panel action atomically; never inherit a personal default live."""
+    if not actor_id or type(expected_revision) is not int or expected_revision < -1:
+        raise ValueError("Reopen Narrative Style before making a change.")
+    with write_transaction(db):
+        if narrative_settings_revision(db, chat_id, session_id) != expected_revision:
+            raise ValueError("Narrative Style changed. Reopen /narrative to use the latest settings.")
+        current = load_session_narrative_settings(db, chat_id, session_id)
+        if action == "default":
+            save_user_narrative_default(db, actor_id, current)
+            return current
+        if action == "preset":
+            changed = preset_narrative_settings(value)
+        elif action == "set":
+            changed = change_narrative_setting(current, field, value)
+        else:
+            raise ValueError("Choose an available Narrative Style action.")
+        if not store_narrative_settings_if_revision(
+            db, chat_id, session_id, _encode_settings(changed), expected_revision, time.time()
+        ):
+            raise ValueError("Narrative Style changed. Reopen /narrative to use the latest settings.")
+        return changed

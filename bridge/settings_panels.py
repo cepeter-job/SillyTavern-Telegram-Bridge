@@ -75,7 +75,8 @@ def send_settings_menu(
             "temperature, max_tokens, top_p, frequency_penalty, presence_penalty, "
             "stop_sequences.\n\nHumanizer rewrites replies to remove AI-sounding "
             "patterns. I am not MC mode keeps user abilities and world reactions tied to established "
-            "facts instead of granting automatic success or attention. Both are off by default."
+            "facts instead of granting automatic success or attention. Both are off by default. "
+            "Use /narrative for story focus, point of view, and off-screen scenes."
         ),
         {"inline_keyboard": rows},
         message_id,

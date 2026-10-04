@@ -205,3 +205,34 @@ def upsert_narrative_scene(db: sqlite3.Connection, chat_id: str, session_id: str
         ),
     )
     return cursor.rowcount == 1
+
+
+def narrative_settings_revision(db: sqlite3.Connection, chat_id: str, session_id: str) -> int:
+    row = db.execute(
+        "SELECT settings_revision FROM narrative_settings WHERE chat_id=? AND session_id=?", (chat_id, session_id)
+    ).fetchone()
+    return int(row[0]) if row else -1
+
+
+def store_narrative_settings_if_revision(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    settings_json: str,
+    expected_revision: int,
+    updated_at: float,
+) -> bool:
+    require_active_transaction(db)
+    if expected_revision == -1:
+        cursor = db.execute(
+            "INSERT INTO narrative_settings(chat_id,session_id,settings_json,updated_at) "
+            "SELECT ?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM narrative_settings WHERE chat_id=? AND session_id=?)",
+            (chat_id, session_id, settings_json, updated_at, chat_id, session_id),
+        )
+    else:
+        cursor = db.execute(
+            "UPDATE narrative_settings SET settings_json=?,settings_revision=settings_revision+1,updated_at=? "
+            "WHERE chat_id=? AND session_id=? AND settings_revision=?",
+            (settings_json, updated_at, chat_id, session_id, expected_revision),
+        )
+    return cursor.rowcount == 1

@@ -2,7 +2,9 @@
 
 All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
-## Unreleased
+## [Unreleased]
+
+## [0.3.001] - 2026-10-04
 
 ### Fixed
 

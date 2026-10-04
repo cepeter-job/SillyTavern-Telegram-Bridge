@@ -66,7 +66,7 @@ HELP_CATEGORIES = {
         ),
         (
             "/character",
-            "Choose Character → Normal/Light Novel → Persona → World → System Prompt → Session; "
+            "Choose Character → Narrative Style → Normal/Light Novel → Persona → World → System Prompt → Session; "
             "Light Novel adds the A/B/C strategy step. Info, Optimizer, Upload and Delete remain available.",
         ),
         (
@@ -74,6 +74,7 @@ HELP_CATEGORIES = {
             "Open dedicated Light Novel mode controls or restore the current 2–4 full-text action choices with "
             "numbered selectors plus Next Scene. Mode changes require an unstarted standard session.",
         ),
+        ("/narrative", "Choose this story's POV, cast focus, off-screen freedom, and user-control rules."),
         ("/persona", "Choose, create, edit, or disable a Persona. Delete only targets inactive, unreferenced ones."),
         ("/world", "Open World Info selection — activate or disable one or more lorebooks."),
         ("/note", "Open the Author's Note panel. Off clears it; User input waits for your next message."),

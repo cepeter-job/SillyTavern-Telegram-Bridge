@@ -2,6 +2,29 @@
 
 All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
+## [0.3.000] - 2026-10-04
+
+Development milestone for the Narrative Engine implementation. This branch does
+not publish a release or change an installed deployment.
+
+### Added
+
+- Narrative Style in character setup and a `/narrative` panel for current stories:
+  Player-centric, Ensemble, World-driven, Observer and advanced Custom settings.
+- Personal setup defaults that never overwrite another session's preferences.
+- Committed narrative scene/thread tracking with revision-safe Utility
+  reconciliation, bounded batches and bounded rewind snapshots.
+- Shared narrative policies for text, images, edits, regeneration, continuation,
+  Light Novel choices and Group speaker selection. Off-screen choices use
+  narrative steering instead of invented user participation.
+
+### Fixed
+
+- Reset clears derived narrative state while preserving Narrative Style and
+  personal defaults. Its local cleanup is atomic after successful memory purge.
+- Optional NumPy acceleration now falls back to existing Python vector math when
+  the installed wheel cannot initialize on a VPS's exposed CPU instruction set.
+
 ## [0.2.058] - 2026-10-02
 
 ### Added

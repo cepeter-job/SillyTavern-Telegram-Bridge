@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ast
+import sqlite3
+from contextlib import closing
 from dataclasses import fields
 from pathlib import Path
 
@@ -86,9 +88,13 @@ def test_director_goals_exposes_direct_policy_without_registry_slot(monkeypatch,
         lambda *_args, app_settings=None, **_kwargs: "director-model",
     )
 
-    result = goals.director_goal_policy(
-        object(), "chat", {"session_id": "session"}, app_settings=app_settings_builder.build()
-    )
+    from bridge.schema import initialize_database_schema
+
+    with closing(sqlite3.connect(":memory:")) as db:
+        initialize_database_schema(db)
+        result = goals.director_goal_policy(
+            db, "chat", {"session_id": "session"}, app_settings=app_settings_builder.build()
+        )
 
     assert isinstance(result, DirectorCustomization)
     assert result.model == "director-model"

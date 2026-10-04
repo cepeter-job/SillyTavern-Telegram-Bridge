@@ -18,6 +18,14 @@ from bridge.conversation_lifecycle import (
 )
 from bridge.limits import PENDING_SETTINGS_TTL_SECONDS
 from bridge.metadata import get_meta, set_meta
+from bridge.narrative_settings import (
+    NARRATIVE_EDIT_FIELDS,
+    change_narrative_setting,
+    load_user_narrative_default,
+    normalize_narrative_settings,
+    preset_narrative_settings,
+    save_session_narrative_settings,
+)
 from bridge.persona_service import PersonaService
 from bridge.session_repository import insert_session_row, load_session_row, update_session_row
 from bridge.session_titles import normalize_session_title
@@ -48,7 +56,8 @@ def begin_setup(
         "character_file": path.name,
         "character_digest": hashlib.sha256(path.read_bytes()).hexdigest(),
         "nonce": secrets.token_urlsafe(12),
-        "stage": "mode",
+        "stage": "narrative",
+        "narrative_settings": load_user_narrative_default(db, actor_id).to_dict(),
         "conversation_mode": "normal",
         "lightnovel_strategy": "",
         "persona_id": "",
@@ -108,7 +117,32 @@ class ConversationSetupService:
             state = self.load(db, chat_id, session["session_id"], actor_id, nonce)
             if state["stage"] != stage:
                 raise ValueError("This setup step is no longer active")
-            if stage == "mode" and action == "pick":
+            if stage == "narrative":
+                if action == "pick":
+                    state["narrative_settings"] = preset_narrative_settings(value).to_dict()
+                    state["stage"] = "mode"
+                elif action == "advanced":
+                    state["stage"] = "narrative_advanced"
+                elif action == "next":
+                    normalize_narrative_settings(state["narrative_settings"])
+                    state["stage"] = "mode"
+                else:
+                    raise ValueError("Choose a Narrative Style or open Advanced")
+            elif stage == "narrative_advanced":
+                if action == "next":
+                    state["stage"] = "mode"
+                elif action == "pick" and value in NARRATIVE_EDIT_FIELDS:
+                    state["narrative_field"] = value
+                    state["stage"] = "narrative_field"
+                else:
+                    raise ValueError("Choose an available Narrative Style field")
+            elif stage == "narrative_field" and action == "pick":
+                current = normalize_narrative_settings(state["narrative_settings"])
+                state["narrative_settings"] = change_narrative_setting(
+                    current, state["narrative_field"], value
+                ).to_dict()
+                state["stage"] = "narrative_advanced"
+            elif stage == "mode" and action == "pick":
                 if value not in {"normal", "lightnovel"}:
                     raise ValueError("Choose Normal or Light Novel")
                 state["conversation_mode"] = value
@@ -173,12 +207,20 @@ class ConversationSetupService:
         with write_transaction(db):
             state = self.load(db, chat_id, session["session_id"], actor_id, nonce)
             stages = (
-                ["mode"]
+                ["narrative", "mode"]
                 + (["strategy"] if state["conversation_mode"] == "lightnovel" else [])
                 + ["persona", "world", "system_prompt", "session", "review"]
             )
             current = state["stage"]
-            state["stage"] = "session" if current == "session_name" else stages[max(0, stages.index(current) - 1)]
+            parents = {
+                "session_name": "session",
+                "narrative_field": "narrative_advanced",
+                "narrative_advanced": "narrative",
+            }
+            if current in parents:
+                state["stage"] = parents[current]
+            else:
+                state["stage"] = stages[max(0, stages.index(current) - 1)]
             state["page"] = 0
             return self._save(db, chat_id, actor_id, state)
 
@@ -209,6 +251,7 @@ class ConversationSetupService:
             prompt = get_system_prompt_choice(prompt_key, app_settings=self.app_settings) if prompt_key else ""
             if prompt is None:
                 raise ValueError("System Prompt is unavailable")
+            narrative = normalize_narrative_settings(state["narrative_settings"])
             target_id = state["target_session_id"]
             if target_id == "$new":
                 target_id = "setup-" + nonce
@@ -245,6 +288,7 @@ class ConversationSetupService:
                 },
                 time.time(),
             )
+            save_session_narrative_settings(db, chat_id, target_id, narrative)
             set_meta(db, f"active_session:{chat_id}", target_id)
             set_meta(db, setup_key(chat_id, actor_id), "")
             return load_session_row(db, chat_id, target_id) or target

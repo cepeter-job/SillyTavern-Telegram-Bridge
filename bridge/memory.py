@@ -45,6 +45,7 @@ from bridge.memory_backend import recall_memory_context as recall_memory_context
 from bridge.memory_backend import remember_fact as remember_fact
 from bridge.metadata import set_meta
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
+from bridge.narrative_repository import load_narrative_clock
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect, write_transaction
@@ -169,9 +170,9 @@ def get_session_summary(db: sqlite3.Connection, chat_id: str, session_id: str) -
 
 
 def clear_session_summary(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
-    db.execute("DELETE FROM session_summaries WHERE chat_id=? AND session_id=?", (chat_id, session_id))
-    db.commit()
-    _run_summary_clear_hooks(db, chat_id, session_id)
+    with write_transaction(db):
+        db.execute("DELETE FROM session_summaries WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+        _run_summary_clear_hooks(db, chat_id, session_id)
 
 
 def transcript_for_summary(rows: list[tuple[int, str, str, float]]) -> str:
@@ -186,6 +187,23 @@ class SessionSummaryResult:
     summary: str
     covered_until_rowid: int
     complete: bool
+
+
+def _summary_generation_snapshot(db: sqlite3.Connection, chat_id: str, session_id: str) -> tuple | None:
+    """Capture story identity and the accepted summary without copying the transcript."""
+    clock = load_narrative_clock(db, chat_id, session_id)
+    if clock is None:
+        return None
+    summary = db.execute(
+        "SELECT summary,covered_until_rowid,updated_at FROM session_summaries WHERE chat_id=? AND session_id=?",
+        (chat_id, session_id),
+    ).fetchone()
+    return clock["session_created_at"], clock["history_revision"], clock["latest_rowid"], summary
+
+
+def _current_summary_result(db: sqlite3.Connection, chat_id: str, session_id: str) -> SessionSummaryResult:
+    summary, covered = get_session_summary(db, chat_id, session_id)
+    return SessionSummaryResult(summary, covered, False)
 
 
 def generate_session_summary(
@@ -211,6 +229,7 @@ def generate_session_summary_result(
     provider_port: ProviderPort,
     app_settings: AppSettings,
 ) -> SessionSummaryResult:
+    source_snapshot = _summary_generation_snapshot(db, chat_id, session["session_id"])
     rows = db.execute(
         "SELECT rowid,role,content,created_at FROM messages WHERE chat_id=? AND session_id=? ORDER BY created_at,rowid",
         (chat_id, session["session_id"]),
@@ -241,6 +260,11 @@ def generate_session_summary_result(
     completed_covered = covered_until
     previous = "" if force else existing
     while pending:
+        if (
+            source_snapshot is None
+            or _summary_generation_snapshot(db, chat_id, session["session_id"]) != source_snapshot
+        ):
+            return _current_summary_result(db, chat_id, session["session_id"])
         header = (("Previous summary:\n" + previous + "\n\n") if previous else "") + "New transcript segment:\n"
         segment = []
         rendered = []
@@ -294,16 +318,19 @@ def generate_session_summary_result(
             logging.warning(
                 "Session summary generation failed for %s/%s", chat_id, session["session_id"], exc_info=True
             )
-            return SessionSummaryResult(summary, completed_covered, False)
+            return _current_summary_result(db, chat_id, session["session_id"])
         if not produced:
-            return SessionSummaryResult(summary, completed_covered, False)
+            return _current_summary_result(db, chat_id, session["session_id"])
         completed_rowid = int(segment[-1][0])
         with write_transaction(db):
+            if _summary_generation_snapshot(db, chat_id, session["session_id"]) != source_snapshot:
+                return _current_summary_result(db, chat_id, session["session_id"])
             db.execute(
                 "INSERT OR REPLACE INTO session_summaries"
                 "(chat_id,session_id,summary,covered_until_rowid,updated_at) VALUES(?,?,?,?,?)",
                 (chat_id, session["session_id"], produced, completed_rowid, time.time()),
             )
+            source_snapshot = _summary_generation_snapshot(db, chat_id, session["session_id"])
         summary = previous = produced
         completed_covered = completed_rowid
         if not force:
@@ -315,6 +342,7 @@ def generate_session_summary_result(
                     source_text="\n".join(rendered),
                     source_start_rowid=int(segment[0][0]),
                     source_end_rowid=completed_rowid,
+                    expected_source=(source_snapshot[0], source_snapshot[1], source_snapshot[2]),
                     provider_port=provider_port,
                     app_settings=app_settings,
                 )
@@ -323,6 +351,8 @@ def generate_session_summary_result(
                     "Episodic memory extraction failed for %s/%s", chat_id, session["session_id"], exc_info=True
                 )
         pending = pending[len(segment) :]
+    if _summary_generation_snapshot(db, chat_id, session["session_id"]) != source_snapshot:
+        return _current_summary_result(db, chat_id, session["session_id"])
     return SessionSummaryResult(summary, completed_covered, True)
 
 

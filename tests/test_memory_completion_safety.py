@@ -334,3 +334,242 @@ def test_summary_command_reports_incomplete_regeneration(session_db, monkeypatch
         assert "Prior summary" in sent[0]
     elif failure == "later":
         assert "Processed prefix" in sent[0]
+
+
+@pytest.mark.parametrize("change", ["reset", "delete", "recreate", "edit", "newer_summary"])
+def test_summary_rejects_completion_after_source_changes(session_db, monkeypatch, change):
+    settings, db, session = session_db
+    add_rows(db, 2, size=30)
+    monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
+    expected = ("", 0)
+
+    def generate(*_args, **_kwargs):
+        nonlocal expected
+        assert not db.in_transaction
+        if change == "reset":
+            message_commands.reset_session(
+                db, "token", "chat", session, memory_service=make_test_memory_service(), npc_service=NpcService()
+            )
+        elif change in {"delete", "recreate"}:
+            assert delete_session_data(db, "chat", "s1", "other", memory_service=make_test_memory_service())[0]
+            if change == "recreate":
+                create_session(db, "chat", "dummy::model", session_id="s1", app_settings=settings)
+                add_rows(db, 2, size=30)
+        elif change == "edit":
+            with write_transaction(db):
+                db.execute("UPDATE messages SET content='Revised story' WHERE rowid=1")
+        else:
+            expected = ("Newer accepted summary", 2)
+            with write_transaction(db):
+                db.execute("INSERT INTO session_summaries VALUES(?,?,?,?,?)", ("chat", "s1", expected[0], 2, 99.0))
+        return "Obsolete summary from the old story"
+
+    result = memory.generate_session_summary_result(
+        db,
+        "chat",
+        session,
+        force=True,
+        provider_port=make_test_provider_port(generate_backend=generate),
+        app_settings=settings,
+    )
+    assert memory.get_session_summary(db, "chat", "s1") == expected
+    assert (result.summary, result.covered_until_rowid) == expected
+    assert result.complete is False
+
+
+def test_summary_failure_after_reset_returns_no_old_fallback(session_db, monkeypatch):
+    settings, db, session = session_db
+    add_rows(db, 2, size=30)
+    db.execute("INSERT INTO session_summaries VALUES(?,?,?,?,?)", ("chat", "s1", "Prior obsolete summary", 1, 1.0))
+    db.commit()
+    monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
+
+    def generate(*_args, **_kwargs):
+        message_commands.reset_session(
+            db, "token", "chat", session, memory_service=make_test_memory_service(), npc_service=NpcService()
+        )
+        raise RuntimeError("Synthetic interruption after reset")
+
+    result = memory.generate_session_summary_result(
+        db,
+        "chat",
+        session,
+        force=True,
+        provider_port=make_test_provider_port(generate_backend=generate),
+        app_settings=settings,
+    )
+    assert memory.get_session_summary(db, "chat", "s1") == ("", 0)
+    assert result.summary == ""
+    assert result.covered_until_rowid == 0
+    assert not result.complete
+
+
+@pytest.mark.parametrize("change", ["reset", "delete", "recreate", "edit"])
+def test_episodic_completion_after_invalidation_does_not_restore_old_facts(session_db, monkeypatch, change):
+    from bridge.episodic_extraction import extract_episodic_memories
+
+    settings, db, session = session_db
+    add_rows(db, 2, size=30)
+    monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
+
+    def generate(*_args, **_kwargs):
+        assert not db.in_transaction
+        if change == "reset":
+            message_commands.reset_session(
+                db, "token", "chat", session, memory_service=make_test_memory_service(), npc_service=NpcService()
+            )
+        elif change in {"delete", "recreate"}:
+            assert delete_session_data(db, "chat", "s1", "other", memory_service=make_test_memory_service())[0]
+            if change == "recreate":
+                create_session(db, "chat", "dummy::model", session_id="s1", app_settings=settings)
+                add_rows(db, 2, size=30)
+        else:
+            with write_transaction(db):
+                db.execute("UPDATE messages SET content='New canonical story' WHERE rowid=1")
+        return '[{"kind":"fact","importance":0.9,"summary":"Obsolete fact from before the change"}]'
+
+    inserted = extract_episodic_memories(
+        db,
+        "chat",
+        session,
+        source_text="Old source",
+        source_start_rowid=1,
+        source_end_rowid=2,
+        provider_port=make_test_provider_port(generate_backend=generate),
+        app_settings=settings,
+    )
+    assert inserted == 0
+    assert db.execute("SELECT count(*) FROM episodic_memories").fetchone()[0] == 0
+    assert not db.in_transaction
+
+
+def test_episodic_extraction_rejects_outer_transaction_before_provider(session_db):
+    from bridge.episodic_extraction import extract_episodic_memories
+
+    settings, db, session = session_db
+    add_rows(db, 2, size=30)
+    calls = []
+    db.execute("BEGIN")
+    try:
+        with pytest.raises(RuntimeError, match="transaction"):
+            extract_episodic_memories(
+                db,
+                "chat",
+                session,
+                source_text="Old source",
+                source_start_rowid=1,
+                source_end_rowid=2,
+                provider_port=make_test_provider_port(generate_backend=lambda *a, **k: calls.append(1) or "[]"),
+                app_settings=settings,
+            )
+        assert calls == []
+    finally:
+        db.rollback()
+
+
+def test_episodic_candidate_batch_rolls_back_together(session_db, monkeypatch):
+    from bridge import episodic_extraction
+
+    settings, db, session = session_db
+    add_rows(db, 2, size=30)
+    original = episodic_extraction.store_episodic_memory
+    calls = []
+
+    def store(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 2:
+            raise RuntimeError("Synthetic second candidate failure")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(episodic_extraction, "store_episodic_memory", store)
+    raw = '[{"kind":"fact","importance":0.9,"summary":"First"},{"kind":"fact","importance":0.9,"summary":"Second"}]'
+    with pytest.raises(RuntimeError, match="second candidate"):
+        episodic_extraction.extract_episodic_memories(
+            db,
+            "chat",
+            session,
+            source_text="Facts",
+            source_start_rowid=1,
+            source_end_rowid=2,
+            provider_port=make_test_provider_port(generate_backend=lambda *a, **k: raw),
+            app_settings=settings,
+        )
+    assert not db.in_transaction
+    assert db.execute("SELECT count(*) FROM episodic_memories").fetchone()[0] == 0
+
+
+def test_duplicate_episodic_visibility_update_is_committed(session_db):
+    from bridge.episodic_extraction import extract_episodic_memories
+    from bridge.episodic_memory import store_episodic_memory
+
+    settings, db, session = session_db
+    add_rows(db, 2, size=30)
+    with write_transaction(db):
+        store_episodic_memory(
+            db,
+            "chat",
+            "s1",
+            kind="fact",
+            importance=0.9,
+            summary="Hidden key",
+            source_start_rowid=1,
+            source_end_rowid=2,
+        )
+    raw = '[{"kind":"fact","importance":0.9,"summary":"Hidden key","visibility":"restricted","known_by":["Mara"]}]'
+    inserted = extract_episodic_memories(
+        db,
+        "chat",
+        session,
+        source_text="Only Mara knows about the hidden key",
+        source_start_rowid=1,
+        source_end_rowid=2,
+        provider_port=make_test_provider_port(generate_backend=lambda *a, **k: raw),
+        app_settings=settings,
+    )
+    assert inserted == 0
+    assert not db.in_transaction
+    assert db.execute("SELECT visibility,known_by_json FROM episodic_memory_visibility").fetchone() == (
+        "restricted",
+        '["Mara"]',
+    )
+
+
+@pytest.mark.parametrize("change", ["reset", "edit"])
+def test_summary_does_not_start_episodic_work_from_invalidated_segment(session_db, monkeypatch, change):
+    settings, db, session = session_db
+    add_rows(db, 32, size=30)
+    original = memory.extract_episodic_memories
+    calls = []
+    monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
+
+    def invalidate_before_extract(*args, **kwargs):
+        if change == "reset":
+            message_commands.reset_session(
+                db, "token", "chat", session, memory_service=make_test_memory_service(), npc_service=NpcService()
+            )
+        else:
+            with write_transaction(db):
+                db.execute("UPDATE messages SET content='Replacement facts' WHERE rowid=1")
+        return original(*args, **kwargs)
+
+    def generate(*_args, **kwargs):
+        calls.append(kwargs.get("session_id"))
+        if str(kwargs.get("session_id", "")).startswith("episodic:"):
+            return '[{"kind":"fact","importance":0.9,"summary":"Old fact"}]'
+        return "A summary of the original segment."
+
+    monkeypatch.setattr(memory, "extract_episodic_memories", invalidate_before_extract)
+    result = memory.generate_session_summary_result(
+        db,
+        "chat",
+        session,
+        provider_port=make_test_provider_port(generate_backend=generate),
+        app_settings=settings,
+    )
+    assert len(calls) == 1
+    assert db.execute("SELECT count(*) FROM episodic_memories").fetchone()[0] == 0
+    assert not result.complete

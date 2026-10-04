@@ -15,6 +15,7 @@ from bridge.light_novel_repository import regeneration_choice_panel_message_ids
 from bridge.light_novel_turn import begin_novel_turn
 from bridge.memory_service import MemoryService
 from bridge.metadata import get_meta
+from bridge.narrative_context import narrative_context_for_session
 from bridge.npc_service import NpcService
 from bridge.operation_recovery import OperationRecovery as _OperationRecovery
 from bridge.operations import begin_operation, operation_phase, record_operation, set_operation_phase
@@ -177,6 +178,9 @@ def regenerate_edited_turn(
         episodic_context=memory_prompt.episodic,
         npc_context=npc_context,
         session_summary=memory_prompt.summary,
+        narrative_context=narrative_context_for_session(
+            db, chat_id, session_id, "story", through_rowid=max(0, int(user_rowid) - 1)
+        ),
         persona_service=persona_service,
         rag_context=rag_service.context_for_prompt(db, chat_id, new_text, rag_bundle),
         app_settings=app_settings,

@@ -49,6 +49,18 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
+    "bridge/narrative_runtime_schema.py",
+    "bridge/narrative_checkpoint_repository.py",
+    "bridge/narrative_context.py",
+    "bridge/narrative_extraction.py",
+    "bridge/narrative_reconciliation.py",
+    "bridge/narrative_values.py",
+    "bridge/narrative_schema.py",
+    "bridge/narrative_repository.py",
+    "bridge/narrative_settings.py",
+    "bridge/narrative_policy.py",
+    "bridge/narrative_panels.py",
+    "bridge/narrative_callbacks.py",
     "bridge/provider_health_store.py",
     "bridge/provider_probe_service.py",
     "bridge/provider_catalog_cache.py",
@@ -166,6 +178,7 @@ LOW_LEVEL_IMPORTS = {
     "bridge.conversation_schema": frozenset([]),
     "bridge.conversation_setup": frozenset(
         [
+            "bridge.narrative_settings",
             "bridge.card_content",
             "bridge.conversation_lifecycle",
             "bridge.limits",
@@ -191,6 +204,8 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.conversation_setup_panels": frozenset(
         [
+            "bridge.narrative_panels",
+            "bridge.narrative_settings",
             "bridge.callback_tokens",
             "bridge.card_content",
             "bridge.conversation_lifecycle",
@@ -203,6 +218,8 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.light_novel_callbacks": frozenset(
         [
+            "bridge.narrative_context",
+            "bridge.narrative_values",
             "bridge.light_novel_contracts",
             "bridge.conversation_lifecycle",
             "bridge.job_service",
@@ -237,6 +254,7 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.light_novel_panels": frozenset(
         [
+            "bridge.narrative_context",
             "bridge.conversation_lifecycle",
             "bridge.light_novel_repository",
             "bridge.light_novel_service",
@@ -250,6 +268,7 @@ LOW_LEVEL_IMPORTS = {
     "bridge.light_novel_repository": frozenset(["bridge.repository_contracts"]),
     "bridge.light_novel_service": frozenset(
         [
+            "bridge.narrative_context",
             "bridge.card_content",
             "bridge.persona_service",
             "bridge.conversation_lifecycle",
@@ -265,6 +284,7 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.light_novel_turn": frozenset(
         [
+            "bridge.narrative_context",
             "bridge.job_store",
             "bridge.light_novel_format",
             "bridge.light_novel_repository",

@@ -78,14 +78,15 @@ explains the tradeoffs.
 ## Basic bot use
 
 1. Open your bot's private chat and send `/character`. Follow the setup panel to
-   choose a character, mode and session. Optional Persona, World and System Prompt
+   choose a character, Narrative Style, mode and session. Optional Persona, World and System Prompt
    choices can be skipped.
 2. Use `/providers` to check the **Story** model. **Utility** is the model used
    for summaries and other helpers; it can inherit Story.
 3. Send `/start` and choose the character's Default or Alternate greeting.
 4. Send normal messages to continue the story.
 5. Use `/session` to switch stories, `/settings` to adjust generation, and
-   `/status` to see the current session and context budget.
+   `/narrative` to change viewpoint and story focus, and `/status` to see the
+   current session, narrative continuity and context budget.
 
 Telegram `/help` is the **canonical command reference**. For a particular action,
 ask for focused help, such as `/help scene refresh`.

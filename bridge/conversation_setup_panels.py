@@ -7,6 +7,8 @@ import json
 from bridge.callback_tokens import dynamic_callback_token
 from bridge.card_content import card_fields_from_file, system_prompt_choices, world_file_paths
 from bridge.conversation_lifecycle import conversation_state, is_group_conversation
+from bridge.narrative_panels import narrative_options, narrative_style_summary
+from bridge.narrative_settings import normalize_narrative_settings
 from bridge.panel_utils import panel_label, panel_page
 from bridge.persona_service import PersonaService
 from bridge.request_types import RequestContext
@@ -34,7 +36,10 @@ def send_setup_panel(
     settings = request_context.app_settings
     stage = state["stage"]
     options: list[tuple[str, str]] = []
-    if stage == "mode":
+    if stage in {"narrative", "narrative_advanced", "narrative_field"}:
+        view = {"narrative": "presets", "narrative_advanced": "advanced", "narrative_field": "field"}[stage]
+        options = narrative_options(view, state.get("narrative_field", ""))
+    elif stage == "mode":
         options = [("normal", "Normal"), ("lightnovel", "Light Novel")]
     elif stage == "strategy":
         options = list(STRATEGY_LABELS.items())
@@ -65,7 +70,12 @@ def send_setup_panel(
         navigation.append(_button("Next page", "page", str(page + 1), chat_id, state, request_context))
     if navigation:
         rows.append(navigation)
-    if stage in {"persona", "system_prompt"}:
+    if stage == "narrative":
+        rows.append([_button("Advanced", "advanced", "", chat_id, state, request_context)])
+        rows.append([_button("Use these settings", "next", "", chat_id, state, request_context)])
+    elif stage == "narrative_advanced":
+        rows.append([_button("Use these settings", "next", "", chat_id, state, request_context)])
+    elif stage in {"persona", "system_prompt"}:
         rows.append([_button("Off / Skip", "pick", "", chat_id, state, request_context)])
     elif stage == "world":
         rows.append(
@@ -86,6 +96,8 @@ def send_setup_panel(
     )
     name = card_fields_from_file(state["character_file"], app_settings=settings)["name"]
     text = f"Conversation setup — {name}\nStep: {stage.replace('_', ' ').title()}\n"
+    if stage in {"narrative", "narrative_advanced", "narrative_field", "review"}:
+        text += "\n" + narrative_style_summary(normalize_narrative_settings(state["narrative_settings"])) + "\n"
     if stage == "strategy":
         text += (
             "\nA: story + choices in one request.\nB: choices from the Utility model."

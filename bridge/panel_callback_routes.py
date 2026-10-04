@@ -10,6 +10,7 @@ from bridge.delivery_port import DeliveryPort
 from bridge.feature_callbacks import handle_prompt_and_feature_callback
 from bridge.group_service import GroupService
 from bridge.help_details import handle_help_callback
+from bridge.narrative_callbacks import handle_narrative_callback
 from bridge.npc_callbacks import handle_npc_callback
 from bridge.persona_callbacks import handle_persona_callback
 from bridge.provider_port import ProviderPort
@@ -136,6 +137,20 @@ def handle_primary_panel_callback(
         operation_id,
         memory_service=memory_service,
         npc_service=npc_service,
+    ):
+        return True
+    if handle_narrative_callback(
+        db,
+        token,
+        callback,
+        answer_callback,
+        data,
+        chat_id,
+        message,
+        session,
+        session_id,
+        operation_id,
+        request_context=request_context,
     ):
         return True
     if handle_npc_callback(

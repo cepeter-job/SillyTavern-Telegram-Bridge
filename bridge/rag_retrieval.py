@@ -16,7 +16,8 @@ from bridge import rag_repository as repository
 _numpy: Any
 try:
     import numpy as _numpy
-except ImportError:
+except (ImportError, RuntimeError):
+    # Optional wheels may require CPU instructions hidden by a VPS hypervisor.
     _numpy = None
 
 

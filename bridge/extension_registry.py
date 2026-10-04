@@ -49,7 +49,7 @@ def register_command_route(name: str, handler: CommandRoute) -> None:
     _register(_COMMAND_ROUTES, name, handler)
 
 
-def dispatch_command_routes(*args, **kwargs) -> bool:
+def dispatch_command_routes(*args: Any, **kwargs: Any) -> bool:
     """Dispatch registered command routes.
 
     Handler exceptions intentionally propagate to the durable command worker.

@@ -106,6 +106,7 @@ def select_character(services: Any, who: MiniAppIdentity, values: dict) -> dict:
         def choose(stage, action, value=""):
             return setup.choose(scope.db, scope.chat_id, scope.session, who.user_id, nonce, stage, action, value)
 
+        choose("narrative", "next")
         mode = text({"mode": values.get("mode", "normal")}, "mode", 16)
         choose("mode", "pick", mode)
         if mode == "lightnovel":

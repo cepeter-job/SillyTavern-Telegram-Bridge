@@ -10,6 +10,7 @@ when they solve a problem for your story.
 - [Everyday controls](#everyday-controls)
 - [Sessions and recovery](#sessions-and-recovery)
 - [Models, context and memory](#models-context-and-memory)
+- [Narrative Style](#narrative-style)
 - [Light Novel choices](#light-novel-mode)
 - [Characters and native data](#characters-and-native-data)
 - [Images, voice and documents](#images-voice-and-documents)
@@ -20,7 +21,9 @@ when they solve a problem for your story.
 After [installing the bridge](installation.md), open your bot's private chat.
 
 1. Send `/character` and choose a PNG character card.
-2. Choose **Normal** for ordinary chat, or **Light Novel** for action choices.
+2. Choose a **Narrative Style**. **Player-centric** keeps the focus on your
+   character. **Ensemble**, **World-driven** and **Observer** let the story follow
+   a wider cast or events away from you. Then choose **Normal** or **Light Novel**;
    Light Novel adds an A/B/C strategy selection.
 3. Select an optional Persona, World Info and System Prompt. **Off/Skip** is
    available, and you can select more than one lorebook.
@@ -63,6 +66,7 @@ expired or belongs to a previous session, reopen the command.
 | Switch between existing stories | `/session` |
 | Check the active session and context budget | `/status` |
 | Choose Story/Utility models or reasoning | `/providers` |
+| Choose point of view, cast focus and off-screen freedom | `/narrative` |
 | Adjust sampling, reply length or optional style controls | `/settings` |
 | Enable or disable live reply previews | `/stream` |
 | Change the reply language or save generation settings | `/language` or `/preset` |
@@ -149,11 +153,13 @@ and Humanizer have different preview behavior, described below.
 ### Reset or delete a session
 
 `/reset` opens a confirmation before clearing the active conversation and its
-memory. It keeps the session and selected Character, mode, Persona, World and
-System Prompt, then returns it to an unstarted state. Send `/start` again.
+memory. It keeps the session and selected Character, mode, Persona, World,
+System Prompt and Narrative Style, then returns it to an unstarted state. Send `/start` again.
 
 Reset clears variants, failed turns, summaries, curated/episodic memory, NPC state
-and old choices. It attempts to remove tracked Telegram conversation messages;
+and old choices. It also clears narrative scenes, threads and derived planning
+state, without changing your saved personal defaults. It attempts to remove
+tracked Telegram conversation messages;
 Telegram may refuse old messages or deletions without sufficient permissions.
 
 Delete an **inactive** session through `/session`. Sessions with running or
@@ -226,6 +232,7 @@ rolls NPC state back to the applicable revision before regeneration.
 | Light Novel B / C | A separate choice request after the story, using Utility / Story respectively. |
 | Humanizer | An additional prose rewrite using the reply's model. |
 | Summaries, memory/NPC/scene refresh, optimizer and ranking | Utility-model work. |
+| Narrative continuity | A bounded Utility reconciliation after committed replies; older or edited history can need more than one batch. |
 | Current Scene image | Utility preparation of the visual prompt, then an image-provider request. |
 | Director / autonomous groups | Director selection can call a model; autonomous turns generate more replies. |
 
@@ -254,6 +261,50 @@ dialogue or links, the original rendered reply is kept. These checks cannot prov
 that meaning is unchanged. There is no automatic weekly reference refresh or
 prompt promotion. Attribution remains in [Third-party notices](../THIRD_PARTY_NOTICES.md).
 
+## Narrative Style
+
+Open `/narrative` to choose how the **current story** is told. You also choose
+this style immediately after selecting a character in `/character`.
+
+| Preset | What changes |
+|---|---|
+| **Player-centric** | Third-person limited, anchored to your character. Off-screen scenes are rare and brief. |
+| **Ensemble** | Limited viewpoints rotate between cast members. Cutaways are allowed but bounded. |
+| **World-driven** | The world and its cast can carry the plot. Scenes may stay away from your character without a forced return. |
+| **Observer** | Cinematic, externally observable narration. You can follow the story from outside it and intervene when you choose. |
+
+For example, a World-driven story can follow a guard at a distant gate while
+your character remains elsewhere. The guard does not need to bring every event
+back to you. This does **not** give the model permission to decide what your
+character says, thinks, promises or chooses.
+
+All four presets use **Physical continuity**: the model may connect an action
+you have already chosen with harmless movement, but your dialogue, thoughts,
+commitments, emotional conclusions and consequential decisions stay yours.
+**Advanced** lets you change point of view, your role, focus, cutaways and user
+control separately. Changes that differ from a preset appear as **Custom**.
+First-person narration must follow an AI-controlled viewpoint, not invent your
+character's inner monologue.
+
+**Save as my default** only prefills your future character setup. It does not
+change existing stories. Choosing a style during setup is still just a draft
+until **Apply**. Changing a session's style invalidates its old Light Novel
+choices, so an outdated menu cannot act under the new rules.
+
+**I am not MC** is a separate option in `/settings`. World-driven and Observer
+recommend it, but never turn it on automatically. Narrative Style controls
+how the story is told; Grounded User controls assumptions about your character's
+abilities and importance.
+
+`/status` shows your style, point of view, current scene/thread and whether the
+narrative record is current or stale. That record describes committed story
+facts, not proposed future events. It is separate from `/scene`, which tracks
+physical surroundings and continuity. Background reconciliation uses the
+Utility model and is reported as `director_reconcile` usage. Opening a style
+panel or status page makes no model request. If reconciliation fails, your
+saved story stays intact and generation keeps the selected policy rather than
+pretending stale facts are current.
+
 ## Light Novel mode
 
 Choose Light Novel during `/character` setup. `/lightnovel` changes its strategy
@@ -271,9 +322,12 @@ Strategy A hides raw structured streaming and can run one automatic choice-only
 repair when usable prose arrives without valid choices. B/C retain ordinary story
 streaming when other settings allow it.
 
-The panel offers 2–4 full-text actions with numbered buttons. **Next Scene** asks
-the narrative to advance until your character can meaningfully participate again,
-without choosing dialogue or actions for you. You can always type your own reply;
+The panel offers 2–4 full-text choices with numbered buttons. When your character
+is present, these can be in-world actions. Off-screen scenes instead offer
+narrative steering, such as following another thread or cutting to a new scene.
+**Next Scene** respects Narrative Style: World-driven and Observer do not force
+a return to your character. It never chooses dialogue or consequential actions
+for you. You can always type your own reply;
 doing so invalidates the old choices. Double taps and stale buttons cannot submit
 another committed user turn from the same choice.
 
@@ -285,7 +339,9 @@ A's repair pass use a bounded snapshot of Character, Persona, relevant World
 Info, System Prompt, Author's Note, summary, NPC state, recent messages and the
 current story. That separate pass does not resend post-history instructions,
 Hindsight/episodic recall or Data Bank context. Grounded User instructions also
-apply to choice generation when enabled.
+apply to choice generation when enabled. Every strategy also receives the
+current Narrative Style and only uses scene facts that are current for that
+committed response.
 
 Normal mode makes no choice requests. Light Novel applies to standard sessions;
 Forum Topic groups use their own turn controls.

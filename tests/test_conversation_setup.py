@@ -23,7 +23,8 @@ def choose(setup, stage, value="", action="pick"):
     return service.choose(db, "chat", session, "owner", state["nonce"], stage, action, value)
 
 
-def ready(setup, mode="normal"):
+def ready(setup, mode="normal", preset="player_centric"):
+    choose(setup, "narrative", preset)
     choose(setup, "mode", mode)
     if mode == "lightnovel":
         choose(setup, "strategy", "b")
@@ -36,6 +37,7 @@ def ready(setup, mode="normal"):
 def test_normal_wizard_skips_strategy_and_does_not_mutate_session(setup):
     db, _, service, state = setup
     original = db.execute("SELECT * FROM sessions").fetchall()
+    choose(setup, "narrative", "player_centric")
     assert choose(setup, "mode", "normal")["stage"] == "persona"
     assert db.execute("SELECT * FROM sessions").fetchall() == original
     assert not conversation_state(db, "chat", "story").started
@@ -43,6 +45,7 @@ def test_normal_wizard_skips_strategy_and_does_not_mutate_session(setup):
 
 
 def test_light_novel_wizard_requires_strategy(setup):
+    choose(setup, "narrative", "player_centric")
     assert choose(setup, "mode", "lightnovel")["stage"] == "strategy"
     with pytest.raises(ValueError):
         choose(setup, "persona", "")
@@ -123,6 +126,7 @@ def test_setup_panel_mode_buttons_are_opaque_and_scoped(setup, monkeypatch):
     from bridge.request_types import RequestContext
 
     db, _session, service, state = setup
+    state = choose(setup, "narrative", "player_centric")
     sent = []
     monkeypatch.setattr(
         panels, "send_panel_request", lambda token, method, payload, **kw: sent.append(payload) or {"message_id": 55}
@@ -151,6 +155,7 @@ def test_setup_callbacks_advance_without_changing_current_session(setup, monkeyp
     from bridge.request_types import RequestContext
 
     db, session, service, state = setup
+    choose(setup, "narrative", "player_centric")
     data = "setup:" + dynamic_callback_token(
         "conversation_setup",
         json.dumps({"nonce": state["nonce"], "stage": "mode", "action": "pick", "value": "lightnovel"}),

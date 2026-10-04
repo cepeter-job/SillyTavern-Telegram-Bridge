@@ -298,5 +298,68 @@ class SessionDeletionTests(SettingsTestCase):
         self.assertNotIn("session:delete", callbacks)
 
 
+def test_session_deletion_cascades_all_narrative_rows_but_not_personal_defaults(tmp_path):
+    import sqlite3
+    from contextlib import closing
+
+    from narrative_test_support import NARRATIVE_DERIVED_TABLES, seed_narrative_story
+    from settings_test_support import SettingsBuilder
+
+    from bridge.schema import initialize_database_schema
+    from bridge.session_core import create_session, delete_session_data
+
+    builder = SettingsBuilder()
+    builder.db_file = tmp_path / "delete.sqlite3"
+    with closing(sqlite3.connect(builder.db_file)) as db:
+        db.execute("PRAGMA foreign_keys=ON")
+        initialize_database_schema(db)
+        create_session(db, "chat", "fixture::model", session_id="story", app_settings=builder.build())
+        create_session(db, "chat", "fixture::model", session_id="active", app_settings=builder.build())
+        seed_narrative_story(db, "chat", "story")
+        result = delete_session_data(
+            db, "chat", "story", "active", memory_service=SimpleNamespace(purge_session=lambda *a: 0)
+        )
+        assert result == (True, "deleted")
+        for table in (*NARRATIVE_DERIVED_TABLES, "narrative_settings"):
+            assert db.execute(f"SELECT COUNT(*) FROM {table} WHERE session_id='story'").fetchone()[0] == 0  # noqa: S608 -- fixed test tables
+        assert db.execute("SELECT COUNT(*) FROM narrative_defaults").fetchone()[0] == 1
+        assert not db.execute("PRAGMA foreign_key_check").fetchall()
+
+
+def test_new_session_materializes_default_style_and_never_inherits_live_personal_default(tmp_path):
+    import sqlite3
+    from contextlib import closing
+
+    from settings_test_support import SettingsBuilder
+
+    from bridge.narrative_settings import (
+        preset_narrative_settings,
+        save_session_narrative_settings,
+        save_user_narrative_default,
+    )
+    from bridge.schema import initialize_database_schema
+    from bridge.session_core import create_session, ensure_session
+
+    builder = SettingsBuilder()
+    builder.db_file = tmp_path / "create.sqlite3"
+    with closing(sqlite3.connect(builder.db_file)) as db:
+        db.execute("PRAGMA foreign_keys=ON")
+        initialize_database_schema(db)
+        save_user_narrative_default(db, "owner", preset_narrative_settings("observer"))
+        first = ensure_session(db, "chat", "fixture::model", app_settings=builder.build())
+        second = create_session(db, "chat", "fixture::model", session_id="new-story", app_settings=builder.build())
+        for session in (first, second):
+            row = db.execute(
+                "SELECT json_extract(settings_json,'$.preset') FROM narrative_settings WHERE session_id=?",
+                (session["session_id"],),
+            ).fetchone()
+            assert row == ("player_centric",)
+        save_session_narrative_settings(db, "chat", "new-story", preset_narrative_settings("world_driven"))
+        create_session(db, "chat", "fixture::model", session_id="new-story", app_settings=builder.build())
+        assert db.execute(
+            "SELECT json_extract(settings_json,'$.preset') FROM narrative_settings WHERE session_id='new-story'"
+        ).fetchone() == ("world_driven",)
+
+
 if __name__ == "__main__":
     unittest.main()

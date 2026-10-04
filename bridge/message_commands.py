@@ -38,6 +38,8 @@ from bridge.memory_backend import hindsight_session_lock
 from bridge.memory_curator import clear_curated_memory_state
 from bridge.memory_service import MemoryService
 from bridge.metadata import get_meta, set_meta
+from bridge.narrative_context import narrative_context_for_session
+from bridge.narrative_repository import clear_narrative_story_state
 from bridge.npc_service import NpcService
 from bridge.operations import (
     begin_operation,
@@ -61,6 +63,7 @@ from bridge.response_delivery import (
 )
 from bridge.response_variants import save_response_variant, swipe_state_key
 from bridge.roleplay_format import normalize_roleplay_transport
+from bridge.scene_repository import delete_scene_state as _repo_delete_scene_state
 from bridge.session_core import ensure_session, list_sessions, load_session
 from bridge.settings import AppSettings
 from bridge.sqlite_store import optimize_database, write_transaction
@@ -81,6 +84,8 @@ def reset_session(
     memory_service: MemoryService,
     npc_service: NpcService,
 ) -> None:
+    if db.in_transaction:
+        raise RuntimeError("Reset cannot perform external cleanup inside a caller transaction")
     with hindsight_session_lock(chat_id, session["session_id"]):
         if operation_id is not None:
             if operation_was_applied(db, operation_id) or not begin_operation(db, operation_id, "reset"):
@@ -96,26 +101,30 @@ def reset_session(
             if operation_id is not None:
                 set_operation_phase(db, operation_id, "reset", "memory_purged")
             db.commit()
-        npc_service.purge_session(db, chat_id, session["session_id"])
         delete_outgoing_messages(db, token, chat_id, session["session_id"])
         delete_incoming_messages(db, token, chat_id, session["session_id"])
-        db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
-        db.execute("DELETE FROM response_variants WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
-        db.execute("DELETE FROM failed_turns WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
-        clear_session_summary(db, chat_id, session["session_id"])
-        purge_episodic_memories(db, chat_id, session["session_id"])
-        clear_curated_memory_state(db, chat_id, session["session_id"])
-        db.execute(
-            "DELETE FROM meta WHERE key IN (?, ?)",
-            (
-                swipe_state_key(chat_id, session["session_id"]),
-                f"swipe_message:{chat_id}:{session['session_id']}",
-            ),
-        )
-        old_choice_panels = reset_conversation(db, chat_id, session["session_id"])
-        if operation_id is not None:
-            set_operation_phase(db, operation_id, "reset", "local_committed")
-        db.commit()
+        with write_transaction(db):
+            npc_service.purge_session(db, chat_id, session["session_id"])
+            db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
+            db.execute(
+                "DELETE FROM response_variants WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"])
+            )
+            db.execute("DELETE FROM failed_turns WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
+            clear_session_summary(db, chat_id, session["session_id"])
+            purge_episodic_memories(db, chat_id, session["session_id"])
+            clear_curated_memory_state(db, chat_id, session["session_id"])
+            db.execute(
+                "DELETE FROM meta WHERE key IN (?, ?)",
+                (
+                    swipe_state_key(chat_id, session["session_id"]),
+                    f"swipe_message:{chat_id}:{session['session_id']}",
+                ),
+            )
+            _repo_delete_scene_state(db, chat_id, session["session_id"])
+            clear_narrative_story_state(db, chat_id, session["session_id"])
+            old_choice_panels = reset_conversation(db, chat_id, session["session_id"])
+            if operation_id is not None:
+                set_operation_phase(db, operation_id, "reset", "local_committed")
         for panel_id in old_choice_panels:
             try:
                 telegram_request(
@@ -222,6 +231,7 @@ def generate_and_store_reply(
             session_summary=session_summary,
             rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
             group_context=group_context,
+            narrative_context=narrative_context_for_session(db, chat_id, session_id, "story"),
             persona_service=persona_service,
             app_settings=app_settings,
             context_stats=context_stats,
@@ -237,7 +247,11 @@ def generate_and_store_reply(
     )
     actor_id = str(session.get("_actor_id") or job_actor_id(db, operation_id))
     choice_record = prepare_turn(db, chat_id, session, f"message:{identity}", actor_id)
-    novel_turn = NovelTurn(choice_record) if choice_record is not None else None
+    novel_turn = (
+        NovelTurn(choice_record, choice_policy=narrative_context_for_session(db, chat_id, session_id, "choices"))
+        if choice_record is not None
+        else None
+    )
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
     send_typing(token, chat_id)

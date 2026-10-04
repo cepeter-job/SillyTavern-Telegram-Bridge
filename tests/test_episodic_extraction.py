@@ -14,6 +14,12 @@ from bridge.schema import initialize_database_schema
 def _db():
     db = sqlite3.connect(":memory:")
     initialize_database_schema(db)
+    db.execute(
+        "INSERT INTO sessions(chat_id,session_id,title,character_file,model_id,persona_id,"
+        "world_file,created_at,updated_at) "
+        "VALUES('chat','s1','Story','card.png','story::main','','',1.0,1.0)"
+    )
+    db.commit()
     return db
 
 

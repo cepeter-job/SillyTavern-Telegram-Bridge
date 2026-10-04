@@ -61,6 +61,8 @@ def capture_pre_finale_state(
                 "accepted_rewrite_revision",
                 "accepted_settings_revision",
                 "state_revision",
+                "direction_until_turn",
+                "last_director_turn",
             )
         }
         | {"arc_guidance_json": director.get("arc_guidance_json", "{}")},

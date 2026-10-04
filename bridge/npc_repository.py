@@ -419,3 +419,35 @@ def snapshot_npc_state(
         entity["fields"] = values
         entity["last_seen_rowid"] = min(entity["last_seen_rowid"], through_rowid)
     return entities
+
+
+def restore_npc_snapshot(db: sqlite3.Connection, chat_id: str, session_id: str, entities: list[dict]) -> None:
+    """Create independent NPC IDs and a checkpoint-valid baseline for future rewinds."""
+    require_active_transaction(db)
+    for entity in entities:
+        npc_id = insert_npc_entity(
+            db,
+            chat_id,
+            session_id,
+            entity["canonical_name"],
+            entity["display_name"],
+            json.loads(entity["aliases_json"]),
+            entity["first_seen_rowid"],
+            entity["created_at"],
+        )
+        set_npc_entity_last_seen(db, npc_id, entity["last_seen_rowid"], entity["updated_at"])
+        for item in entity["fields"]:
+            field = NpcFieldState(
+                npc_id,
+                item["field_key"],
+                json.loads(item["value_json"]),
+                item["field_mode"],
+                item["visibility"],
+                tuple(json.loads(item["known_by_json"])),
+                item["updated_rowid"],
+                item["updated_at"],
+            )
+            upsert_npc_field(db, field)
+            insert_npc_field_change(
+                db, npc_id, field.field_key, "set", None, field, field.updated_rowid, field.updated_at
+            )

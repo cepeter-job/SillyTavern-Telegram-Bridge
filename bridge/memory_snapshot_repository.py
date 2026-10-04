@@ -6,6 +6,8 @@ import json
 import sqlite3
 from typing import Any
 
+from bridge.repository_contracts import require_active_transaction
+
 
 def snapshot_local_memory(db: sqlite3.Connection, chat_id: str, session_id: str, through_rowid: int) -> dict[str, Any]:
     summary = db.execute(
@@ -42,3 +44,33 @@ def snapshot_local_memory(db: sqlite3.Connection, chat_id: str, session_id: str,
         else None,
         "episodic": episodes,
     }
+
+
+def restore_local_memory_snapshot(db: sqlite3.Connection, chat_id: str, session_id: str, memory: dict) -> None:
+    """Restore already-remapped, checkpoint-time local memories with fresh identities."""
+    require_active_transaction(db)
+    summary = memory.get("summary")
+    if summary:
+        db.execute(
+            "INSERT INTO session_summaries VALUES(?,?,?,?,?)",
+            (chat_id, session_id, summary["summary"], summary["covered_until_rowid"], summary["updated_at"]),
+        )
+    for item in memory.get("episodic", []):
+        row = db.execute(
+            "INSERT INTO episodic_memories(chat_id,session_id,kind,importance,summary,source_start_rowid,"
+            "source_end_rowid,created_at) VALUES(?,?,?,?,?,?,?,?)",
+            (
+                chat_id,
+                session_id,
+                item["kind"],
+                item["importance"],
+                item["summary"],
+                item["source_start_rowid"],
+                item["source_end_rowid"],
+                item["created_at"],
+            ),
+        )
+        db.execute(
+            "INSERT INTO episodic_memory_visibility VALUES(?,?,?,?,?)",
+            (row.lastrowid, chat_id, session_id, item["visibility"], item["known_by_json"]),
+        )

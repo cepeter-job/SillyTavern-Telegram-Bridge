@@ -26,7 +26,6 @@ STATIC_TARGETS: tuple[str, ...] = (
 
 
 REPOSITORY_TARGETS: tuple[str, ...] = (
-    "bridge/memory_snapshot_repository.py",
     "bridge/ending_repository.py",
     "bridge/narrative_arc_repository.py",
     "bridge/token_usage_repository.py",
@@ -52,6 +51,13 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
+    "bridge/alternate_ending.py",
+    "bridge/alternate_ending_restore.py",
+    "bridge/alternate_ending_repository.py",
+    "bridge/alternate_ending_schema.py",
+    "bridge/alternate_ending_memory.py",
+    "bridge/checkpoint_remap.py",
+    "bridge/memory_snapshot_repository.py",
     "bridge/ending_controls.py",
     "bridge/ending_runtime.py",
     "bridge/closed_session_guard.py",

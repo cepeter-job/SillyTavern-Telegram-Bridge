@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 
 from bridge.repository_contracts import require_active_transaction
@@ -104,3 +105,86 @@ def committed_callback_operation(db: sqlite3.Connection, job_id: int | None) -> 
         (job_id,),
     ).fetchone()
     return (str(row[0]), str(row[1]), str(row[2])) if row else None
+
+
+def read_scoped_operation(db: sqlite3.Connection, operation_id: str) -> dict | None:
+    cursor = db.execute(
+        "SELECT o.kind,o.state,o.updated_at,m.value FROM operations o LEFT JOIN meta m "
+        "ON m.key='operation_payload:'||o.operation_id WHERE o.operation_id=?",
+        (operation_id,),
+    )
+    row = cursor.fetchone()
+    if row is None:
+        return None
+    raw = row[3] or "{}"
+    if len(raw) > 4096:
+        raise ValueError("Operation identity payload is oversized")
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        raise ValueError("Operation identity is invalid")
+    return {"kind": row[0], "state": row[1], "updated_at": row[2], "payload": payload}
+
+
+def prepare_scoped_operation(db: sqlite3.Connection, operation_id: str, kind: str, payload: dict, now: float) -> None:
+    require_active_transaction(db)
+    existing = read_scoped_operation(db, operation_id)
+    if existing is not None:
+        identity = {k: v for k, v in existing["payload"].items() if k != "lease"}
+        if existing["kind"] != kind or identity != payload:
+            raise ValueError("This operation belongs to another request")
+        return
+    encoded = json.dumps(payload, separators=(",", ":"))
+    if len(encoded) > 4096:
+        raise ValueError("Operation identity payload is oversized")
+    db.execute("INSERT INTO operations VALUES(?,?,'prepared',?,?)", (operation_id, kind, now, now))
+    db.execute("INSERT INTO meta(key,value) VALUES(?,?)", ("operation_payload:" + operation_id, encoded))
+
+
+def claim_scoped_operation_stage(
+    db: sqlite3.Connection,
+    operation_id: str,
+    token: str,
+    now: float,
+    *,
+    stage: str,
+    prior: str,
+) -> bool:
+    require_active_transaction(db)
+    current = read_scoped_operation(db, operation_id)
+    if not current or current["kind"] != "alternate_ending":
+        raise ValueError("The alternate-ending operation is missing")
+    cursor = db.execute(
+        "UPDATE operations SET state=?,updated_at=? WHERE operation_id=? AND kind='alternate_ending' "
+        "AND (state=? OR (state=? AND updated_at<?))",
+        (stage, now, operation_id, prior, stage, now - 600),
+    )
+    if cursor.rowcount != 1:
+        return False
+    payload = current["payload"] | {"lease": token}
+    db.execute(
+        "UPDATE meta SET value=? WHERE key=?",
+        (json.dumps(payload, separators=(",", ":")), "operation_payload:" + operation_id),
+    )
+    return True
+
+
+def finish_scoped_operation(db: sqlite3.Connection, operation_id: str, token: str, now: float) -> bool:
+    require_active_transaction(db)
+    current = read_scoped_operation(db, operation_id)
+    if not current or current["state"] != "memory_seeding" or current["payload"].get("lease") != token:
+        return False
+    db.execute("UPDATE operations SET state='applied',updated_at=? WHERE operation_id=?", (now, operation_id))
+    return True
+
+
+def recoverable_branch_operations(db: sqlite3.Connection, now: float, limit: int = 32) -> list[str]:
+    return [
+        row[0]
+        for row in db.execute(
+            "SELECT o.operation_id FROM operations o JOIN narrative_branches b ON b.operation_id=o.operation_id "
+            "WHERE o.kind='alternate_ending' AND b.memory_status='pending' "
+            "AND (o.state='local_committed' OR (o.state='memory_seeding' AND o.updated_at<?)) "
+            "ORDER BY o.updated_at,o.operation_id LIMIT ?",
+            (now - 600, max(1, min(32, limit))),
+        ).fetchall()
+    ]

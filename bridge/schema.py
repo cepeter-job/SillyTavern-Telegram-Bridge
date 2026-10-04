@@ -1,6 +1,7 @@
 import sqlite3
 import time
 
+from bridge.alternate_ending_schema import migrate_alternate_ending_lineage
 from bridge.closed_story_schema import migrate_closed_story_guards
 from bridge.conversation_schema import migrate_conversation_modes
 from bridge.delivery_schema import migrate_delivery_progress, migrate_job_delivery_intents
@@ -319,7 +320,7 @@ def _run_startup_database_cleanup(db: sqlite3.Connection) -> None:
         (now,),
     )
     db.execute(
-        "DELETE FROM operations WHERE updated_at < ?",
+        "DELETE FROM operations WHERE updated_at < ? AND NOT (kind='alternate_ending' AND state<>'applied')",
         (now - 90 * 86400,),
     )
     db.execute(
@@ -501,6 +502,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(15, "finale_checkpoint_guards", migrate_finale_checkpoint_guards),
     _Migration(16, "ending_workflow", migrate_ending_workflow),
     _Migration(17, "closed_story_guards", migrate_closed_story_guards),
+    _Migration(18, "alternate_ending_lineage", migrate_alternate_ending_lineage),
 )
 
 

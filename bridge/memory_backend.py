@@ -93,7 +93,7 @@ def _ensure_hindsight_loopback_proxy_bypass(host: str) -> None:
             os.environ[name] = combined
 
 
-def hindsight_client(*, app_settings: AppSettings):
+def hindsight_client(*, app_settings: AppSettings) -> Any:
     base_url, host = _validated_hindsight_base_url(app_settings.environ.get("HINDSIGHT_API_URL", HINDSIGHT_DEFAULT_URL))
     _ensure_hindsight_loopback_proxy_bypass(host)
 
@@ -107,7 +107,7 @@ _HINDSIGHT_SESSION_LOCKS: weakref.WeakValueDictionary[tuple[str, str], threading
 _HINDSIGHT_SESSION_LOCKS_GUARD = threading.Lock()
 
 
-def close_hindsight_client(client) -> None:
+def close_hindsight_client(client: Any) -> None:
     """Close the supported SDK wrapper on its own synchronous lifecycle."""
     if client is None:
         return
@@ -161,7 +161,7 @@ def _record_hindsight_document(
     mapping_db = db_connect(app_settings=app_settings)
     try:
 
-        def write_mapping():
+        def write_mapping() -> None:
             mapping_db.execute(
                 (
                     "INSERT OR REPLACE INTO hindsight_documents(chat_id,session_id,document_i"
@@ -181,7 +181,7 @@ def _hindsight_not_found(exc: Exception) -> bool:
     return status == 404 or "404" in str(exc)
 
 
-async def _listed_hindsight_document_ids(api, bank_id: str, **filters) -> set[str]:
+async def _listed_hindsight_document_ids(api: Any, bank_id: str, **filters: Any) -> set[str]:
     found = set()
     offset = 0
     while True:
@@ -197,7 +197,7 @@ async def _listed_hindsight_document_ids(api, bank_id: str, **filters) -> set[st
     return found
 
 
-async def _delete_hindsight_session_documents(client, bank_id: str, session_id: str, mapped_ids: set[str]) -> int:
+async def _delete_hindsight_session_documents(client: Any, bank_id: str, session_id: str, mapped_ids: set[str]) -> int:
     api = client.documents
     tag = f"session:{session_id}"
     prefix = hindsight_session_prefix(session_id)
@@ -234,7 +234,7 @@ async def _delete_hindsight_session_documents(client, bank_id: str, session_id: 
 
 
 async def _delete_hindsight_session_documents_and_close(
-    client, bank_id: str, session_id: str, mapped_ids: set[str]
+    client: Any, bank_id: str, session_id: str, mapped_ids: set[str]
 ) -> int:
     try:
         return await _delete_hindsight_session_documents(client, bank_id, session_id, mapped_ids)
@@ -292,7 +292,7 @@ def recall_memory_results(
     max_tokens: int = HINDSIGHT_RECALL_MAX_TOKENS,
     *,
     app_settings: AppSettings,
-):
+) -> list[Any]:
     if memory_mode(db, chat_id) != "on" or not query.strip():
         return []
     try:
@@ -470,7 +470,7 @@ def _write_hindsight_successful_purge_state(
     chat_id: str,
     session_id: str,
 ) -> None:
-    def write_purge_state():
+    def write_purge_state() -> None:
         db.execute(
             "DELETE FROM hindsight_documents WHERE chat_id=? AND session_id=?",
             (str(chat_id), str(session_id)),
@@ -556,3 +556,36 @@ def remember_fact(
             "Hindsight explicit retain unavailable for chat %s",
             app_settings=app_settings,
         )
+
+
+def seed_session_memory_now(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session: dict[str, str],
+    *,
+    app_settings: AppSettings,
+) -> str:
+    """Retain only this session's copied transcript using its canonical document identity."""
+    if db.in_transaction:
+        raise ValueError("Memory seeding cannot run inside a write transaction")
+    if memory_mode(db, chat_id) != "on":
+        return "disabled"
+    session_id = session["session_id"]
+    with hindsight_session_lock(chat_id, session_id):
+        if not _memory_hindsight_session_exists(db, chat_id, session_id):
+            return "degraded"
+        conversation, _fingerprint = _memory_hindsight_conversation_snapshot(db, chat_id, session_id)
+        if not conversation:
+            return "ready"
+        retained = _retain_with_client(
+            chat_id,
+            session_id,
+            hindsight_conversation_document_id(session_id),
+            session.get("title", "Story"),
+            conversation,
+            "Restored pre-finale conversation in an independent session",
+            "conversation",
+            "Hindsight branch seeding unavailable for chat %s",
+            app_settings=app_settings,
+        )
+        return "ready" if retained else "degraded"

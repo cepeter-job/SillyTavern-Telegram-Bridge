@@ -357,3 +357,38 @@ def close_reconciled_narrative_state(
         ).rowcount
         == 1
     )
+
+
+def restore_narrative_snapshot(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    state: Mapping[str, Any],
+    scenes: list[dict],
+    threads: list[dict],
+    *,
+    now: float,
+) -> None:
+    require_active_transaction(db)
+    for item in threads:
+        upsert_narrative_thread(db, chat_id, session_id, item)
+    for item in scenes:
+        upsert_narrative_scene(db, chat_id, session_id, item)
+    clock = load_narrative_clock(db, chat_id, session_id)
+    if clock is None:
+        raise ValueError("Alternate-ending target has no narrative clock")
+    db.execute(
+        "UPDATE narrative_state SET active_scene_id=?,active_thread_id=?,story_phase=?,state_revision=?,"
+        "updated_through_rowid=?,reconciled_history_revision=history_revision,invalidated_from_rowid=NULL,"
+        "updated_at=? WHERE chat_id=? AND session_id=?",
+        (
+            state["active_scene_id"],
+            state["active_thread_id"],
+            state["story_phase"],
+            max(int(state["state_revision"]), int(clock["state_revision"])) + 1,
+            state["updated_through_rowid"],
+            now,
+            chat_id,
+            session_id,
+        ),
+    )

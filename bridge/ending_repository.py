@@ -183,3 +183,30 @@ def recoverable_ending_rows(db: sqlite3.Connection, now: float, *, limit: int = 
             (now - 60, now - 600, max(1, min(64, int(limit)))),
         ).fetchall()
     )
+
+
+def restore_ending_goal_snapshot(
+    db: sqlite3.Connection, chat_id: str, session_id: str, state: dict, history: list[dict], now: float
+) -> None:
+    require_active_transaction(db)
+    db.execute(
+        "INSERT INTO ending_state(chat_id,session_id,current_goal,goal_revision,updated_at) VALUES(?,?,?,?,?)",
+        (chat_id, session_id, state["current_goal"], state["goal_revision"], now),
+    )
+    for item in sorted(history, key=lambda row: row["goal_revision"]):
+        db.execute(
+            "INSERT INTO ending_goal_history(chat_id,session_id,goal_revision,source,story_revision,scene_id,"
+            "previous_goal,new_goal,reason,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (
+                chat_id,
+                session_id,
+                item["goal_revision"],
+                item["source"],
+                item["story_revision"],
+                item["scene_id"],
+                item["previous_goal"],
+                item["new_goal"],
+                item["reason"],
+                item["created_at"],
+            ),
+        )

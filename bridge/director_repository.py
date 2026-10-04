@@ -292,3 +292,55 @@ def store_arc_guidance(
         (encoded, now, chat_id, session_id, expected_revision),
     )
     return cursor.rowcount == 1
+
+
+def restore_director_snapshot(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    state: dict,
+    history: list[dict],
+    *,
+    settings_revision: int,
+    rewrite_revision: int,
+    now: float,
+) -> None:
+    require_active_transaction(db)
+    turn = director_story_turns(db, chat_id, session_id)
+    db.execute(
+        "INSERT INTO director_state(chat_id,session_id,goal,active_direction,direction_scope,state_revision,"
+        "accepted_through_rowid,active_proposal_json,accepted_rewrite_revision,accepted_settings_revision,"
+        "accepted_scene_id,direction_source,direction_until_turn,last_director_turn,arc_guidance_json,updated_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            chat_id,
+            session_id,
+            state["goal"],
+            state["active_direction"],
+            state["direction_scope"],
+            state["state_revision"] + 1,
+            state["accepted_through_rowid"],
+            state["active_proposal_json"],
+            rewrite_revision,
+            settings_revision,
+            state["accepted_scene_id"],
+            state["direction_source"],
+            state.get("direction_until_turn", turn),
+            state.get("last_director_turn", turn),
+            state.get("arc_guidance_json", "{}"),
+            now,
+        ),
+    )
+    for item in reversed(history):
+        append_director_decision(
+            db,
+            chat_id,
+            session_id,
+            source=item["source"],
+            result=item["result"],
+            expected_revision=item["expected_revision"],
+            proposal_json="{}",
+            accepted_direction=item["accepted_direction"],
+            reason=item["reason"],
+            created_at=item["created_at"],
+        )

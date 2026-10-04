@@ -125,3 +125,35 @@ def bounded_story_history(
     finally:
         cursor.close()
     return list(reversed(result))
+
+
+def clone_transcript_prefix(
+    db: sqlite3.Connection,
+    chat_id: str,
+    origin: str,
+    target: str,
+    through_rowid: int,
+    references: set[int],
+) -> dict[int, int]:
+    """Stream the prefix, retaining only the bounded snapshot's referenced ID map."""
+    require_active_transaction(db)
+    if db.execute("SELECT 1 FROM messages WHERE chat_id=? AND session_id=? LIMIT 1", (chat_id, target)).fetchone():
+        raise ValueError("An alternate-ending target must have an empty transcript")
+    mapped = {0: 0}
+    cursor = db.execute(
+        "SELECT id,role,content,created_at FROM messages WHERE chat_id=? AND session_id=? AND id<=? ORDER BY id",
+        (chat_id, origin, through_rowid),
+    )
+    try:
+        for source, role, content, created_at in cursor:
+            inserted = db.execute(
+                "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+                (chat_id, target, role, content, created_at),
+            )
+            if source in references or source == through_rowid:
+                mapped[source] = int(inserted.lastrowid or 0)
+    finally:
+        cursor.close()
+    if not references <= mapped.keys() or through_rowid not in mapped:
+        raise ValueError("A checkpoint reference is outside its saved transcript")
+    return mapped

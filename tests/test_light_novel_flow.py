@@ -239,6 +239,7 @@ def test_retry_choices_enqueues_only_choice_job_with_unchanged_count(novel_db):
         db.execute("UPDATE jobs SET state='done'")
     callback = {"id": "cb", "data": f"lnretry:{record.nonce}", "message": {"message_id": 81}}
     route_light_novel_callback(services, db, callback, 105, "chat", "owner", message_worker=lambda *a: None)
+    assert load_choice_set(db, record.nonce).generation_status == "pending"
     pending_edits = [payload for method, payload in sent if method == "editMessageText"]
     assert pending_edits[-1]["text"] == "Preparing choices for your saved story. You may also type your own reply."
     assert pending_edits[-1]["reply_markup"] == {"inline_keyboard": []}

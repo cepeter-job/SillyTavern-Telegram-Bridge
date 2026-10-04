@@ -7,17 +7,22 @@ from dataclasses import asdict
 
 import pytest
 
-from bridge.narrative_schema import migrate_narrative_engine_foundation
+from bridge.migrations import run_migrations
 from bridge.narrative_values import NarrativeScene, NarrativeThread
+from bridge.schema import SCHEMA_MIGRATIONS
 
 
 @pytest.fixture
 def db():
     with closing(sqlite3.connect(":memory:")) as connection:
         connection.execute("PRAGMA foreign_keys=ON")
-        connection.execute("CREATE TABLE sessions(chat_id TEXT,session_id TEXT,PRIMARY KEY(chat_id,session_id))")
-        connection.execute("INSERT INTO sessions VALUES('chat','story')")
-        migrate_narrative_engine_foundation(connection)
+        run_migrations(connection, tuple(m for m in SCHEMA_MIGRATIONS if m.version < 10))
+        connection.execute(
+            "INSERT INTO sessions(chat_id,session_id,title,character_file,model_id,persona_id,world_file,"
+            "created_at,updated_at) VALUES('chat','story','Story','','model','','',1,1)"
+        )
+        connection.commit()
+        run_migrations(connection, SCHEMA_MIGRATIONS)
         connection.commit()
         yield connection
 

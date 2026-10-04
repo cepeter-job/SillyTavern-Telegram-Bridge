@@ -250,6 +250,7 @@ def test_upgrade_preserves_existing_sessions_and_adds_usage_ledger(tmp_path):
             (8,),
             (9,),
             (10,),
+            (11,),
         ]
         run_migrations(db, SCHEMA_MIGRATIONS)
     finally:

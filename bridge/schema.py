@@ -5,6 +5,7 @@ from bridge.conversation_schema import migrate_conversation_modes
 from bridge.delivery_schema import migrate_delivery_progress, migrate_job_delivery_intents
 from bridge.migrations import Migration as _Migration
 from bridge.migrations import run_migrations as _run_migrations
+from bridge.narrative_runtime_schema import migrate_narrative_history_revisions
 from bridge.narrative_schema import migrate_narrative_engine_foundation
 from bridge.token_usage_schema import migrate_token_usage
 from bridge.transcript_schema import migrate_message_identity
@@ -487,6 +488,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(8, "assistant_delivery_progress", migrate_delivery_progress),
     _Migration(9, "job_delivery_intents", migrate_job_delivery_intents),
     _Migration(10, "narrative_engine_foundation", migrate_narrative_engine_foundation),
+    _Migration(11, "narrative_history_revisions", migrate_narrative_history_revisions),
 )
 
 

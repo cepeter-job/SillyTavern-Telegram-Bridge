@@ -100,8 +100,10 @@ def upsert_narrative_state_if_fresh(
     else:
         cursor = db.execute(
             "UPDATE narrative_state SET active_scene_id=?,active_thread_id=?,story_phase=?,"
-            "updated_through_rowid=?,updated_at=?,state_revision=state_revision+1 "
-            "WHERE chat_id=? AND session_id=? AND state_revision=? AND updated_through_rowid<=?",
+            "updated_through_rowid=?,updated_at=?,state_revision=state_revision+1,"
+            "reconciled_history_revision=history_revision,invalidated_from_rowid=NULL "
+            "WHERE chat_id=? AND session_id=? AND state_revision=? "
+            "AND (updated_through_rowid<=? OR invalidated_from_rowid IS NOT NULL)",
             (*values[2:], chat_id, session_id, expected_state_revision, through_rowid),
         )
     return cursor.rowcount == 1
@@ -236,3 +238,51 @@ def store_narrative_settings_if_revision(
             (settings_json, updated_at, chat_id, session_id, expected_revision),
         )
     return cursor.rowcount == 1
+
+
+def load_narrative_clock(db: sqlite3.Connection, chat_id: str, session_id: str) -> dict[str, Any] | None:
+    cursor = db.execute(
+        "SELECT s.created_at AS session_created_at,COALESCE(n.state_revision,0) AS state_revision,"
+        "COALESCE(n.history_revision,0) AS history_revision,"
+        "COALESCE(n.reconciled_history_revision,0) AS reconciled_history_revision,"
+        "COALESCE(n.updated_through_rowid,0) AS updated_through_rowid,n.invalidated_from_rowid,"
+        "COALESCE(p.settings_revision,-1) AS settings_revision,"
+        "(SELECT COALESCE(MAX(id),0) FROM messages m WHERE m.chat_id=s.chat_id "
+        "AND m.session_id=s.session_id) AS latest_rowid "
+        "FROM sessions s LEFT JOIN narrative_state n ON n.chat_id=s.chat_id AND n.session_id=s.session_id "
+        "LEFT JOIN narrative_settings p ON p.chat_id=s.chat_id AND p.session_id=s.session_id "
+        "WHERE s.chat_id=? AND s.session_id=?",
+        (chat_id, session_id),
+    )
+    row = cursor.fetchone()
+    return dict(zip((column[0] for column in cursor.description), row, strict=True)) if row else None
+
+
+def next_narrative_transcript_rows(
+    db: sqlite3.Connection, chat_id: str, session_id: str, after_rowid: int, through_rowid: int, *, limit: int = 16
+) -> list[tuple[int, str, str]]:
+    return db.execute(
+        "SELECT id,role,content FROM messages WHERE chat_id=? AND session_id=? AND id>? AND id<=? ORDER BY id LIMIT ?",
+        (chat_id, session_id, after_rowid, through_rowid, min(32, max(1, limit))),
+    ).fetchall()
+
+
+def delete_narrative_scene(db: sqlite3.Connection, chat_id: str, session_id: str, scene_id: str) -> None:
+    require_active_transaction(db)
+    db.execute(
+        "DELETE FROM narrative_scenes WHERE chat_id=? AND session_id=? AND scene_id=?", (chat_id, session_id, scene_id)
+    )
+
+
+def delete_narrative_thread(db: sqlite3.Connection, chat_id: str, session_id: str, thread_id: str) -> None:
+    require_active_transaction(db)
+    db.execute(
+        "DELETE FROM narrative_threads WHERE chat_id=? AND session_id=? AND thread_id=?",
+        (chat_id, session_id, thread_id),
+    )
+
+
+def clear_reconciled_entities(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
+    require_active_transaction(db)
+    db.execute("DELETE FROM narrative_scenes WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+    db.execute("DELETE FROM narrative_threads WHERE chat_id=? AND session_id=?", (chat_id, session_id))

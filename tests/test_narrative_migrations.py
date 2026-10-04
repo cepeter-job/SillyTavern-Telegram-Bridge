@@ -44,8 +44,8 @@ def table_names(db):
 
 
 def test_narrative_migration_is_registered_after_existing_history():
-    assert [migration.version for migration in SCHEMA_MIGRATIONS] == list(range(1, 11))
-    assert SCHEMA_MIGRATIONS[-1].name == "narrative_engine_foundation"
+    assert [migration.version for migration in SCHEMA_MIGRATIONS] == list(range(1, 12))
+    assert SCHEMA_MIGRATIONS[9].name == "narrative_engine_foundation"
 
 
 def test_upgrade_preserves_goals_and_physical_scene_and_pins_existing_defaults():

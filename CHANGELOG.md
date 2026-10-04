@@ -4,6 +4,18 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.3.002] - 2026-10-05
+
+### Fixed
+
+- Guard Light Novel **Retry Choices** against repeated taps. The first accepted retry now atomically moves the saved choice set back to pending and immediately replaces the Telegram retry panel with a buttonless preparing state before worker dispatch.
+- Repeated or stale retry callbacks converge the same panel to the disabled pending state while preserving the existing durable-job idempotency, so only one choice-generation job is queued and committed story text is never regenerated.
+
+### Compatibility and validation
+
+- No runtime dependency-lock or database-schema changes.
+- Release verification covers duplicate-callback convergence, the full Python suite, static analysis, dependency audit, secret scan, Mini App smoke checks, and application/security coverage gates.
+
 ## [0.3.001] - 2026-10-04
 
 ### Fixed

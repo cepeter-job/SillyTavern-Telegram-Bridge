@@ -136,13 +136,13 @@ The installer prepares the standard trust file at
 public signer record is:
 
 ```text
-cepeter namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGRaxgobK+D+zdXdUzLb1xTQ2EPs9iYkeQGOOlepl+35 cepeter-release-signing
+cepeter namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA+L6kUwaC94495CdAyZWyocRT5u951D4YnXhtceVKky cepeter-release-signing-2026-10-04
 ```
 
 Its fingerprint is:
 
 ```text
-SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI
+SHA256:Au9pahLKr9Wj1ayrHyXAZEO48y/xuVY88dk6zATqYqU
 ```
 
 Verify the fingerprint through an independent trusted channel when provisioning
@@ -173,6 +173,23 @@ below if automatic installation refuses to continue:
 | `unmanaged_target` | An old live code mirror lacks the deployment marker; see the recovery note below. |
 | `dirty` / `branch` | Save/review local changes and restore a clean source checkout on `main`. |
 | `dependencies` | Use the manual procedure to install reviewed locked dependencies. |
+
+#### Upgrading to the 0.3 release signer
+
+Starting with `v0.3.000`, releases use the public signer shown above. The previous
+signer fingerprint is `SHA256:nCiZP+h1YWYCFjh37W8tXjR7oWGpZPF6bP4lbTOlAiI`.
+Existing installations that trust only that key will refuse the new signature.
+
+Authenticate the new fingerprint through an independent maintainer channel before
+adding its public allowed-signers record to your external trust file. Keep the
+previous authorized record during the overlap period; do not replace the entire
+file. Then retry `/update`. Never add a private key to the allowed-signers file.
+
+The updater does not download or automatically trust a replacement key. The
+installer uses the new pin for fresh trust-on-first-use installations, but refuses
+to overwrite an existing old-only trust file. An explicitly provided
+`--allowed-signers` file remains the operator's authority. No historical release
+tag has been rewritten or re-signed as part of this rotation.
 
 #### Release-signing key rotation and revocation
 

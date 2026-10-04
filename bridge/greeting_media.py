@@ -1,5 +1,6 @@
 """Select a first-message image without fetching untrusted card URLs locally."""
 
+import ipaddress
 import re
 from urllib.parse import urlsplit
 
@@ -13,10 +14,27 @@ def first_image_url(greeting: str) -> str | None:
         try:
             parsed = urlsplit(url)
             hostname = parsed.hostname
+            port = parsed.port
         except ValueError:
             continue
-        if not hostname or parsed.username or parsed.password:
+        if (
+            parsed.scheme.casefold() != "https"
+            or not hostname
+            or port not in (None, 443)
+            or parsed.username
+            or parsed.password
+            or any(char in parsed.netloc for char in "\\%")
+            or hostname.casefold().rstrip(".") in {"localhost", "localhost.localdomain"}
+            or hostname.casefold().rstrip(".").endswith((".localhost", ".local"))
+        ):
             continue
+        try:
+            address = ipaddress.ip_address(hostname)
+        except ValueError:
+            pass
+        else:
+            if not address.is_global:
+                continue
         path = parsed.path.casefold()
         marked_image = bool(
             re.search(

@@ -8,7 +8,7 @@ import random
 import sqlite3
 import time
 
-from bridge.card_content import replace_macros
+from bridge.card_content import replace_macros, safe_character_path
 from bridge.conversation_lifecycle import (
     ALREADY_STARTED,
     conversation_state,
@@ -17,6 +17,7 @@ from bridge.conversation_lifecycle import (
     mark_started,
 )
 from bridge.delivery_progress import delivery_complete
+from bridge.greeting_media import first_image_url
 from bridge.light_novel_service import attach_turn, prepare_turn
 from bridge.limits import CARD_FIELD_MAX_CHARS
 from bridge.metadata import get_meta, set_meta
@@ -29,12 +30,13 @@ from bridge.operations import (
     set_operation_phase,
 )
 from bridge.panel_utils import PANEL_PAGE_SIZE, panel_page
+from bridge.request_types import RequestContext
 from bridge.response_delivery import delete_outgoing_message_row, send_reply
 from bridge.roleplay_format import normalize_roleplay_transport
 from bridge.session_repository import load_session_row
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
-from bridge.telegram import send_panel_request, send_text, telegram_request
+from bridge.telegram import send_panel_photo, send_panel_request, send_text, telegram_request
 from bridge.telegram_output import telegram_safe_output
 
 _GREETING_PREVIEW_MAX_CHARS = 3200
@@ -73,6 +75,62 @@ def render_greeting(fields: dict, user_name: str, index: int, *, app_settings: A
     if selected_index < 0 or selected_index >= len(options):
         return ""
     return replace_macros(options[selected_index], fields, user_name, app_settings=app_settings).strip()
+
+
+def _deliver_greeting_photo(
+    db: sqlite3.Connection,
+    token: str,
+    chat_id: str,
+    session_id: str,
+    rowid: int,
+    greeting: str,
+    *,
+    app_settings: AppSettings,
+) -> None:
+    # Text delivery may have yielded to reset/deletion; do not send orphan media.
+    row = db.execute(
+        "SELECT 1 FROM messages WHERE rowid=? AND chat_id=? AND session_id=? AND role='assistant'",
+        (rowid, chat_id, session_id),
+    ).fetchone()
+    if row is None:
+        return
+    key = f"greeting_photo:{rowid}"
+    if get_meta(db, key, ""):
+        return
+    url = get_meta(db, f"greeting_photo_url:{rowid}", "") or first_image_url(greeting)
+    if url:
+        result = telegram_request(token, "sendPhoto", {"chat_id": chat_id, "photo": url})
+    else:
+        session = load_session_row(db, chat_id, session_id)
+        path = (
+            safe_character_path(str(session.get("character_file") or ""), app_settings=app_settings)
+            if session
+            else None
+        )
+        if path is None:
+            logging.warning("Greeting character PNG is unavailable for session %s", session_id)
+            return
+        result = send_panel_photo(
+            token,
+            chat_id,
+            path,
+            caption="",
+            reply_markup={},
+            request_context=RequestContext(db, "", app_settings=app_settings),
+        )
+    message_id = int(result["message_id"])
+    with write_transaction(db):
+        row = db.execute(
+            "SELECT telegram_message_ids FROM messages "
+            "WHERE rowid=? AND chat_id=? AND session_id=? AND role='assistant'",
+            (rowid, chat_id, session_id),
+        ).fetchone()
+        if row is None:
+            return
+        ids = json.loads(row[0] or "[]")
+        ids.append(message_id)
+        db.execute("UPDATE messages SET telegram_message_ids=? WHERE rowid=?", (json.dumps(ids), rowid))
+        set_meta(db, key, str(message_id))
 
 
 def send_greeting_menu(
@@ -215,6 +273,7 @@ def send_character_greeting(
             expected_job_id=operation_id,
             app_settings=app_settings,
         )
+        _deliver_greeting_photo(db, token, chat_id, session_id, int(row[0]), str(row[1]), app_settings=app_settings)
         _GREETING_RECOVERY.finish(db, operation_id, operation_kind)
         return True
     opening_key = lifecycle_key("opening", chat_id, session_id)
@@ -248,8 +307,9 @@ def send_character_greeting(
             if not options:
                 return False
             selected_index = random.randrange(len(options)) if index is None else int(index)  # noqa: S311 -- greeting selection
+            rendered = render_greeting(fields, user_name, selected_index, app_settings=app_settings)
             greeting = normalize_roleplay_transport(
-                telegram_safe_output(render_greeting(fields, user_name, selected_index, app_settings=app_settings)),
+                telegram_safe_output(rendered),
                 preserve_authored_unquoted_dialogue=True,
             )
             if not greeting:
@@ -259,6 +319,10 @@ def send_character_greeting(
                 (chat_id, session_id, "assistant", greeting, time.time()),
             )
             rowid = int(cursor.lastrowid)
+            # SQLite messages use recyclable rowids; an old greeting's media
+            # checkpoint must never suppress a newly inserted opening.
+            set_meta(db, f"greeting_photo:{rowid}", "")
+            set_meta(db, f"greeting_photo_url:{rowid}", first_image_url(rendered) or "")
             if not group:
                 if not mark_started(db, chat_id, session_id, state.epoch):
                     raise ValueError("Opening state changed")
@@ -277,5 +341,6 @@ def send_character_greeting(
         _GREETING_RECOVERY.record_delivery_target(db, operation_id, rowid, greeting, greeting)
         set_operation_phase(db, operation_id, operation_kind, "local_committed")
     send_reply(token, chat_id, greeting, db, None, rowid, expected_job_id=operation_id, app_settings=app_settings)
+    _deliver_greeting_photo(db, token, chat_id, session_id, rowid, greeting, app_settings=app_settings)
     _GREETING_RECOVERY.finish(db, operation_id, operation_kind)
     return True

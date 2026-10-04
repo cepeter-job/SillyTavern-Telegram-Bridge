@@ -6,6 +6,7 @@ from pathlib import Path
 
 from bridge.card_content import active_world_files, system_prompt_label
 from bridge.context_diagnostics import context_diagnostics_snapshot
+from bridge.ending_service import load_ending_state
 from bridge.expressions import expression_mode_key
 from bridge.generation_settings import get_generation_settings
 from bridge.group_service import GroupService
@@ -15,6 +16,10 @@ from bridge.memory import get_session_summary
 from bridge.memory_backend import memory_mode, memory_scope
 from bridge.metadata import get_meta
 from bridge.model_selection import task_model_for_session
+from bridge.narrative_context import load_narrative_state, narrative_clock_is_current
+from bridge.narrative_panels import FIELD_OPTIONS, PRESET_LABELS
+from bridge.narrative_repository import load_narrative_clock
+from bridge.narrative_settings import load_session_narrative_settings
 from bridge.persona_sync import persona_name
 from bridge.rag_query import rag_mode
 from bridge.rag_repository import data_bank_documents
@@ -79,8 +84,26 @@ def status_text(
     group_state_text = f"{'on' if group['enabled'] else 'off'} ({', '.join(group_labels) if group_labels else 'none'})"
     expression_mode = get_meta(db, expression_mode_key(chat_id, session["session_id"]), "off")
     utility_model = task_model_for_session(db, chat_id, session, "utility", app_settings=app_settings)
+    director_model = task_model_for_session(db, chat_id, session, "director", app_settings=app_settings)
     context_status = _context_status_text(
         context_diagnostics_snapshot(db, str(chat_id), session, app_settings=app_settings)
+    )
+    narrative = load_session_narrative_settings(db, chat_id, session["session_id"])
+    narrative_state = load_narrative_state(db, chat_id, session["session_id"])
+    narrative_current = narrative_clock_is_current(load_narrative_clock(db, chat_id, session["session_id"]))
+    ending = load_ending_state(db, chat_id, session["session_id"])
+    ending_status = (
+        "Ending: "
+        + ("Closed Story" if narrative.ending_mode == "closed_story" else "Open-ended")
+        + " · "
+        + ending.lifecycle.replace("_", " ")
+    )
+    narrative_status = (
+        f"Narrative: {PRESET_LABELS[narrative.preset]}\n"
+        f"POV: {dict(FIELD_OPTIONS['pov_mode'])[narrative.pov_mode]}\n"
+        f"Narrative state: {'current' if narrative_current else 'stale'}\n"
+        f"Scene / thread: {narrative_state.active_scene_id[:60] or 'not established'} / "
+        f"{narrative_state.active_thread_id[:60] or 'not established'}"
     )
     return (
         "📊 Session status\n"
@@ -90,9 +113,11 @@ def status_text(
         f"💬 Stored messages: {count}\n"
         f"🤖 Model: {current_model}\n"
         f"🛠️ Utility model: {utility_model}\n"
+        f"🎬 Director model: {director_model}\n"
         f"🌐 Response language: {response_language_label(session.get('response_language') or 'auto')}\n"
         f"🖋️ Humanizer: {humanizer_label(session.get('humanizer'))}\n\n"
         f"{context_status}\n\n"
+        f"{narrative_status}\n{ending_status}\n\n"
         "📚 Native context\n"
         f"• Persona: {persona}\n"
         f"• World Info: {world}\n"

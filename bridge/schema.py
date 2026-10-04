@@ -1,10 +1,20 @@
 import sqlite3
 import time
 
+from bridge.alternate_ending_schema import migrate_alternate_ending_lineage
+from bridge.closed_story_schema import migrate_closed_story_guards
 from bridge.conversation_schema import migrate_conversation_modes
 from bridge.delivery_schema import migrate_delivery_progress, migrate_job_delivery_intents
+from bridge.director_schema import migrate_director_runtime
+from bridge.ending_schema import migrate_ending_readiness
+from bridge.ending_work_schema import migrate_ending_workflow
+from bridge.finale_checkpoint_schema import migrate_finale_checkpoint_guards
+from bridge.greeting_media_schema import migrate_greeting_media_cleanup
 from bridge.migrations import Migration as _Migration
 from bridge.migrations import run_migrations as _run_migrations
+from bridge.narrative_arc_schema import migrate_narrative_arc_evidence
+from bridge.narrative_runtime_schema import migrate_narrative_history_revisions
+from bridge.narrative_schema import migrate_narrative_engine_foundation
 from bridge.token_usage_schema import migrate_token_usage
 from bridge.transcript_schema import migrate_message_identity
 
@@ -311,7 +321,8 @@ def _run_startup_database_cleanup(db: sqlite3.Connection) -> None:
         (now,),
     )
     db.execute(
-        "DELETE FROM operations WHERE updated_at < ?",
+        "DELETE FROM operations WHERE updated_at < ? AND NOT (kind='alternate_ending' "
+        "AND state IN ('prepared','local_committed','memory_seeding'))",
         (now - 90 * 86400,),
     )
     db.execute(
@@ -485,6 +496,16 @@ SCHEMA_MIGRATIONS = (
     _Migration(7, "message_identity", migrate_message_identity),
     _Migration(8, "assistant_delivery_progress", migrate_delivery_progress),
     _Migration(9, "job_delivery_intents", migrate_job_delivery_intents),
+    _Migration(10, "narrative_engine_foundation", migrate_narrative_engine_foundation),
+    _Migration(11, "narrative_history_revisions", migrate_narrative_history_revisions),
+    _Migration(12, "director_runtime", migrate_director_runtime),
+    _Migration(13, "narrative_arc_evidence", migrate_narrative_arc_evidence),
+    _Migration(14, "ending_readiness", migrate_ending_readiness),
+    _Migration(15, "finale_checkpoint_guards", migrate_finale_checkpoint_guards),
+    _Migration(16, "ending_workflow", migrate_ending_workflow),
+    _Migration(17, "closed_story_guards", migrate_closed_story_guards),
+    _Migration(18, "alternate_ending_lineage", migrate_alternate_ending_lineage),
+    _Migration(19, "greeting_media_cleanup", migrate_greeting_media_cleanup),
 )
 
 

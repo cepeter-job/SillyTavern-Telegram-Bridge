@@ -10,6 +10,12 @@ from typing import TYPE_CHECKING
 from bridge.card_content import card_fields_from_file
 from bridge.cards import send_session_menu
 from bridge.character_identity import reconcile_session_character
+from bridge.closed_session_guard import (
+    closed_session_allows_input,
+    guard_story_mutation,
+    guard_story_reset,
+    story_mutation_message,
+)
 from bridge.context_compaction import ContextWindowBudgetError, context_history_candidate_limit
 from bridge.context_diagnostics import context_stats_key
 from bridge.continuation import continue_last
@@ -22,6 +28,7 @@ from bridge.conversation_lifecycle import (
 )
 from bridge.delivery_progress import bind_committed_turn
 from bridge.edit_messages import edit_last_user
+from bridge.ending_runtime import recover_ending_workflow
 from bridge.episodic_memory import purge_episodic_memories
 from bridge.failed_turns import clear_failed_turn
 from bridge.generation import build_chat_messages, render_response_language
@@ -38,6 +45,8 @@ from bridge.memory_backend import hindsight_session_lock
 from bridge.memory_curator import clear_curated_memory_state
 from bridge.memory_service import MemoryService
 from bridge.metadata import get_meta, set_meta
+from bridge.narrative_context import narrative_context_for_session
+from bridge.narrative_repository import clear_narrative_story_state
 from bridge.npc_service import NpcService
 from bridge.operations import (
     begin_operation,
@@ -61,6 +70,7 @@ from bridge.response_delivery import (
 )
 from bridge.response_variants import save_response_variant, swipe_state_key
 from bridge.roleplay_format import normalize_roleplay_transport
+from bridge.scene_repository import delete_scene_state as _repo_delete_scene_state
 from bridge.session_core import ensure_session, list_sessions, load_session
 from bridge.settings import AppSettings
 from bridge.sqlite_store import optimize_database, write_transaction
@@ -81,6 +91,9 @@ def reset_session(
     memory_service: MemoryService,
     npc_service: NpcService,
 ) -> None:
+    guard_story_reset(db, chat_id, session["session_id"])
+    if db.in_transaction:
+        raise RuntimeError("Reset cannot perform external cleanup inside a caller transaction")
     with hindsight_session_lock(chat_id, session["session_id"]):
         if operation_id is not None:
             if operation_was_applied(db, operation_id) or not begin_operation(db, operation_id, "reset"):
@@ -96,26 +109,30 @@ def reset_session(
             if operation_id is not None:
                 set_operation_phase(db, operation_id, "reset", "memory_purged")
             db.commit()
-        npc_service.purge_session(db, chat_id, session["session_id"])
         delete_outgoing_messages(db, token, chat_id, session["session_id"])
         delete_incoming_messages(db, token, chat_id, session["session_id"])
-        db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
-        db.execute("DELETE FROM response_variants WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
-        db.execute("DELETE FROM failed_turns WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
-        clear_session_summary(db, chat_id, session["session_id"])
-        purge_episodic_memories(db, chat_id, session["session_id"])
-        clear_curated_memory_state(db, chat_id, session["session_id"])
-        db.execute(
-            "DELETE FROM meta WHERE key IN (?, ?)",
-            (
-                swipe_state_key(chat_id, session["session_id"]),
-                f"swipe_message:{chat_id}:{session['session_id']}",
-            ),
-        )
-        old_choice_panels = reset_conversation(db, chat_id, session["session_id"])
-        if operation_id is not None:
-            set_operation_phase(db, operation_id, "reset", "local_committed")
-        db.commit()
+        with write_transaction(db):
+            npc_service.purge_session(db, chat_id, session["session_id"])
+            db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
+            db.execute(
+                "DELETE FROM response_variants WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"])
+            )
+            db.execute("DELETE FROM failed_turns WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
+            clear_session_summary(db, chat_id, session["session_id"])
+            purge_episodic_memories(db, chat_id, session["session_id"])
+            clear_curated_memory_state(db, chat_id, session["session_id"])
+            db.execute(
+                "DELETE FROM meta WHERE key IN (?, ?)",
+                (
+                    swipe_state_key(chat_id, session["session_id"]),
+                    f"swipe_message:{chat_id}:{session['session_id']}",
+                ),
+            )
+            _repo_delete_scene_state(db, chat_id, session["session_id"])
+            clear_narrative_story_state(db, chat_id, session["session_id"])
+            old_choice_panels = reset_conversation(db, chat_id, session["session_id"])
+            if operation_id is not None:
+                set_operation_phase(db, operation_id, "reset", "local_committed")
         for panel_id in old_choice_panels:
             try:
                 telegram_request(
@@ -166,6 +183,7 @@ def generate_and_store_reply(
     rag_service: RagService,
 ) -> None:
     """Assemble context, run generation, persist the reply, and deliver it."""
+    guard_story_mutation(db, chat_id, session_id)
     provider_port = provider_port.for_usage(chat_id, session_id, "story")
     if not require_started(db, chat_id, session_id):
         send_text(token, chat_id, START_REQUIRED)
@@ -222,6 +240,7 @@ def generate_and_store_reply(
             session_summary=session_summary,
             rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
             group_context=group_context,
+            narrative_context=narrative_context_for_session(db, chat_id, session_id, "story"),
             persona_service=persona_service,
             app_settings=app_settings,
             context_stats=context_stats,
@@ -237,7 +256,11 @@ def generate_and_store_reply(
     )
     actor_id = str(session.get("_actor_id") or job_actor_id(db, operation_id))
     choice_record = prepare_turn(db, chat_id, session, f"message:{identity}", actor_id)
-    novel_turn = NovelTurn(choice_record) if choice_record is not None else None
+    novel_turn = (
+        NovelTurn(choice_record, choice_policy=narrative_context_for_session(db, chat_id, session_id, "choices"))
+        if choice_record is not None
+        else None
+    )
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
     send_typing(token, chat_id)
@@ -422,7 +445,26 @@ def prepare_message(
     )
     session_id = session["session_id"]
     request_context = RequestContext(db, session_id, actor_id, app_settings=app_settings)
-    if operation_id is not None and operation_phase(db, operation_id) == "local_committed":
+    closing_notice = story_mutation_message(db, chat_id, session_id)
+    if closing_notice and command == "/retry":
+        result = recover_ending_workflow(
+            db,
+            token,
+            api_key,
+            chat_id,
+            session,
+            provider_port=provider_port,
+            delivery_port=delivery_port,
+            persona_service=persona_service,
+            app_settings=app_settings,
+            manual=True,
+        )
+        delivery_port.send_text(token, chat_id, result.message)
+        return None
+    if closing_notice and not closed_session_allows_input(db, chat_id, session_id, actor_id, command):
+        delivery_port.send_text(token, chat_id, closing_notice)
+        return None
+    if not closing_notice and operation_id is not None and operation_phase(db, operation_id) == "local_committed":
         recovery_command = _operation_command(text)
         recovery_fields = card_fields_from_file(session["character_file"], app_settings=app_settings)
         if recovery_command == "/regen":
@@ -539,13 +581,7 @@ def prepare_message(
     director_plan = None
     group_director = group_director_service
     if not command.startswith("/"):
-        director_plan = group_director.plan(
-            db,
-            api_key,
-            chat_id,
-            session,
-            text,
-        )
+        director_plan = group_director.plan(db, chat_id, session)
     director_instruction = ""
     if director_plan:
         group_turn = (director_plan[0], director_plan[1])

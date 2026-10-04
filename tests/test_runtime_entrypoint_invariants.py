@@ -210,6 +210,7 @@ def _exercise_runtime_memory_diagnostics(
         memory_diagnostics=injected,
     )
     monkeypatch.setattr(lifecycle, "MemoryDiagnostics", diagnostics_type(events), raising=False)
+    monkeypatch.setattr(lifecycle, "_queue_ending_recovery", lambda *_args: 0)
     monkeypatch.setattr(lifecycle, "install_bridge_signal_handlers", lambda *_args: None)
     monkeypatch.setattr(lifecycle, "start_live_sync_worker", lambda **_kwargs: None)
     monkeypatch.setattr(lifecycle, "stop_live_sync_worker", lambda **_kwargs: True)

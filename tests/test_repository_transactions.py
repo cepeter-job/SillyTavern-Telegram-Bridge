@@ -128,10 +128,16 @@ class RepositoryPrimitiveTests(SettingsTestCase):
         self.db = sqlite3.connect(":memory:")
         self.db.executescript(
             """
-            CREATE TABLE director_goals(
+            CREATE TABLE director_state(
                 chat_id TEXT NOT NULL,
                 session_id TEXT NOT NULL,
                 goal TEXT NOT NULL,
+                state_revision INTEGER NOT NULL DEFAULT 0,
+                inflight_token TEXT NOT NULL DEFAULT '',
+                inflight_started_at REAL NOT NULL DEFAULT 0,
+                active_direction TEXT NOT NULL DEFAULT '',
+                active_proposal_json TEXT NOT NULL DEFAULT '{}',
+                direction_source TEXT NOT NULL DEFAULT 'ai',
                 updated_at REAL NOT NULL,
                 PRIMARY KEY(chat_id, session_id)
             );
@@ -219,7 +225,7 @@ class RepositoryPrimitiveTests(SettingsTestCase):
 
     def test_repository_write_does_not_commit(self):
         self.db.execute("BEGIN")
-        _owner_director_goal_repository.store_director_goal(self.db, "chat", "session", "goal", 1.0)
+        _owner_director_goal_repository.store_director_goal(self.db, "chat", "session", "goal", 1.0, 0)
         self.assertTrue(self.db.in_transaction)
         self.db.rollback()
         self.assertEqual(

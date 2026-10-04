@@ -2,6 +2,54 @@
 
 All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
+## [0.3.000] - 2026-10-04
+
+The 0.3 series adds the complete Narrative Engine, AI Director, closed stories
+and independent alternate endings.
+
+### Added
+
+- Narrative Style in character setup and a `/narrative` panel for current stories:
+  Player-centric, Ensemble, World-driven, Observer and advanced Custom settings.
+- Personal setup defaults that never overwrite another session's preferences.
+- Committed narrative scene/thread tracking with revision-safe Utility
+  reconciliation, bounded batches and bounded rewind snapshots.
+- Shared narrative policies for text, images, edits, regeneration, continuation,
+  Light Novel choices and Group speaker selection. Off-screen choices use
+  narrative steering instead of invented user participation.
+
+- A canonical AI Director with a dedicated optional model route, independent
+  reasoning budget, strict proposal validation and adaptive/fixed cadence.
+- Actor- and revision-bound Director Room controls in Telegram and the Mini App,
+  with temporary scene directions, persistent objectives and decision history.
+- Groups consume canonical plans without a second planning-model request.
+
+- Revision-aware story arcs with committed-text evidence for resolved outcomes,
+  plus separate persistent user guidance in Director Room.
+- Ending Goal revisions, finale-readiness checks and atomic immutable pre-finale
+  snapshots as the storage foundation for Closed Story.
+- Full Closed Story execution with multi-turn finales, a separate Story-model
+  epilogue, bounded restart recovery and immutable completed originals.
+- Ending controls and explicit finale confirmation in Telegram and the Mini App.
+- Alternate Ending creates an independent session from an immutable pre-finale
+  checkpoint, with local continuity restored and Hindsight recall isolated to
+  the new session. Completed originals are never reopened.
+- Greeting photos from the opening message image URL, or the selected character
+  PNG, with delivery receipts so a failed photo does not resend the opening text.
+- Light Novel choices vary motive and approach without assuming altruism or
+  forcing cruelty. Off-screen scenes retain narrative-steering choices.
+
+### Fixed
+
+- Provider-escaped roleplay paragraph breaks render as real Telegram newlines
+  without decoding code blocks or literal paths.
+- Deleted opening messages no longer send orphan greeting photos; their image
+  URLs and delivery receipts are removed transactionally with the message.
+- Reset clears derived narrative state while preserving Narrative Style and
+  personal defaults. Its local cleanup is atomic after successful memory purge.
+- Optional NumPy acceleration now falls back to existing Python vector math when
+  the installed wheel cannot initialize on a VPS's exposed CPU instruction set.
+
 ## [0.2.058] - 2026-10-02
 
 ### Added

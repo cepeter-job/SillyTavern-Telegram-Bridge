@@ -86,10 +86,15 @@ def test_populated_identity_migration_preserves_rowids_indexes_and_references():
             ).fetchall()
             == before
         )
-        assert (
-            db.execute("SELECT name,sql FROM sqlite_master WHERE type='index' AND tbl_name='messages'").fetchall()
-            == indexes
-        )
+        assert db.execute(
+            "SELECT name,sql FROM sqlite_master WHERE type='index' AND tbl_name='messages'"
+        ).fetchall() == [
+            *indexes,
+            (
+                "messages_narrative_cursor_idx",
+                "CREATE INDEX messages_narrative_cursor_idx ON messages(chat_id,session_id,id)",
+            ),
+        ]
         assert db.execute("SELECT user_rowid FROM response_variants").fetchone() == (91,)
         db.execute("DELETE FROM messages")
         cursor = db.execute(

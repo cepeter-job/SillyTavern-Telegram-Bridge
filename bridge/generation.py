@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sqlite3
 from pathlib import Path
 
 from bridge.card_content import active_world_files, build_system_prompt, build_world_info, replace_macros
@@ -23,6 +24,7 @@ from bridge.limits import (
     RAG_MAX_CONTEXT_CHARS,
     SUMMARY_MAX_CHARS,
 )
+from bridge.narrative_values import NARRATIVE_STEERING_PREFIX
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
 from bridge.rag_service import RagService
@@ -115,6 +117,11 @@ def render_session_response(
 def format_user_dialogue_action(text: str) -> str:
     """Make user dialogue and single-star actions explicit to the model."""
     original = str(text or "").strip()
+    if original.startswith(NARRATIVE_STEERING_PREFIX):
+        return (
+            "Out-of-world narrative steering, not character dialogue, action, knowledge, or a completed event:\n"
+            + original[len(NARRATIVE_STEERING_PREFIX) :]
+        )
     actions = re.findall(r"(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)", original, flags=re.DOTALL)
     if not actions:
         return original
@@ -143,6 +150,7 @@ def build_chat_messages(
     session_summary: str = "",
     rag_context: str = "",
     group_context: str = "",
+    narrative_context: str = "",
     app_settings: AppSettings,
     context_stats: dict[str, object] | None = None,
 ) -> list[dict]:
@@ -201,12 +209,17 @@ def build_chat_messages(
     post_history = replace_macros(fields["post_history_instructions"], fields, user_name, app_settings=app_settings)
     if post_history:
         system += f"\n\n## Final instruction\n{post_history}"
+    if narrative_context:
+        system += (
+            "\n\n## Narrative Policy\nThese session settings govern viewpoint, focus and user agency. "
+            "Preserve established character and world facts without retconning.\n" + narrative_context
+        )
     grounded_policy = grounded_user_policy(session.get("grounded_user"))
     if grounded_policy:
         system += "\n\n## Grounded User Policy\n" + grounded_policy
     system += "\n\n" + _ROLEPLAY_OUTPUT_CONTRACT
     system += "\n\n## Mandatory response language\n" + language_instruction
-    messages = [{"role": "system", "content": system}]
+    messages: list[dict] = [{"role": "system", "content": system}]
     if not history and fields["first_mes"]:
         messages.append(
             {
@@ -307,21 +320,21 @@ def build_chat_messages(
 
 
 def _generation_generate_rendered_reply(
-    db,
-    token,
-    api_key,
-    session,
-    chat_id,
-    messages,
-    query,
-    rag_bundle,
+    db: sqlite3.Connection,
+    token: str,
+    api_key: str,
+    session: dict[str, str],
+    chat_id: str,
+    messages: list[dict],
+    query: str,
+    rag_bundle: dict,
     *,
     provider_port: ProviderPort,
     delivery_port: DeliveryPort,
     app_settings: AppSettings,
     rag_service: RagService,
     novel_turn: NovelTurn | None = None,
-):
+) -> str:
     session_id = session["session_id"]
     provider_port = provider_port.for_usage(chat_id, session_id, "generation")
     delivery_port.send_typing(token, chat_id)

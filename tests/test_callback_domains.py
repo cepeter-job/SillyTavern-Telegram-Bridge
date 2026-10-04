@@ -14,6 +14,7 @@ import pytest
 
 ROOT = Path(__file__).parents[1]
 DOMAINS = {
+    "narrative_callbacks": ["handle_narrative_callback"],
     "settings_callbacks": [
         "handle_system_prompt_callback",
         "handle_note_callback",

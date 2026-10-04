@@ -118,7 +118,7 @@ try {
   const sessionsTab=[...shellDocument.querySelectorAll('#navigation button')].find(n=>n.textContent.trim()==='Sessions');
   assert.ok(sessionsTab,'Sessions navigation button exists');sessionsTab.click();
   await until(()=>shellDocument.getElementById('page-title').textContent==='Sessions'&&shellDocument.querySelector('main').textContent.includes('Create session'),'Sessions tab click renders Sessions');
-  for(const page of ['dashboard','characters','sessions','manage','advanced','usage','models','personas','worlds','memory','npcs','databank','system']) {
+  for(const page of ['dashboard','characters','sessions','manage','advanced','usage','models','personas','worlds','memory','director','npcs','databank','system']) {
     await app.namespace.navigate(page);
     assert.ok(shellDocument.getElementById('page-title').textContent.trim().length>0,page+' updates the compact page title');
     const body=dom.window.document.querySelector('main').textContent;
@@ -146,7 +146,7 @@ try {
       portraitMode='empty';
     }
     if(page==='manage') {
-      assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['models','personas','worlds','generation','memory','npcs','databank','advanced'],'Manage exposes unique design destinations in order');
+      assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['models','director','personas','worlds','generation','memory','npcs','databank','advanced'],'Manage exposes unique design destinations in order');
       assert.deepEqual([...shellDocument.querySelectorAll('.manage-section-title')].map(node=>node.textContent.trim()),['Story setup','Knowledge','Advanced']);
       const generation=[...shellDocument.querySelectorAll('.manage-link')].find(node=>node.textContent.includes('Generation'));
       generation.click();
@@ -154,6 +154,14 @@ try {
     }
     if(page==='advanced') {
       assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['usage'],'Advanced settings keeps Usage reachable');
+    }
+    if(page==='director') {
+      assert.ok(shellDocument.querySelector('.director-room-page'),'Director Room renders its own private page');
+      assert.ok(body.includes('hidden plans'),'Director Room distinguishes plans from story facts');
+      assert.ok([...shellDocument.querySelectorAll('main button')].some(node=>node.textContent==='Save objective'),'Persistent objective has an explicit save action');
+      const labels=[...shellDocument.querySelectorAll('main label')].map(node=>node.textContent);
+      assert.ok(labels.includes('Reassessment cadence'),'Adaptive and fixed cadence controls are visible');
+      assert.ok(labels.includes('Director reasoning budget (0–32000)'),'Director reasoning stays independently configurable');
     }
     if(page==='npcs') {
       assert.ok(shellDocument.querySelector('.npc-bank-page'),'NPC Bank page renders');
@@ -192,6 +200,39 @@ try {
     }
     console.log('render='+page+' ok');
   }
+  await reserveFixtureCapacity(10);
+  await app.namespace.navigate('director');
+  const objectiveLabel=[...shellDocument.querySelectorAll('main label')].find(node=>node.textContent==='Persistent objective');
+  assert.ok(objectiveLabel,'Director Room exposes a persistent objective input');
+  const objective= shellDocument.getElementById(objectiveLabel.htmlFor);
+  objective.value='<b>Keep the lighthouse safe.</b>';
+  const directorSession=app.namespace.state.session.session_id;
+  app.namespace.state.session={...app.namespace.state.session,session_id:'other-view-cannot-retarget-director'};
+  const saveObjective=[...shellDocument.querySelectorAll('main button')].find(node=>node.textContent==='Save objective');
+  saveObjective.click();await until(()=>!saveObjective.disabled,'Director objective saved');
+  const savedDirector=await app.namespace.api('/director');
+  assert.equal(savedDirector.session.session_id,directorSession,'Director mutation keeps the rendered session scope');
+  assert.equal(savedDirector.objective,objective.value,'Director objective uses the shared canonical service');
+  assert.equal(shellDocument.querySelector('.director-room-page b'),null,'User-authored planning text is never inserted as HTML');
+  assert.equal(shellDocument.getElementById('notice').textContent,'Director objective saved.');
+  await reserveFixtureCapacity(14);
+  for(const [mode,confirmation] of [['closed_story','true'],['open_ended','false']]) {
+    await app.namespace.navigate('director');
+    const endingLabel=[...shellDocument.querySelectorAll('main label')].find(node=>node.textContent==='Story ending');
+    const finaleLabel=[...shellDocument.querySelectorAll('main label')].find(node=>node.textContent==='Finale entry');
+    assert.ok(endingLabel&&finaleLabel,'Director Room exposes ending mode and finale consent');
+    shellDocument.getElementById(endingLabel.htmlFor).value=mode;
+    shellDocument.getElementById(finaleLabel.htmlFor).value=confirmation;
+    app.namespace.state.session={...app.namespace.state.session,session_id:'different-view-must-not-retarget-ending'};
+    const saveEnding=[...shellDocument.querySelectorAll('main button')].find(node=>node.textContent==='Save ending settings');
+    saveEnding.click();await until(()=>!saveEnding.disabled,'Ending preference saved');
+    const savedEnding=await app.namespace.api('/director');
+    assert.equal(savedEnding.session.session_id,directorSession,'Ending preferences stay with the rendered session');
+    assert.equal(savedEnding.ending.mode,mode);
+    assert.equal(savedEnding.ending.require_confirmation,confirmation==='true');
+    assert.equal(shellDocument.getElementById('notice').textContent,'Ending settings saved for this story.');
+  }
+  console.log('ending-controls=mode,confirmation,rendered-session-scope passed');
   await app.namespace.navigate('dashboard');
   await until(()=>shellDocument.querySelector('.dashboard-session .session-portrait-frame')?.hidden===true,'dashboard missing portrait fallback');
   assert.ok(shellDocument.querySelector('.dashboard-session').textContent.includes('Default session'),'Dashboard text remains when its portrait is unavailable');
@@ -425,7 +466,7 @@ try {
   const newView=document.createElement('div');newView.textContent='Current view';finishNew(newView);await newNavigation;
   assert.equal(document.querySelector('main').textContent,'Current view','Only the latest page is committed');
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
-  console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=13 passed; browser-errors=0');
+  console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=14 passed; browser-errors=0');
 } finally {
   dom.window.close();lines.close();child.kill('SIGTERM');
 }

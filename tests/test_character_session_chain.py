@@ -43,7 +43,7 @@ class CharacterSessionChainTests(SettingsTestCase):
             "message": {"message_id": message_id, "chat": {"id": "chat"}},
         }
 
-    def test_character_selection_opens_mode_panel_without_mutating_session(self):
+    def test_character_selection_opens_narrative_panel_without_mutating_session(self):
         from unittest.mock import patch
 
         from settings_test_support import make_test_settings
@@ -79,7 +79,7 @@ class CharacterSessionChainTests(SettingsTestCase):
                 provider_port=application_setup.make_test_provider_port(),
             )
         self.assertTrue(handled)
-        self.assertEqual(opened[-1]["stage"], "mode")
+        self.assertEqual(opened[-1]["stage"], "narrative")
         self.assertEqual(opened[-1]["character_file"], "chosen.png")
         self.assertEqual(
             self.db.execute(

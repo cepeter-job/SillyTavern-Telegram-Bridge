@@ -13,6 +13,7 @@ import copy
 import math
 import re
 from dataclasses import dataclass
+from typing import cast
 
 from bridge.codex_models import codex_context_window_tokens
 from bridge.provider_catalog import context_metadata_for_model
@@ -47,9 +48,9 @@ class ContextWindowBudgetError(ProviderRequestError):
         super().__init__(model or "the selected model", "request_too_large")
 
     def _user_message(self) -> str:
-        final_tokens = int(self.stats.get("final_tokens") or 0)
-        budget_tokens = int(self.stats.get("budget_tokens") or 0)
-        window_tokens = int(self.stats.get("window_tokens") or 0)
+        final_tokens = int(cast(int, self.stats.get("final_tokens") or 0))
+        budget_tokens = int(cast(int, self.stats.get("budget_tokens") or 0))
+        window_tokens = int(cast(int, self.stats.get("window_tokens") or 0))
         return (
             f"Prompt for {self.model} cannot fit the configured context window "
             f"({final_tokens:,} estimated input tokens; {budget_tokens:,} usable of "
@@ -65,9 +66,9 @@ def context_profile(model: str = "", *, app_settings: AppSettings) -> ContextPro
         window = codex_window
         source = "codex-alias"
     else:
-        window = int(metadata.get("window_tokens") or app_settings.context_window_tokens)
+        window = int(cast(int, metadata.get("window_tokens") or app_settings.context_window_tokens))
         source = str(metadata.get("source") or "global-fallback")
-    chars_per_token = float(metadata.get("chars_per_token") or DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN)
+    chars_per_token = float(cast(float, metadata.get("chars_per_token") or DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN))
     safety = min(
         MAX_CONTEXT_SAFETY_MARGIN_TOKENS,
         max(MIN_CONTEXT_SAFETY_MARGIN_TOKENS, math.ceil(window * CONTEXT_SAFETY_MARGIN_RATIO)),
@@ -96,7 +97,7 @@ def context_history_candidate_limit(*, app_settings: AppSettings) -> int:
     return app_settings.context_history_candidates
 
 
-def _content_tokens(content, chars_per_token: float) -> int:
+def _content_tokens(content: object, chars_per_token: float) -> int:
     ratio = min(8.0, max(1.0, float(chars_per_token or DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN)))
     if isinstance(content, str):
         return max(1, math.ceil(len(content) / ratio))

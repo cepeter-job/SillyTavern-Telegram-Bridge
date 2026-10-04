@@ -67,6 +67,8 @@ EXPECTED = {
             ("exact", "models:story-reasoning"),
             ("prefix", "storyreasoning:"),
             ("exact", "models:utility-reasoning"),
+            ("exact", "models:director-reasoning"),
+            ("prefix", "directorreasoning:"),
             ("prefix", "utilityreasoning:"),
             ("exact", "models:back"),
             ("exact", "provider:health"),

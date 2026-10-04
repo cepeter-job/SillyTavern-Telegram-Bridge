@@ -194,7 +194,7 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
         self.db.close()
 
     def test_initial_schema_preserved_with_conversation_migration(self):
-        self.assertEqual(len(schema.SCHEMA_MIGRATIONS), 9)
+        self.assertEqual(len(schema.SCHEMA_MIGRATIONS), 19)
         migration = schema.SCHEMA_MIGRATIONS[0]
         self.assertEqual((migration.version, migration.name), (1, "initial_schema"))
 
@@ -213,6 +213,16 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
                 (7, "message_identity"),
                 (8, "assistant_delivery_progress"),
                 (9, "job_delivery_intents"),
+                (10, "narrative_engine_foundation"),
+                (11, "narrative_history_revisions"),
+                (12, "director_runtime"),
+                (13, "narrative_arc_evidence"),
+                (14, "ending_readiness"),
+                (15, "finale_checkpoint_guards"),
+                (16, "ending_workflow"),
+                (17, "closed_story_guards"),
+                (18, "alternate_ending_lineage"),
+                (19, "greeting_media_cleanup"),
             ],
         )
 
@@ -245,7 +255,7 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
             "data_bank_fts",
             "group_sessions",
             "scene_states",
-            "director_goals",
+            "director_state",
         ):
             with self.subTest(table=table):
                 self.assertIsNotNone(
@@ -258,7 +268,6 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
         for object_type, name in (
             ("index", "scene_states_updated_idx"),
             ("trigger", "scene_states_session_delete"),
-            ("trigger", "director_goals_session_delete"),
             ("trigger", "sessions_delete_sync_binding"),
         ):
             with self.subTest(name=name):
@@ -337,7 +346,7 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
         self.assertIsNone(self.db.execute("SELECT 1 FROM callback_tokens WHERE token='expired'").fetchone())
         self.assertEqual(
             self.db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0],
-            9,
+            19,
         )
 
 
@@ -407,9 +416,7 @@ class RequestTimeSchemaRegressionTests(SettingsTestCase):
                 self.session["session_id"],
                 "Keep tension unresolved.",
             ),
-            lambda: _m_director_goals.director_goal_policy(
-                self.db, "chat", self.session, app_settings=self.app_settings_builder.build()
-            ),
+            lambda: _m_director_goals.director_goal_policy(self.db, "chat", self.session),
         )
         for operation in operations:
             with self.subTest(operation=operation):

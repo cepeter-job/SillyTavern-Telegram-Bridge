@@ -7,6 +7,7 @@ import sqlite3
 import time
 
 from bridge.card_content import card_fields_from_file
+from bridge.closed_session_guard import guard_story_mutation
 from bridge.delivery_progress import DeliveryTargetExpired
 from bridge.episodic_memory import invalidate_episodic_memories_from_row
 from bridge.generation import build_chat_messages, render_session_response
@@ -15,6 +16,7 @@ from bridge.light_novel_repository import regeneration_choice_panel_message_ids
 from bridge.light_novel_turn import begin_novel_turn
 from bridge.memory_service import MemoryService
 from bridge.metadata import get_meta
+from bridge.narrative_context import narrative_context_for_session
 from bridge.npc_service import NpcService
 from bridge.operation_recovery import OperationRecovery as _OperationRecovery
 from bridge.operations import begin_operation, operation_phase, record_operation, set_operation_phase
@@ -91,6 +93,7 @@ def regenerate_edited_turn(
     app_settings: AppSettings,
     rag_service: RagService,
 ) -> None:
+    guard_story_mutation(db, chat_id, session["session_id"])
     session_id = session["session_id"]
 
     def deliver_recovered_edit():
@@ -177,6 +180,9 @@ def regenerate_edited_turn(
         episodic_context=memory_prompt.episodic,
         npc_context=npc_context,
         session_summary=memory_prompt.summary,
+        narrative_context=narrative_context_for_session(
+            db, chat_id, session_id, "story", through_rowid=max(0, int(user_rowid) - 1)
+        ),
         persona_service=persona_service,
         rag_context=rag_service.context_for_prompt(db, chat_id, new_text, rag_bundle),
         app_settings=app_settings,
@@ -326,6 +332,7 @@ def edit_last_user(
     app_settings: AppSettings,
     rag_service: RagService,
 ) -> None:
+    guard_story_mutation(db, chat_id, session["session_id"])
     session_id = session["session_id"]
     rows = db.execute(
         "SELECT rowid,role,content FROM messages WHERE chat_id=? AND session_id=? ORDER BY created_at,rowid",

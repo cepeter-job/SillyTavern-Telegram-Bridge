@@ -23,6 +23,17 @@ CHOICE_MATURITY_POLICY = (
     "Do not introduce or escalate mature content beyond what the current context supports."
 )
 
+CHOICE_MOTIVE_POLICY = (
+    "Make the choices differ in motive and approach, not just wording. "
+    "Do not assume the USER is altruistic, heroic, forgiving, protective, or trying to do the right thing. "
+    "When plausible, include a neutral or self-interested action; do not make all options helpful or cooperative. "
+    "Do not force either virtue or cruelty. "
+    "For in-world user actions only, phrase the action from the USER's perspective; "
+    "use second person ('you') rather than 'we' unless the scene clearly establishes a group action. "
+    "For narrative steering choices, vary the thread, focus, pacing or scene transition instead; "
+    "do not turn an absent user into a participant or assign them a motive or action."
+)
+
 
 def validate_choices(value: object, requested_count: int) -> list[str]:
     if requested_count not in {2, 3, 4} or not isinstance(value, list) or len(value) != requested_count:
@@ -239,23 +250,29 @@ def parse_choice_response(source: str, requested_count: int) -> list[str]:
     return validate_choices(value.get("choices") if isinstance(value, dict) else value, requested_count)
 
 
-def inline_instruction(count: int, language: str) -> str:
+def inline_instruction(count: int, language: str, *, narrative_policy: str = "") -> str:
     return (
         "Light Novel response contract: return a JSON object with exactly two keys: "
         '"story" (the complete narrative as a JSON string) and "choices" (an array of '
-        f"exactly {count} distinct next actions for the USER, each 1–{MAX_CHOICE_CHARS} characters). "
+        f"exactly {count} distinct next choices, each 1–{MAX_CHOICE_CHARS} characters). "
+        "Use plausible user actions when the user is present in the scene; otherwise use narrative steering "
+        "such as following an AI-controlled thread or a scene cut, never fabricated off-screen user participation. "
         "Do not choose for the user, predict outcomes, put menu text inside the story, or include slash commands. "
         "Preserve the character, persona, world and all established story context. "
         + CHOICE_MATURITY_POLICY
         + " "
+        + CHOICE_MOTIVE_POLICY
+        + " "
         + f"Both narrative and actions must match response language {language or 'auto (the conversation language)'}. "
         "No markdown fences, explanations or extra keys."
+        + ("\n\nNarrative choice policy:\n" + narrative_policy if narrative_policy else "")
+        + "\nApply that policy to the final scene you actually write. A planned scene change is not a committed fact."
     )
 
 
-def add_inline_contract(messages: list[dict], count: int, language: str) -> list[dict]:
+def add_inline_contract(messages: list[dict], count: int, language: str, *, narrative_policy: str = "") -> list[dict]:
     result = [dict(message) for message in messages]
-    instruction = inline_instruction(count, language)
+    instruction = inline_instruction(count, language, narrative_policy=narrative_policy)
     if result and result[0].get("role") == "system":
         result[0]["content"] = str(result[0].get("content") or "") + "\n\n" + instruction
     else:

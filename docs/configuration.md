@@ -469,7 +469,7 @@ endpoint, keep explicit `models`, set `discover_models: false`, and optionally s
 
 The provider panel is the normal user interface:
 
-Open `/providers`, choose **Story** or **Utility**, then use **Provider health**
+Open `/providers`, choose **Story**, **Utility** or **Director**, then use **Provider health**
 or **Refresh models** in the provider list. These maintenance actions are
 panel-only; typing a provider subcommand returns guidance instead of running it.
 
@@ -533,11 +533,11 @@ after visible streaming output, cancellation, a request-local error, or the
 original timeout budget expires (240 seconds when no timeout was supplied).
 Each alternative resolves its own credentials; the primary key is never forwarded
 to a fallback. Usage is recorded against every model actually attempted, including
-failed attempts. The session's selected Story/Utility model is not rewritten.
+failed attempts. The session's selected Story/Utility/Director model is not rewritten.
 
 ### Provider diagnostics and catalog maintenance
 
-Use `/providers` → **Story model** or **Utility model** to open the provider list.
+Use `/providers` → **Story model**, **Utility model** or **Director model** to open the provider list.
 **Provider health** runs manual probes and displays their results separately from
 observed runtime health. A successful catalog response does not prove generation
 works. An inference probe opens a tiny streaming completion and may use quota;
@@ -581,3 +581,22 @@ Manual health sweeps use at most three concurrent provider probes. Each bridge
 instance serializes its sweeps, so simultaneous users cannot multiply that limit.
 Results retain catalog order; a failed probe does not hide its neighbors. This
 adds no timer, background health traffic, or automatic paid inference requests.
+
+### Director routing and cadence
+
+Director is an optional session task route, not another required provider entry.
+Choose it in `/providers` or Mini App **Models**. When unset, it inherits the
+Utility route, then the Story/default route. Director reasoning is independent
+from Utility reasoning and accepts a whole-number budget from 0 to 32,000; actual
+provider support still determines how that budget is interpreted.
+
+`/director` and Mini App **Director Room** share the same session settings and
+revision checks. Adaptive cadence caps quiet periods at 10/6/4/2 completed Story
+turns for setup/development/escalation/climax, with earlier event-driven checks.
+Fixed and custom intervals are 1–100 turns. There is no second Group Director
+model: groups consume accepted canonical plans and otherwise select a safe
+round-robin speaker.
+
+Database initialization and migration do not contact providers or reconstruct old
+histories with AI. Reconciliation runs in bounded batches during normal operation;
+Director output is accepted only against the history and settings it actually read.

@@ -43,8 +43,8 @@ Covered session-owned calls include ordinary stories, edited and image replies,
 regeneration/continuation, response-language rendering, Humanizer, Light Novel
 choices, character ranking/optimization, continuity summaries,
 curated/episodic-memory extraction, NPC-state extraction and scene-state
-extraction. Usage follows the actual selected Story/Utility route.
-Unscoped administrative/provider-health work, group-director planning and embedding
+extraction. Usage follows the actual selected Story/Utility/Director route.
+Unscoped administrative/provider-health work and embedding
 requests are not included. The Mini App reports the authenticated private bot
 chat only; it does not combine group/forum-chat counters with a personal view.
 
@@ -77,3 +77,29 @@ The usage ledger is created by a forward database migration. Historical token
 counts are not reconstructed from old messages. If you roll back across a newer
 schema boundary, restore a matching pre-upgrade database backup instead of
 deleting migration records. See [backup and restore](operations.md#database-migrations-backup-and-restore).
+
+### Director calls
+
+Canonical planning is recorded under `director`; committed-story reconciliation
+uses `director_reconcile`. An automatic reassessment runs only when an event or
+cadence requires it. A malformed version-1 proposal may get one repair request; an
+unsupported schema version is rejected without repair. Those requests remain
+visible as actual usage, not a fabricated billing amount.
+
+Group speaker selection consumes the accepted plan locally and makes no second
+planning request. Opening Director Room, viewing its history or changing a manual
+objective also makes no provider call.
+
+### Ending calls
+
+The separate planning brief uses `director_epilogue`; epilogue prose uses
+`epilogue` on the Story model. Committed-story reconciliation continues to use
+`director_reconcile`. Viewing a saved ending, a blocked closed-session message,
+and retrying already committed delivery make no new model calls. Provider-reported
+usage may still be incomplete; no subscription balance or cost is inferred.
+
+Creating an Alternate Ending does not call a Story or Director model. Optional
+external-memory seeding may ask the configured Hindsight service to retain the
+copied conversation; that service's own model use is not necessarily reported by
+the bridge's provider-usage ledger. Duplicate completed branch requests do not
+repeat seeding.

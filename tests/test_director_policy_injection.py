@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import ast
+import sqlite3
+from contextlib import closing
 from dataclasses import fields
 from pathlib import Path
 
@@ -53,15 +55,12 @@ def test_group_director_service_owns_typed_policy_contract():
     assert "director_customization" not in field_names
 
     customization = service_module.DirectorCustomization(
-        model="director-model",
-        hidden_instructions="hidden",
-        max_tokens=220,
-        speaker_context="context",
+        speaker="Mara", direction="Follow the river", speaker_context="context"
     )
-    assert customization.model == "director-model"
-    assert customization.hidden_instructions == "hidden"
-    assert customization.max_tokens == 220
+    assert customization.speaker == "Mara"
+    assert customization.direction == "Follow the river"
     assert customization.speaker_context == "context"
+    assert not {"generate_text", "generation_settings", "default_model"} & field_names
 
 
 def test_director_goals_exposes_direct_policy_without_registry_slot(monkeypatch, *, app_settings_builder):
@@ -80,20 +79,15 @@ def test_director_goals_exposes_direct_policy_without_registry_slot(monkeypatch,
         "get_director_goal",
         lambda *_args, **_kwargs: "Protect the witness",
     )
-    monkeypatch.setattr(
-        goals,
-        "task_model_for_session",
-        lambda *_args, app_settings=None, **_kwargs: "director-model",
-    )
 
-    result = goals.director_goal_policy(
-        object(), "chat", {"session_id": "session"}, app_settings=app_settings_builder.build()
-    )
+    from bridge.schema import initialize_database_schema
+
+    with closing(sqlite3.connect(":memory:")) as db:
+        initialize_database_schema(db)
+        result = goals.director_goal_policy(db, "chat", {"session_id": "session"})
 
     assert isinstance(result, DirectorCustomization)
-    assert result.model == "director-model"
-    assert result.max_tokens == 220
-    assert "Protect the witness" in result.hidden_instructions
+    assert not hasattr(result, "model")
     assert "Protect the witness" in result.speaker_context
 
 
@@ -113,7 +107,7 @@ def test_main_injects_director_goal_policy_directly():
 
     assert "get_director_customization" not in source
     assert "director_goal_policy" in source
-    assert "director_policy=_partial(director_goal_policy, app_settings=config)" in source
+    assert "director_policy=director_goal_policy" in source
 
 
 def test_group_director_service_stays_bridge_independent():

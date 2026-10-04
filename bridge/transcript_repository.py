@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
+
+from bridge.repository_contracts import require_active_transaction
 
 
 def committed_assistant_for_message(
@@ -59,3 +62,98 @@ def recent_transcript_rows(
         (str(chat_id), str(session_id), cutoff, cutoff, limit),
     ).fetchall()
     return list(reversed(rows))
+
+
+def story_row_by_id(db: sqlite3.Connection, chat_id: str, session_id: str, rowid: int) -> tuple[str, str] | None:
+    """Read evidence by exact owner and row identity, without changing story state."""
+    return db.execute(
+        "SELECT role,content FROM messages WHERE chat_id=? AND session_id=? AND id=?",
+        (chat_id, session_id, rowid),
+    ).fetchone()
+
+
+def transcript_prefix_fingerprint(
+    db: sqlite3.Connection, chat_id: str, session_id: str, through_rowid: int
+) -> dict[str, int | str]:
+    """Hash a transcript prefix incrementally; delivery metadata is deliberately excluded."""
+    import hashlib
+
+    digest = hashlib.sha256()
+    count = 0
+    cursor = db.execute(
+        "SELECT id,role,content,created_at FROM messages WHERE chat_id=? AND session_id=? AND id<=? ORDER BY id",
+        (chat_id, session_id, through_rowid),
+    )
+    try:
+        for row in cursor:
+            digest.update(json.dumps(row, ensure_ascii=False, separators=(",", ":")).encode())
+            digest.update(b"\n")
+            count += 1
+    finally:
+        cursor.close()
+    return {"count": count, "sha256": digest.hexdigest()}
+
+
+def append_epilogue_message(db: sqlite3.Connection, chat_id: str, session_id: str, content: str, now: float) -> int:
+    """Append the already-generated epilogue inside its caller-owned ending transaction."""
+    require_active_transaction(db)
+    cursor = db.execute(
+        "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,'assistant',?,?)",
+        (chat_id, session_id, content, now),
+    )
+    if cursor.lastrowid is None:
+        raise RuntimeError("The epilogue message identity was not stored")
+    return int(cursor.lastrowid)
+
+
+def bounded_story_history(
+    db: sqlite3.Connection, chat_id: str, session_id: str, *, budget: int = 14000
+) -> list[tuple[str, str]]:
+    """Read a bounded suffix of committed Story, newest first while counting text."""
+    result = []
+    used = 0
+    cursor = db.execute(
+        "SELECT role,substr(content,1,?) FROM messages WHERE chat_id=? AND session_id=? ORDER BY id DESC LIMIT 64",
+        (budget, chat_id, session_id),
+    )
+    try:
+        for role, content in cursor:
+            if used + len(content) > budget:
+                break
+            result.append((str(role), str(content)))
+            used += len(content)
+    finally:
+        cursor.close()
+    return list(reversed(result))
+
+
+def clone_transcript_prefix(
+    db: sqlite3.Connection,
+    chat_id: str,
+    origin: str,
+    target: str,
+    through_rowid: int,
+    references: set[int],
+) -> dict[int, int]:
+    """Stream the prefix, retaining only the bounded snapshot's referenced ID map."""
+    require_active_transaction(db)
+    if db.execute("SELECT 1 FROM messages WHERE chat_id=? AND session_id=? LIMIT 1", (chat_id, target)).fetchone():
+        raise ValueError("An alternate-ending target must have an empty transcript")
+    mapped = {0: 0}
+    cursor = db.execute(
+        "SELECT id,role,content,created_at FROM messages WHERE chat_id=? AND session_id=? AND id<=? ORDER BY id",
+        (chat_id, origin, through_rowid),
+    )
+    try:
+        for source, role, content, created_at in cursor:
+            inserted = db.execute(
+                "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+                (chat_id, target, role, content, created_at),
+            )
+            if source in references or source == through_rowid:
+                mapped[source] = int(inserted.lastrowid or 0)
+    finally:
+        cursor.close()
+    if not references <= mapped.keys() or through_rowid not in mapped:
+        raise ValueError("A checkpoint reference is outside its saved transcript")
+    return mapped

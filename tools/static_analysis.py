@@ -26,6 +26,8 @@ STATIC_TARGETS: tuple[str, ...] = (
 
 
 REPOSITORY_TARGETS: tuple[str, ...] = (
+    "bridge/ending_repository.py",
+    "bridge/narrative_arc_repository.py",
     "bridge/token_usage_repository.py",
     "bridge/rag_repository.py",
     "bridge/variant_repository.py",
@@ -49,6 +51,58 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
+    "bridge/alternate_ending_runtime.py",
+    "bridge/alternate_ending.py",
+    "bridge/alternate_ending_restore.py",
+    "bridge/alternate_ending_repository.py",
+    "bridge/alternate_ending_schema.py",
+    "bridge/alternate_ending_memory.py",
+    "bridge/checkpoint_remap.py",
+    "bridge/memory_snapshot_repository.py",
+    "bridge/ending_controls.py",
+    "bridge/ending_runtime.py",
+    "bridge/closed_session_guard.py",
+    "bridge/closed_story_schema.py",
+    "bridge/epilogue_contracts.py",
+    "bridge/epilogue_service.py",
+    "bridge/ending_reconciliation.py",
+    "bridge/ending_work_schema.py",
+    "bridge/narrative_checkpoint_capture.py",
+    "bridge/narrative_checkpoints.py",
+    "bridge/finale_checkpoint_schema.py",
+    "bridge/ending_values.py",
+    "bridge/ending_service.py",
+    "bridge/ending_schema.py",
+    "bridge/story_evidence.py",
+    "bridge/narrative_arcs.py",
+    "bridge/narrative_arc_schema.py",
+    "bridge/miniapp_director.py",
+    "bridge/director_room.py",
+    "bridge/director_panels.py",
+    "bridge/director_callbacks.py",
+    "bridge/director_input.py",
+    "bridge/director_cadence.py",
+    "bridge/director_runtime.py",
+    "bridge/extension_context.py",
+    "bridge/director_schema.py",
+    "bridge/director_repository.py",
+    "bridge/director_guidance.py",
+    "bridge/director_prompt.py",
+    "bridge/director_service.py",
+    "bridge/director_contracts.py",
+    "bridge/director_validation.py",
+    "bridge/narrative_runtime_schema.py",
+    "bridge/narrative_checkpoint_repository.py",
+    "bridge/narrative_context.py",
+    "bridge/narrative_extraction.py",
+    "bridge/narrative_reconciliation.py",
+    "bridge/narrative_values.py",
+    "bridge/narrative_schema.py",
+    "bridge/narrative_repository.py",
+    "bridge/narrative_settings.py",
+    "bridge/narrative_policy.py",
+    "bridge/narrative_panels.py",
+    "bridge/narrative_callbacks.py",
     "bridge/provider_health_store.py",
     "bridge/provider_probe_service.py",
     "bridge/provider_catalog_cache.py",
@@ -121,6 +175,7 @@ TYPE_TARGETS: tuple[str, ...] = (
 
 
 PURE_CONTRACT_IMPORTS = {
+    "bridge.director_contracts": frozenset(),
     "bridge.token_usage_values": frozenset(),
     "bridge.rag_contracts": frozenset(),
     "bridge.port_contracts": frozenset(
@@ -166,6 +221,7 @@ LOW_LEVEL_IMPORTS = {
     "bridge.conversation_schema": frozenset([]),
     "bridge.conversation_setup": frozenset(
         [
+            "bridge.narrative_settings",
             "bridge.card_content",
             "bridge.conversation_lifecycle",
             "bridge.limits",
@@ -191,6 +247,8 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.conversation_setup_panels": frozenset(
         [
+            "bridge.narrative_panels",
+            "bridge.narrative_settings",
             "bridge.callback_tokens",
             "bridge.card_content",
             "bridge.conversation_lifecycle",
@@ -203,6 +261,9 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.light_novel_callbacks": frozenset(
         [
+            "bridge.closed_session_guard",
+            "bridge.narrative_context",
+            "bridge.narrative_values",
             "bridge.light_novel_contracts",
             "bridge.conversation_lifecycle",
             "bridge.job_service",
@@ -237,6 +298,7 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.light_novel_panels": frozenset(
         [
+            "bridge.narrative_context",
             "bridge.conversation_lifecycle",
             "bridge.light_novel_repository",
             "bridge.light_novel_service",
@@ -250,6 +312,8 @@ LOW_LEVEL_IMPORTS = {
     "bridge.light_novel_repository": frozenset(["bridge.repository_contracts"]),
     "bridge.light_novel_service": frozenset(
         [
+            "bridge.closed_session_guard",
+            "bridge.narrative_context",
             "bridge.card_content",
             "bridge.persona_service",
             "bridge.conversation_lifecycle",
@@ -265,6 +329,7 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.light_novel_turn": frozenset(
         [
+            "bridge.narrative_context",
             "bridge.job_store",
             "bridge.light_novel_format",
             "bridge.light_novel_repository",

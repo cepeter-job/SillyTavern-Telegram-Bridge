@@ -108,6 +108,7 @@ def test_prepare_message_forwards_pending_context_through_service(monkeypatch):
         "ensure_session",
         lambda *_args, app_settings=None, **_kwargs: session,
     )
+    monkeypatch.setattr(message_commands, "story_mutation_message", lambda *_args: None)
     monkeypatch.setattr(message_commands, "has_pending_management_input", lambda *_args: True)
     monkeypatch.setattr(
         message_commands,

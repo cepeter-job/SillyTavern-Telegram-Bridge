@@ -9,6 +9,7 @@ from bridge.character_optimizer_input import handle_character_optimizer_suggesti
 from bridge.conversation_lifecycle import is_command_text
 from bridge.conversation_setup import setup_key
 from bridge.conversation_setup_callbacks import handle_setup_name_input
+from bridge.director_input import handle_director_input
 from bridge.group_service import GroupService
 from bridge.memory_service import MemoryService
 from bridge.metadata import set_meta
@@ -44,6 +45,8 @@ def handle_pending_input(
 ) -> bool:
     """Consume one scoped pending-input message, including cancel and validation."""
     session_id = session["session_id"]
+    if handle_director_input(db, token, chat_id, session, stripped, request_context):
+        return True
     setup = _pending_state(db, setup_key(chat_id, request_context.actor_id), session_id, token, chat_id)
     if (
         setup

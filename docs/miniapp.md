@@ -37,6 +37,11 @@ See [Token usage](token-usage.md) for missing counters and coverage limits.
 
 ### Characters and optimizer
 
+Selecting a character uses your saved Narrative Style default for the new
+session. Existing sessions keep their own style. Use Telegram `/narrative` to
+change it or save a new personal default; the Mini App does not yet provide
+separate Narrative Style controls.
+
 Choose a character to create a new normal session, then send `/start` in Telegram
 for its opening. This leaves your existing conversation intact.
 
@@ -52,7 +57,8 @@ animation is unavailable or reduced motion is enabled.
 
 ### Models and generation
 
-Story and Utility selections belong to the current session. Utility can inherit
+Story, Utility and Director selections belong to the current session. Director can
+inherit Utility; Utility can inherit
 Story. Provider credentials stay on the server.
 
 Generation uses the same limits as Telegram: temperature 0–2, top-p 0–1, output
@@ -204,3 +210,40 @@ names, portraits and status from the authenticated bridge.
     <td><img src="assets/miniapp-concept/manage.webp" alt="Mini App Manage design preview" width="280"></td>
   </tr>
 </table>
+
+## Director Room
+
+Choose **Manage → Director Room** to inspect hidden scene plans, current viewpoint,
+threads and recent decisions. Planning text is not story dialogue or character
+knowledge. **Next scene only** and **Persistent objective** are separate controls;
+only the latter remains until you explicitly change or clear it. The same
+persistent objective is available through Telegram `/group goal`.
+
+Choose an established thread to guide the next scene, or use **Reassess now** for a
+provider-backed Director check. The confirmation makes the extra model call
+explicit. Repeated requests reuse the existing job, and an old rendered page
+cannot retarget its edit to a different active session.
+
+Director settings offer Adaptive, 4/6/10-turn and custom 1–100-turn cadence, plus a
+reasoning budget separate from Utility. **Choose models** opens Story/Utility/
+Director routing. Text is rendered safely; saving a long objective preserves the
+full supported 4,000 characters even when Telegram shows a shorter preview.
+
+### Ending controls
+
+Director Room includes the story's ending mode, optional goal, finale-confirmation
+preference and current lifecycle. **Begin finale** requires explicit consent and
+checks the displayed story revision. **Recover saved ending** is a bounded job
+that resumes only unfinished epilogue work or delivery. **View ending** reads the
+saved prose without a provider call. Completed sessions offer **New Story** and
+keep their original ending immutable.
+
+### Alternate endings
+
+A completed story with a valid checkpoint offers **Alternate Ending** in Director
+Room. Confirming creates an independent session and switches to it when the
+original is still active. The action runs through the existing actor-bound jobs
+queue. Retrying the same operation retrieves its result instead of creating a
+second branch; a later explicit request can create a different alternate ending.
+The original stays closed. A memory warning means external seeding was unavailable,
+not that the new local story was lost.

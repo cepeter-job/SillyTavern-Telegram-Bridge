@@ -381,3 +381,28 @@ def test_character_restore_ui_disables_identical_backup_and_surfaces_undo_messag
     assert "item.matches_installed" in source
     assert "backup_digest:item.backup_digest" in source
     assert "notice(result.message)" in source
+
+
+@pytest.mark.parametrize("preset", ["observer", "custom"])
+def test_miniapp_character_setup_preserves_personal_style_prefill_only_for_new_session(tmp_path, preset):
+    from bridge.miniapp_characters import select_character
+    from bridge.narrative_settings import (
+        load_session_narrative_settings,
+        normalize_narrative_settings,
+        preset_narrative_settings,
+        save_user_narrative_default,
+    )
+
+    services, who, params = setup(tmp_path)
+    preferred = (
+        normalize_narrative_settings({"preset": "custom", "offscreen_policy": "free"})
+        if preset == "custom"
+        else preset_narrative_settings(preset)
+    )
+    with services.db_factory() as db:
+        original = load_session_narrative_settings(db, who.chat_id, params["session_id"])
+        save_user_narrative_default(db, who.user_id, preferred)
+    result = select_character(services, who, {**params, "filename": "Alice.png", "confirm": True})
+    with services.db_factory() as db:
+        assert load_session_narrative_settings(db, who.chat_id, result["session"]["session_id"]) == preferred
+        assert load_session_narrative_settings(db, who.chat_id, params["session_id"]) == original

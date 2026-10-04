@@ -10,12 +10,14 @@ from bridge.cards import send_character_menu, send_persona_menu, send_session_me
 from bridge.continuation import continue_last
 from bridge.conversation_lifecycle import ALREADY_STARTED, conversation_state, is_group_conversation
 from bridge.delivery_recovery import retry_failed_delivery
+from bridge.director_panels import send_director_menu
 from bridge.extension_registry import dispatch_command_routes as _dispatch_extension_command_routes
 from bridge.failed_turns import clear_failed_turn, latest_failed_turn, record_failed_turn
 from bridge.greetings import send_greeting_menu
 from bridge.help_details import send_help_command, send_help_menu
 from bridge.light_novel_panels import send_light_novel_menu
 from bridge.model_selection import task_model_for_session
+from bridge.narrative_panels import send_narrative_menu
 from bridge.npc_service import NpcService
 from bridge.prompt_diagnostics import prompt_diagnostics
 from bridge.prompt_panels import send_prompt_menu
@@ -305,6 +307,12 @@ def _handle_entities(
     persona_service,
 ):
     """Handle character, session, persona, world, prompt, and provider panels."""
+    if command == "/director":
+        send_director_menu(token, chat_id, session, request_context=request_context)
+        return True
+    if command == "/narrative":
+        send_narrative_menu(token, chat_id, session, request_context=request_context)
+        return True
     if command == "/systemprompt":
         send_system_prompt_menu(token, chat_id, session.get("system_prompt") or "", request_context=request_context)
         return True

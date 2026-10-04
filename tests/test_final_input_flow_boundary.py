@@ -178,6 +178,9 @@ def test_input_flows_no_longer_imports_session_naming_or_status_panels():
 def test_pending_session_name_uses_injected_handler(monkeypatch, *, app_settings_builder):
     import bridge.input_flows as flows
 
+    # This routing test isolates the session-name handler from unrelated pending-input owners.
+    monkeypatch.setattr(flows, "handle_director_input", lambda *_args, **_kwargs: False)
+
     calls = []
 
     def handler(*args, **kwargs):

@@ -9,7 +9,7 @@ from bridge.generation_settings_values import parse_generation_setting
 from bridge.language import normalize_stt_language, stt_language_label
 from bridge.message_commands import send_pending_input_message
 from bridge.metadata import set_meta
-from bridge.model_selection import set_utility_reasoning, task_model_for_session
+from bridge.model_selection import set_director_reasoning, set_utility_reasoning, task_model_for_session
 from bridge.note_panels import send_note_menu
 from bridge.pending_input import _cancel_pending
 from bridge.preset_panels import send_preset_menu
@@ -42,7 +42,7 @@ def _handle_settings_input(
 ) -> bool:
     reasoning_scope = str(state.get("scope") or "")
     utility_reasoning = reasoning_scope == "utility_reasoning"
-    provider_reasoning = reasoning_scope in {"story_reasoning", "utility_reasoning"}
+    provider_reasoning = reasoning_scope in {"story_reasoning", "utility_reasoning", "director_reasoning"}
     if stripped.casefold() in {"/cancel", "cancel"}:
         _cancel_pending(db, token, chat_id, f"settings_input:{chat_id}", state)
         if provider_reasoning:
@@ -54,7 +54,9 @@ def _handle_settings_input(
         key, value = parse_generation_setting(str(state.get("key") or ""), stripped)
         if provider_reasoning and key != "reasoning_budget":
             raise ValueError("provider reasoning input accepts reasoning budget only")
-        if utility_reasoning:
+        if reasoning_scope == "director_reasoning":
+            set_director_reasoning(db, chat_id, session_id, int(value))
+        elif utility_reasoning:
             set_utility_reasoning(db, chat_id, session_id, int(value))
         else:
             update_generation_settings(db, chat_id, session_id, **{key: value})

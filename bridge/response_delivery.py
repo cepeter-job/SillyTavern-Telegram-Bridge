@@ -11,6 +11,7 @@ from collections.abc import Callable
 from functools import partial as _partial
 
 from bridge.background import submit_background
+from bridge.closed_session_guard import story_mutation_message
 from bridge.delivery_progress import DeliveryFailure, DeliveryTargetExpired, checkpoint, prepare_progress
 from bridge.delivery_repository import clear_progress
 from bridge.expressions import deliver_expression
@@ -234,6 +235,8 @@ def queue_user_quote_tts(
     app_settings: AppSettings,
 ) -> bool:
     """Queue quoted user dialogue for TTS without changing the transcript."""
+    if story_mutation_message(db, chat_id, session_id):
+        return False
     if get_meta(db, f"voice_mode:{chat_id}", "off") != "tts":
         return False
     speech = quoted_speech_from_reply(text)
@@ -265,6 +268,9 @@ def send_reply(
     expected_job_id: int | str | None = None,
     app_settings: AppSettings,
 ) -> None:
+    if db is not None and session_id and story_mutation_message(db, chat_id, session_id):
+        # Recovery may deliver committed text, but never generate fresh media for a closed original.
+        session_id = None
     text = telegram_safe_output(text)
     message_ids: list[int] = []
     complete = False

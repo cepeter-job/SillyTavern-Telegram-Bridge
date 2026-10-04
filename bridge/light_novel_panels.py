@@ -10,6 +10,7 @@ from bridge.conversation_lifecycle import conversation_state
 from bridge.light_novel_repository import ChoiceSet, bind_choice_panel, latest_choice_set, load_choice_set
 from bridge.light_novel_service import current_choice_story
 from bridge.metadata import get_meta
+from bridge.narrative_context import narrative_choice_is_steering
 from bridge.request_types import RequestContext
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
@@ -42,7 +43,12 @@ def render_choices(db: sqlite3.Connection, token: str, record: ChoiceSet, *, app
         choice_lines = [
             f"<b>{index + 1}.</b> {html.escape(choice, quote=False)}" for index, choice in enumerate(current.choices)
         ]
-        text = "What will you do?\n\n" + "\n\n".join(choice_lines) + "\n\nYou may also type your own reply."
+        heading = (
+            "Where should the story go next?"
+            if narrative_choice_is_steering(db, current.chat_id, current.session_id)
+            else "What will you do?"
+        )
+        text = heading + "\n\n" + "\n\n".join(choice_lines) + "\n\nYou may also type your own reply."
         rows = [
             [
                 {"text": str(index + 1), "callback_data": f"lnchoice:{current.nonce}:{index}"}

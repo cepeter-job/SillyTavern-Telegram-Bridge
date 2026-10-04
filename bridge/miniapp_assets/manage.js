@@ -4,7 +4,8 @@ import {icon} from './icons.js';
 
 const sections = [
   ['Story setup', [
-    ['models','Models','Choose story and utility models','models'],
+    ['models','Models','Choose story, utility and director models','models'],
+    ['director','Director Room','Review hidden plans and guide the next scene','generation'],
     ['personas','Persona','Define who you are in the story','personas'],
     ['worlds','Worlds','Shape lore, setting and context','worlds'],
     ['models','Generation','Tune creativity, length and reasoning','generation','generation'],

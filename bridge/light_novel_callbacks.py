@@ -7,6 +7,7 @@ import logging
 import sqlite3
 from collections.abc import Callable
 
+from bridge.closed_session_guard import guard_story_mutation
 from bridge.conversation_lifecycle import conversation_state
 from bridge.job_service import JobSubmission
 from bridge.light_novel_contracts import LightNovelRuntime
@@ -15,6 +16,8 @@ from bridge.light_novel_jobs import process_light_novel_choices_job
 from bridge.light_novel_repository import consume_choice_set, load_choice_set, set_choice_job
 from bridge.light_novel_service import current_choice_story
 from bridge.metadata import get_meta
+from bridge.narrative_context import narrative_choice_is_steering
+from bridge.narrative_values import NARRATIVE_STEERING_PREFIX
 from bridge.sqlite_store import write_transaction
 
 NEXT_SCENE_INSTRUCTION = (
@@ -60,12 +63,14 @@ def route_light_novel_callback(
                 raise ValueError("Choice expired")
             if get_meta(db, f"active_session:{chat_id}", "default") != record.session_id:
                 raise ValueError("Choice expired")
+            guard_story_mutation(db, chat_id, record.session_id)
             state = conversation_state(db, chat_id, record.session_id)
             if record.state == "consumed":
                 raise ValueError("Choice already used")
             if current_choice_story(db, record) is None or state.epoch != record.epoch:
                 raise ValueError("Choice expired")
             if action in {"lnchoice", "lnnext"}:
+                steering = narrative_choice_is_steering(db, chat_id, record.session_id)
                 if action == "lnchoice":
                     choices = validate_choices(list(record.choices), record.requested_count)
                     index = int(parts[2])
@@ -78,10 +83,19 @@ def route_light_novel_callback(
                     consume_choice_set(
                         db, record.nonce, None, chat_id, record.session_id, actor_id, state.epoch, message_id
                     )
-                    selection = NEXT_SCENE_INSTRUCTION
+                    selection = (
+                        "Advance to a narratively meaningful next scene under the selected Narrative Style. "
+                        "Preserve off-screen freedom without forcing a return to the user. "
+                        "Do not invent the user's dialogue, thoughts, decisions, or consequential actions."
+                        if steering
+                        else NEXT_SCENE_INSTRUCTION
+                    )
                     selection_label = NEXT_SCENE_LABEL
-                payload = {
+                if steering:
+                    selection = NARRATIVE_STEERING_PREFIX + selection
+                payload: dict[str, object] = {
                     "text": selection,
+                    "narrative_input": "steering" if steering else "in_world",
                     "model": record.model_id,
                     "actor_id": actor_id,
                     "resolve_active": False,

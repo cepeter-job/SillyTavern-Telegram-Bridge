@@ -7,6 +7,7 @@ import sqlite3
 import time
 
 from bridge.card_content import card_fields_from_file
+from bridge.closed_session_guard import guard_story_mutation
 from bridge.conversation_lifecycle import START_REQUIRED, require_started
 from bridge.delivery_progress import bind_committed_turn
 from bridge.generation import build_chat_messages, render_session_response
@@ -16,6 +17,7 @@ from bridge.group_service import GroupService
 from bridge.light_novel_turn import begin_novel_turn
 from bridge.limits import MAX_HISTORY_MESSAGES
 from bridge.memory_service import MemoryService
+from bridge.narrative_context import narrative_context_for_session
 from bridge.npc_service import NpcService
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
@@ -50,6 +52,7 @@ def process_image_message(
     app_settings: AppSettings,
     rag_service: RagService,
 ) -> None:
+    guard_story_mutation(db, chat_id, session["session_id"])
     if not require_started(db, chat_id, session["session_id"]):
         send_text(token, chat_id, START_REQUIRED)
         return
@@ -102,6 +105,7 @@ def process_image_message(
         rag_context=rag_service.context_for_prompt(db, chat_id, caption, rag_bundle),
         group_context=group_context,
         persona_service=persona_service,
+        narrative_context=narrative_context_for_session(db, chat_id, session["session_id"], "story"),
         app_settings=app_settings,
     )
     novel_turn = begin_novel_turn(db, chat_id, session, "image", telegram_message_id)

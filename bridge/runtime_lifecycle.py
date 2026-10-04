@@ -11,8 +11,10 @@ import time
 import urllib.error
 from contextlib import ExitStack
 
+from bridge.alternate_ending_runtime import queue_alternate_ending_recovery
 from bridge.background import shutdown_background_executors
 from bridge.composition import BridgeServices
+from bridge.ending_runtime import queue_startup_ending_recovery
 from bridge.metadata import get_meta
 from bridge.provider_discovery import refresh_model_catalog
 from bridge.runtime_health import capture_deployment
@@ -111,6 +113,17 @@ def _shutdown_runtime(services: BridgeServices, db: sqlite3.Connection | None, *
         run_database_maintenance(app_settings=services.config)
 
 
+def _queue_ending_recovery(services: BridgeServices, db: sqlite3.Connection) -> int:
+    branches = queue_alternate_ending_recovery(db, app_settings=services.config)
+    return branches + queue_startup_ending_recovery(
+        db,
+        provider_port=services.provider,
+        delivery_port=services.delivery,
+        persona_service=services.persona,
+        app_settings=services.config,
+    )
+
+
 def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
     config = services.config
     db: sqlite3.Connection | None = None
@@ -157,6 +170,8 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
             ),
             recover_running=True,
         )
+        _queue_ending_recovery(services, db)
+        ending_scan_at = time.monotonic() + 60
         offset = int(get_meta(db, "telegram_offset", "0"))
         permitted = config.allowed_users
         logging.info("Bridge started")
@@ -180,6 +195,9 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
                 if health is not None:
                     health.poll_succeeded()
                 now = time.monotonic()
+                if now >= ending_scan_at:
+                    _queue_ending_recovery(services, db)
+                    ending_scan_at = now + 60
                 if pending_at_boot and not ack_terminal and now >= ack_retry_at:
                     ack_status = attempt_pending_update_ack(
                         token,

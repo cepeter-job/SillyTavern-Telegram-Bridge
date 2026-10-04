@@ -15,6 +15,7 @@ from bridge.metadata import set_meta
 from bridge.model_selection import (
     clear_model_target_selection,
     get_model_target_selection,
+    set_director_reasoning,
     set_model_target_selection,
     set_task_model,
     set_utility_reasoning,
@@ -24,6 +25,7 @@ from bridge.port_contracts import ProviderPolicy, ProviderProbes
 from bridge.provider_discovery import refresh_model_catalog
 from bridge.provider_panel_tokens import load_provider_report, resolve_provider_action
 from bridge.provider_panels import (
+    send_director_reasoning_menu,
     send_model_menu,
     send_model_target_menu,
     send_provider_health_menu,
@@ -35,8 +37,9 @@ from bridge.telegram import send_text
 
 
 def _catalog_current_model(db, chat_id: str, session: dict, session_id: str, *, request_context) -> str:
-    if db is not None and get_model_target_selection(db, chat_id, session_id) == "utility":
-        return task_model_for_session(db, chat_id, session, "utility", app_settings=request_context.app_settings)
+    target = get_model_target_selection(db, chat_id, session_id) if db is not None else ""
+    if target in {"utility", "director"}:
+        return task_model_for_session(db, chat_id, session, target, app_settings=request_context.app_settings)
     return session["model_id"] or request_context.app_settings.default_model
 
 
@@ -75,14 +78,12 @@ def _handle_models_model(
     return True
 
 
-def _handle_models_target(
-    db, token, callback, answer_callback, chat_id, session, session_id, request_context, message_id
-):
+def _handle_models_target(db, token, callback, answer_callback, chat_id, session, request_context, message_id):
     answer_callback(token, str(callback.get("id", "")), "Back to target")
     send_model_target_menu(
         token,
         chat_id,
-        _catalog_current_model(db, chat_id, session, session_id, request_context=request_context),
+        session["model_id"] or request_context.app_settings.default_model,
         task_model_for_session(db, chat_id, session, "utility", app_settings=request_context.app_settings),
         message_id,
         request_context=request_context,
@@ -156,30 +157,54 @@ def _handle_models_utility_reasoning(token, callback, answer_callback, chat_id, 
 def _handle_utilityreasoning(
     db, token, callback, answer_callback, data, chat_id, session_id, request_context, message_id
 ):
+    return _handle_taskreasoning(
+        db, token, callback, answer_callback, data, chat_id, session_id, request_context, message_id, task="utility"
+    )
+
+
+def _handle_directorreasoning(
+    db, token, callback, answer_callback, data, chat_id, session_id, request_context, message_id
+):
+    return _handle_taskreasoning(
+        db, token, callback, answer_callback, data, chat_id, session_id, request_context, message_id, task="director"
+    )
+
+
+def _handle_models_director_reasoning(token, callback, answer_callback, chat_id, request_context, message_id):
+    answer_callback(token, str(callback.get("id", "")), "Director reasoning")
+    send_director_reasoning_menu(token, chat_id, message_id, request_context=request_context)
+    return True
+
+
+def _handle_taskreasoning(
+    db, token, callback, answer_callback, data, chat_id, session_id, request_context, message_id, *, task
+):
+    setter = set_director_reasoning if task == "director" else set_utility_reasoning
+    sender = send_director_reasoning_menu if task == "director" else send_utility_reasoning_menu
     label = data.split(":", 1)[1]
     if label == "custom":
         pending = {
             "key": "reasoning_budget",
-            "scope": "utility_reasoning",
+            "scope": f"{task}_reasoning",
             "session_id": session_id,
             "expires_at": time.time() + PENDING_SETTINGS_TTL_SECONDS,
         }
         set_meta(db, f"settings_input:{chat_id}", json.dumps(pending))
-        answer_callback(token, str(callback.get("id", "")), "Enter Utility reasoning")
+        answer_callback(token, str(callback.get("id", "")), f"Enter {task.title()} reasoning")
         remove_inline_keyboard(db, token, callback)
         pending["prompt_message_ids"] = send_text(
             token,
             chat_id,
-            "Send Utility reasoning budget (0–32000). Send /cancel to leave it unchanged.",
+            f"Send {task.title()} reasoning budget (0–32000). Send /cancel to leave it unchanged.",
         )
         set_meta(db, f"settings_input:{chat_id}", json.dumps(pending))
         return True
     if label not in REASONING_LEVELS:
         answer_callback(token, str(callback.get("id", "")), "Reasoning choice invalid")
         return True
-    set_utility_reasoning(db, chat_id, session_id, REASONING_LEVELS[label])
-    answer_callback(token, str(callback.get("id", "")), "Utility reasoning updated")
-    send_utility_reasoning_menu(
+    setter(db, chat_id, session_id, REASONING_LEVELS[label])
+    answer_callback(token, str(callback.get("id", "")), f"{task.title()} reasoning updated")
+    sender(
         token,
         chat_id,
         message_id,
@@ -365,7 +390,7 @@ def _handle_modeltarget(
     db, token, callback, answer_callback, data, chat_id, session, session_id, request_context, message_id, send_models
 ):
     target = data.split(":", 1)[1]
-    if target not in {"story", "utility"}:
+    if target not in {"story", "utility", "director"}:
         answer_callback(token, str(callback.get("id", "")), "Model target invalid")
         return True
     set_model_target_selection(db, chat_id, session_id, target)
@@ -400,11 +425,11 @@ def _handle_model(
         return True
     target = get_model_target_selection(db, chat_id, session_id)
     if not target:
-        answer_callback(token, str(callback.get("id", "")), "Choose Story or Utility first")
+        answer_callback(token, str(callback.get("id", "")), "Choose Story, Utility or Director first")
         send_model_target_menu(
             token,
             chat_id,
-            _catalog_current_model(db, chat_id, session, session_id, request_context=request_context),
+            session["model_id"] or request_context.app_settings.default_model,
             task_model_for_session(db, chat_id, session, "utility", app_settings=request_context.app_settings),
             message_id,
             request_context=request_context,
@@ -416,8 +441,8 @@ def _handle_model(
         )
         message = f"Story model updated: {model}"
     else:
-        set_task_model(db, chat_id, session_id, model, "utility")
-        message = f"Utility model updated: {model}"
+        set_task_model(db, chat_id, session_id, model, target)
+        message = f"{target.title()} model updated: {model}"
     clear_model_target_selection(db, chat_id, session_id)
     answer_callback(token, str(callback.get("id", "")), "Model updated")
     send_text(token, chat_id, message)
@@ -457,10 +482,13 @@ def _bind_routes(
     return (
         {
             "models:target": lambda: _handle_models_target(
-                db, token, callback, answer_callback, chat_id, session, session_id, request_context, message_id
+                db, token, callback, answer_callback, chat_id, session, request_context, message_id
             ),
             "models:cancel": lambda: _handle_models_cancel(db, token, callback, answer_callback),
             "models:story-reasoning": lambda: _handle_models_story_reasoning(
+                token, callback, answer_callback, chat_id, request_context, message_id
+            ),
+            "models:director-reasoning": lambda: _handle_models_director_reasoning(
                 token, callback, answer_callback, chat_id, request_context, message_id
             ),
             "models:utility-reasoning": lambda: _handle_models_utility_reasoning(
@@ -533,6 +561,12 @@ def _bind_routes(
             (
                 "storyreasoning:",
                 lambda: _handle_storyreasoning(
+                    db, token, callback, answer_callback, data, chat_id, session_id, request_context, message_id
+                ),
+            ),
+            (
+                "directorreasoning:",
+                lambda: _handle_directorreasoning(
                     db, token, callback, answer_callback, data, chat_id, session_id, request_context, message_id
                 ),
             ),

@@ -377,3 +377,23 @@ Do not re-resolve the active session after a queued upload has begun.
 
 The Humanizer prompt changes through reviewed source changes. There is no weekly
 reference fetch or automatic prompt promotion in the runtime.
+
+### Narrative ending foundation
+
+The canonical Director proposes plans; only committed-story reconciliation may
+change arc facts. Resolved or abandoned arc updates require exact owned transcript
+evidence within the current reconciliation window. Rewrites restore the preceding
+arc state through the same bounded undo snapshots as scenes and threads.
+
+Ending goals have independent source, lifecycle and goal revisions, with a
+100-record history. Readiness is bound to the complete committed history/settings
+clock; a continued story, edit or changed goal invalidates unconfirmed readiness.
+The pre-finale restoration snapshot and `FINALE` transition are a single local
+transaction. No model request runs inside it. The saved transcript prefix and
+linked checkpoint cannot mutate independently; explicit session deletion removes
+parent ownership first and then cleans dependent data atomically.
+
+Director Room arc guidance is user-authored planning metadata, not permission to
+manually fabricate a resolved arc. Ending Goal controls lock at finale entry.
+At this foundation increment, the epilogue and hard-close workflow still requires
+its owning implementation before Closed Story execution is exposed.

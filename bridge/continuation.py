@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import sqlite3
 
+from bridge.closed_session_guard import guard_story_mutation
 from bridge.delivery_port import DeliveryPort
 from bridge.delivery_repository import clear_progress
 from bridge.generation import _generation_generate_rendered_reply, build_chat_messages
 from bridge.generation_recovery import _generation_operation_recovery
 from bridge.light_novel_turn import begin_novel_turn
 from bridge.memory_service import MemoryService
+from bridge.narrative_context import narrative_context_for_session
 from bridge.npc_service import NpcService
 from bridge.operations import set_operation_phase
 from bridge.persona_service import PersonaService
@@ -36,6 +38,7 @@ def continue_last(
     app_settings: AppSettings,
     rag_service: RagService,
 ) -> None:
+    guard_story_mutation(db, chat_id, session["session_id"])
     session_id = session["session_id"]
     recovery = _generation_operation_recovery(delivery_port)
 
@@ -124,6 +127,7 @@ def continue_last(
         episodic_context=memory_prompt.episodic,
         npc_context=npc_context,
         session_summary=memory_prompt.summary,
+        narrative_context=narrative_context_for_session(db, chat_id, session_id, "story"),
         persona_service=persona_service,
         rag_context=rag_service.context_for_prompt(db, chat_id, instruction, rag_bundle),
         app_settings=app_settings,

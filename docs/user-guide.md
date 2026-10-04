@@ -10,6 +10,8 @@ when they solve a problem for your story.
 - [Everyday controls](#everyday-controls)
 - [Sessions and recovery](#sessions-and-recovery)
 - [Models, context and memory](#models-context-and-memory)
+- [Narrative Style](#narrative-style)
+- [Director Room](#director-room)
 - [Light Novel choices](#light-novel-mode)
 - [Characters and native data](#characters-and-native-data)
 - [Images, voice and documents](#images-voice-and-documents)
@@ -20,7 +22,9 @@ when they solve a problem for your story.
 After [installing the bridge](installation.md), open your bot's private chat.
 
 1. Send `/character` and choose a PNG character card.
-2. Choose **Normal** for ordinary chat, or **Light Novel** for action choices.
+2. Choose a **Narrative Style**. **Player-centric** keeps the focus on your
+   character. **Ensemble**, **World-driven** and **Observer** let the story follow
+   a wider cast or events away from you. Then choose **Normal** or **Light Novel**;
    Light Novel adds an A/B/C strategy selection.
 3. Select an optional Persona, World Info and System Prompt. **Off/Skip** is
    available, and you can select more than one lorebook.
@@ -62,7 +66,8 @@ expired or belongs to a previous session, reopen the command.
 | Start a fresh story | `/new`, then `/character` and `/start` |
 | Switch between existing stories | `/session` |
 | Check the active session and context budget | `/status` |
-| Choose Story/Utility models or reasoning | `/providers` |
+| Choose Story, Utility or Director models and reasoning | `/providers` |
+| Choose point of view, cast focus and off-screen freedom | `/narrative` |
 | Adjust sampling, reply length or optional style controls | `/settings` |
 | Enable or disable live reply previews | `/stream` |
 | Change the reply language or save generation settings | `/language` or `/preset` |
@@ -108,7 +113,7 @@ This applies to both your messages and character replies.
 keeps the previous story and its Telegram messages. `/session` lets you return
 to that story later.
 
-Each session keeps its transcript, character setup, Story/Utility selections,
+Each session keeps its transcript, character setup, Story/Utility/Director selections,
 reasoning and generation settings, response language, variants, notes, summary
 and derived memory. Queued work stays attached to the session that submitted it;
 switching sessions does not redirect an unfinished reply or edit.
@@ -149,11 +154,13 @@ and Humanizer have different preview behavior, described below.
 ### Reset or delete a session
 
 `/reset` opens a confirmation before clearing the active conversation and its
-memory. It keeps the session and selected Character, mode, Persona, World and
-System Prompt, then returns it to an unstarted state. Send `/start` again.
+memory. It keeps the session and selected Character, mode, Persona, World,
+System Prompt and Narrative Style, then returns it to an unstarted state. Send `/start` again.
 
 Reset clears variants, failed turns, summaries, curated/episodic memory, NPC state
-and old choices. It attempts to remove tracked Telegram conversation messages;
+and old choices. It also clears narrative scenes, threads and derived planning
+state, without changing your saved personal defaults. It attempts to remove
+tracked Telegram conversation messages;
 Telegram may refuse old messages or deletions without sufficient permissions.
 
 Delete an **inactive** session through `/session`. Sessions with running or
@@ -164,8 +171,10 @@ verified, destructive local cleanup is refused. Other sessions are unaffected.
 
 ### Choosing models
 
-Use `/providers` to choose Story and Utility independently for the current
-session. Both Story and Utility reasoning are configured from `/providers`.
+Use `/providers` to choose Story, Utility and Director independently for the current
+session. Story writes the prose. Utility handles summaries and extraction. Director
+plans the next scene. An unset Director model inherits Utility, then Story. Both Story and Utility reasoning are configured from `/providers`. Director adds
+its own independent reasoning control there and in Director Room.
 Reasoning support depends on the provider; a zero budget can mean the backend
 default rather than disabled reasoning.
 
@@ -226,8 +235,10 @@ rolls NPC state back to the applicable revision before regeneration.
 | Light Novel B / C | A separate choice request after the story, using Utility / Story respectively. |
 | Humanizer | An additional prose rewrite using the reply's model. |
 | Summaries, memory/NPC/scene refresh, optimizer and ranking | Utility-model work. |
+| Narrative continuity | A bounded Utility reconciliation after committed replies; older or edited history can need more than one batch. |
 | Current Scene image | Utility preparation of the visual prompt, then an image-provider request. |
-| Director / autonomous groups | Director selection can call a model; autonomous turns generate more replies. |
+| AI Director | One planning call on an event or cadence threshold, with at most one repair for malformed version-1 output. Groups reuse the accepted plan without another planning call. |
+| Autonomous groups | Bounded multi-character Story replies; not another independent story planner. |
 
 Review reported counts in the Mini App's **Manage → Advanced settings → Usage**.
 A failed request can still consume tokens. The tracker is not an invoice or a
@@ -254,6 +265,134 @@ dialogue or links, the original rendered reply is kept. These checks cannot prov
 that meaning is unchanged. There is no automatic weekly reference refresh or
 prompt promotion. Attribution remains in [Third-party notices](../THIRD_PARTY_NOTICES.md).
 
+## Director Room
+
+Open `/director`, or **Manage → Director Room** in the Mini App, to see what the
+Director is planning. This is a private planning view: plans do not become story
+facts, and characters do not learn them just because you opened the panel.
+
+The room shows the current scene, viewpoint, thread, accepted direction and recent
+decisions. **Reassess now** asks the configured Director model for a fresh plan.
+It can use provider quota. **Choose thread** plans a future scene without rewriting
+anything already committed.
+
+Use **Next scene only** for a temporary instruction such as “Stay with Mara at the
+gate.” It expires when the scene changes or its source history/settings become
+invalid. A **Persistent objective** stays active until you change or clear it. The
+AI Director cannot silently remove that objective. Both forms still reserve your
+character's dialogue, thoughts and consequential decisions for you.
+
+**Adaptive** cadence is the default. Stable/setup scenes allow up to 10 completed
+Story turns between checks, development 6, escalation 4 and climax 2. Meaningful
+scene or thread changes can trigger a check sooner. Advanced controls offer fixed
+4/6/10-turn intervals or a custom whole-number interval from 1 to 100. Ordinary
+turns below the threshold make no extra Director call.
+
+A Director outage does not change your Narrative Style or erase a reply. The bridge
+keeps valid guidance and otherwise continues conservatively from committed state.
+Stale or malformed plans are not applied. The Mini App and Telegram controls reject
+edits from an old panel rather than silently overwrite a newer decision.
+
+## Closed Story and the epilogue
+
+Choose **Closed Story** in the Advanced step after selecting a character, or open
+**Director Room → Ending settings** for an existing story. The default remains
+Open-ended. An optional Ending Goal gives the Director a destination without
+scripting your character's decisions. Its revisions and reasons remain visible.
+
+A finale starts automatically when current story evidence supports it. Turn on
+**Ask before finale** to review the Director's reason and press **Begin finale**
+yourself. Continuing the story first expires that old confirmation. The bridge
+saves an immutable pre-finale checkpoint before entering the finale.
+
+The finale can span several turns. Once its actual resolution is committed and
+reconciled, the Director prepares a brief and the Story model writes a **separate
+epilogue**. Its time jump may show the immediate aftermath or a later future, but
+must preserve your agency and deliberately unresolved facts.
+
+A completed story is read-only. New story messages receive:
+
+> This story has ended. Please start new story.
+
+Editing, regeneration, choices, `/reset`, new images and other creative work cannot
+reopen the original. Status, history, usage and Director Room remain available.
+Choose **New Story** or `/character` to start a different session.
+
+When an epilogue or its delivery is interrupted, use `/retry` or **Recover saved
+ending**. The bridge retries the unfinished stage, not the already committed
+resolution or epilogue. A Telegram outage does not undo a saved ending. A provider
+failure pauses automatic retries to avoid repeatedly spending tokens.
+
+### Try an alternate ending
+
+Open the completed story's **Director Room → Ending settings** and choose
+**Alternate Ending**. The Mini App offers the same action. It appears only when
+the original has a valid saved pre-finale checkpoint.
+
+The bridge creates a separate, already-started session named after the original
+with “— Alternate Ending” added. It copies the story only through the checkpoint,
+along with the character setup, models, preferences and local continuity as they
+were then. It does **not** copy the original finale, epilogue or their later facts.
+Continue the new session normally to explore another resolution.
+
+The original stays closed. Returning to it later and explicitly requesting another
+alternate ending creates another independent session. Repeated delivery of the
+same button action returns the same branch instead of making accidental copies.
+
+External memory is isolated by the new session's tags and document IDs inside the
+chat's Hindsight bank. Seeding failure does not point the branch at the original's
+memories: the copied transcript and local continuity remain usable, and the UI
+reports degraded external memory. A later ordinary memory retain uses the new
+session's identity.
+
+`/branch` still selects existing response variants; it is not Alternate Ending.
+A finale freezes its earlier story history, so `/reset` cannot discard that
+checkpoint after the finale begins. Start a new story instead.
+
+## Narrative Style
+
+Open `/narrative` to choose how the **current story** is told. You also choose
+this style immediately after selecting a character in `/character`.
+
+| Preset | What changes |
+|---|---|
+| **Player-centric** | Third-person limited, anchored to your character. Off-screen scenes are rare and brief. |
+| **Ensemble** | Limited viewpoints rotate between cast members. Cutaways are allowed but bounded. |
+| **World-driven** | The world and its cast can carry the plot. Scenes may stay away from your character without a forced return. |
+| **Observer** | Cinematic, externally observable narration. You can follow the story from outside it and intervene when you choose. |
+
+For example, a World-driven story can follow a guard at a distant gate while
+your character remains elsewhere. The guard does not need to bring every event
+back to you. This does **not** give the model permission to decide what your
+character says, thinks, promises or chooses.
+
+All four presets use **Physical continuity**: the model may connect an action
+you have already chosen with harmless movement, but your dialogue, thoughts,
+commitments, emotional conclusions and consequential decisions stay yours.
+**Advanced** lets you change point of view, your role, focus, cutaways and user
+control separately. Changes that differ from a preset appear as **Custom**.
+First-person narration must follow an AI-controlled viewpoint, not invent your
+character's inner monologue.
+
+**Save as my default** only prefills your future character setup. It does not
+change existing stories. Choosing a style during setup is still just a draft
+until **Apply**. Changing a session's style invalidates its old Light Novel
+choices, so an outdated menu cannot act under the new rules.
+
+**I am not MC** is a separate option in `/settings`. World-driven and Observer
+recommend it, but never turn it on automatically. Narrative Style controls
+how the story is told; Grounded User controls assumptions about your character's
+abilities and importance.
+
+`/status` shows your style, point of view, current scene/thread and whether the
+narrative record is current or stale. That record describes committed story
+facts, not proposed future events. It is separate from `/scene`, which tracks
+physical surroundings and continuity. Background reconciliation uses the
+Utility model and is reported as `director_reconcile` usage. Opening a style
+panel or status page makes no model request. If reconciliation fails, your
+saved story stays intact and generation keeps the selected policy rather than
+pretending stale facts are current.
+
 ## Light Novel mode
 
 Choose Light Novel during `/character` setup. `/lightnovel` changes its strategy
@@ -271,9 +410,12 @@ Strategy A hides raw structured streaming and can run one automatic choice-only
 repair when usable prose arrives without valid choices. B/C retain ordinary story
 streaming when other settings allow it.
 
-The panel offers 2–4 full-text actions with numbered buttons. **Next Scene** asks
-the narrative to advance until your character can meaningfully participate again,
-without choosing dialogue or actions for you. You can always type your own reply;
+The panel offers 2–4 full-text choices with numbered buttons. When your character
+is present, these can be in-world actions. Off-screen scenes instead offer
+narrative steering, such as following another thread or cutting to a new scene.
+**Next Scene** respects Narrative Style: World-driven and Observer do not force
+a return to your character. It never chooses dialogue or consequential actions
+for you. You can always type your own reply;
 doing so invalidates the old choices. Double taps and stale buttons cannot submit
 another committed user turn from the same choice.
 
@@ -285,7 +427,9 @@ A's repair pass use a bounded snapshot of Character, Persona, relevant World
 Info, System Prompt, Author's Note, summary, NPC state, recent messages and the
 current story. That separate pass does not resend post-history instructions,
 Hindsight/episodic recall or Data Bank context. Grounded User instructions also
-apply to choice generation when enabled.
+apply to choice generation when enabled. Every strategy also receives the
+current Narrative Style and only uses scene facts that are current for that
+committed response.
 
 Normal mode makes no choice requests. Light Novel applies to standard sessions;
 Forum Topic groups use their own turn controls.
@@ -427,7 +571,7 @@ group state. The wizard selects characters, World Info and a turn mode:
 |---|---|
 | Round-robin | Characters speak in a set order. |
 | Contextual | The next speaker is selected from context. |
-| Director | A bounded model call chooses a known speaker and short scene direction. |
+| Director | Uses the canonical Director's accepted speaker or viewpoint. If none is valid, uses conservative round robin without another provider call. |
 | Manual | A user claims or passes the turn. |
 | Autonomous | Characters continue within configured bounds. |
 
@@ -435,9 +579,12 @@ Manual turn ownership applies to text, message edits, photos, PNG documents and
 voice input before processing. PNG card uploads also pass that check. Recovery
 of an already-saved answer can finish even after ownership changes.
 
-In Director mode, `/group goal <objective>` sets a hidden scene objective of up
-to 1,200 characters. `/group goal status` reviews it and `/group goal clear`
-removes it. The objective guides the Director without entering the transcript.
+`/group goal <objective>` sets the same persistent objective shown in Director
+Room, up to 4,000 characters. `/group goal status` reviews it and `/group goal clear`
+clears it. Every change is recorded as a manual Director revision, not as story
+dialogue. A forced group speaker remains an explicit choice; otherwise the group
+uses the canonical plan or safe round robin. Configured cast members are not
+automatically treated as physically present.
 
 ### Scene state
 

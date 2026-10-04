@@ -381,3 +381,73 @@ def load_npc_fields_as_of(db: sqlite3.Connection, npc_id: int, through_rowid: in
         else:
             fields[change.field_key] = change.after
     return fields
+
+
+def snapshot_npc_state(
+    db: sqlite3.Connection, chat_id: str, session_id: str, through_rowid: int
+) -> list[dict[str, Any]]:
+    """Capture checkpoint-time local NPC state without reading future extraction results."""
+    cursor = db.execute(
+        "SELECT * FROM npc_entities WHERE chat_id=? AND session_id=? AND first_seen_rowid<=? ORDER BY npc_id LIMIT 257",
+        (chat_id, session_id, through_rowid),
+    )
+    try:
+        columns = [item[0] for item in cursor.description]
+        entities = [dict(zip(columns, row, strict=True)) for row in cursor]
+    finally:
+        cursor.close()
+    if len(entities) > 256:
+        raise ValueError("NPC state exceeds the bounded pre-finale snapshot")
+    budget = 0
+    for entity in entities:
+        cursor = db.execute(
+            "SELECT npc_id,field_key,substr(value_json,1,1048577) AS value_json,field_mode,visibility,"
+            "known_by_json,updated_rowid,updated_at FROM npc_fields WHERE npc_id=? AND updated_rowid<=? "
+            "ORDER BY field_key LIMIT 129",
+            (entity["npc_id"], through_rowid),
+        )
+        try:
+            columns = [item[0] for item in cursor.description]
+            values = [dict(zip(columns, row, strict=True)) for row in cursor]
+        finally:
+            cursor.close()
+        if len(values) > 128:
+            raise ValueError("NPC fields exceed the bounded pre-finale snapshot")
+        budget += len(json.dumps(values, ensure_ascii=False))
+        if budget > 1048576:
+            raise ValueError("NPC state is too large for a pre-finale snapshot")
+        entity["fields"] = values
+        entity["last_seen_rowid"] = min(entity["last_seen_rowid"], through_rowid)
+    return entities
+
+
+def restore_npc_snapshot(db: sqlite3.Connection, chat_id: str, session_id: str, entities: list[dict]) -> None:
+    """Create independent NPC IDs and a checkpoint-valid baseline for future rewinds."""
+    require_active_transaction(db)
+    for entity in entities:
+        npc_id = insert_npc_entity(
+            db,
+            chat_id,
+            session_id,
+            entity["canonical_name"],
+            entity["display_name"],
+            json.loads(entity["aliases_json"]),
+            entity["first_seen_rowid"],
+            entity["created_at"],
+        )
+        set_npc_entity_last_seen(db, npc_id, entity["last_seen_rowid"], entity["updated_at"])
+        for item in entity["fields"]:
+            field = NpcFieldState(
+                npc_id,
+                item["field_key"],
+                json.loads(item["value_json"]),
+                item["field_mode"],
+                item["visibility"],
+                tuple(json.loads(item["known_by_json"])),
+                item["updated_rowid"],
+                item["updated_at"],
+            )
+            upsert_npc_field(db, field)
+            insert_npc_field_change(
+                db, npc_id, field.field_key, "set", None, field, field.updated_rowid, field.updated_at
+            )

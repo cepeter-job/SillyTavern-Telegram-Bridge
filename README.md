@@ -62,8 +62,15 @@ managers and an independently trusted setup, see
   models, settings and continuity state.
 - **Use your native characters.** Select cards, Personas, lorebooks and System
   Prompts; review proposed card edits before applying them.
+- **Choose who the story follows.** Stay player-centric, share the stage with an
+  ensemble, or follow a world-driven story where other characters carry the plot.
+  Director Room lets you inspect and steer the plan without giving away your
+  character's decisions.
+- **Finish a story without losing it.** Closed Story adds a finale and separate
+  epilogue. Alternate Ending creates a new session before the finale; the original
+  ending stays unchanged.
 - **Shape the conversation.** Regenerate replies, keep alternate responses,
-  edit your last turn, or use Light Novel action choices.
+  edit your last turn, or use Light Novel choices while a story is open.
 - **Keep track of a long story.** Use summaries, optional memory, NPC state and
   searchable documents. The bridge budgets context before sending it to a model.
 - **Add media when you need it.** Generate an image of the current scene, use a
@@ -78,14 +85,16 @@ explains the tradeoffs.
 ## Basic bot use
 
 1. Open your bot's private chat and send `/character`. Follow the setup panel to
-   choose a character, mode and session. Optional Persona, World and System Prompt
+   choose a character, Narrative Style, mode and session. Optional Persona, World and System Prompt
    choices can be skipped.
 2. Use `/providers` to check the **Story** model. **Utility** is the model used
-   for summaries and other helpers; it can inherit Story.
+   for summaries and other helpers; it can inherit Story. **Director** plans the
+   narrative and can inherit Utility.
 3. Send `/start` and choose the character's Default or Alternate greeting.
 4. Send normal messages to continue the story.
 5. Use `/session` to switch stories, `/settings` to adjust generation, and
-   `/status` to see the current session and context budget.
+   `/narrative` to change viewpoint and story focus, `/director` to inspect plans
+   and endings, and `/status` to see narrative continuity and the context budget.
 
 Telegram `/help` is the **canonical command reference**. For a particular action,
 ask for focused help, such as `/help scene refresh`.

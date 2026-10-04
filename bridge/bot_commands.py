@@ -19,6 +19,8 @@ def set_bot_commands(token: str) -> None:
                     {"command": "cancel", "description": "Cancel the current pending input"},
                     {"command": "providers", "description": "Choose Story or Utility provider/model"},
                     {"command": "character", "description": "Configure a Normal/Light Novel session"},
+                    {"command": "narrative", "description": "Choose narrative style and point of view"},
+                    {"command": "director", "description": "Inspect hidden plans and direct the next scene"},
                     {"command": "lightnovel", "description": "Light Novel mode and current action choices"},
                     {"command": "session", "description": "Manage sessions; delete inactive only"},
                     {"command": "sync", "description": "Open Live API Sync controls"},

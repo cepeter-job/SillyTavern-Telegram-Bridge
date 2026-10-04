@@ -7,9 +7,11 @@ from bridge.character_optimizer_callbacks import handle_character_optimizer_call
 from bridge.character_proposal_callbacks import handle_character_proposal_callback
 from bridge.conversation_callbacks import handle_greeting_callback, handle_reset_callback, handle_swipe_callback
 from bridge.delivery_port import DeliveryPort
+from bridge.director_callbacks import handle_director_callback
 from bridge.feature_callbacks import handle_prompt_and_feature_callback
 from bridge.group_service import GroupService
 from bridge.help_details import handle_help_callback
+from bridge.narrative_callbacks import handle_narrative_callback
 from bridge.npc_callbacks import handle_npc_callback
 from bridge.persona_callbacks import handle_persona_callback
 from bridge.provider_port import ProviderPort
@@ -136,6 +138,37 @@ def handle_primary_panel_callback(
         operation_id,
         memory_service=memory_service,
         npc_service=npc_service,
+    ):
+        return True
+    if handle_director_callback(
+        db,
+        token,
+        callback,
+        answer_callback,
+        data,
+        chat_id,
+        message,
+        session,
+        session_id,
+        operation_id,
+        provider_port=provider_port,
+        delivery_port=delivery_port,
+        persona_service=persona_service,
+        request_context=request_context,
+    ):
+        return True
+    if handle_narrative_callback(
+        db,
+        token,
+        callback,
+        answer_callback,
+        data,
+        chat_id,
+        message,
+        session,
+        session_id,
+        operation_id,
+        request_context=request_context,
     ):
         return True
     if handle_npc_callback(

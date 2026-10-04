@@ -11,6 +11,7 @@ from functools import partial as _partial
 import bridge.sillytavern_api as _st_api
 from bridge.background import chat_job_lock
 from bridge.card_content import card_fields_from_file
+from bridge.closed_session_guard import guard_story_mutation
 from bridge.group_core import group_state
 from bridge.port_contracts import RetainSessionMemory
 from bridge.session_core import load_session
@@ -126,6 +127,7 @@ def live_sync_now(
     retain_memory: RetainSessionMemory,
 ) -> str:
     """Synchronize one binding through SillyTavern's supported chat API."""
+    guard_story_mutation(db, chat_id, session_id)
     client = _st_api.live_sync_client(app_settings=app_settings)
     session = load_session(db, chat_id, session_id, app_settings.default_model, app_settings=app_settings)
     binding = sync_binding(db, chat_id, session_id)

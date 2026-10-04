@@ -38,6 +38,7 @@ const pageInfo = {
   models:{label:'Models',module:'models',hint:'GENERATION',description:'The right model for every task.'},
   personas:{label:'Personas',module:'management',hint:'YOUR IDENTITY',description:'Choose who you are in each story.'},
   worlds:{label:'Worlds',module:'management',hint:'LORE & CONTEXT',description:'Give your conversation a setting.'},
+  director:{label:'Director Room',module:'director',hint:'STORY DIRECTION',description:'Review hidden plans and steer the next scene.'},
   memory:{label:'Memory',module:'memory',hint:'CONTINUITY',description:'Keep the details that matter.'},
   npcs:{label:'NPC Bank',module:'npcs',hint:'SUPPORTING CAST',description:'Review persistent supporting-character state.'},
   databank:{label:'Data Bank',module:'memory',hint:'REFERENCE LIBRARY',description:'Ground replies in your documents.'},
@@ -46,7 +47,7 @@ const pageInfo = {
 };
 const pages = {};
 const primaryPages = [['dashboard','Home'],['characters','Characters'],['sessions','Sessions'],['manage','Manage'],['system','System']];
-const managedPages = new Set(['manage','models','personas','worlds','memory','npcs','databank','advanced','usage']);
+const managedPages = new Set(['manage','models','personas','worlds','memory','npcs','databank','advanced','usage','director']);
 const loadedModules = new Map();
 async function loadPage(key) {
   const name=pageInfo[key].module;

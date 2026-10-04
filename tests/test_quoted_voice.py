@@ -7,6 +7,7 @@ ensure_application_extensions()
 
 import sqlite3
 import unittest
+from unittest.mock import patch
 
 import bridge.help_details as _m_help_details
 import bridge.message_commands as _m_message_commands
@@ -26,6 +27,7 @@ class QuotedVoiceTests(SettingsTestCase):
     def test_unclosed_quote_is_not_spoken(self):
         self.assertEqual(_owner_response_delivery.quoted_speech_from_reply('"I am here'), "")
 
+    @patch.object(_owner_response_delivery, "story_mutation_message", new=lambda *a: None)
     def test_user_quote_is_queued_for_tts_when_voice_is_enabled(self):
         calls = []
         original_meta = _owner_response_delivery.get_meta
@@ -49,6 +51,7 @@ class QuotedVoiceTests(SettingsTestCase):
         self.assertEqual(calls[0][0], "tts")
         self.assertEqual(calls[0][2:5], ("token", "chat", "Hello there."))
 
+    @patch.object(_owner_response_delivery, "story_mutation_message", new=lambda *a: None)
     def test_user_quote_is_not_queued_when_voice_is_disabled(self):
         calls = []
         original_meta = _owner_response_delivery.get_meta

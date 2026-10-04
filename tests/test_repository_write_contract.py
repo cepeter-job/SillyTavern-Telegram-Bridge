@@ -15,8 +15,8 @@ from bridge.sqlite_store import write_transaction
 @pytest.mark.parametrize(
     "writer,args",
     [
-        (director_goal_repository.store_director_goal, ("chat", "session", "goal", 1.0)),
-        (director_goal_repository.delete_director_goal, ("chat", "session")),
+        (director_goal_repository.store_director_goal, ("chat", "session", "goal", 1.0, 0)),
+        (director_goal_repository.store_director_goal, ("chat", "session", "", 1.0, 0)),
         (scene_repository.delete_scene_state, ("chat", "session")),
         (scene_repository.upsert_scene_state_if_fresh, ("chat", "session", "{}", 1, 1.0)),
         (meta_repository.store_meta_value, ("key", "value")),

@@ -12,6 +12,7 @@ import sqlite3
 from pathlib import Path
 
 from bridge.background import chat_job_lock
+from bridge.closed_session_guard import story_mutation_message
 from bridge.config import STT_DEFAULT_MODEL
 from bridge.conversation_jobs import narrative_job_is_current
 from bridge.conversation_lifecycle import START_REQUIRED, require_started
@@ -44,6 +45,10 @@ def process_voice_message(
     services: _BridgeServices,
 ) -> None:
     session_id = queued_session_id or ensure_session(db, chat_id, model, app_settings=services.config)["session_id"]
+    closing_notice = story_mutation_message(db, chat_id, session_id)
+    if closing_notice:
+        send_text(token, chat_id, closing_notice)
+        return
     if not services.group.user_turn_allowed(db, chat_id, session_id, actor_id):
         send_text(token, chat_id, "It is not your turn in manual group mode.")
         return

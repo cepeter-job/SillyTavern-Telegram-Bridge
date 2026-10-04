@@ -312,3 +312,41 @@ surface. `python tools/static_analysis.py --print-type-target-count` reports the
 current typed count; [Contributing](../CONTRIBUTING.md) describes the verification
 workflow. These checks are useful evidence, not a guarantee against every leak
 or operational failure.
+
+## Closed-story recovery
+
+The ending lifecycle and explicit committed message IDs are durable. Runtime
+startup and bounded periodic scans admit unfinished ending work only after
+service composition; migrations never call a provider. Normal reply delivery
+keeps its existing owner and acknowledgements. The recovery worker acquires a
+per-chat lock and a durable ending lease; expired leases can be reclaimed.
+
+`RESOLUTION_COMMITTED` resumes epilogue preparation. A committed epilogue resumes
+reconciliation and closure without another Story call. `CLOSED` resumes only
+missing delivery. Inspect Director Room and use `/retry` after a provider error;
+a failed model call is not an unlimited automatic retry loop. Read-only ending
+recovery never generates new expressions, speech or images. Database guards also
+reject stale queued writes that try to alter a completed original.
+
+Keep a database backup before an upgrade. Recovery tests cover transaction
+rollback and simulated restarts, not physical host power-loss behavior.
+
+## Alternate-ending recovery
+
+Alternate Ending has one durable request identity and a deterministic target
+session. Creating the target, copying the checkpoint prefix and restoring local
+state is one transaction. A failed local copy leaves no half-created session;
+restart recovery resumes the same admitted request.
+
+Optional Hindsight seeding runs afterward under a reclaimable lease, using only
+the target's deterministic conversation document and strict session tag. A normal
+seeding error completes the branch as degraded instead of retrying indefinitely.
+A process interruption can resume after the lease expires without creating
+another target. An applied request retains a small provenance receipt; its
+transient operation payload is discarded. Source deletion after the local copy
+does not delete the independent target.
+
+Source message IDs, Telegram delivery state, queued jobs, response variants and
+callback records are not reused by the target. Snapshot references are remapped
+to its new transcript identities. Prefix copying streams rows and keeps only the
+bounded set of references required by the checkpoint in memory.

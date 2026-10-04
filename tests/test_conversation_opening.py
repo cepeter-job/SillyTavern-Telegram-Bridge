@@ -12,6 +12,7 @@ from bridge import command_routes, greetings, update_message_routing
 from bridge.conversation_lifecycle import conversation_state, reset_conversation
 from bridge.metadata import set_meta
 from bridge.request_types import RequestContext
+from bridge.sqlite_store import write_transaction
 
 
 @pytest.mark.parametrize(
@@ -269,3 +270,124 @@ def test_failed_greeting_delivery_reuses_committed_row(novel_db, monkeypatch):
     )
     assert sent == ["Original"]
     assert db.execute("SELECT content FROM messages").fetchall() == [("Original",)]
+
+
+def test_greeting_photo_uses_first_message_image_url_without_local_download(novel_db, monkeypatch):
+    db, _session, settings = novel_db
+    sent = []
+    monkeypatch.setattr(
+        greeting_delivery, "send_text", lambda *a, acknowledged_chunk=None, **kw: acknowledged_chunk(71)
+    )
+    monkeypatch.setattr(
+        greetings,
+        "telegram_request",
+        lambda _token, method, payload: sent.append((method, payload)) or {"message_id": 72},
+    )
+    monkeypatch.setattr(greetings, "send_panel_photo", lambda *a, **kw: pytest.fail("local PNG used"))
+    fields = {"name": "Alice", "first_mes": "Hello ![portrait](https://images.example/portrait.png?size=large)"}
+
+    assert greetings.send_character_greeting(
+        db, "token", "chat", fields, "story", "User", operation_id=41, app_settings=settings
+    )
+    assert sent == [("sendPhoto", {"chat_id": "chat", "photo": "https://images.example/portrait.png?size=large"})]
+    assert json.loads(db.execute("SELECT telegram_message_ids FROM messages").fetchone()[0]) == [71, 72]
+    assert not greetings.send_character_greeting(
+        db, "token", "chat", fields, "story", "User", operation_id=41, app_settings=settings
+    )
+    assert len(sent) == 1
+
+
+def test_greeting_photo_uses_selected_character_png_without_image_url(novel_db, monkeypatch):
+    db, _session, settings = novel_db
+    with write_transaction(db):
+        db.execute(
+            "UPDATE sessions SET character_file=? WHERE chat_id=? AND session_id=?", ("Alice.png", "chat", "story")
+        )
+    character_file = settings.character_dir / "Alice.png"
+    character_file.parent.mkdir(parents=True, exist_ok=True)
+    character_file.write_bytes(b"PNG for mocked transport")
+    sent = []
+    monkeypatch.setattr(
+        greeting_delivery, "send_text", lambda *a, acknowledged_chunk=None, **kw: acknowledged_chunk(71)
+    )
+    monkeypatch.setattr(greetings, "telegram_request", lambda *a, **kw: pytest.fail("remote URL used"))
+    monkeypatch.setattr(
+        greetings, "send_panel_photo", lambda _token, _chat, path, **kw: sent.append((path, kw)) or {"message_id": 72}
+    )
+
+    assert greetings.send_character_greeting(
+        db,
+        "token",
+        "chat",
+        {"name": "Alice", "first_mes": "Hello"},
+        "story",
+        "User",
+        operation_id=41,
+        app_settings=settings,
+    )
+    assert sent[0][0] == character_file
+    assert sent[0][1]["reply_markup"] == {}
+    assert json.loads(db.execute("SELECT telegram_message_ids FROM messages").fetchone()[0]) == [71, 72]
+
+
+def test_greeting_photo_failure_recovery_only_retries_photo(novel_db, monkeypatch):
+    db, _session, settings = novel_db
+    sent = []
+    monkeypatch.setattr(
+        greeting_delivery,
+        "send_text",
+        lambda *a, acknowledged_chunk=None, **kw: sent.append("text") or acknowledged_chunk(71),
+    )
+
+    def send_photo(_token, _method, _payload):
+        sent.append("photo")
+        if sent.count("photo") == 1:
+            raise RuntimeError("network")
+        return {"message_id": 72}
+
+    monkeypatch.setattr(greetings, "telegram_request", send_photo)
+    fields = {"name": "Alice", "first_mes": "Hello <img src='https://images.example/a.jpg'>"}
+
+    with pytest.raises(RuntimeError, match="network"):
+        greetings.send_character_greeting(
+            db, "token", "chat", fields, "story", "User", operation_id=41, app_settings=settings
+        )
+    assert greetings.send_character_greeting(
+        db, "token", "chat", {"first_mes": "Changed"}, "story", "User", operation_id=41, app_settings=settings
+    )
+    assert sent == ["text", "photo", "photo"]
+    assert json.loads(db.execute("SELECT telegram_message_ids FROM messages").fetchone()[0]) == [71, 72]
+
+
+def test_greeting_photo_skips_a_deleted_opening(novel_db, monkeypatch):
+    db, _session, settings = novel_db
+    with write_transaction(db):
+        rowid = db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+            ("chat", "story", "assistant", "Hello", 1.0),
+        ).lastrowid
+        set_meta(db, f"greeting_photo_url:{rowid}", "https://images.example/portrait.png")
+        db.execute("DELETE FROM messages WHERE rowid=?", (rowid,))
+    sent = []
+    monkeypatch.setattr(greetings, "telegram_request", lambda *a, **kw: sent.append(a) or {"message_id": 81})
+    greetings._deliver_greeting_photo(db, "token", "chat", "story", rowid, "Hello", app_settings=settings)
+    assert sent == []
+
+
+def test_greeting_media_metadata_lives_only_with_its_message(novel_db):
+    from bridge.metadata import get_meta
+
+    db, _session, _settings = novel_db
+    with write_transaction(db):
+        rowid = db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+            ("chat", "story", "assistant", "Hello", 1.0),
+        ).lastrowid
+        set_meta(db, f"greeting_photo:{rowid}", "81")
+        set_meta(db, f"greeting_photo_url:{rowid}", "https://images.example/portrait.png")
+        set_meta(db, "unrelated_setting", "preserved")
+    with write_transaction(db):
+        db.execute("DELETE FROM messages WHERE rowid=?", (rowid,))
+    assert get_meta(db, f"greeting_photo:{rowid}", "") == ""
+    assert get_meta(db, f"greeting_photo_url:{rowid}", "") == ""
+    assert get_meta(db, "unrelated_setting", "") == "preserved"

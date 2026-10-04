@@ -22,6 +22,7 @@ from bridge.memory_service import MemoryService
 from bridge.meta_repository import store_meta_value
 from bridge.metadata import get_meta
 from bridge.model_selection import utility_reasoning_key
+from bridge.narrative_settings import initialize_session_narrative_settings
 from bridge.operation_repository import claim_operation, mark_operation_applied
 from bridge.persona_sync import default_persona_id, get_persona
 from bridge.response_variants import swipe_state_key
@@ -135,6 +136,7 @@ def ensure_session(
         )
         with write_transaction(db):
             insert_session_row(db, values, time.time())
+            initialize_session_narrative_settings(db, chat_id, active_id)
             initialize_conversation(db, chat_id, active_id)
         session = load_session_row(db, chat_id, active_id) or values
     get_generation_settings(db, chat_id, active_id)
@@ -185,6 +187,7 @@ def create_session(
     )
     with write_transaction(db):
         insert_session_row(db, values, time.time())
+        initialize_session_narrative_settings(db, chat_id, session_id)
         initialize_conversation(db, chat_id, session_id)
         store_meta_value(db, f"active_session:{chat_id}", session_id)
     return _normalize_session_defaults(

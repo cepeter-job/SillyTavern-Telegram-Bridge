@@ -9,8 +9,10 @@ from dataclasses import dataclass
 from bridge.episodic_memory import store_episodic_memory
 from bridge.generation_settings import get_generation_settings
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
+from bridge.narrative_repository import load_narrative_clock
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
+from bridge.sqlite_store import write_transaction
 
 EPISODIC_KINDS = frozenset({"scene_event", "relationship_change", "fact", "goal", "world_change", "secret"})
 EPISODIC_MIN_IMPORTANCE = 0.65
@@ -103,10 +105,19 @@ def extract_episodic_memories(
     source_end_rowid: int,
     provider_port: ProviderPort,
     app_settings: AppSettings,
+    expected_source: tuple[float, int, int] | None = None,
 ) -> int:
     if not str(source_text or "").strip():
         return 0
+    if db.in_transaction:
+        raise RuntimeError("Episodic extraction cannot call a provider inside a transaction")
     session_id = str(session["session_id"])
+    source_clock = load_narrative_clock(db, chat_id, session_id)
+    if source_clock is None:
+        return 0
+    identity_fields = ("session_created_at", "history_revision", "latest_rowid")
+    if expected_source is not None and tuple(source_clock[key] for key in identity_fields) != expected_source:
+        return 0
     messages = [
         {
             "role": "system",
@@ -140,22 +151,25 @@ def extract_episodic_memories(
         session_id=f"episodic:{chat_id}:{session_id}",
         settings=settings,
     )
+    candidates = parse_episodic_candidates(response)
     inserted = 0
-    for candidate in parse_episodic_candidates(response):
-        inserted += int(
-            store_episodic_memory(
-                db,
-                chat_id,
-                session_id,
-                kind=candidate.kind,
-                importance=candidate.importance,
-                summary=candidate.summary,
-                source_start_rowid=source_start_rowid,
-                source_end_rowid=source_end_rowid,
-                visibility=candidate.visibility,
-                known_by=candidate.known_by,
+    with write_transaction(db):
+        current_clock = load_narrative_clock(db, chat_id, session_id)
+        if current_clock is None or any(current_clock[key] != source_clock[key] for key in identity_fields):
+            return 0
+        for candidate in candidates:
+            inserted += int(
+                store_episodic_memory(
+                    db,
+                    chat_id,
+                    session_id,
+                    kind=candidate.kind,
+                    importance=candidate.importance,
+                    summary=candidate.summary,
+                    source_start_rowid=source_start_rowid,
+                    source_end_rowid=source_end_rowid,
+                    visibility=candidate.visibility,
+                    known_by=candidate.known_by,
+                )
             )
-        )
-    if inserted:
-        db.commit()
     return inserted

@@ -342,3 +342,18 @@ def narrative_snapshot_rows(
             raise ValueError("Narrative history is too large for a bounded pre-finale snapshot")
         result[name] = rows
     return result
+
+
+def close_reconciled_narrative_state(
+    db: sqlite3.Connection, chat_id: str, session_id: str, *, expected_revision: int, epilogue_rowid: int
+) -> bool:
+    require_active_transaction(db)
+    return (
+        db.execute(
+            "UPDATE narrative_state SET story_phase='closed',state_revision=state_revision+1 "
+            "WHERE chat_id=? AND session_id=? AND state_revision=? AND updated_through_rowid>=? "
+            "AND reconciled_history_revision=history_revision AND invalidated_from_rowid IS NULL",
+            (chat_id, session_id, expected_revision, epilogue_rowid),
+        ).rowcount
+        == 1
+    )

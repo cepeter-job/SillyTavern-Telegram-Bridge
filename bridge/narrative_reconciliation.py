@@ -279,6 +279,10 @@ def _publish(
     with write_transaction(db):
         if load_narrative_clock(db, chat, session) != clock:
             return load_narrative_state(db, chat, session)
+        if extracted is not None and extracted.story_phase == "epilogue":
+            ending = load_ending_state(db, chat, session)
+            if ending.lifecycle != "epilogue_committed" or ending.epilogue_committed_rowid != through:
+                raise ValueError("Epilogue facts require the committed epilogue identity")
         _restore_base(db, chat, session, base)
         for row in arcs.values():
             store_arc_row(db, chat, session, row)
@@ -380,6 +384,8 @@ def reconcile_narrative_state_now(
         "POV is first_person/third_person_user/third_person_rotating/omniscient/cinematic. "
         "user_present is true/false/null based only on evidence. Thread status is active/offscreen/dormant/resolved. "
         "The current scene needs an established thread; a committed resolution may close that thread. "
+        "When ending_lifecycle is epilogue_committed, story_phase may be epilogue for its committed aftermath. "
+        "Never declare story_phase closed; only the application can close a story. "
         "Fields not shown are managed by the application."
     )
     try:
@@ -392,7 +398,9 @@ def reconcile_narrative_state_now(
             settings=settings,
             force_non_stream=True,
         )
-        extracted = parse_narrative_extraction(raw)
+        extracted = parse_narrative_extraction(
+            raw, allow_epilogue=load_ending_state(db, chat_id, session_id).lifecycle == "epilogue_committed"
+        )
         first = next_narrative_transcript_rows(
             db, chat_id, session_id, base.state.updated_through_rowid, through, limit=1
         )

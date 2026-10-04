@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import sqlite3
 
+from bridge.repository_contracts import require_active_transaction
+
 
 def committed_assistant_for_message(
     db: sqlite3.Connection, chat_id: str, telegram_message_id: int | str
@@ -90,3 +92,36 @@ def transcript_prefix_fingerprint(
     finally:
         cursor.close()
     return {"count": count, "sha256": digest.hexdigest()}
+
+
+def append_epilogue_message(db: sqlite3.Connection, chat_id: str, session_id: str, content: str, now: float) -> int:
+    """Append the already-generated epilogue inside its caller-owned ending transaction."""
+    require_active_transaction(db)
+    cursor = db.execute(
+        "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,'assistant',?,?)",
+        (chat_id, session_id, content, now),
+    )
+    if cursor.lastrowid is None:
+        raise RuntimeError("The epilogue message identity was not stored")
+    return int(cursor.lastrowid)
+
+
+def bounded_story_history(
+    db: sqlite3.Connection, chat_id: str, session_id: str, *, budget: int = 14000
+) -> list[tuple[str, str]]:
+    """Read a bounded suffix of committed Story, newest first while counting text."""
+    result = []
+    used = 0
+    cursor = db.execute(
+        "SELECT role,substr(content,1,?) FROM messages WHERE chat_id=? AND session_id=? ORDER BY id DESC LIMIT 64",
+        (budget, chat_id, session_id),
+    )
+    try:
+        for role, content in cursor:
+            if used + len(content) > budget:
+                break
+            result.append((str(role), str(content)))
+            used += len(content)
+    finally:
+        cursor.close()
+    return list(reversed(result))

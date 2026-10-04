@@ -44,13 +44,16 @@ def _choice(value: Any, field: str, allowed: set[str]) -> str:
     return value
 
 
-def parse_narrative_extraction(raw: str) -> NarrativeExtraction:
+def parse_narrative_extraction(raw: str, *, allow_epilogue: bool = False) -> NarrativeExtraction:
     if not isinstance(raw, str) or len(raw) > MAX_RECONCILIATION_OUTPUT:
         raise ValueError("Narrative extraction exceeds its size limit")
     data = json.loads(raw)
     if not isinstance(data, dict) or type(data.get("schema_version")) is not int or data["schema_version"] != 1:
         raise ValueError("Unsupported narrative extraction version")
-    phase = _choice(data.get("story_phase"), "phase", {"setup", "development", "escalation", "climax", "resolution"})
+    phases = {"setup", "development", "escalation", "climax", "resolution"}
+    if allow_epilogue:
+        phases.add("epilogue")
+    phase = _choice(data.get("story_phase"), "phase", phases)
     scene = data.get("scene")
     threads = data.get("threads")
     if not isinstance(scene, dict) or not isinstance(threads, list) or len(threads) > MAX_THREAD_UPDATES:

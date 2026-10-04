@@ -8,6 +8,7 @@ from collections.abc import Callable
 
 from bridge.delivery_port import DeliveryPort
 from bridge.panel_utils import panel_navigation, panel_page
+from bridge.request_types import RequestContext
 
 RESPONSE_LANGUAGES = (
     ("auto", "Auto — match user"),
@@ -122,7 +123,7 @@ def send_language_menu(
     page: int = 0,
     *,
     delivery_port: DeliveryPort,
-    request_context,
+    request_context: RequestContext,
 ) -> None:
     current = normalize_response_language(current or "auto")
     _options, current_page, total_pages = panel_page(list(RESPONSE_LANGUAGES), page)
@@ -135,7 +136,7 @@ def send_language_menu(
         "\nChoose the language for generated replies:"
     )
     method = "editMessageText" if message_id else "sendMessage"
-    payload = {"chat_id": chat_id, "text": text, "reply_markup": language_menu_markup(current, page)}
+    payload: dict = {"chat_id": chat_id, "text": text, "reply_markup": language_menu_markup(current, page)}
     if message_id:
         payload["message_id"] = message_id
     delivery_port.send_panel_request(token, method, payload, request_context=request_context)
@@ -167,7 +168,7 @@ def handle_language_command(
     *,
     delivery_port: DeliveryPort,
     update_session: Callable[..., object],
-    request_context,
+    request_context: RequestContext,
 ) -> None:
     parts = command_text.strip().split(None, 1)
     if len(parts) == 1 or parts[1].strip().casefold() in {"list", "status"}:

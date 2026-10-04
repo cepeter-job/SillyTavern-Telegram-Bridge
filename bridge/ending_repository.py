@@ -111,3 +111,53 @@ def list_ending_goal_revisions(
         (chat_id, session_id, min(100, max(1, limit))),
     ).fetchall()
     return [dict(zip(_GOAL_COLUMNS, row, strict=True)) for row in rows]
+
+
+def claim_ending_work(db: sqlite3.Connection, chat_id: str, session_id: str, token: str, now: float) -> bool:
+    require_active_transaction(db)
+    return (
+        db.execute(
+            "UPDATE ending_state SET work_token=?,work_started_at=?,last_attempt_at=?,last_error='' "
+            "WHERE chat_id=? AND session_id=? "
+            "AND lifecycle IN ('resolution_committed','epilogue_pending','epilogue_committed') "
+            "AND (work_token='' OR work_started_at<?)",
+            (token, now, now, chat_id, session_id, now - 600),
+        ).rowcount
+        == 1
+    )
+
+
+def release_ending_work(db: sqlite3.Connection, chat_id: str, session_id: str, token: str) -> None:
+    require_active_transaction(db)
+    db.execute(
+        "UPDATE ending_state SET work_token='',work_started_at=0,work_stage='' "
+        "WHERE chat_id=? AND session_id=? AND work_token=?",
+        (chat_id, session_id, token),
+    )
+
+
+def mark_ending_work_stage(db: sqlite3.Connection, chat_id: str, session_id: str, token: str, stage: str) -> bool:
+    require_active_transaction(db)
+    return (
+        db.execute(
+            "UPDATE ending_state SET work_stage=? WHERE chat_id=? AND session_id=? AND work_token=?",
+            (stage, chat_id, session_id, token),
+        ).rowcount
+        == 1
+    )
+
+
+def record_ending_error(db: sqlite3.Connection, chat_id: str, session_id: str, token: str, message: str) -> None:
+    require_active_transaction(db)
+    db.execute(
+        "UPDATE ending_state SET last_error=? WHERE chat_id=? AND session_id=? AND work_token=?",
+        (message[:300], chat_id, session_id, token),
+    )
+
+
+def clear_ending_error(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
+    require_active_transaction(db)
+    db.execute(
+        "UPDATE ending_state SET last_error='' WHERE chat_id=? AND session_id=? AND last_error<>''",
+        (chat_id, session_id),
+    )

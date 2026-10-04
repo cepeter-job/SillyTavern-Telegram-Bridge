@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sqlite3
 from pathlib import Path
 
 from bridge.card_content import active_world_files, build_system_prompt, build_world_info, replace_macros
@@ -218,7 +219,7 @@ def build_chat_messages(
         system += "\n\n## Grounded User Policy\n" + grounded_policy
     system += "\n\n" + _ROLEPLAY_OUTPUT_CONTRACT
     system += "\n\n## Mandatory response language\n" + language_instruction
-    messages = [{"role": "system", "content": system}]
+    messages: list[dict] = [{"role": "system", "content": system}]
     if not history and fields["first_mes"]:
         messages.append(
             {
@@ -319,21 +320,21 @@ def build_chat_messages(
 
 
 def _generation_generate_rendered_reply(
-    db,
-    token,
-    api_key,
-    session,
-    chat_id,
-    messages,
-    query,
-    rag_bundle,
+    db: sqlite3.Connection,
+    token: str,
+    api_key: str,
+    session: dict[str, str],
+    chat_id: str,
+    messages: list[dict],
+    query: str,
+    rag_bundle: dict,
     *,
     provider_port: ProviderPort,
     delivery_port: DeliveryPort,
     app_settings: AppSettings,
     rag_service: RagService,
     novel_turn: NovelTurn | None = None,
-):
+) -> str:
     session_id = session["session_id"]
     provider_port = provider_port.for_usage(chat_id, session_id, "generation")
     delivery_port.send_typing(token, chat_id)

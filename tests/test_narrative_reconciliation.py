@@ -307,3 +307,89 @@ def test_insert_inside_reconciled_prefix_invalidates_from_inserted_identity(sess
             "VALUES(50,'chat','s1','assistant','An earlier missing event.',50)"
         )
     assert db.execute("SELECT invalidated_from_rowid FROM narrative_state").fetchone()[0] == 50
+
+
+def test_late_physical_scene_refresh_cannot_recreate_reset_story_facts(session_db, monkeypatch):
+    from types import SimpleNamespace
+
+    from bridge import message_commands
+    from bridge.scene_state import refresh_scene_state_now
+
+    settings, db, session = session_db
+    rowid = add_story(db, "Mara waits at an old gate.")
+    monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
+
+    def generate(*args, **kwargs):
+        message_commands.reset_session(
+            db,
+            "token",
+            "chat",
+            session,
+            memory_service=SimpleNamespace(purge_session=lambda *a: 0),
+            npc_service=SimpleNamespace(purge_session=lambda *a: 0),
+        )
+        return '{"location":"OBSOLETE_GATE","time":"night","environment":[],"characters":{},"objects":{}}'
+
+    refresh_scene_state_now(
+        db,
+        "",
+        "chat",
+        session,
+        "Mara",
+        through_rowid=rowid,
+        provider_port=make_test_provider_port(generate_backend=generate),
+        app_settings=settings,
+    )
+    assert db.execute("SELECT * FROM scene_states").fetchall() == []
+    assert db.execute("SELECT * FROM narrative_state").fetchall() == []
+    assert db.execute("SELECT * FROM messages").fetchall() == []
+
+
+def test_reset_clears_physical_state_without_optional_extension_hooks(session_db, monkeypatch):
+    from types import SimpleNamespace
+
+    from bridge import memory, message_commands
+
+    _settings, db, session = session_db
+    rowid = add_story(db)
+    with write_transaction(db):
+        db.execute("INSERT INTO scene_states VALUES(?,?,?,?,?)", ("chat", "s1", '{"location":"Old gate"}', rowid, 1))
+    monkeypatch.setattr(memory, "_run_summary_clear_hooks", lambda *a: None)
+    monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
+    message_commands.reset_session(
+        db,
+        "token",
+        "chat",
+        session,
+        memory_service=SimpleNamespace(purge_session=lambda *a: 0),
+        npc_service=SimpleNamespace(purge_session=lambda *a: 0),
+    )
+    assert db.execute("SELECT * FROM scene_states").fetchall() == []
+
+
+def test_physical_scene_refresh_refuses_provider_work_inside_a_transaction(session_db):
+    from bridge.scene_state import refresh_scene_state_now
+
+    settings, db, session = session_db
+    add_story(db)
+    calls = []
+    db.execute("BEGIN")
+    try:
+        with pytest.raises(RuntimeError, match="transaction"):
+            refresh_scene_state_now(
+                db,
+                "",
+                "chat",
+                session,
+                "Mara",
+                app_settings=settings,
+                provider_port=make_test_provider_port(
+                    generate_backend=lambda *a, **k: calls.append(True) or '{"location":"Gate"}'
+                ),
+            )
+        assert not calls
+        assert db.in_transaction
+    finally:
+        db.rollback()

@@ -166,5 +166,113 @@ class ResetBehaviorTests(SettingsTestCase):
         self.assertEqual(deleted[0][0][2:4], ("chat", self.session["session_id"]))
 
 
+class NarrativeResetTests(SettingsTestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.app_settings_builder.db_file = Path(self.tmp.name) / "narrative-reset.sqlite3"
+        self.db = _m_memory_curator.db_connect(app_settings=self.app_settings_builder.build())
+        self.addCleanup(self.db.close)
+        self.session = _owner_session_core.create_session(
+            self.db, "chat", "fixture::model", session_id="story", app_settings=self.app_settings_builder.build()
+        )
+        from narrative_test_support import seed_narrative_story
+
+        seed_narrative_story(self.db, "chat", "story")
+
+    def _reset(self, purge=None):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+
+        with (
+            patch.object(_m_message_commands, "delete_outgoing_messages"),
+            patch.object(_m_message_commands, "delete_incoming_messages"),
+            patch.object(_m_message_commands, "telegram_request", return_value={}),
+        ):
+            _m_message_commands.reset_session(
+                self.db,
+                "token",
+                "chat",
+                self.session,
+                memory_service=SimpleNamespace(purge_session=purge or (lambda *a: 0)),
+                npc_service=make_test_npc_service(),
+            )
+
+    def test_reset_clears_every_derived_narrative_table_and_keeps_preferences(self):
+        from narrative_test_support import NARRATIVE_DERIVED_TABLES
+
+        from bridge.narrative_settings import load_session_narrative_settings, load_user_narrative_default
+
+        before = self.db.execute("SELECT * FROM narrative_settings").fetchall()
+
+        def purge(db, chat_id, session_id):
+            self.assertFalse(db.in_transaction)
+            self.assertEqual((chat_id, session_id), ("chat", "story"))
+            self.assertGreater(db.execute("SELECT COUNT(*) FROM messages").fetchone()[0], 0)
+            return 0
+
+        self._reset(purge)
+        for table in NARRATIVE_DERIVED_TABLES:
+            with self.subTest(table=table):
+                self.assertEqual(self.db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0], 0)  # noqa: S608 -- fixed test tables
+        self.assertEqual(self.db.execute("SELECT * FROM narrative_settings").fetchall(), before)
+        self.assertEqual(load_session_narrative_settings(self.db, "chat", "story").preset, "observer")
+        self.assertEqual(load_user_narrative_default(self.db, "owner").preset, "world_driven")
+        self.assertIsNotNone(self.db.execute("SELECT 1 FROM sessions WHERE session_id='story'").fetchone())
+
+    def test_failed_external_cleanup_preserves_narrative_and_transcript(self):
+        before = "\n".join(self.db.iterdump())
+
+        def fail(*args):
+            raise RuntimeError("memory unavailable")
+
+        with self.assertRaisesRegex(RuntimeError, "memory unavailable"):
+            self._reset(fail)
+        self.assertEqual("\n".join(self.db.iterdump()), before)
+
+    def test_local_reset_failure_rolls_back_transcript_summary_and_narrative(self):
+        from unittest.mock import patch
+
+        before_messages = self.db.execute("SELECT * FROM messages").fetchall()
+        before_summary = self.db.execute("SELECT * FROM session_summaries").fetchall()
+        before_state = self.db.execute("SELECT * FROM narrative_state").fetchall()
+        with patch.object(
+            _m_message_commands, "reset_conversation", side_effect=RuntimeError("injected local failure")
+        ):
+            with self.assertRaisesRegex(RuntimeError, "injected local failure"):
+                self._reset()
+        self.assertFalse(self.db.in_transaction)
+        self.assertEqual(self.db.execute("SELECT * FROM messages").fetchall(), before_messages)
+        self.assertEqual(self.db.execute("SELECT * FROM session_summaries").fetchall(), before_summary)
+        self.assertEqual(self.db.execute("SELECT * FROM narrative_state").fetchall(), before_state)
+
+    def test_reset_rejects_existing_transaction_before_external_cleanup(self):
+        self.db.execute("BEGIN")
+        calls = []
+        try:
+            with self.assertRaisesRegex(RuntimeError, "transaction"):
+                self._reset(lambda *a: calls.append(True))
+            self.assertTrue(self.db.in_transaction)
+            self.assertEqual(calls, [])
+        finally:
+            self.db.rollback()
+
+    def test_summary_clear_joins_existing_caller_transaction(self):
+        from bridge.memory import clear_session_summary
+
+        before = self.db.execute("SELECT * FROM session_summaries").fetchall()
+        self.db.execute("BEGIN")
+        clear_session_summary(self.db, "chat", "story")
+        self.assertTrue(self.db.in_transaction)
+        self.db.rollback()
+        self.assertEqual(self.db.execute("SELECT * FROM session_summaries").fetchall(), before)
+
+    def test_reset_confirmation_explains_narrative_cleanup_and_retained_style(self):
+        from bridge.reset_panel import RESET_CONFIRMATION_TEXT
+
+        self.assertIn("narrative scenes, threads, arcs", RESET_CONFIRMATION_TEXT)
+        self.assertIn("Keep Narrative Style", RESET_CONFIRMATION_TEXT)
+
+
 if __name__ == "__main__":
     unittest.main()

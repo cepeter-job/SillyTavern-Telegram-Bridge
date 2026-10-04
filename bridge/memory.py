@@ -169,9 +169,9 @@ def get_session_summary(db: sqlite3.Connection, chat_id: str, session_id: str) -
 
 
 def clear_session_summary(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
-    db.execute("DELETE FROM session_summaries WHERE chat_id=? AND session_id=?", (chat_id, session_id))
-    db.commit()
-    _run_summary_clear_hooks(db, chat_id, session_id)
+    with write_transaction(db):
+        db.execute("DELETE FROM session_summaries WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+        _run_summary_clear_hooks(db, chat_id, session_id)
 
 
 def transcript_for_summary(rows: list[tuple[int, str, str, float]]) -> str:

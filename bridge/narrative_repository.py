@@ -286,3 +286,26 @@ def clear_reconciled_entities(db: sqlite3.Connection, chat_id: str, session_id: 
     require_active_transaction(db)
     db.execute("DELETE FROM narrative_scenes WHERE chat_id=? AND session_id=?", (chat_id, session_id))
     db.execute("DELETE FROM narrative_threads WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+
+
+_NARRATIVE_DERIVED_TABLES = (
+    "narrative_state",
+    "director_decisions",
+    "director_state",
+    "ending_goal_history",
+    "ending_state",
+    "narrative_checkpoints",
+    "narrative_arcs",
+    "narrative_scenes",
+    "narrative_threads",
+)
+
+
+def clear_narrative_story_state(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
+    """Reset derived story state only; keep session style and personal defaults."""
+    require_active_transaction(db)
+    for table in _NARRATIVE_DERIVED_TABLES:
+        db.execute(
+            f"DELETE FROM {table} WHERE chat_id=? AND session_id=?",  # noqa: S608 -- fixed internal table names
+            (chat_id, session_id),
+        )

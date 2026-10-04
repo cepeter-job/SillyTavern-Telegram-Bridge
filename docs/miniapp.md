@@ -37,6 +37,11 @@ See [Token usage](token-usage.md) for missing counters and coverage limits.
 
 ### Characters and optimizer
 
+Selecting a character uses your saved Narrative Style default for the new
+session. Existing sessions keep their own style. Use Telegram `/narrative` to
+change it or save a new personal default; the Mini App does not yet provide
+separate Narrative Style controls.
+
 Choose a character to create a new normal session, then send `/start` in Telegram
 for its opening. This leaves your existing conversation intact.
 

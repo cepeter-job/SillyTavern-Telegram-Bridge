@@ -24,6 +24,7 @@ from bridge.extension_registry import register_summary_clear_hook as _register_s
 from bridge.extension_registry import register_summary_context_hook as _register_summary_context_hook
 from bridge.generation_settings import get_generation_settings
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
+from bridge.narrative_repository import load_narrative_clock
 from bridge.provider_port import ProviderPort
 from bridge.scene_panel import scene_panel
 from bridge.scene_repository import delete_scene_state as _repo_delete_scene_state
@@ -124,7 +125,12 @@ def refresh_scene_state_now(
     provider_port: ProviderPort,
     app_settings: AppSettings,
 ) -> dict[str, object] | None:
+    if db.in_transaction:
+        raise RuntimeError("Scene-state refresh cannot call a provider inside a transaction")
     session_id = str(session["session_id"])
+    source_clock = load_narrative_clock(db, chat_id, session_id)
+    if source_clock is None:
+        return None
     rows = recent_transcript_rows(
         db, chat_id, session_id, limit=_SCENE_STATE_TRANSCRIPT_MESSAGES, through_rowid=through_rowid
     )
@@ -189,6 +195,11 @@ def refresh_scene_state_now(
 
     state_json = json.dumps(state, ensure_ascii=False, sort_keys=True)
     with write_transaction(db):
+        current_clock = load_narrative_clock(db, chat_id, session_id)
+        identity_fields = ("session_created_at", "history_revision", "latest_rowid")
+        if current_clock is None or any(current_clock[key] != source_clock[key] for key in identity_fields):
+            current_state, _current_rowid = get_scene_state(db, chat_id, session_id)
+            return current_state or None
         accepted = _repo_upsert_scene_state_if_fresh(
             db,
             chat_id,

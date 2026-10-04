@@ -177,3 +177,10 @@ def apply_narrative_preference(
             raise ValueError("Narrative Style changed. Reopen /narrative to use the latest settings.")
         invalidate_choice_sets(db, chat_id, session_id)
         return changed
+
+
+def initialize_session_narrative_settings(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
+    """Pin an explicit new-session default without replacing existing preferences."""
+    with write_transaction(db):
+        if load_narrative_settings_row(db, chat_id, session_id) is None:
+            save_session_narrative_settings(db, chat_id, session_id, NarrativeSettings())

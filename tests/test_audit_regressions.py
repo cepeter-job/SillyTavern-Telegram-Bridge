@@ -640,10 +640,11 @@ class AuditRegressionTests(SettingsTestCase):
         expected = (
             "Reset active session and purge its memory?\n\nThis will:\n"
             "• Delete this session's stored conversation, response variants, continuity summary, curated memory, "
-            "episodic memory, and NPC Bank state.\n"
+            "episodic memory, NPC Bank state, narrative scenes, threads, arcs, "
+            "Director state and ending checkpoints.\n"
             "• Purge Hindsight documents for this active session.\n"
             "• Attempt to delete this session's tracked Telegram user messages, assistant replies, and choice panels.\n"
-            "• Keep chat-scoped RAG and this session identity.\n"
+            "• Keep Narrative Style, your personal defaults, chat-scoped RAG and this session identity.\n"
             "• Use /new when you need a completely new session.\n\n"
             "If Hindsight cleanup fails, no local session data will be deleted.\n\n"
             "This cannot be undone."

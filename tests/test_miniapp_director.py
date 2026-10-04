@@ -166,3 +166,22 @@ def test_director_model_target_inherits_utility_and_is_independent(tmp_path):
     assert catalog["story"] == "test::model"
     select_model(services, who, body | {"target": "director", "model": ""})
     assert model_catalog(services, who, {})["director"] == "test::utility"
+
+
+def test_long_objective_is_not_truncated_before_edit_round_trip(tmp_path):
+    services, who, _, body = setup(tmp_path)
+    objective = "The lighthouse must stay lit. " * 100
+    api.edit_direction(services, who, body | {"scope": "persistent", "direction": objective})
+    data = api.get_director(services, who, {})
+    assert data["objective"] == objective.strip()
+    api.edit_direction(
+        services,
+        who,
+        {
+            "session_id": data["session_id"],
+            "revision": data["revision"],
+            "scope": "persistent",
+            "direction": data["objective"],
+        },
+    )
+    assert api.get_director(services, who, {})["objective"] == objective.strip()

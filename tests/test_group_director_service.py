@@ -1,224 +1,143 @@
-import sqlite3
-import unittest
-from dataclasses import replace
+"""Group speaker selection consumes canonical plans without its own model call."""
 
-from settings_test_support import SettingsTestCase
+from dataclasses import fields, replace
+from pathlib import Path
+
+import pytest
 
 from bridge.group_director_service import DirectorCustomization, GroupDirectorService
 
 
-class GroupDirectorServiceTests(SettingsTestCase):
-    def setUp(self):
-        self.db = sqlite3.connect(":memory:")
-        self.db.execute("CREATE TABLE messages(chat_id TEXT,session_id TEXT,role TEXT,content TEXT,created_at REAL)")
-        self.db.executemany(
-            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
-            [
-                ("chat", "session", "user", "hello", 1.0),
-                ("chat", "session", "assistant", "hi", 2.0),
-            ],
-        )
-        self.state = {
-            "title": "Group",
-            "enabled": True,
-            "turn_index": 1,
-            "mode": "director",
-            "forced_speaker": "",
-            "members": ["alice.png", "bob.png"],
-            "turn_user_id": "",
-            "turn_users": [],
-        }
-        self.generated = []
-        self.policy_calls = []
-        self.customization = None
-        self.generation_result = '{"speaker":"Bob","direction":"raise the stakes"}'
-        self.generation_error = None
-
-        def generate_text(
-            api_key,
-            model,
-            messages,
-            *,
-            session_id,
-            settings,
-            force_non_stream,
-        ):
-            self.generated.append(
-                {
-                    "api_key": api_key,
-                    "model": model,
-                    "messages": messages,
-                    "session_id": session_id,
-                    "settings": dict(settings),
-                    "force_non_stream": force_non_stream,
-                }
-            )
-            if self.generation_error is not None:
-                raise self.generation_error
-            return self.generation_result
-
-        def director_customization(db, chat_id, session):
-            self.policy_calls.append((db, chat_id, session))
-            return self.customization
-
-        self.service = GroupDirectorService(
-            load_group_state=lambda _db, _chat_id, _session_id: dict(self.state),
-            safe_character=lambda filename: filename in {"alice.png", "bob.png"},
-            member_labels=lambda filenames: [
-                {"alice.png": "Alice", "bob.png": "Bob"}[filename] for filename in filenames
-            ],
-            card_fields=lambda filename: {"name": {"alice.png": "Alice", "bob.png": "Bob"}[filename]},
-            generation_settings=lambda _db, _chat_id, _session_id: {
-                "temperature": 0.85,
-                "max_tokens": 1800,
-                "top_p": 1.0,
-                "frequency_penalty": 0.0,
-                "presence_penalty": 0.0,
-                "reasoning_budget": 0,
-                "stop_sequences": "",
-            },
-            generate_text=generate_text,
-            director_policy=director_customization,
-            default_model="main-model",
-        )
-        self.session = {
-            "session_id": "session",
-            "model_id": "story-model",
-        }
-
-    def tearDown(self):
-        self.db.close()
-
-    def test_prompt_context_policy_failure_uses_core_context(self):
-        def fail_policy(_db, _chat_id, _session):
-            raise RuntimeError("policy failed")
-
-        service = replace(
-            self.service,
-            director_policy=fail_policy,
-        )
-        with self.assertLogs(level="ERROR"):
-            context = service.prompt_context(
-                self.db,
-                "chat",
-                self.session,
-                "alice.png",
-                "Keep the pace measured.",
-            )
-
-        self.assertIn("Current speaker: Alice.", context)
-        self.assertIn(
-            "Invisible director guidance: Keep the pace measured.",
-            context,
-        )
-
-    def test_parse_decision_rejects_unknown_speaker(self):
-        self.assertIsNone(
-            self.service._parse_decision(
-                '{"speaker":"Mallory","direction":"Enter dramatically."}',
-                ["alice.png", "bob.png"],
-            )
-        )
-
-    def test_plan_chooses_known_speaker_without_mutating_transcript(self):
-        before = self.db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
-
-        result = self.service.plan(
-            self.db,
-            "api-key",
-            "chat",
-            self.session,
-            "continue",
-        )
-
-        after = self.db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
-        self.assertEqual(result[0], "bob.png")
-        self.assertEqual(result[2], "raise the stakes")
-        self.assertEqual(before, after)
-        self.assertEqual(self.generated[0]["model"], "story-model")
-        self.assertEqual(self.generated[0]["settings"]["max_tokens"], 180)
-
-    def test_invalid_output_falls_back_to_round_robin(self):
-        self.generation_result = '{"speaker":"Unknown","direction":"ignored"}'
-
-        result = self.service.plan(
-            self.db,
-            "api-key",
-            "chat",
-            self.session,
-            "continue",
-        )
-
-        self.assertEqual(result, ("bob.png", self.state, ""))
-
-    def test_generation_error_falls_back_to_round_robin(self):
-        self.generation_error = RuntimeError("provider down")
-
-        result = self.service.plan(
-            self.db,
-            "api-key",
-            "chat",
-            self.session,
-            "continue",
-        )
-
-        self.assertEqual(result, ("bob.png", self.state, ""))
-
-    def test_forced_speaker_bypasses_policy_and_generation(self):
-        self.state["forced_speaker"] = "alice.png"
-
-        result = self.service.plan(
-            self.db,
-            "api-key",
-            "chat",
-            self.session,
-            "continue",
-        )
-
-        self.assertEqual(result, ("alice.png", self.state, ""))
-        self.assertEqual(self.policy_calls, [])
-        self.assertEqual(self.generated, [])
-
-    def test_policy_customization_is_bounded(self):
-        self.customization = DirectorCustomization(
-            model="utility-model",
-            hidden_instructions="Move toward the hidden goal.",
-            max_tokens=500,
-            speaker_context="Keep the goal implicit.",
-        )
-
-        result = self.service.plan(
-            self.db,
-            "api-key",
-            "chat",
-            self.session,
-            "continue",
-        )
-
-        self.assertEqual(result[0], "bob.png")
-        request = self.generated[0]
-        self.assertEqual(request["model"], "utility-model")
-        self.assertEqual(request["settings"]["max_tokens"], 500)
-        self.assertIn(
-            "Hidden Director policy:\nMove toward the hidden goal.",
-            request["messages"][1]["content"],
-        )
-
-    def test_prompt_context_appends_policy_speaker_context(self):
-        self.customization = DirectorCustomization(speaker_context="Keep the goal implicit.")
-
-        context = self.service.prompt_context(
-            self.db,
-            "chat",
-            self.session,
-            "alice.png",
-            "slow the pacing",
-        )
-
-        self.assertIn("Current speaker: Alice", context)
-        self.assertIn("Invisible director guidance: slow the pacing", context)
-        self.assertIn("Keep the goal implicit.", context)
+@pytest.fixture
+def group():
+    state = {
+        "enabled": True,
+        "mode": "director",
+        "turn_index": 0,
+        "forced_speaker": "",
+        "members": ["alice.png", "bob.png"],
+    }
+    service = GroupDirectorService(
+        load_group_state=lambda *_: dict(state),
+        safe_character=lambda name: name in {"alice.png", "bob.png"},
+        member_labels=lambda names: [Path(name).stem.title() for name in names],
+        card_fields=lambda name: {"name": Path(name).stem.title()},
+        director_policy=lambda *_: DirectorCustomization(speaker="Bob", direction="Watch the gate."),
+    )
+    return state, service
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_group_has_no_provider_model_or_token_budget_dependencies():
+    names = {item.name for item in fields(GroupDirectorService)}
+    assert not {"generate_text", "generation_settings", "default_model"} & names
+    assert not {"model", "max_tokens", "hidden_instructions"} & {item.name for item in fields(DirectorCustomization)}
+
+
+@pytest.mark.parametrize("speaker", ["Bob", "bob", "bob.png", "BOB.PNG"])
+def test_canonical_speaker_overrides_round_robin_without_transcript_or_provider(group, speaker):
+    state, service = group
+    service = replace(
+        service, director_policy=lambda *_: DirectorCustomization(speaker=speaker, direction="Watch gate.")
+    )
+    # No SQLite/transport capability is passed: selecting the accepted plan is pure orchestration.
+    assert service.plan(object(), "chat", {"session_id": "s1"}) == ("bob.png", state, "Watch gate.")
+
+
+@pytest.mark.parametrize(
+    "custom",
+    [
+        None,
+        "invalid",
+        DirectorCustomization(speaker="unknown"),
+        DirectorCustomization(speaker="user"),
+        DirectorCustomization(viewpoint="off-screen NPC"),
+    ],
+)
+def test_missing_or_unknown_canonical_choice_falls_back_safely(group, custom):
+    state, service = group
+    service = replace(service, director_policy=lambda *_: custom)
+    assert service.plan(object(), "chat", {"session_id": "s1"}) == ("alice.png", state, "")
+
+
+def test_canonical_viewpoint_can_select_configured_member(group):
+    state, service = group
+    service = replace(
+        service, director_policy=lambda *_: DirectorCustomization(viewpoint="Bob", direction="Follow Bob.")
+    )
+    assert service.plan(object(), "chat", {"session_id": "s1"}) == ("bob.png", state, "Follow Bob.")
+
+
+def test_ambiguous_alias_is_not_guessed(group):
+    state, service = group
+    service = replace(
+        service,
+        card_fields=lambda _: {"name": "Same"},
+        director_policy=lambda *_: DirectorCustomization(speaker="Same"),
+    )
+    assert service.plan(object(), "chat", {"session_id": "s1"}) == ("alice.png", state, "")
+
+
+def test_forced_member_is_explicit_and_never_calls_policy(group):
+    state, service = group
+    state["forced_speaker"] = "alice.png"
+    service = replace(service, director_policy=lambda *_: pytest.fail("forced member consulted Director"))
+    assert service.plan(object(), "chat", {"session_id": "s1"}) == ("alice.png", state, "")
+
+
+@pytest.mark.parametrize(
+    "change",
+    [{"enabled": False}, {"mode": "round_robin"}, {"members": ["alice.png"]}, {"members": ["missing.png", "bob.png"]}],
+)
+def test_non_director_or_invalid_group_is_not_planned(group, change):
+    state, service = group
+    state.update(change)
+    assert service.plan(object(), "chat", {"session_id": "s1"}) is None
+
+
+def test_policy_failure_continues_group_without_leaking_error_details(group, caplog):
+    state, service = group
+
+    def fail(*_):
+        raise RuntimeError("PRIVATE provider detail")
+
+    service = replace(service, director_policy=fail)
+    assert service.plan(object(), "chat", {"session_id": "s1"}) == ("alice.png", state, "")
+    assert "PRIVATE" not in caplog.text
+
+
+def test_plan_direction_and_context_are_bounded(group):
+    _, service = group
+    service = replace(
+        service,
+        director_policy=lambda *_: DirectorCustomization(
+            speaker="Bob", direction="x" * 10000, speaker_context="y" * 10000, narrative_context="z" * 10000
+        ),
+    )
+    plan = service.plan(object(), "chat", {"session_id": "s1"})
+    assert len(plan[2]) <= 500
+    context = service.prompt_context(object(), "chat", {"session_id": "s1"}, "bob.png", plan[2])
+    assert len(context) < 11000
+
+
+def test_prompt_does_not_assume_all_configured_characters_are_present(group):
+    _, service = group
+    context = service.prompt_context(object(), "chat", {"session_id": "s1"}, "alice.png", "Follow distant Bob.")
+    assert "Other characters present" not in context
+    assert "configured" in context.lower()
+    assert "not assume" in context.lower()
+    assert "Follow distant Bob" in context
+    assert "Do not speak for the user" in context
+
+
+def test_grounded_user_policy_still_applies(group):
+    _, service = group
+    context = service.prompt_context(object(), "chat", {"session_id": "s1", "grounded_user": "on"}, "alice.png")
+    assert "Do not select a speaker merely to make the user the center of attention" in context
+
+
+def test_autonomous_mode_remains_bounded(group):
+    state, service = group
+    state["mode"] = "autonomous"
+    context = service.prompt_context(object(), "chat", {"session_id": "s1"}, "alice.png")
+    assert "up to 3" in context
+    assert "Do not speak for the user" in context

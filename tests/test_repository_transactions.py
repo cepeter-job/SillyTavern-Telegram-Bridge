@@ -133,6 +133,8 @@ class RepositoryPrimitiveTests(SettingsTestCase):
                 session_id TEXT NOT NULL,
                 goal TEXT NOT NULL,
                 state_revision INTEGER NOT NULL DEFAULT 0,
+                inflight_token TEXT NOT NULL DEFAULT '',
+                inflight_started_at REAL NOT NULL DEFAULT 0,
                 updated_at REAL NOT NULL,
                 PRIMARY KEY(chat_id, session_id)
             );
@@ -220,7 +222,7 @@ class RepositoryPrimitiveTests(SettingsTestCase):
 
     def test_repository_write_does_not_commit(self):
         self.db.execute("BEGIN")
-        _owner_director_goal_repository.store_director_goal(self.db, "chat", "session", "goal", 1.0)
+        _owner_director_goal_repository.store_director_goal(self.db, "chat", "session", "goal", 1.0, 0)
         self.assertTrue(self.db.in_transaction)
         self.db.rollback()
         self.assertEqual(

@@ -1,484 +1,113 @@
-from functools import partial as _partial
+"""Canonical group integration preserves source facts and World-driven camera freedom."""
 
-from application_test_setup import ensure_application_extensions, make_test_provider_port
-from settings_test_support import SettingsTestCase
-
-import bridge.card_content as _owner_card_content
-import bridge.generation_settings as _owner_generation_settings
-
-ensure_application_extensions()
-
-import tempfile
+import json
+from dataclasses import fields
 from pathlib import Path
 
-import bridge.group_core as _m_group_core
-import bridge.memory_curator as _m_memory_curator
-import bridge.session_naming as _m_session_naming
-import bridge.sync_api as _m_sync_api
-from bridge.group_director_service import DirectorCustomization, GroupDirectorService
+import pytest
+from test_memory_completion_safety import session_db as session_db
+from test_narrative_reconciliation import add_story, run_reconciliation
+
+from bridge.director_goals import director_goal_policy, set_director_goal
+from bridge.director_room import apply_direction, director_room
+from bridge.director_service import DirectorService
+from bridge.group_director_service import GroupDirectorService
+from bridge.narrative_settings import preset_narrative_settings, save_session_narrative_settings
+from bridge.provider_port import ProviderPort
 
 
-class GroupDirectorTests(SettingsTestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-        self.old_db = self.app_settings_builder.db_file
-        self.app_settings_builder.db_file = Path(self.tmp.name) / "bridge.sqlite3"
-        self.db = _m_memory_curator.db_connect(app_settings=self.app_settings_builder.build())
-        self._generate_text = make_test_provider_port().generate
-        self.session = _m_session_naming.create_session(
-            self.db,
-            "chat|topic:1",
-            "provider::main",
-            session_id="director-session",
-            title="Director",
-            app_settings=self.app_settings_builder.build(),
-        )
-        _m_group_core.save_group_state(
-            self.db,
-            "chat|topic:1",
-            self.session["session_id"],
-            {
-                "title": "Director",
-                "enabled": True,
-                "turn_index": 0,
-                "mode": "director",
-                "forced_speaker": "",
-                "members": ["alice.png", "bob.png"],
-                "turn_user_id": "",
-                "turn_users": [],
-            },
-        )
+def service(_directed):
+    group = {"enabled": True, "mode": "director", "turn_index": 1, "members": ["Mara.png", "Boris.png"]}
+    return GroupDirectorService(
+        load_group_state=lambda *_: group,
+        safe_character=Path,
+        member_labels=lambda names: [Path(name).stem for name in names],
+        card_fields=lambda name: {"name": Path(name).stem},
+        director_policy=director_goal_policy,
+    )
 
-    def _service(self, director_policy=None):
-        return GroupDirectorService(
-            load_group_state=_m_group_core.group_state,
-            safe_character=_partial(
-                _owner_card_content.safe_character_path, app_settings=self.app_settings_builder.build()
-            ),
-            member_labels=_partial(_m_group_core.group_member_labels, app_settings=self.app_settings_builder.build()),
-            card_fields=_partial(
-                _owner_card_content.card_fields_from_file, app_settings=self.app_settings_builder.build()
-            ),
-            generation_settings=_owner_generation_settings.get_generation_settings,
-            generate_text=self._generate_text,
-            director_policy=(director_policy or (lambda _db, _chat_id, _session: None)),
-            default_model=self.app_settings_builder.default_model,
-        )
 
-    def tearDown(self):
-        self.db.close()
-        self.app_settings_builder.db_file = self.old_db
-        self.tmp.cleanup()
+@pytest.fixture
+def directed(session_db):
+    _, db, _ = session_db
+    save_session_narrative_settings(db, "chat", "s1", preset_narrative_settings("world_driven"))
+    add_story(db)
+    run_reconciliation(session_db)
+    return session_db
 
-    def test_parser_rejects_unknown_speaker(self):
-        old_fields = _owner_card_content.card_fields_from_file
-        _owner_card_content.card_fields_from_file = lambda filename, *, app_settings=None: {
-            "name": Path(filename).stem.title()
-        }
-        try:
-            self.assertIsNone(
-                self._service()._parse_decision(
-                    '{"speaker":"Mallory","direction":"Enter dramatically."}',
-                    ["alice.png", "bob.png"],
-                )
-            )
-        finally:
-            _owner_card_content.card_fields_from_file = old_fields
 
-    def test_director_chooses_known_speaker_without_writing_transcript(self):
-        old_safe = _owner_card_content.safe_character_path
-        old_fields = _owner_card_content.card_fields_from_file
-        old_generate = self._generate_text
-        _owner_card_content.safe_character_path = lambda filename, *, app_settings=None: Path(filename)
-        _owner_card_content.card_fields_from_file = lambda filename, *, app_settings=None: {
-            "name": Path(filename).stem.title()
-        }
-        calls = []
+def test_current_canonical_direction_selects_viewpoint_without_a_second_call(directed):
+    _settings, db, session = directed
+    clock = director_room(db, "chat", "s1")
+    result = apply_direction(db, "chat", "s1", clock["revision"], "Stay with Mara at the gate.", "next_scene")
+    assert result.result == "accepted"
+    before = db.execute("SELECT * FROM messages").fetchall()
+    plan = service(directed).plan(db, "chat", session)
+    assert plan[0] == "Mara.png"
+    assert "Mara" in plan[2]
+    assert db.execute("SELECT * FROM messages").fetchall() == before
+    assert "generate_text" not in {item.name for item in fields(GroupDirectorService)}
 
-        def fake_generate(_api_key, model, messages, **kwargs):
-            calls.append((model, messages, kwargs))
-            return '{"speaker":"Bob","direction":"Let Bob notice the hidden door and raise the tension."}'
 
-        self._generate_text = fake_generate
-        try:
-            before = self.db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
-            plan = self._service().plan(
-                self.db,
-                "key",
-                "chat|topic:1",
-                self.session,
-                "What do you see?",
-            )
-            after = self.db.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
-        finally:
-            _owner_card_content.safe_character_path = old_safe
-            _owner_card_content.card_fields_from_file = old_fields
-            self._generate_text = old_generate
+def test_stale_plan_does_not_revive_through_group_adapter(directed):
+    _, db, session = directed
+    revision = director_room(db, "chat", "s1")["revision"]
+    apply_direction(db, "chat", "s1", revision, "Stay with Mara.", "next_scene")
+    add_story(db)
+    plan = service(directed).plan(db, "chat", session)
+    assert plan[0] == "Boris.png" and plan[2] == ""
 
-        self.assertEqual(plan[0], "bob.png")
-        self.assertIn("hidden door", plan[2])
-        self.assertEqual(before, after)
-        self.assertEqual(calls[0][0], "provider::main")
-        self.assertTrue(calls[0][2]["force_non_stream"])
 
-    def test_director_falls_back_to_round_robin_on_invalid_output(self):
-        old_safe = _owner_card_content.safe_character_path
-        old_fields = _owner_card_content.card_fields_from_file
-        old_generate = self._generate_text
-        _owner_card_content.safe_character_path = lambda filename, *, app_settings=None: Path(filename)
-        _owner_card_content.card_fields_from_file = lambda filename, *, app_settings=None: {
-            "name": Path(filename).stem.title()
-        }
-        self._generate_text = lambda *_args, **_kwargs: "not json"
-        try:
-            plan = self._service().plan(
-                self.db,
-                "key",
-                "chat|topic:1",
-                self.session,
-                "Continue.",
-            )
-        finally:
-            _owner_card_content.safe_character_path = old_safe
-            _owner_card_content.card_fields_from_file = old_fields
-            self._generate_text = old_generate
+def test_group_goal_and_room_are_the_same_objective_with_one_history(directed):
+    _, db, session = directed
+    set_director_goal(db, "chat", "s1", "  Protect   the archive. ")
+    view = director_room(db, "chat", "s1")
+    assert view["objective"] == "Protect the archive."
+    assert view["history"][0]["source"] == "user"
+    apply_direction(db, "chat", "s1", view["revision"], "Keep the gate open.", "persistent")
+    customization = director_goal_policy(db, "chat", session)
+    assert "Keep the gate open." in customization.speaker_context
+    assert "no forced return to the user" in customization.narrative_context
+    assert "not to recenter the user" in customization.narrative_context
 
-        self.assertEqual(plan[0], "alice.png")
-        self.assertEqual(plan[2], "")
 
-    def test_director_falls_back_to_round_robin_on_generation_error(self):
-        old_safe = _owner_card_content.safe_character_path
-        old_fields = _owner_card_content.card_fields_from_file
-        old_generate = self._generate_text
-        _owner_card_content.safe_character_path = lambda filename, *, app_settings=None: Path(filename)
-        _owner_card_content.card_fields_from_file = lambda filename, *, app_settings=None: {
-            "name": Path(filename).stem.title()
-        }
+def test_director_ai_plan_is_consumed_by_group_without_extra_model_call(directed):
+    settings, db, session = directed
+    from bridge.narrative_context import load_narrative_state
 
-        def fail_generate(*_args, **_kwargs):
-            raise RuntimeError("model unavailable")
+    state = load_narrative_state(db, "chat", "s1")
+    calls = []
+    proposal = {
+        "schema_version": 1,
+        "action": "continue",
+        "expected_revision": state.state_revision,
+        "speaker": "Boris",
+        "direction": "Let Mara inspect the gate.",
+    }
+    provider = ProviderPort(lambda *a, **k: calls.append(k) or json.dumps(proposal))
+    result = DirectorService().reassess(
+        db,
+        "",
+        "chat",
+        session,
+        provider_port=provider,
+        app_settings=settings,
+        reason="manual",
+        valid_characters={"Mara", "Boris"},
+    )
+    assert result.result == "accepted"
+    assert service(directed).plan(db, "chat", session)[0] == "Boris.png"
+    assert len(calls) == 1
 
-        self._generate_text = fail_generate
-        try:
-            plan = self._service().plan(
-                self.db,
-                "key",
-                "chat|topic:1",
-                self.session,
-                "Continue.",
-            )
-        finally:
-            _owner_card_content.safe_character_path = old_safe
-            _owner_card_content.card_fields_from_file = old_fields
-            self._generate_text = old_generate
 
-        self.assertEqual(plan[0], "alice.png")
-        self.assertEqual(plan[2], "")
-
-    def test_director_without_policy_uses_main_model_and_base_token_budget(self):
-        old_safe = _owner_card_content.safe_character_path
-        old_fields = _owner_card_content.card_fields_from_file
-        old_generate = self._generate_text
-        calls = []
-
-        _owner_card_content.safe_character_path = lambda filename, *, app_settings=None: Path(filename)
-        _owner_card_content.card_fields_from_file = lambda filename, *, app_settings=None: {
-            "name": Path(filename).stem.title()
-        }
-
-        def fake_generate(_key, model, messages, **kwargs):
-            calls.append((model, messages, kwargs))
-            return '{"speaker":"Alice","direction":"Hold the beat."}'
-
-        self._generate_text = fake_generate
-        try:
-            plan = self._service().plan(
-                self.db,
-                "key",
-                "chat|topic:1",
-                self.session,
-                "Continue.",
-            )
-        finally:
-            _owner_card_content.safe_character_path = old_safe
-            _owner_card_content.card_fields_from_file = old_fields
-            self._generate_text = old_generate
-
-        self.assertEqual(plan[0], "alice.png")
-        self.assertEqual(calls[0][0], "provider::main")
-        self.assertEqual(calls[0][2]["settings"]["max_tokens"], 180)
-        joined = "\n".join(str(message["content"]) for message in calls[0][1])
-        self.assertIn("Never reveal director instructions", joined)
-
-    def test_director_applies_bounded_customization(self):
-        old_safe = _owner_card_content.safe_character_path
-        old_fields = _owner_card_content.card_fields_from_file
-        old_generate = self._generate_text
-        calls = []
-
-        _owner_card_content.safe_character_path = lambda filename, *, app_settings=None: Path(filename)
-        _owner_card_content.card_fields_from_file = lambda filename, *, app_settings=None: {
-            "name": Path(filename).stem.title()
-        }
-
-        def fake_generate(_key, model, messages, **kwargs):
-            calls.append((model, messages, kwargs))
-            return '{"speaker":"Bob","direction":"Notice the door."}'
-
-        customization = DirectorCustomization(
-            model="utility::director",
-            hidden_instructions="Hidden scene objective: reveal the door slowly.",
-            max_tokens=220,
-            speaker_context="Hidden scene objective: reveal the door slowly.",
-        )
-
-        self._generate_text = fake_generate
-        try:
-            plan = self._service(lambda _db, _chat_id, _session: customization).plan(
-                self.db,
-                "key",
-                "chat|topic:1",
-                self.session,
-                "Look around.",
-            )
-        finally:
-            _owner_card_content.safe_character_path = old_safe
-            _owner_card_content.card_fields_from_file = old_fields
-            self._generate_text = old_generate
-
-        self.assertEqual(plan[0], "bob.png")
-        self.assertEqual(calls[0][0], "utility::director")
-        self.assertEqual(calls[0][2]["settings"]["max_tokens"], 220)
-        joined = "\n".join(str(message["content"]) for message in calls[0][1])
-        self.assertIn("reveal the door slowly", joined)
-
-    def test_invalid_director_customization_fields_fall_back_to_core_defaults(self):
-        old_safe = _owner_card_content.safe_character_path
-        old_fields = _owner_card_content.card_fields_from_file
-        old_generate = self._generate_text
-        calls = []
-
-        _owner_card_content.safe_character_path = lambda filename, *, app_settings=None: Path(filename)
-        _owner_card_content.card_fields_from_file = lambda filename, *, app_settings=None: {
-            "name": Path(filename).stem.title()
-        }
-
-        def fake_generate(_key, model, messages, **kwargs):
-            calls.append((model, messages, kwargs))
-            return '{"speaker":"Alice","direction":"Continue safely."}'
-
-        customization = DirectorCustomization(
-            model=" invalid model ",
-            max_tokens="large",
-        )
-
-        self._generate_text = fake_generate
-        try:
-            plan = self._service(lambda _db, _chat_id, _session: customization).plan(
-                self.db,
-                "key",
-                "chat|topic:1",
-                self.session,
-                "Continue.",
-            )
-        finally:
-            _owner_card_content.safe_character_path = old_safe
-            _owner_card_content.card_fields_from_file = old_fields
-            self._generate_text = old_generate
-
-        self.assertEqual(plan[0], "alice.png")
-        self.assertEqual(calls[0][0], "provider::main")
-        self.assertEqual(calls[0][2]["settings"]["max_tokens"], 180)
-
-    def test_director_customization_token_budget_clamps_to_generation_limits(self):
-        old_safe = _owner_card_content.safe_character_path
-        old_fields = _owner_card_content.card_fields_from_file
-        old_generate = self._generate_text
-        calls = []
-
-        _owner_card_content.safe_character_path = lambda filename, *, app_settings=None: Path(filename)
-        _owner_card_content.card_fields_from_file = lambda filename, *, app_settings=None: {
-            "name": Path(filename).stem.title()
-        }
-
-        def fake_generate(_key, model, messages, **kwargs):
-            calls.append((model, messages, kwargs))
-            return '{"speaker":"Alice","direction":"Continue."}'
-
-        self._generate_text = fake_generate
-        try:
-            for supplied, expected in ((0, 1), (-50, 1), (99999, 16000), ("220", 220)):
-                calls.clear()
-                customization = DirectorCustomization(
-                    model=" utility::director ",
-                    max_tokens=supplied,
-                )
-                with self.subTest(max_tokens=supplied):
-                    plan = self._service(lambda _db, _chat_id, _session, value=customization: value).plan(
-                        self.db,
-                        "key",
-                        "chat|topic:1",
-                        self.session,
-                        "Continue.",
-                    )
-                    self.assertEqual(plan[0], "alice.png")
-                    self.assertEqual(calls[0][0], "utility::director")
-                    self.assertEqual(calls[0][2]["settings"]["max_tokens"], expected)
-        finally:
-            _owner_card_content.safe_character_path = old_safe
-            _owner_card_content.card_fields_from_file = old_fields
-            self._generate_text = old_generate
-
-    def test_director_policy_failure_uses_ordinary_director_behavior(self):
-        old_safe = _owner_card_content.safe_character_path
-        old_fields = _owner_card_content.card_fields_from_file
-        old_generate = self._generate_text
-        calls = []
-
-        _owner_card_content.safe_character_path = lambda filename, *, app_settings=None: Path(filename)
-        _owner_card_content.card_fields_from_file = lambda filename, *, app_settings=None: {
-            "name": Path(filename).stem.title()
-        }
-
-        def fail_policy(_db, _chat_id, _session):
-            raise RuntimeError("policy failed")
-
-        def fake_generate(_key, model, messages, **kwargs):
-            calls.append((model, messages, kwargs))
-            return '{"speaker":"Alice","direction":"Continue normally."}'
-
-        self._generate_text = fake_generate
-        try:
-            plan = self._service(fail_policy).plan(
-                self.db,
-                "key",
-                "chat|topic:1",
-                self.session,
-                "Continue.",
-            )
-        finally:
-            _owner_card_content.safe_character_path = old_safe
-            _owner_card_content.card_fields_from_file = old_fields
-            self._generate_text = old_generate
-
-        self.assertEqual(plan[0], "alice.png")
-        self.assertEqual(calls[0][0], "provider::main")
-        self.assertEqual(calls[0][2]["settings"]["max_tokens"], 180)
-
-    def test_forced_speaker_bypasses_policy_and_generation(self):
-        state = _m_sync_api.group_state(self.db, "chat|topic:1", self.session["session_id"])
-        state["forced_speaker"] = "bob.png"
-        _m_group_core.save_group_state(
-            self.db,
-            "chat|topic:1",
-            self.session["session_id"],
-            state,
-        )
-
-        old_safe = _owner_card_content.safe_character_path
-        old_generate = self._generate_text
-        policy_calls = []
-        generation_calls = []
-        _owner_card_content.safe_character_path = lambda filename, *, app_settings=None: Path(filename)
-
-        def policy(_db, _chat_id, _session):
-            policy_calls.append(True)
-            return None
-
-        def generate(*_args, **_kwargs):
-            generation_calls.append(True)
-            raise AssertionError("generation should not run")
-
-        self._generate_text = generate
-        try:
-            plan = self._service(policy).plan(
-                self.db,
-                "key",
-                "chat|topic:1",
-                self.session,
-                "Continue.",
-            )
-        finally:
-            _owner_card_content.safe_character_path = old_safe
-            self._generate_text = old_generate
-
-        self.assertEqual(plan[0], "bob.png")
-        self.assertEqual(policy_calls, [])
-        self.assertEqual(generation_calls, [])
-
-    def test_group_prompt_context_appends_director_policy_context(self):
-        old_safe = _owner_card_content.safe_character_path
-        old_fields = _owner_card_content.card_fields_from_file
-        _owner_card_content.safe_character_path = lambda filename, *, app_settings=None: Path(filename)
-        _owner_card_content.card_fields_from_file = lambda filename, *, app_settings=None: {
-            "name": Path(filename).stem.title()
-        }
-
-        customization = DirectorCustomization(speaker_context="Hidden scene objective: keep the letter unopened.")
-        try:
-            context = self._service(lambda _db, _chat_id, _session: customization).prompt_context(
-                self.db,
-                "chat|topic:1",
-                self.session,
-                "alice.png",
-                "Keep the pace measured.",
-            )
-        finally:
-            _owner_card_content.safe_character_path = old_safe
-            _owner_card_content.card_fields_from_file = old_fields
-
-        self.assertIn("Invisible director guidance: Keep the pace measured.", context)
-        self.assertIn("keep the letter unopened", context)
-
-    def test_groups_module_no_longer_owns_director_workflow(self):
-        source = "\n".join(
-            (
-                (Path(__file__).parents[1] / "bridge" / "group_callbacks.py").read_text(encoding="utf-8"),
-                (Path(__file__).parents[1] / "bridge" / "group_commands.py").read_text(encoding="utf-8"),
-                (Path(__file__).parents[1] / "bridge" / "group_panels.py").read_text(encoding="utf-8"),
-                (Path(__file__).parents[1] / "bridge" / "group_setup.py").read_text(encoding="utf-8"),
-            )
-        )
-        for forbidden in (
-            "GroupDirectorService",
-            "_compat_group_director_service",
-            "group_director_plan",
-            "group_prompt_context",
-            "parse_group_director_decision",
-        ):
-            self.assertNotIn(forbidden, source)
-
-    def test_grounded_user_director_does_not_center_user_by_default(self):
-        old_safe = _owner_card_content.safe_character_path
-        old_fields = _owner_card_content.card_fields_from_file
-        old_generate = self._generate_text
-        calls = []
-
-        _owner_card_content.safe_character_path = lambda filename, *, app_settings=None: Path(filename)
-        _owner_card_content.card_fields_from_file = lambda filename, *, app_settings=None: {
-            "name": Path(filename).stem.title()
-        }
-
-        def fake_generate(_key, model, messages, **kwargs):
-            calls.append((model, messages, kwargs))
-            return '{"speaker":"Alice","direction":"Continue naturally."}'
-
-        self._generate_text = fake_generate
-        self.session["grounded_user"] = "on"
-        try:
-            plan = self._service().plan(
-                self.db,
-                "key",
-                "chat|topic:1",
-                self.session,
-                "I enter the room.",
-            )
-        finally:
-            _owner_card_content.safe_character_path = old_safe
-            _owner_card_content.card_fields_from_file = old_fields
-            self._generate_text = old_generate
-
-        self.assertEqual(plan[0], "alice.png")
-        joined = "\n".join(str(message["content"]) for message in calls[0][1])
-        self.assertIn("Do not select a speaker merely to make the user the center of attention.", joined)
-        self.assertIn("Choose whoever would naturally act or respond", joined)
+def test_group_adapters_do_not_reintroduce_a_second_director_owner():
+    root = Path(__file__).parents[1] / "bridge"
+    source = "\n".join(
+        (root / filename).read_text()
+        for filename in ("group_callbacks.py", "group_commands.py", "group_panels.py", "group_setup.py")
+    )
+    for obsolete in ("_compat_group_director_service", "group_director_plan", "parse_group_director_decision"):
+        assert obsolete not in source
+    source = (root / "group_director_service.py").read_text()
+    assert "generate_text" not in source
+    assert "_parse_decision" not in source

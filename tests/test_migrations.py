@@ -409,9 +409,7 @@ class RequestTimeSchemaRegressionTests(SettingsTestCase):
                 self.session["session_id"],
                 "Keep tension unresolved.",
             ),
-            lambda: _m_director_goals.director_goal_policy(
-                self.db, "chat", self.session, app_settings=self.app_settings_builder.build()
-            ),
+            lambda: _m_director_goals.director_goal_policy(self.db, "chat", self.session),
         )
         for operation in operations:
             with self.subTest(operation=operation):

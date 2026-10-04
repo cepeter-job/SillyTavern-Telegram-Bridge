@@ -12,6 +12,7 @@ from typing import Any
 
 from bridge.director_cadence import DIRECTOR_LEASE_SECONDS, director_event_key, director_interval
 from bridge.director_contracts import DirectorProposal, DirectorProposalError, parse_director_proposal
+from bridge.director_goal_repository import store_director_goal
 from bridge.director_guidance import active_director_plan
 from bridge.director_prompt import DIRECTOR_INSTRUCTION, build_director_input
 from bridge.director_repository import (
@@ -24,7 +25,6 @@ from bridge.director_repository import (
     publish_director_plan,
     release_director_run,
     write_manual_direction,
-    write_manual_objective,
 )
 from bridge.director_validation import validate_director_proposal
 from bridge.generation_settings import get_generation_settings
@@ -321,9 +321,7 @@ class DirectorService:
             encoded = json.dumps(proposal.to_dict(), ensure_ascii=False, separators=(",", ":"))
             now = time.time()
             if scope == "persistent":
-                written = write_manual_objective(
-                    db, chat_id, session_id, direction, expected_director_revision=expected_director_revision, now=now
-                )
+                written = store_director_goal(db, chat_id, session_id, direction, now, expected_director_revision)
             else:
                 written = write_manual_direction(
                     db,

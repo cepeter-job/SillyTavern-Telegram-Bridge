@@ -209,29 +209,6 @@ def mark_director_degraded(
     return cursor.rowcount == 1
 
 
-def write_manual_objective(
-    db: sqlite3.Connection,
-    chat_id: str,
-    session_id: str,
-    goal: str,
-    *,
-    expected_director_revision: int,
-    now: float,
-) -> bool:
-    require_active_transaction(db)
-    if expected_director_revision == 0:
-        db.execute(
-            "INSERT INTO director_state(chat_id,session_id) VALUES(?,?) ON CONFLICT(chat_id,session_id) DO NOTHING",
-            (chat_id, session_id),
-        )
-    cursor = db.execute(
-        "UPDATE director_state SET goal=?,state_revision=state_revision+1,updated_at=?,inflight_token='',"
-        "inflight_started_at=0 WHERE chat_id=? AND session_id=? AND state_revision=?",
-        (goal, now, chat_id, session_id, expected_director_revision),
-    )
-    return cursor.rowcount == 1
-
-
 def write_manual_direction(
     db: sqlite3.Connection,
     chat_id: str,

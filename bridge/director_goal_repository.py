@@ -25,23 +25,19 @@ def store_director_goal(
     session_id: str,
     goal: str,
     updated_at: float,
-) -> None:
+    expected_revision: int,
+) -> bool:
+    """Publish a manual objective and invalidate an older in-flight AI lease."""
     require_active_transaction(db)
-    db.execute(
-        "INSERT INTO director_state(chat_id,session_id,goal,updated_at) VALUES(?,?,?,?) "
-        "ON CONFLICT(chat_id,session_id) DO UPDATE SET goal=excluded.goal,updated_at=excluded.updated_at,"
-        "state_revision=director_state.state_revision+1",
-        (str(chat_id), str(session_id), str(goal), float(updated_at)),
+    if expected_revision == 0:
+        db.execute(
+            "INSERT INTO director_state(chat_id,session_id,goal,updated_at) VALUES(?,?,'',?) "
+            "ON CONFLICT(chat_id,session_id) DO NOTHING",
+            (chat_id, session_id, updated_at),
+        )
+    cursor = db.execute(
+        "UPDATE director_state SET goal=?,state_revision=state_revision+1,updated_at=?,inflight_token='',"
+        "inflight_started_at=0 WHERE chat_id=? AND session_id=? AND state_revision=?",
+        (goal, updated_at, chat_id, session_id, expected_revision),
     )
-
-
-def delete_director_goal(
-    db: sqlite3.Connection,
-    chat_id: str,
-    session_id: str,
-) -> None:
-    require_active_transaction(db)
-    db.execute(
-        "UPDATE director_state SET goal='',state_revision=state_revision+1 WHERE chat_id=? AND session_id=?",
-        (str(chat_id), str(session_id)),
-    )
+    return cursor.rowcount == 1

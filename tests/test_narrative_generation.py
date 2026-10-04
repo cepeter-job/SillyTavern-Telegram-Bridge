@@ -2,7 +2,6 @@
 
 import json
 from contextlib import closing
-from functools import partial
 from pathlib import Path
 
 import pytest
@@ -240,25 +239,21 @@ def test_group_speaker_selection_receives_policy_through_its_injected_contract(s
     from bridge.director_goals import director_goal_policy
     from bridge.group_director_service import GroupDirectorService
 
-    db, session, settings, _ = story_case
-    calls = []
+    db, session, _settings, _ = story_case
     group = {"enabled": True, "mode": "director", "members": ["Mara.png", "Boris.png"], "turn_index": 0}
     service = GroupDirectorService(
         load_group_state=lambda *a: group,
         safe_character=Path,
         member_labels=lambda names: names,
         card_fields=lambda name: {"name": Path(name).stem},
-        generation_settings=lambda *a: {},
-        generate_text=lambda _a, _m, messages, **k: calls.append(messages) or '{"speaker":"Mara","direction":"Wait."}',
-        director_policy=partial(director_goal_policy, app_settings=settings),
-        default_model=session["model_id"],
+        director_policy=director_goal_policy,
     )
     before = db.execute("SELECT * FROM messages").fetchall()
-    result = service.plan(db, "", "chat", session, "Follow the world.")
+    result = service.plan(db, "chat", session)
     assert result[0] == "Mara.png"
-    assert len(calls) == 1
-    assert "no forced return to the user" in calls[0][0]["content"]
-    assert "not to recenter the user" in calls[0][0]["content"]
+    context = service.prompt_context(db, "chat", session, result[0])
+    assert "no forced return to the user" in context
+    assert "not to recenter the user" in context
     assert db.execute("SELECT * FROM messages").fetchall() == before
 
 

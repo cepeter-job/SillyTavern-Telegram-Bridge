@@ -553,13 +553,7 @@ def prepare_message(
     director_plan = None
     group_director = group_director_service
     if not command.startswith("/"):
-        director_plan = group_director.plan(
-            db,
-            api_key,
-            chat_id,
-            session,
-            text,
-        )
+        director_plan = group_director.plan(db, chat_id, session)
     director_instruction = ""
     if director_plan:
         group_turn = (director_plan[0], director_plan[1])

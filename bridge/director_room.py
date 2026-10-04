@@ -60,9 +60,9 @@ def director_room(db: sqlite3.Connection, chat_id: str, session_id: str) -> dict
             "viewpoint": str(state.get("viewpoint_character", "")),
             "pov": str(state.get("pov_mode", "")),
         },
-        "direction": str(director["active_direction"])[:1024],
+        "direction": str(director["active_direction"])[:4000],
         "scope": str(director.get("direction_scope", "")),
-        "objective": str(director["goal"])[:1024],
+        "objective": str(director["goal"])[:4000],
         "degraded": bool(director["degraded_state"]),
         "threads": [
             {"thread_id": row["thread_id"], "title": row["title"], "status": row["status"]}

@@ -35,7 +35,6 @@ from bridge.embedding_port import EmbeddingPort
 from bridge.embedding_transport import embed_rag_batch, embed_rag_text
 from bridge.environment import bootstrap_environment
 from bridge.episodic_memory import episodic_context_for_prompt
-from bridge.generation_settings import get_generation_settings
 from bridge.group_core import (
     advance_group_turn,
     claim_group_user_turn,
@@ -223,10 +222,7 @@ def _build_startup_services(
         safe_character=_partial(safe_character_path, app_settings=config),
         member_labels=group.member_labels,
         card_fields=_partial(card_fields_from_file, app_settings=config),
-        generation_settings=get_generation_settings,
-        generate_text=provider.generate,
-        director_policy=_partial(director_goal_policy, app_settings=config),
-        default_model=config.default_model,
+        director_policy=director_goal_policy,
     )
     memory = _MemoryService(
         recall_context=_partial(recall_memory_context, app_settings=config),

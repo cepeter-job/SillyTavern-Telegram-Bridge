@@ -89,16 +89,17 @@ def test_scene_thread_identity_is_scoped_and_stale_updates_do_not_win(db):
 
 
 def test_director_goal_changes_preserve_plans_and_caller_transaction(db):
-    from bridge.director_goal_repository import delete_director_goal, load_director_goal, store_director_goal
+    from bridge.director_goal_repository import load_director_goal, store_director_goal
 
     db.execute("INSERT INTO director_state(chat_id,session_id,active_direction) VALUES('chat','story','Stay at gate')")
     db.commit()
     with pytest.raises(RuntimeError, match="caller-owned transaction"):
-        store_director_goal(db, "chat", "story", "Resolve rebellion", 1.0)
+        store_director_goal(db, "chat", "story", "Resolve rebellion", 1.0, 0)
     db.execute("BEGIN")
-    store_director_goal(db, "chat", "story", "Resolve rebellion", 1.0)
+    store_director_goal(db, "chat", "story", "Resolve rebellion", 1.0, 0)
     assert load_director_goal(db, "chat", "story") == "Resolve rebellion"
-    delete_director_goal(db, "chat", "story")
+    assert not store_director_goal(db, "chat", "story", "Stale objective", 1.0, 0)
+    assert store_director_goal(db, "chat", "story", "", 2.0, 1)
     assert load_director_goal(db, "chat", "story") == ""
     assert db.execute("SELECT active_direction,state_revision FROM director_state").fetchone() == ("Stay at gate", 2)
     db.rollback()

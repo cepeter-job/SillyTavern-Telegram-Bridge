@@ -9,7 +9,7 @@ from bridge.callback_tokens import dynamic_callback_token
 from bridge.cards import send_panel_message
 from bridge.config import REASONING_LEVELS
 from bridge.generation_settings import get_generation_settings
-from bridge.model_selection import utility_reasoning_for_session
+from bridge.model_selection import director_reasoning_for_session, task_model_for_session, utility_reasoning_for_session
 from bridge.panel_utils import panel_label, panel_page
 from bridge.port_contracts import ProviderPolicy, ProviderProbes
 from bridge.provider_discovery import get_model_groups, provider_health_checks
@@ -156,17 +156,28 @@ def send_model_target_menu(
     token: str, chat_id: str, current_model: str, utility_model: str, message_id: int | None = None, *, request_context
 ) -> None:
     if request_context.db is None:
-        story_reasoning = utility_reasoning = 0
+        story_reasoning = utility_reasoning = director_reasoning = 0
+        director_model = utility_model
     else:
         story_settings = get_generation_settings(request_context.db, chat_id, request_context.session_id)
         story_reasoning = int(story_settings.get("reasoning_budget") or 0)
         utility_reasoning = utility_reasoning_for_session(request_context.db, chat_id, request_context.session_id)
+        director_reasoning = director_reasoning_for_session(request_context.db, chat_id, request_context.session_id)
+        director_model = task_model_for_session(
+            request_context.db,
+            chat_id,
+            {"session_id": request_context.session_id, "model_id": current_model},
+            "director",
+            app_settings=request_context.app_settings,
+        )
     quote = (
         "Current models\n"
         f"📖 Story: {current_model}\n"
         f"🧠 Story reasoning: {_reasoning_label(story_reasoning)}\n"
         f"🛠 Utility: {utility_model}\n"
-        f"🧠 Utility reasoning: {_reasoning_label(utility_reasoning)}"
+        f"🧠 Utility reasoning: {_reasoning_label(utility_reasoning)}\n"
+        f"🎬 Director: {director_model}\n"
+        f"🧠 Director reasoning: {_reasoning_label(director_reasoning)}"
     )
     markup = {
         "inline_keyboard": [
@@ -177,6 +188,10 @@ def send_model_target_menu(
             [
                 {"text": "🧠 Story reasoning", "callback_data": "models:story-reasoning"},
                 {"text": "🧠 Utility reasoning", "callback_data": "models:utility-reasoning"},
+            ],
+            [
+                {"text": "🎬 Director model", "callback_data": "modeltarget:director"},
+                {"text": "🧠 Director reasoning", "callback_data": "models:director-reasoning"},
             ],
             [{"text": "❌ Cancel", "callback_data": "models:cancel"}],
         ]
@@ -228,24 +243,34 @@ def send_story_reasoning_menu(
     )
 
 
-def send_utility_reasoning_menu(
+def send_utility_reasoning_menu(token: str, chat_id: str, message_id: int | None = None, *, request_context) -> None:
+    _send_task_reasoning_menu(token, chat_id, message_id, request_context=request_context, task="utility")
+
+
+def send_director_reasoning_menu(token: str, chat_id: str, message_id: int | None = None, *, request_context) -> None:
+    _send_task_reasoning_menu(token, chat_id, message_id, request_context=request_context, task="director")
+
+
+def _send_task_reasoning_menu(
     token: str,
     chat_id: str,
     message_id: int | None = None,
     *,
     request_context,
+    task: str,
 ) -> None:
-    current = utility_reasoning_for_session(request_context.db, chat_id, request_context.session_id)
+    getter = director_reasoning_for_session if task == "director" else utility_reasoning_for_session
+    current = getter(request_context.db, chat_id, request_context.session_id)
     rows = [
         [
             {
                 "text": ("✅ " if budget == current else "") + f"{label.title()} ({budget})",
-                "callback_data": f"utilityreasoning:{label}",
+                "callback_data": f"{task}reasoning:{label}",
             }
         ]
         for label, budget in REASONING_LEVELS.items()
     ]
-    rows.append([{"text": "✏️ Custom (0–32000)", "callback_data": "utilityreasoning:custom"}])
+    rows.append([{"text": "✏️ Custom (0–32000)", "callback_data": f"{task}reasoning:custom"}])
     rows.append(
         [
             {"text": "⬅️ Back", "callback_data": "models:target"},
@@ -255,8 +280,8 @@ def send_utility_reasoning_menu(
     send_panel_message(
         token,
         chat_id,
-        f"Utility reasoning\nCurrent: {_reasoning_label(current)}\n\n"
-        "Choose the reasoning budget used by Utility-model tasks.",
+        f"{task.title()} reasoning\nCurrent: {_reasoning_label(current)}\n\n"
+        f"Choose the reasoning budget used by {task.title()}-model tasks.",
         {"inline_keyboard": rows},
         message_id,
         request_context=request_context,

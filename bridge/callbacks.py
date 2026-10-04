@@ -86,6 +86,7 @@ def is_session_scoped_panel_callback(data: str) -> bool:
             "model",
             "storyreasoning:",
             "utilityreasoning:",
+            "directorreasoning:",
             "group",
             "groupchars",
             "groupmode",

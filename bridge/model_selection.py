@@ -66,12 +66,32 @@ def set_utility_reasoning(db: sqlite3.Connection, chat_id: str, session_id: str,
     return value
 
 
+def director_reasoning_key(chat_id: str, session_id: str) -> str:
+    return f"director_reasoning:{chat_id}:{session_id}"
+
+
+def director_reasoning_for_session(db: sqlite3.Connection, chat_id: str, session_id: str) -> int:
+    raw = get_meta(db, director_reasoning_key(chat_id, session_id), "0")
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return 0
+    return value if 0 <= value <= 32000 else 0
+
+
+def set_director_reasoning(db: sqlite3.Connection, chat_id: str, session_id: str, budget: int) -> int:
+    if type(budget) is not int or not 0 <= budget <= 32000:
+        raise ValueError("director reasoning budget must be an integer between 0 and 32000")
+    set_meta(db, director_reasoning_key(chat_id, session_id), str(budget))
+    return budget
+
+
 def model_target_selection_key(chat_id: str, session_id: str) -> str:
     return f"model_target_selection:{chat_id}:{session_id}"
 
 
 def set_model_target_selection(db: sqlite3.Connection, chat_id: str, session_id: str, target: str) -> None:
-    if target not in {"story", "utility"}:
+    if target not in {"story", "utility", "director"}:
         raise ValueError("invalid model target")
     set_meta(
         db,
@@ -90,7 +110,7 @@ def get_model_target_selection(db: sqlite3.Connection, chat_id: str, session_id:
         set_meta(db, model_target_selection_key(chat_id, session_id), "")
         return ""
     target = str(state.get("target") or "")
-    return target if target in {"story", "utility"} else ""
+    return target if target in {"story", "utility", "director"} else ""
 
 
 def clear_model_target_selection(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:

@@ -67,7 +67,9 @@ def test_provider_target_panel_quotes_models_and_both_reasoning_levels(tmp_path,
             "📖 Story: story::main\n"
             "🧠 Story reasoning: Medium (4096)\n"
             "🛠 Utility: utility::worker\n"
-            "🧠 Utility reasoning: Low (1024)"
+            "🧠 Utility reasoning: Low (1024)\n"
+            "🎬 Director: story::main\n"
+            "🧠 Director reasoning: None (0)"
         )
         assert payload["text"].startswith(quote + "\n\nConfigure models:")
         blockquote = next(entity for entity in payload["entities"] if entity["type"] == "blockquote")

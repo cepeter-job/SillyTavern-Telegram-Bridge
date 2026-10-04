@@ -83,6 +83,7 @@ def status_text(
     group_state_text = f"{'on' if group['enabled'] else 'off'} ({', '.join(group_labels) if group_labels else 'none'})"
     expression_mode = get_meta(db, expression_mode_key(chat_id, session["session_id"]), "off")
     utility_model = task_model_for_session(db, chat_id, session, "utility", app_settings=app_settings)
+    director_model = task_model_for_session(db, chat_id, session, "director", app_settings=app_settings)
     context_status = _context_status_text(
         context_diagnostics_snapshot(db, str(chat_id), session, app_settings=app_settings)
     )
@@ -104,6 +105,7 @@ def status_text(
         f"💬 Stored messages: {count}\n"
         f"🤖 Model: {current_model}\n"
         f"🛠️ Utility model: {utility_model}\n"
+        f"🎬 Director model: {director_model}\n"
         f"🌐 Response language: {response_language_label(session.get('response_language') or 'auto')}\n"
         f"🖋️ Humanizer: {humanizer_label(session.get('humanizer'))}\n\n"
         f"{context_status}\n\n"

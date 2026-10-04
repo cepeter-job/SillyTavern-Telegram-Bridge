@@ -355,3 +355,64 @@ class DirectorService:
             return DirectorDecision(
                 decision_id, expected_revision, "user", "accepted", "Manual direction updated.", proposal
             )
+
+    def accept_manual_transition(
+        self,
+        db: sqlite3.Connection,
+        chat_id: str,
+        session_id: str,
+        proposal: DirectorProposal,
+        *,
+        expected_director_revision: int,
+        valid_characters: set[str],
+        user_characters: set[str],
+        valid_threads: set[str],
+    ) -> DirectorDecision:
+        """Steer a future scene without changing reconciled story facts."""
+        with write_transaction(db):
+            clock = load_narrative_clock(db, chat_id, session_id)
+            if not clock or not narrative_clock_is_current(clock):
+                raise ValueError("Scene continuity is catching up. Reassess before choosing a thread.")
+            state = load_narrative_state(db, chat_id, session_id)
+            validate_director_proposal(
+                proposal,
+                policy=narrative_policy(load_session_narrative_settings(db, chat_id, session_id)),
+                state=state,
+                valid_characters=valid_characters,
+                user_characters=user_characters,
+                valid_threads=valid_threads,
+                ending_state=director_ending_lifecycle(db, chat_id, session_id),
+            )
+            if proposal.action != "transition_scene":
+                raise ValueError("Choose a valid scene transition.")
+            now = time.time()
+            encoded = json.dumps(proposal.to_dict(), ensure_ascii=False, separators=(",", ":"))
+            if not write_manual_direction(
+                db,
+                chat_id,
+                session_id,
+                proposal.direction or proposal.purpose,
+                expected_director_revision=expected_director_revision,
+                proposal_json=encoded,
+                scene_id=state.active_scene_id,
+                through_rowid=state.updated_through_rowid,
+                rewrite_revision=clock["rewrite_revision"],
+                settings_revision=clock["settings_revision"],
+                now=now,
+            ):
+                raise ValueError("A newer Director decision already changed this plan.")
+            decision_id = append_director_decision(
+                db,
+                chat_id,
+                session_id,
+                source="user",
+                result="accepted",
+                expected_revision=state.state_revision,
+                proposal_json=encoded,
+                accepted_direction=proposal.direction or proposal.purpose,
+                reason="One-scene thread selection",
+                created_at=now,
+            )
+            return DirectorDecision(
+                decision_id, state.state_revision, "user", "accepted", "Next thread selected.", proposal
+            )

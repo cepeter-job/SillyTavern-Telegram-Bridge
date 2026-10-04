@@ -132,7 +132,13 @@ def has_pending_management_input(db: sqlite3.Connection, chat_id: str, session_i
         "databank_upload",
     )
     keys = [f"{prefix}:{chat_id}" for prefix in prefixes]
-    keys.extend((f"character_optimizer_input:{chat_id}:{actor_id}", f"conversation_setup:{chat_id}:{actor_id}"))
+    keys.extend(
+        (
+            f"character_optimizer_input:{chat_id}:{actor_id}",
+            f"conversation_setup:{chat_id}:{actor_id}",
+            f"director_input:{chat_id}:{actor_id}",
+        )
+    )
     for key in keys:
         try:
             state = json.loads(load_meta_value(db, key, "") or "{}")

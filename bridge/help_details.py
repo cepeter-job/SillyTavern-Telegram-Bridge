@@ -74,6 +74,7 @@ HELP_CATEGORIES = {
             "Open dedicated Light Novel mode controls or restore the current 2–4 full-text action choices with "
             "numbered selectors plus Next Scene. Mode changes require an unstarted standard session.",
         ),
+        ("/director", "Inspect hidden plans, steer the next scene, or keep a persistent story objective."),
         ("/narrative", "Choose this story's POV, cast focus, off-screen freedom, and user-control rules."),
         ("/persona", "Choose, create, edit, or disable a Persona. Delete only targets inactive, unreferenced ones."),
         ("/world", "Open World Info selection — activate or disable one or more lorebooks."),

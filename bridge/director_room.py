@@ -1,0 +1,153 @@
+"""Read-only Director Room views and revision-bound manual planning actions."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import sqlite3
+from typing import Any
+
+from bridge.director_repository import director_decision_history, director_ending_lifecycle, load_director_state
+from bridge.director_service import DirectorDecision, DirectorService
+from bridge.narrative_repository import list_narrative_threads, load_narrative_clock, load_narrative_state_row
+from bridge.narrative_settings import load_session_narrative_settings
+from bridge.persona_service import PersonaService
+from bridge.settings import AppSettings
+from bridge.sqlite_store import write_transaction
+
+
+def director_room(db: sqlite3.Connection, chat_id: str, session_id: str) -> dict[str, Any]:
+    """Return a bounded, safe view, never provider prompts, raw proposals or leases."""
+    clock = load_narrative_clock(db, chat_id, session_id)
+    if clock is None:
+        raise ValueError("This story no longer exists. Open /director for the current story.")
+    director = load_director_state(db, chat_id, session_id)
+    state = load_narrative_state_row(db, chat_id, session_id) or {}
+    ending = director_ending_lifecycle(db, chat_id, session_id)
+    identity = (chat_id, session_id, clock, director["state_revision"], ending)
+    revision = hashlib.sha256(json.dumps(identity, sort_keys=True, default=str).encode()).hexdigest()
+    history = [
+        {
+            "id": row["decision_id"],
+            "source": row["source"],
+            "result": row["result"],
+            "direction": str(row.get("accepted_direction", ""))[:500],
+            "reason": str(row["reason"])[:240],
+        }
+        for row in director_decision_history(db, chat_id, session_id, limit=10)
+    ]
+    return {
+        "session_id": session_id,
+        "revision": revision,
+        "mutable": ending not in {"resolution_committed", "epilogue_pending", "epilogue_committed", "closed"},
+        "lifecycle": ending,
+        "phase": str(state.get("story_phase", "setup")),
+        "scene": {
+            "scene_id": str(state.get("active_scene_id", "")),
+            "thread_id": str(state.get("active_thread_id", "")),
+            "viewpoint": str(state.get("viewpoint_character", "")),
+            "pov": str(state.get("pov_mode", "")),
+        },
+        "direction": str(director["active_direction"])[:1024],
+        "scope": str(director.get("direction_scope", "")),
+        "objective": str(director["goal"])[:1024],
+        "degraded": bool(director["degraded_state"]),
+        "threads": [
+            {"thread_id": row["thread_id"], "title": row["title"], "status": row["status"]}
+            for row in list_narrative_threads(db, chat_id, session_id)[:16]
+        ],
+        "history": history,
+        "cadence": load_session_narrative_settings(db, chat_id, session_id).director_cadence_mode,
+    }
+
+
+def require_room_revision(db: sqlite3.Connection, chat_id: str, session_id: str, revision: str) -> dict[str, Any]:
+    view = director_room(db, chat_id, session_id)
+    if view["revision"] != revision:
+        raise ValueError("The Director Room changed. Reopen /director before editing it.")
+    if not view["mutable"]:
+        raise ValueError("This story has ended. Its Director Room is read-only.")
+    return view
+
+
+def apply_direction(
+    db: sqlite3.Connection, chat_id: str, session_id: str, revision: str, direction: str, scope: str
+) -> DirectorDecision:
+    """Commit a user-authored plan, never story facts, against the displayed state."""
+    with write_transaction(db):
+        require_room_revision(db, chat_id, session_id, revision)
+        clock = load_narrative_clock(db, chat_id, session_id)
+        if clock is None:
+            raise ValueError("This story no longer exists.")
+        director = load_director_state(db, chat_id, session_id)
+        result = DirectorService().accept_manual_direction(
+            db,
+            chat_id,
+            session_id,
+            direction=direction,
+            scope=scope,
+            expected_revision=int(clock["state_revision"]),
+            expected_director_revision=int(director["state_revision"]),
+        )
+        if result.result != "accepted":
+            raise ValueError(result.reason)
+        return result
+
+
+def steer_thread(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session: dict[str, str],
+    revision: str,
+    thread_id: str,
+    *,
+    persona_service: PersonaService,
+    app_settings: AppSettings,
+) -> DirectorDecision:
+    """Select a known thread using its last committed viewpoint, as a manual plan."""
+    from bridge.director_contracts import DirectorProposal
+    from bridge.director_prompt import build_director_input
+    from bridge.narrative_context import load_narrative_state
+    from bridge.narrative_repository import load_narrative_scene, load_narrative_thread
+
+    session_id = session["session_id"]
+    with write_transaction(db):
+        require_room_revision(db, chat_id, session_id, revision)
+        target = load_narrative_thread(db, chat_id, session_id, thread_id)
+        if not target or target["status"] == "resolved":
+            raise ValueError("That thread is unavailable. Refresh Director Room.")
+        previous_scene = load_narrative_scene(db, chat_id, session_id, target["last_scene_id"])
+        if not previous_scene:
+            raise ValueError("This thread has no established scene to return to.")
+        state = load_narrative_state(db, chat_id, session_id)
+        settings = load_session_narrative_settings(db, chat_id, session_id)
+        director = load_director_state(db, chat_id, session_id)
+        _, cast, users, threads = build_director_input(
+            db, chat_id, session, state, settings, director, app_settings=app_settings, persona_service=persona_service
+        )
+        viewpoint = str(previous_scene["viewpoint_character"])
+        if viewpoint:
+            cast.add(viewpoint)
+        proposal = DirectorProposal(
+            1,
+            "transition_scene",
+            state.state_revision,
+            direction=f"Follow the {target['title']} thread next.",
+            scene_id=state.active_scene_id,
+            thread_id=thread_id,
+            viewpoint=viewpoint,
+            pov=settings.pov_mode,
+            user_present=None,
+            purpose="Resume an established storyline without inventing user decisions.",
+            transition_type="thread_switch",
+        )
+        return DirectorService().accept_manual_transition(
+            db,
+            chat_id,
+            session_id,
+            proposal,
+            expected_director_revision=int(director["state_revision"]),
+            valid_characters=cast,
+            user_characters=users,
+            valid_threads=threads | {thread_id},
+        )

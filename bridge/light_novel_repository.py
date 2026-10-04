@@ -212,6 +212,19 @@ def bind_choice_panel(db: sqlite3.Connection, nonce: str, message_id: int) -> bo
     )
 
 
+def mark_choice_retry_pending(db: sqlite3.Connection, nonce: str, now: float) -> bool:
+    """Persist manual retry admission before the worker can start."""
+    require_active_transaction(db)
+    return (
+        db.execute(
+            "UPDATE light_novel_choice_sets SET generation_status='pending',lease_token='',lease_until=0,updated_at=? "
+            "WHERE nonce=? AND state='open' AND generation_status='failed'",
+            (now, nonce),
+        ).rowcount
+        == 1
+    )
+
+
 def claim_choice_generation(
     db: sqlite3.Connection,
     nonce: str,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import logging
 import sqlite3
+import time
 from collections.abc import Callable
 
 from bridge.closed_session_guard import guard_story_mutation
@@ -13,7 +14,12 @@ from bridge.job_service import JobSubmission
 from bridge.light_novel_contracts import LightNovelRuntime
 from bridge.light_novel_format import validate_choices
 from bridge.light_novel_jobs import process_light_novel_choices_job
-from bridge.light_novel_repository import consume_choice_set, load_choice_set, set_choice_job
+from bridge.light_novel_repository import (
+    consume_choice_set,
+    load_choice_set,
+    mark_choice_retry_pending,
+    set_choice_job,
+)
 from bridge.light_novel_service import current_choice_story
 from bridge.metadata import get_meta
 from bridge.narrative_context import narrative_choice_is_steering
@@ -47,6 +53,7 @@ def route_light_novel_callback(
     selection_label = None
     submission = None
     job_id = None
+    retry_panel_pending = False
     try:
         parts = data.split(":")
         action = parts[0]
@@ -122,8 +129,11 @@ def route_light_novel_callback(
                     (chat_id, record.session_id, record.nonce),
                 ).fetchone()
                 if existing:
+                    retry_panel_pending = True
                     feedback = "Choices are already queued"
                 else:
+                    if not mark_choice_retry_pending(db, record.nonce, time.time()):
+                        raise ValueError("Choice expired")
                     payload = {
                         "nonce": record.nonce,
                         "actor_id": actor_id,
@@ -137,7 +147,22 @@ def route_light_novel_callback(
                     submission = JobSubmission(
                         "utility", chat_id, process_light_novel_choices_job, (services, chat_id, record.nonce, True)
                     )
+                    retry_panel_pending = True
                     feedback = "Choices queued"
+        if retry_panel_pending:
+            try:
+                services.telegram.request(
+                    token,
+                    "editMessageText",
+                    {
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "text": ("Preparing choices for your saved story. You may also type your own reply."),
+                        "reply_markup": {"inline_keyboard": []},
+                    },
+                )
+            except Exception:
+                logging.info("Choice retry queued; pending panel update unavailable")
         if submission is not None and job_id is not None:
             # Admission failure leaves a committed recoverable job, never a reusable choice.
             services.jobs.submit(db, job_id, submission)

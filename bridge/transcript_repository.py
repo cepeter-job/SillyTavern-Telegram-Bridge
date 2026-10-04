@@ -59,3 +59,11 @@ def recent_transcript_rows(
         (str(chat_id), str(session_id), cutoff, cutoff, limit),
     ).fetchall()
     return list(reversed(rows))
+
+
+def story_row_by_id(db: sqlite3.Connection, chat_id: str, session_id: str, rowid: int) -> tuple[str, str] | None:
+    """Read evidence by exact owner and row identity, without changing story state."""
+    return db.execute(
+        "SELECT role,content FROM messages WHERE chat_id=? AND session_id=? AND id=?",
+        (chat_id, session_id, rowid),
+    ).fetchone()

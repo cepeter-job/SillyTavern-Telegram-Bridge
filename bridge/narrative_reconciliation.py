@@ -14,6 +14,8 @@ from typing import Any
 from bridge.background import chat_job_lock, submit_background
 from bridge.generation_settings import get_generation_settings
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
+from bridge.narrative_arc_repository import clear_arc_rows, delete_arc_row, list_arc_rows, load_arc_row, store_arc_row
+from bridge.narrative_arcs import validate_story_evidence
 from bridge.narrative_checkpoint_repository import (
     delete_rolling_checkpoints_after,
     insert_narrative_checkpoint,
@@ -55,6 +57,7 @@ class _Base:
     reset: bool = False
     scenes: dict[str, dict[str, Any] | None] = field(default_factory=dict)
     threads: dict[str, dict[str, Any] | None] = field(default_factory=dict)
+    arcs: dict[str, dict[str, Any] | None] = field(default_factory=dict)
 
     def scene(self, db: sqlite3.Connection, chat: str, session: str, identifier: str) -> dict[str, Any] | None:
         if identifier in self.scenes:
@@ -65,6 +68,11 @@ class _Base:
         if identifier in self.threads:
             return self.threads[identifier]
         return None if self.reset else load_narrative_thread(db, chat, session, identifier)
+
+    def arc(self, db: sqlite3.Connection, chat: str, session: str, identifier: str) -> dict[str, Any] | None:
+        if identifier in self.arcs:
+            return self.arcs[identifier]
+        return None if self.reset else load_arc_row(db, chat, session, identifier)
 
 
 def _reconciliation_base(db: sqlite3.Connection, chat: str, session: str, clock: dict) -> _Base:
@@ -80,6 +88,7 @@ def _reconciliation_base(db: sqlite3.Connection, chat: str, session: str, clock:
                 undo = json.loads(item["payload_json"])["undo"]
                 base.scenes.update(undo["scenes"])
                 base.threads.update(undo["threads"])
+                base.arcs.update(undo.get("arcs", {}))
             return base
         except (KeyError, TypeError, ValueError):
             logging.warning("Narrative rewind cache is invalid; rebuilding committed facts")
@@ -96,9 +105,33 @@ def _source_prompt(
     thread_rows.update(base.threads)
     threads = [row for row in thread_rows.values() if row is not None]
     threads.sort(key=lambda row: (-int(row["source_revision"]), row["thread_id"]))
+    arc_rows: dict[str, dict[str, Any] | None] = (
+        {} if base.reset else {row["arc_id"]: row for row in list_arc_rows(db, chat, session, limit=16)}
+    )
+    arc_rows.update(base.arcs)
+    arcs = sorted(
+        (row for row in arc_rows.values() if row is not None),
+        key=lambda row: (-int(row["source_revision"]), row["arc_id"]),
+    )
+    arc_context: list[dict[str, Any]] = []
+    for row in arcs[:8]:
+        item = {
+            "arc_id": row["arc_id"],
+            "title": row["title"][:100],
+            "status": row["status"],
+            "phase": row["phase"],
+            "importance": row["importance"],
+            "summary": row["summary"][:250],
+            "open_questions": [question[:150] for question in row["open_questions"][:3]],
+            "related_threads": row["related_threads"][:4],
+        }
+        if len(json.dumps([*arc_context, item], ensure_ascii=False)) > 4000:
+            break
+        arc_context.append(item)
     initial: dict[str, Any] = {
         "state": asdict(base.state),
         "scene": current_scene,
+        "arcs": arc_context,
         "threads": [
             {key: value for key, value in row.items() if key != "summary"} | {"summary": row["summary"][:500]}
             for row in threads[:8]
@@ -190,7 +223,13 @@ def _restore_base(db: sqlite3.Connection, chat: str, session: str, base: _Base) 
         return
     if base.reset:
         clear_reconciled_entities(db, chat, session)
+        clear_arc_rows(db, chat, session)
     else:
+        for identifier in base.arcs:
+            delete_arc_row(db, chat, session, identifier)
+        for row in base.arcs.values():
+            if row is not None:
+                store_arc_row(db, chat, session, row)
         for identifier in base.scenes:
             delete_narrative_scene(db, chat, session, identifier)
         for identifier in base.threads:
@@ -215,19 +254,30 @@ def _publish(
     through: int,
 ) -> NarrativeState:
     scenes, threads = _changes(db, chat, session, base, extracted, first_rowid, through) if extracted else ({}, {})
+    arcs: dict[str, dict[str, Any]] = {}
+    for arc in extracted.arcs if extracted else ():
+        for identifier in arc.related_threads:
+            if identifier not in threads and base.thread(db, chat, session, identifier) is None:
+                raise ValueError("An arc must reference established narrative threads")
+        if arc.status in {"resolved", "abandoned"} or arc.evidence:
+            validate_story_evidence(db, chat, session, arc.evidence, first_rowid=first_rowid, through_rowid=through)
+        arcs[arc.arc_id] = asdict(arc) | {"source_revision": through}
     undo = {
         "scenes": {identifier: base.scene(db, chat, session, identifier) for identifier in scenes},
         "threads": {identifier: base.thread(db, chat, session, identifier) for identifier in threads},
+        "arcs": {identifier: base.arc(db, chat, session, identifier) for identifier in arcs},
     }
     state_data = {
-        "active_scene_id": extracted.scene.scene_id if extracted else "",
-        "active_thread_id": extracted.scene.thread_id if extracted else "",
-        "story_phase": extracted.story_phase if extracted else "setup",
+        "active_scene_id": extracted.scene.scene_id if extracted else base.state.active_scene_id,
+        "active_thread_id": extracted.scene.thread_id if extracted else base.state.active_thread_id,
+        "story_phase": extracted.story_phase if extracted else base.state.story_phase,
     }
     with write_transaction(db):
         if load_narrative_clock(db, chat, session) != clock:
             return load_narrative_state(db, chat, session)
         _restore_base(db, chat, session, base)
+        for row in arcs.values():
+            store_arc_row(db, chat, session, row)
         for row in threads.values():
             upsert_narrative_thread(db, chat, session, row)
         for row in scenes.values():
@@ -279,13 +329,15 @@ def reconcile_narrative_state_now(
     base = _reconciliation_base(db, chat_id, session_id, clock)
     if target == 0:
         return _publish(db, chat_id, session_id, base, clock, None, 0, 0)
+    if base.rewinding and target == base.state.updated_through_rowid:
+        return _publish(db, chat_id, session_id, base, clock, None, target, target)
     prompt, through = _source_prompt(db, chat_id, session_id, base, clock, target)
     if through <= base.state.updated_through_rowid:
         return previous
     settings = get_generation_settings(db, chat_id, session_id)
     settings.update(
         temperature=0.0,
-        max_tokens=1600,
+        max_tokens=2400,
         stop_sequences="",
         reasoning_budget=utility_reasoning_for_session(db, chat_id, session_id),
     )
@@ -295,7 +347,14 @@ def reconcile_narrative_state_now(
         "Do not invent decisions, dialogue, thoughts, future events, or resolved outcomes. "
         "Return one JSON object with schema_version:1, story_phase (setup/development/escalation/climax/resolution), "
         "scene:{scene_id,thread_id,viewpoint_character,pov_mode,user_present,purpose,transition_type}, "
-        "threads:[{thread_id,title,status,summary}]. Use at most 8 thread updates. "
+        "threads:[{thread_id,title,status,summary}], "
+        "arcs:[{arc_id,title,status,phase,importance,summary,open_questions,related_threads,evidence}]. "
+        "Use at most 8 thread updates and 8 changed arc updates; omit unchanged arcs. "
+        "Arc status is planned/active/dormant/resolved/abandoned, importance is major/minor. "
+        "Arc phase is setup/development/escalation/climax/resolution. Each arc has at most 8 short open questions "
+        "and 8 established thread IDs. A resolved or abandoned arc MUST cite evidence from the newly supplied "
+        "committed transcript rows: evidence:[{rowid,quote}] with 1–4 exact quotes of at most 500 characters. "
+        "A plan, rumor or expectation is not evidence that its intended outcome happened. "
         "Keep existing IDs stable. New scenes need new IDs and an explicit cut/pov_switch/time_jump/thread_switch; "
         "continue preserves the scene, thread and viewpoint. IDs use letters, numbers, underscore or hyphen. "
         "POV is first_person/third_person_user/third_person_rotating/omniscient/cinematic. "

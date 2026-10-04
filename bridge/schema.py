@@ -6,6 +6,7 @@ from bridge.delivery_schema import migrate_delivery_progress, migrate_job_delive
 from bridge.director_schema import migrate_director_runtime
 from bridge.migrations import Migration as _Migration
 from bridge.migrations import run_migrations as _run_migrations
+from bridge.narrative_arc_schema import migrate_narrative_arc_evidence
 from bridge.narrative_runtime_schema import migrate_narrative_history_revisions
 from bridge.narrative_schema import migrate_narrative_engine_foundation
 from bridge.token_usage_schema import migrate_token_usage
@@ -491,6 +492,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(10, "narrative_engine_foundation", migrate_narrative_engine_foundation),
     _Migration(11, "narrative_history_revisions", migrate_narrative_history_revisions),
     _Migration(12, "director_runtime", migrate_director_runtime),
+    _Migration(13, "narrative_arc_evidence", migrate_narrative_arc_evidence),
 )
 
 

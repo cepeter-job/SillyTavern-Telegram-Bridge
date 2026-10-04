@@ -26,6 +26,7 @@ STATIC_TARGETS: tuple[str, ...] = (
 
 
 REPOSITORY_TARGETS: tuple[str, ...] = (
+    "bridge/narrative_arc_repository.py",
     "bridge/token_usage_repository.py",
     "bridge/rag_repository.py",
     "bridge/variant_repository.py",
@@ -49,6 +50,9 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
+    "bridge/story_evidence.py",
+    "bridge/narrative_arcs.py",
+    "bridge/narrative_arc_schema.py",
     "bridge/miniapp_director.py",
     "bridge/director_room.py",
     "bridge/director_panels.py",

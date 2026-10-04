@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from bridge.narrative_arcs import NarrativeArc, parse_arc_updates
 from bridge.narrative_values import NarrativeScene, NarrativeThread
 
 MAX_RECONCILIATION_OUTPUT = 24000
@@ -19,6 +20,7 @@ class NarrativeExtraction:
     story_phase: str
     scene: NarrativeScene
     threads: tuple[NarrativeThread, ...]
+    arcs: tuple[NarrativeArc, ...] = ()
 
 
 def _text(value: Any, field: str, maximum: int, *, required: bool = False) -> str:
@@ -100,4 +102,4 @@ def parse_narrative_extraction(raw: str) -> NarrativeExtraction:
                 summary=_text(thread.get("summary", ""), "thread summary", 2000),
             )
         )
-    return NarrativeExtraction(phase, parsed_scene, tuple(parsed_threads))
+    return NarrativeExtraction(phase, parsed_scene, tuple(parsed_threads), parse_arc_updates(data.get("arcs", [])))

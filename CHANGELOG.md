@@ -2,6 +2,15 @@
 
 All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
+## Unreleased
+
+### Fixed
+
+- Preserve character quality ranks across safe character-directory moves and
+  filesystem recreation by keying new rank state to the card SHA-256 instead of
+  absolute path, mtime and inode. Existing filesystem-bound rank state upgrades
+  lazily only when the original recorded file still proves byte-for-byte identity.
+
 ## [0.3.000] - 2026-10-04
 
 The 0.3 series adds the complete Narrative Engine, AI Director, closed stories

@@ -4,7 +4,8 @@ Ranking and optimization are utility-model tasks. They never touch the
 roleplay transcript: they read a card, ask the utility model, and (for
 optimization) produce improved text fields that the caller may write back.
 
-File signatures associate cached ranks with the native file revision. File
+Content signatures associate cached ranks with the native file revision while
+remaining stable across directory moves, restores and filesystem recreation. File
 mutations and backup side effects remain exclusively in the native-import owner. The pure PNG
 re-encoding helpers (`write_png_chara_bytes`, `merge_optimized_fields`) are
 exported for `bridge.native_imports` to combine with its verified-backup flow.
@@ -15,6 +16,7 @@ from __future__ import annotations
 import base64
 import binascii
 import copy
+import hashlib
 import json
 import logging
 import re
@@ -68,6 +70,14 @@ _OPTIMIZER_MATURITY_POLICY = (
 _JSON_FENCE = re.compile(r"```(?:json)?\s*(.*?)\s*```", re.DOTALL)
 
 
+def _path_digest(path: Path) -> str | None:
+    try:
+        with path.open("rb") as stream:
+            return hashlib.file_digest(stream, "sha256").hexdigest()
+    except OSError:
+        return None
+
+
 def _file_signature(filename: str, *, app_settings: AppSettings) -> list[str | int] | None:
     if Path(filename).name != filename:
         return None
@@ -75,10 +85,41 @@ def _file_signature(filename: str, *, app_settings: AppSettings) -> list[str | i
     try:
         if path.is_symlink() or not path.is_file():
             return None
-        stat = path.stat()
     except OSError:
         return None
-    return [str(path.resolve()), stat.st_size, stat.st_mtime_ns, stat.st_ino]
+    digest = _path_digest(path)
+    return ["sha256", digest] if digest else None
+
+
+def _legacy_signature_matches_current(
+    filename: str,
+    legacy_signature: object,
+    current_signature: list[str | int],
+) -> bool:
+    if not isinstance(legacy_signature, list) or len(legacy_signature) != 4:
+        return False
+    legacy_path_raw = legacy_signature[0]
+    if not isinstance(legacy_path_raw, str):
+        return False
+    legacy_path = Path(legacy_path_raw)
+    if legacy_path.name != filename:
+        return False
+    try:
+        if legacy_path.is_symlink() or not legacy_path.is_file():
+            return False
+        stat = legacy_path.stat()
+        expected: list[str | int] = [
+            str(legacy_path.resolve()),
+            stat.st_size,
+            stat.st_mtime_ns,
+            stat.st_ino,
+        ]
+    except OSError:
+        return False
+    if legacy_signature != expected:
+        return False
+    legacy_digest = _path_digest(legacy_path)
+    return legacy_digest is not None and current_signature == ["sha256", legacy_digest]
 
 
 def character_rank(db: sqlite3.Connection, filename: str, *, app_settings: AppSettings) -> str:
@@ -89,10 +130,18 @@ def character_rank(db: sqlite3.Connection, filename: str, *, app_settings: AppSe
         state = json.loads(get_meta(db, RANK_META_PREFIX + filename, "{}"))
     except (ValueError, TypeError):
         return ""
-    if not isinstance(state, dict) or state.get("file_signature") != signature:
+    if not isinstance(state, dict):
         return ""
     rank = str(state.get("rank") or "")
-    return rank if rank in RANK_TIERS else ""
+    if rank not in RANK_TIERS:
+        return ""
+    stored_signature = state.get("file_signature")
+    if stored_signature == signature:
+        return rank
+    if not _legacy_signature_matches_current(filename, stored_signature, signature):
+        return ""
+    _store_rank_state(db, filename, rank, signature)
+    return rank
 
 
 def _store_rank_state(db: sqlite3.Connection, filename: str, rank: str, signature: list[str | int]) -> None:

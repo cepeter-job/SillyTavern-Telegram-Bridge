@@ -49,6 +49,8 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
+    "bridge/director_contracts.py",
+    "bridge/director_validation.py",
     "bridge/narrative_runtime_schema.py",
     "bridge/narrative_checkpoint_repository.py",
     "bridge/narrative_context.py",
@@ -133,6 +135,7 @@ TYPE_TARGETS: tuple[str, ...] = (
 
 
 PURE_CONTRACT_IMPORTS = {
+    "bridge.director_contracts": frozenset(),
     "bridge.token_usage_values": frozenset(),
     "bridge.rag_contracts": frozenset(),
     "bridge.port_contracts": frozenset(

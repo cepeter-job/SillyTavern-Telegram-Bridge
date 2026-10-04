@@ -156,10 +156,7 @@ def route_light_novel_callback(
                     {
                         "chat_id": chat_id,
                         "message_id": message_id,
-                        "text": (
-                            "Preparing choices for your saved story. "
-                            "You may also type your own reply."
-                        ),
+                        "text": ("Preparing choices for your saved story. You may also type your own reply."),
                         "reply_markup": {"inline_keyboard": []},
                     },
                 )

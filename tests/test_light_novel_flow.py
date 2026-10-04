@@ -243,7 +243,10 @@ def test_retry_choices_enqueues_only_choice_job_with_unchanged_count(novel_db):
     pending_edits = [payload for method, payload in sent if method == "editMessageText"]
     assert pending_edits[-1]["text"] == "Preparing choices for your saved story. You may also type your own reply."
     assert pending_edits[-1]["reply_markup"] == {"inline_keyboard": []}
+    sent.clear()
     route_light_novel_callback(services, db, callback, 106, "chat", "owner", message_worker=lambda *a: None)
+    duplicate_edits = [payload for method, payload in sent if method == "editMessageText"]
+    assert duplicate_edits[-1]["reply_markup"] == {"inline_keyboard": []}
     rows = db.execute("SELECT kind,payload_json FROM jobs WHERE state='queued'").fetchall()
     assert len(rows) == 1 and rows[0][0] == "novel_choices"
     assert json.loads(rows[0][1])["retry"] is True

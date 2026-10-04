@@ -89,3 +89,14 @@ def delete_arc_row(db: sqlite3.Connection, chat_id: str, session_id: str, arc_id
 def clear_arc_rows(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
     require_active_transaction(db)
     db.execute("DELETE FROM narrative_arcs WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+
+
+def unresolved_major_arc_ids(db: sqlite3.Connection, chat_id: str, session_id: str, *, limit: int = 129) -> list[str]:
+    return [
+        str(row[0])
+        for row in db.execute(
+            "SELECT arc_id FROM narrative_arcs WHERE chat_id=? AND session_id=? "
+            "AND importance='major' AND status NOT IN ('resolved','abandoned') ORDER BY arc_id LIMIT ?",
+            (chat_id, session_id, min(129, max(1, limit))),
+        ).fetchall()
+    ]

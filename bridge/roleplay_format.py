@@ -9,6 +9,9 @@ _CODE_TOKEN = re.compile(r"\x00RPCODE(?P<index>\d+)\x00")
 _SINGLE_STAR = re.compile(r"(?<!\*)\*(?!\*)")
 _ROLEPLAY_ITALIC = re.compile(r"(?<!\*)\*(?![\s*])(?P<body>.*?)(?<![\s*])\*(?!\*)", re.DOTALL)
 _QUOTE_PAIRS = {'"': '"', "“": "”", "«": "»"}
+_ESCAPED_PARAGRAPH = re.compile(r"(?<!\\)\\n(?<!\\)\\n")
+_ESCAPED_LINE = re.compile(r"(?<=[.!?*\"'])\\n")
+_ESCAPED_QUOTE = re.compile(r'(?<!\\)\\"')
 
 
 def _is_escaped(text: str, index: int) -> bool:
@@ -72,6 +75,13 @@ def normalize_roleplay_transport(
         return value
 
     source = _CODE.sub(protect_code, str(text or ""))
+    # Some providers return JSON-escaped prose rather than actual line breaks.
+    # Decode only paragraph markers or markers after sentence punctuation: a
+    # blanket unescape would corrupt literal paths such as C:\\new and code.
+    repaired = _ESCAPED_PARAGRAPH.sub("\n\n", source)
+    repaired = _ESCAPED_LINE.sub("\n", repaired)
+    if repaired != source:
+        source = _ESCAPED_QUOTE.sub('"', repaired)
     single_stars = list(_SINGLE_STAR.finditer(source))
     valid_spans = list(_ROLEPLAY_ITALIC.finditer(source))
     if valid_spans and len(single_stars) == 2 * len(valid_spans):

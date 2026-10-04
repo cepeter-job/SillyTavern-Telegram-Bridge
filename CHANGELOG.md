@@ -18,6 +18,12 @@ not publish a release or change an installed deployment.
   Light Novel choices and Group speaker selection. Off-screen choices use
   narrative steering instead of invented user participation.
 
+- A canonical AI Director with a dedicated optional model route, independent
+  reasoning budget, strict proposal validation and adaptive/fixed cadence.
+- Actor- and revision-bound Director Room controls in Telegram and the Mini App,
+  with temporary scene directions, persistent objectives and decision history.
+- Groups consume canonical plans without a second planning-model request.
+
 ### Fixed
 
 - Reset clears derived narrative state while preserving Narrative Style and

@@ -11,6 +11,7 @@ when they solve a problem for your story.
 - [Sessions and recovery](#sessions-and-recovery)
 - [Models, context and memory](#models-context-and-memory)
 - [Narrative Style](#narrative-style)
+- [Director Room](#director-room)
 - [Light Novel choices](#light-novel-mode)
 - [Characters and native data](#characters-and-native-data)
 - [Images, voice and documents](#images-voice-and-documents)
@@ -65,7 +66,7 @@ expired or belongs to a previous session, reopen the command.
 | Start a fresh story | `/new`, then `/character` and `/start` |
 | Switch between existing stories | `/session` |
 | Check the active session and context budget | `/status` |
-| Choose Story/Utility models or reasoning | `/providers` |
+| Choose Story, Utility or Director models and reasoning | `/providers` |
 | Choose point of view, cast focus and off-screen freedom | `/narrative` |
 | Adjust sampling, reply length or optional style controls | `/settings` |
 | Enable or disable live reply previews | `/stream` |
@@ -112,7 +113,7 @@ This applies to both your messages and character replies.
 keeps the previous story and its Telegram messages. `/session` lets you return
 to that story later.
 
-Each session keeps its transcript, character setup, Story/Utility selections,
+Each session keeps its transcript, character setup, Story/Utility/Director selections,
 reasoning and generation settings, response language, variants, notes, summary
 and derived memory. Queued work stays attached to the session that submitted it;
 switching sessions does not redirect an unfinished reply or edit.
@@ -170,8 +171,10 @@ verified, destructive local cleanup is refused. Other sessions are unaffected.
 
 ### Choosing models
 
-Use `/providers` to choose Story and Utility independently for the current
-session. Both Story and Utility reasoning are configured from `/providers`.
+Use `/providers` to choose Story, Utility and Director independently for the current
+session. Story writes the prose. Utility handles summaries and extraction. Director
+plans the next scene. An unset Director model inherits Utility, then Story. Each
+route has its own reasoning control in `/providers`.
 Reasoning support depends on the provider; a zero budget can mean the backend
 default rather than disabled reasoning.
 
@@ -234,7 +237,8 @@ rolls NPC state back to the applicable revision before regeneration.
 | Summaries, memory/NPC/scene refresh, optimizer and ranking | Utility-model work. |
 | Narrative continuity | A bounded Utility reconciliation after committed replies; older or edited history can need more than one batch. |
 | Current Scene image | Utility preparation of the visual prompt, then an image-provider request. |
-| Director / autonomous groups | Director selection can call a model; autonomous turns generate more replies. |
+| AI Director | One planning call on an event or cadence threshold, with at most one repair for malformed version-1 output. Groups reuse the accepted plan without another planning call. |
+| Autonomous groups | Bounded multi-character Story replies; not another independent story planner. |
 
 Review reported counts in the Mini App's **Manage → Advanced settings → Usage**.
 A failed request can still consume tokens. The tracker is not an invoice or a
@@ -260,6 +264,34 @@ If the rewrite fails or changes protected fragments such as code, numbers,
 dialogue or links, the original rendered reply is kept. These checks cannot prove
 that meaning is unchanged. There is no automatic weekly reference refresh or
 prompt promotion. Attribution remains in [Third-party notices](../THIRD_PARTY_NOTICES.md).
+
+## Director Room
+
+Open `/director`, or **Manage → Director Room** in the Mini App, to see what the
+Director is planning. This is a private planning view: plans do not become story
+facts, and characters do not learn them just because you opened the panel.
+
+The room shows the current scene, viewpoint, thread, accepted direction and recent
+decisions. **Reassess now** asks the configured Director model for a fresh plan.
+It can use provider quota. **Choose thread** plans a future scene without rewriting
+anything already committed.
+
+Use **Next scene only** for a temporary instruction such as “Stay with Mara at the
+gate.” It expires when the scene changes or its source history/settings become
+invalid. A **Persistent objective** stays active until you change or clear it. The
+AI Director cannot silently remove that objective. Both forms still reserve your
+character's dialogue, thoughts and consequential decisions for you.
+
+**Adaptive** cadence is the default. Stable/setup scenes allow up to 10 completed
+Story turns between checks, development 6, escalation 4 and climax 2. Meaningful
+scene or thread changes can trigger a check sooner. Advanced controls offer fixed
+4/6/10-turn intervals or a custom whole-number interval from 1 to 100. Ordinary
+turns below the threshold make no extra Director call.
+
+A Director outage does not change your Narrative Style or erase a reply. The bridge
+keeps valid guidance and otherwise continues conservatively from committed state.
+Stale or malformed plans are not applied. The Mini App and Telegram controls reject
+edits from an old panel rather than silently overwrite a newer decision.
 
 ## Narrative Style
 
@@ -483,7 +515,7 @@ group state. The wizard selects characters, World Info and a turn mode:
 |---|---|
 | Round-robin | Characters speak in a set order. |
 | Contextual | The next speaker is selected from context. |
-| Director | A bounded model call chooses a known speaker and short scene direction. |
+| Director | Uses the canonical Director's accepted speaker or viewpoint. If none is valid, uses conservative round robin without another provider call. |
 | Manual | A user claims or passes the turn. |
 | Autonomous | Characters continue within configured bounds. |
 
@@ -491,9 +523,12 @@ Manual turn ownership applies to text, message edits, photos, PNG documents and
 voice input before processing. PNG card uploads also pass that check. Recovery
 of an already-saved answer can finish even after ownership changes.
 
-In Director mode, `/group goal <objective>` sets a hidden scene objective of up
-to 1,200 characters. `/group goal status` reviews it and `/group goal clear`
-removes it. The objective guides the Director without entering the transcript.
+`/group goal <objective>` sets the same persistent objective shown in Director
+Room, up to 4,000 characters. `/group goal status` reviews it and `/group goal clear`
+clears it. Every change is recorded as a manual Director revision, not as story
+dialogue. A forced group speaker remains an explicit choice; otherwise the group
+uses the canonical plan or safe round robin. Configured cast members are not
+automatically treated as physically present.
 
 ### Scene state
 

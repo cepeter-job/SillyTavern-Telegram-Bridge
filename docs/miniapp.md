@@ -57,7 +57,8 @@ animation is unavailable or reduced motion is enabled.
 
 ### Models and generation
 
-Story and Utility selections belong to the current session. Utility can inherit
+Story, Utility and Director selections belong to the current session. Director can
+inherit Utility; Utility can inherit
 Story. Provider credentials stay on the server.
 
 Generation uses the same limits as Telegram: temperature 0–2, top-p 0–1, output
@@ -209,3 +210,21 @@ names, portraits and status from the authenticated bridge.
     <td><img src="assets/miniapp-concept/manage.webp" alt="Mini App Manage design preview" width="280"></td>
   </tr>
 </table>
+
+## Director Room
+
+Choose **Manage → Director Room** to inspect hidden scene plans, current viewpoint,
+threads and recent decisions. Planning text is not story dialogue or character
+knowledge. **Next scene only** and **Persistent objective** are separate controls;
+only the latter remains until you explicitly change or clear it. The same
+persistent objective is available through Telegram `/group goal`.
+
+Choose an established thread to guide the next scene, or use **Reassess now** for a
+provider-backed Director check. The confirmation makes the extra model call
+explicit. Repeated requests reuse the existing job, and an old rendered page
+cannot retarget its edit to a different active session.
+
+Director settings offer Adaptive, 4/6/10-turn and custom 1–100-turn cadence, plus a
+reasoning budget separate from Utility. **Choose models** opens Story/Utility/
+Director routing. Text is rendered safely; saving a long objective preserves the
+full supported 4,000 characters even when Telegram shows a shorter preview.

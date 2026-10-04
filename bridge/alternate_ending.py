@@ -142,6 +142,7 @@ def create_alternate_ending(
         "target_session_id": target,
         "checkpoint_id": checkpoint_id,
         "checkpoint_revision": checkpoint.source_revision,
+        "request_id": operation_id,
         "title": target_title,
     }
     with write_transaction(db):
@@ -164,3 +165,38 @@ def create_alternate_ending(
             )
             write_operation_phase(db, key, "alternate_ending", "local_committed", time.time())
     return finish_alternate_ending(db, key, seed_memory=seed_memory)
+
+
+def recover_alternate_ending(
+    db: sqlite3.Connection,
+    operation_id: str,
+    *,
+    seed_memory: SeedMemory | None = None,
+) -> AlternateEndingResult:
+    """Resume the exact durable request; external callers still use scoped creation."""
+    lineage = branch_for_operation(db, operation_id)
+    if lineage is not None and lineage["memory_status"] != "pending":
+        return _result(db, operation_id)
+    current = read_scoped_operation(db, operation_id)
+    if current is None or current["kind"] != "alternate_ending":
+        raise ValueError("The alternate-ending operation no longer exists")
+    payload = current["payload"]
+    required = {"chat_id", "origin_session_id", "target_session_id", "checkpoint_id", "request_id", "title"}
+    if not required <= payload.keys() or not all(isinstance(payload[key], str) for key in required):
+        raise ValueError("The saved alternate-ending operation is invalid")
+    if _operation_key(payload["chat_id"], payload["request_id"]) != operation_id:
+        raise ValueError("The saved alternate-ending operation identity does not match")
+    expected = alternate_ending_target_id(
+        payload["chat_id"], payload["origin_session_id"], payload["checkpoint_id"], payload["request_id"]
+    )
+    if expected != payload["target_session_id"]:
+        raise ValueError("The saved target identity does not match")
+    return create_alternate_ending(
+        db,
+        payload["chat_id"],
+        payload["origin_session_id"],
+        payload["checkpoint_id"],
+        payload["request_id"],
+        title=payload["title"],
+        seed_memory=seed_memory,
+    )

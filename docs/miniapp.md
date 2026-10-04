@@ -237,3 +237,13 @@ checks the displayed story revision. **Recover saved ending** is a bounded job
 that resumes only unfinished epilogue work or delivery. **View ending** reads the
 saved prose without a provider call. Completed sessions offer **New Story** and
 keep their original ending immutable.
+
+### Alternate endings
+
+A completed story with a valid checkpoint offers **Alternate Ending** in Director
+Room. Confirming creates an independent session and switches to it when the
+original is still active. The action runs through the existing actor-bound jobs
+queue. Retrying the same operation retrieves its result instead of creating a
+second branch; a later explicit request can create a different alternate ending.
+The original stays closed. A memory warning means external seeding was unavailable,
+not that the new local story was lost.

@@ -11,6 +11,7 @@ import time
 import urllib.error
 from contextlib import ExitStack
 
+from bridge.alternate_ending_runtime import queue_alternate_ending_recovery
 from bridge.background import shutdown_background_executors
 from bridge.composition import BridgeServices
 from bridge.ending_runtime import queue_startup_ending_recovery
@@ -113,7 +114,8 @@ def _shutdown_runtime(services: BridgeServices, db: sqlite3.Connection | None, *
 
 
 def _queue_ending_recovery(services: BridgeServices, db: sqlite3.Connection) -> int:
-    return queue_startup_ending_recovery(
+    branches = queue_alternate_ending_recovery(db, app_settings=services.config)
+    return branches + queue_startup_ending_recovery(
         db,
         provider_port=services.provider,
         delivery_port=services.delivery,

@@ -83,6 +83,12 @@ async function renderDirector() {
         const saved=await api('/director/ending');
         progress.append(el('div',{class:'saved-ending'},el('h3',{},'Saved ending'),el('p',{},saved.epilogue||saved.resolution)));
       },'secondary'));
+      if(data.ending.alternate_available)progress.append(button('Alternate Ending',async()=>{
+        if(!await confirmAction('Create an independent story from the saved pre-finale checkpoint? The original ending will remain unchanged.'))return;
+        const result=await runJob('/director/alternate-ending',body({confirm:true,checkpoint_id:data.ending.checkpoint_id}),root);
+        await load();
+        notice(result.message+(result.memory_status==='degraded'?' External memory is unavailable; the copied transcript and local memories are usable.':''));
+      }));
       if(data.ending.lifecycle==='closed')progress.append(button('New Story',()=>navigate('characters'),'secondary'));
       views.push(progress);
       const ending=card('Ending goal',el('p',{class:'muted'},'A hidden destination, not a predetermined script. A blank goal lets the ending emerge from the story.'));

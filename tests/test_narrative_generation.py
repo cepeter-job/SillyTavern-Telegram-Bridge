@@ -100,7 +100,7 @@ def invoke_story_flow(flow, case, monkeypatch):
             "chat",
             "Follow Mara.",
             session,
-            "s1",
+            session["session_id"],
             session["model_id"],
             None,
             "",

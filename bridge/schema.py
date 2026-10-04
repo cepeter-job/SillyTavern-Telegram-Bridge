@@ -320,7 +320,8 @@ def _run_startup_database_cleanup(db: sqlite3.Connection) -> None:
         (now,),
     )
     db.execute(
-        "DELETE FROM operations WHERE updated_at < ? AND NOT (kind='alternate_ending' AND state<>'applied')",
+        "DELETE FROM operations WHERE updated_at < ? AND NOT (kind='alternate_ending' "
+        "AND state IN ('prepared','local_committed','memory_seeding'))",
         (now - 90 * 86400,),
     )
     db.execute(

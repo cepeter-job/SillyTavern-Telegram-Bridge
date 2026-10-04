@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import secrets
 import sqlite3
 from typing import Any
 
@@ -98,6 +99,17 @@ def director_panel(
             rows.append([button("Recover saved ending", "recover_ending")])
         if ending["has_resolution"] or ending["has_epilogue"]:
             rows.append([button("View ending", "view_ending")])
+        if ending["alternate_available"]:
+            rows.append(
+                [
+                    button(
+                        "Alternate Ending",
+                        "alternate_ending",
+                        checkpoint_id=ending["checkpoint_id"],
+                        operation_id=secrets.token_hex(16),
+                    )
+                ]
+            )
         if ending["lifecycle"] == "closed":
             rows.append([button("New Story", "new_story")])
         rows.append([button("Back", "open")])

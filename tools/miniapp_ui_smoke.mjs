@@ -215,6 +215,24 @@ try {
   assert.equal(savedDirector.objective,objective.value,'Director objective uses the shared canonical service');
   assert.equal(shellDocument.querySelector('.director-room-page b'),null,'User-authored planning text is never inserted as HTML');
   assert.equal(shellDocument.getElementById('notice').textContent,'Director objective saved.');
+  await reserveFixtureCapacity(14);
+  for(const [mode,confirmation] of [['closed_story','true'],['open_ended','false']]) {
+    await app.namespace.navigate('director');
+    const endingLabel=[...shellDocument.querySelectorAll('main label')].find(node=>node.textContent==='Story ending');
+    const finaleLabel=[...shellDocument.querySelectorAll('main label')].find(node=>node.textContent==='Finale entry');
+    assert.ok(endingLabel&&finaleLabel,'Director Room exposes ending mode and finale consent');
+    shellDocument.getElementById(endingLabel.htmlFor).value=mode;
+    shellDocument.getElementById(finaleLabel.htmlFor).value=confirmation;
+    app.namespace.state.session={...app.namespace.state.session,session_id:'different-view-must-not-retarget-ending'};
+    const saveEnding=[...shellDocument.querySelectorAll('main button')].find(node=>node.textContent==='Save ending settings');
+    saveEnding.click();await until(()=>!saveEnding.disabled,'Ending preference saved');
+    const savedEnding=await app.namespace.api('/director');
+    assert.equal(savedEnding.session.session_id,directorSession,'Ending preferences stay with the rendered session');
+    assert.equal(savedEnding.ending.mode,mode);
+    assert.equal(savedEnding.ending.require_confirmation,confirmation==='true');
+    assert.equal(shellDocument.getElementById('notice').textContent,'Ending settings saved for this story.');
+  }
+  console.log('ending-controls=mode,confirmation,rendered-session-scope passed');
   await app.namespace.navigate('dashboard');
   await until(()=>shellDocument.querySelector('.dashboard-session .session-portrait-frame')?.hidden===true,'dashboard missing portrait fallback');
   assert.ok(shellDocument.querySelector('.dashboard-session').textContent.includes('Default session'),'Dashboard text remains when its portrait is unavailable');

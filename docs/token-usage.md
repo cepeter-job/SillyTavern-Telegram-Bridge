@@ -97,3 +97,9 @@ The separate planning brief uses `director_epilogue`; epilogue prose uses
 `director_reconcile`. Viewing a saved ending, a blocked closed-session message,
 and retrying already committed delivery make no new model calls. Provider-reported
 usage may still be incomplete; no subscription balance or cost is inferred.
+
+Creating an Alternate Ending does not call a Story or Director model. Optional
+external-memory seeding may ask the configured Hindsight service to retain the
+copied conversation; that service's own model use is not necessarily reported by
+the bridge's provider-usage ledger. Duplicate completed branch requests do not
+repeat seeding.

@@ -174,6 +174,7 @@ def finish_scoped_operation(db: sqlite3.Connection, operation_id: str, token: st
     if not current or current["state"] != "memory_seeding" or current["payload"].get("lease") != token:
         return False
     db.execute("UPDATE operations SET state='applied',updated_at=? WHERE operation_id=?", (now, operation_id))
+    discard_scoped_operation_payload(db, operation_id)
     return True
 
 
@@ -181,10 +182,15 @@ def recoverable_branch_operations(db: sqlite3.Connection, now: float, limit: int
     return [
         row[0]
         for row in db.execute(
-            "SELECT o.operation_id FROM operations o JOIN narrative_branches b ON b.operation_id=o.operation_id "
-            "WHERE o.kind='alternate_ending' AND b.memory_status='pending' "
-            "AND (o.state='local_committed' OR (o.state='memory_seeding' AND o.updated_at<?)) "
+            "SELECT o.operation_id FROM operations o LEFT JOIN narrative_branches b ON b.operation_id=o.operation_id "
+            "WHERE o.kind='alternate_ending' AND (o.state='prepared' OR (b.memory_status='pending' "
+            "AND (o.state='local_committed' OR (o.state='memory_seeding' AND o.updated_at<?)))) "
             "ORDER BY o.updated_at,o.operation_id LIMIT ?",
             (now - 600, max(1, min(32, limit))),
         ).fetchall()
     ]
+
+
+def discard_scoped_operation_payload(db: sqlite3.Connection, operation_id: str) -> None:
+    require_active_transaction(db)
+    db.execute("DELETE FROM meta WHERE key=?", ("operation_payload:" + operation_id,))

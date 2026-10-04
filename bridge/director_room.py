@@ -8,6 +8,7 @@ import sqlite3
 import time
 from typing import Any
 
+from bridge.alternate_ending_repository import linked_alternate_checkpoint
 from bridge.delivery_progress import delivery_complete
 from bridge.director_repository import (
     append_director_decision,
@@ -100,6 +101,8 @@ def director_room(db: sqlite3.Connection, chat_id: str, session_id: str) -> dict
             "editable": ending.lifecycle in {"open", "finale_ready"},
             "require_confirmation": settings.require_finale_confirmation,
             "reason": ending.readiness_reason,
+            "alternate_available": linked_alternate_checkpoint(db, chat_id, session_id) is not None,
+            "checkpoint_id": ending.checkpoint_id or "",
             "has_resolution": ending.resolution_rowid is not None,
             "has_epilogue": ending.epilogue_committed_rowid is not None,
             "delivery_pending": any(

@@ -10,7 +10,12 @@ from typing import TYPE_CHECKING
 from bridge.card_content import card_fields_from_file
 from bridge.cards import send_session_menu
 from bridge.character_identity import reconcile_session_character
-from bridge.closed_session_guard import closed_session_allows_input, guard_story_mutation, story_mutation_message
+from bridge.closed_session_guard import (
+    closed_session_allows_input,
+    guard_story_mutation,
+    guard_story_reset,
+    story_mutation_message,
+)
 from bridge.context_compaction import ContextWindowBudgetError, context_history_candidate_limit
 from bridge.context_diagnostics import context_stats_key
 from bridge.continuation import continue_last
@@ -86,7 +91,7 @@ def reset_session(
     memory_service: MemoryService,
     npc_service: NpcService,
 ) -> None:
-    guard_story_mutation(db, chat_id, session["session_id"])
+    guard_story_reset(db, chat_id, session["session_id"])
     if db.in_transaction:
         raise RuntimeError("Reset cannot perform external cleanup inside a caller transaction")
     with hindsight_session_lock(chat_id, session["session_id"]):

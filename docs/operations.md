@@ -330,3 +330,23 @@ reject stale queued writes that try to alter a completed original.
 
 Keep a database backup before an upgrade. Recovery tests cover transaction
 rollback and simulated restarts, not physical host power-loss behavior.
+
+## Alternate-ending recovery
+
+Alternate Ending has one durable request identity and a deterministic target
+session. Creating the target, copying the checkpoint prefix and restoring local
+state is one transaction. A failed local copy leaves no half-created session;
+restart recovery resumes the same admitted request.
+
+Optional Hindsight seeding runs afterward under a reclaimable lease, using only
+the target's deterministic conversation document and strict session tag. A normal
+seeding error completes the branch as degraded instead of retrying indefinitely.
+A process interruption can resume after the lease expires without creating
+another target. An applied request retains a small provenance receipt; its
+transient operation payload is discarded. Source deletion after the local copy
+does not delete the independent target.
+
+Source message IDs, Telegram delivery state, queued jobs, response variants and
+callback records are not reused by the target. Snapshot references are remapped
+to its new transcript identities. Prefix copying streams rows and keeps only the
+bounded set of references required by the checkpoint in memory.

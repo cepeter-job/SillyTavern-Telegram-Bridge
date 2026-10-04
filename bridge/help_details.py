@@ -74,7 +74,10 @@ HELP_CATEGORIES = {
             "Open dedicated Light Novel mode controls or restore the current 2–4 full-text action choices with "
             "numbered selectors plus Next Scene. Mode changes require an unstarted standard session.",
         ),
-        ("/director", "Inspect hidden plans, steer the next scene, or keep a persistent story objective."),
+        (
+            "/director",
+            "Inspect plans, steer scenes, configure Closed Story, recover its epilogue or create an Alternate Ending.",
+        ),
         ("/narrative", "Choose this story's POV, cast focus, off-screen freedom, and user-control rules."),
         ("/persona", "Choose, create, edit, or disable a Persona. Delete only targets inactive, unreferenced ones."),
         ("/world", "Open World Info selection — activate or disable one or more lorebooks."),
@@ -106,11 +109,14 @@ HELP_CATEGORIES = {
         ("/stscript", "Open the safe STscript panel for allowlisted bridge actions only."),
         ("/regen", "Generate a new response variant for the latest user turn."),
         ("/swipe", "Browse stored response variants and keep the one you like."),
-        ("/branch", "Open the response branch selector for the active session."),
+        ("/branch", "Select existing response variants. For a new alternate ending of a closed story, open /director."),
         ("/continue", "Continue the latest assistant response from where it stopped."),
         ("/edit", "Open scoped input for replacement text for the latest user turn."),
         ("/edit <text>", "Replace the latest user turn immediately and regenerate from the new text."),
-        ("/retry", "Retry the latest failed character response without creating a duplicate turn."),
+        (
+            "/retry",
+            "Retry a failed reply, or recover a saved resolution/epilogue without regenerating committed prose.",
+        ),
         ("/prompt", "Open the read-only prompt inspector with budget, memory/RAG, and group-context sections."),
         ("/prompt text", "Send the plain-text prompt diagnostic output without opening the inspector panel."),
     ],

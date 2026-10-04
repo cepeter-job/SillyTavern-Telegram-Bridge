@@ -6,7 +6,10 @@ import hashlib
 import json
 import sqlite3
 from collections.abc import Callable
+from functools import partial
 
+from bridge.alternate_ending import create_alternate_ending
+from bridge.alternate_ending_memory import seed_alternate_ending_memory
 from bridge.callback_tokens import resolve_dynamic_callback_token
 from bridge.callbacks import close_panel_message
 from bridge.cards import send_character_menu
@@ -57,6 +60,27 @@ def handle_director_callback(
         page = "main"
         if action == "close":
             close_panel_message(db, token, chat_id, {"message": message})
+        elif action == "alternate_ending":
+            require_ending_revision(db, chat_id, session_id, str(values.get("revision", "")))
+            branch_result = create_alternate_ending(
+                db,
+                chat_id,
+                session_id,
+                str(values.get("checkpoint_id", "")),
+                str(values.get("operation_id", "")),
+                seed_memory=partial(seed_alternate_ending_memory, app_settings=request_context.app_settings),
+            )
+            if branch_result.applied:
+                notice = (
+                    "Alternate Ending created: "
+                    + branch_result.session["title"]
+                    + ". The original ending is unchanged."
+                )
+                if branch_result.memory_status == "degraded":
+                    notice += " External memory is unavailable; the copied transcript and local memories are ready."
+            else:
+                notice = "This alternate-ending request already has a saved target and is finishing memory setup."
+            send_text(token, chat_id, notice)
         elif action == "new_story":
             send_character_menu(token, chat_id, session.get("character_file", ""), request_context=request_context)
         elif action in {"recover_ending", "view_ending"}:

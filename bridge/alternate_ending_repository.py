@@ -53,3 +53,14 @@ def activate_branch_if_origin(db: sqlite3.Connection, chat_id: str, origin: str,
         ).rowcount
         == 1
     )
+
+
+def linked_alternate_checkpoint(db: sqlite3.Connection, chat_id: str, session_id: str) -> str | None:
+    """Cheap UI eligibility; the creation service verifies the complete immutable snapshot."""
+    row = db.execute(
+        "SELECT c.checkpoint_id FROM ending_state e JOIN narrative_checkpoints c ON c.checkpoint_id=e.checkpoint_id "
+        "AND c.chat_id=e.chat_id AND c.session_id=e.session_id WHERE e.chat_id=? AND e.session_id=? "
+        "AND e.lifecycle='closed' AND c.kind='pre_finale' AND c.format_version=1",
+        (chat_id, session_id),
+    ).fetchone()
+    return str(row[0]) if row else None

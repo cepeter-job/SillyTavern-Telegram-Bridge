@@ -311,3 +311,33 @@ def test_branch_memory_lease_cannot_be_stolen_by_a_late_worker(session_db):
     result = branch(session_db, cp, seed=replaced)
     assert not result.applied and result.memory_status == "pending"
     assert load_meta_value(db, "active_session:chat") == "s1"
+
+
+def test_finished_branch_discards_transient_operation_payload_but_keeps_idempotent_receipt(session_db):
+    from bridge.alternate_ending import recover_alternate_ending
+
+    cp = close_story(session_db)
+    _, db, _ = session_db
+    result = branch(session_db, cp)
+    op = db.execute("SELECT operation_id FROM narrative_branches").fetchone()[0]
+    assert db.execute("SELECT value FROM meta WHERE key=?", ("operation_payload:" + op,)).fetchone() is None
+    assert recover_alternate_ending(db, op).session == result.session
+
+
+def test_alternate_session_accepts_a_normal_story_turn_without_touching_the_original(session_db, monkeypatch):
+    from test_narrative_generation import invoke_story_flow
+
+    cp = close_story(session_db)
+    config, db, _ = session_db
+    target = branch(session_db, cp).session
+    before = db.execute("SELECT id,content FROM messages WHERE session_id='s1' ORDER BY id").fetchall()
+    calls = invoke_story_flow("text", (db, target, config, 0), monkeypatch)
+    assert len(calls) == 1 and "## Narrative Policy" in calls[0][0]["content"]
+    assert (
+        db.execute(
+            "SELECT content FROM messages WHERE session_id=? ORDER BY id DESC LIMIT 1", (target["session_id"],)
+        ).fetchone()[0]
+        == "*Mara waits.*"
+    )
+    assert db.execute("SELECT id,content FROM messages WHERE session_id='s1' ORDER BY id").fetchall() == before
+    assert load_ending_state(db, "chat", "s1").lifecycle == "closed"

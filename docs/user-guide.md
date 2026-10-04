@@ -323,6 +323,32 @@ ending**. The bridge retries the unfinished stage, not the already committed
 resolution or epilogue. A Telegram outage does not undo a saved ending. A provider
 failure pauses automatic retries to avoid repeatedly spending tokens.
 
+### Try an alternate ending
+
+Open the completed story's **Director Room → Ending settings** and choose
+**Alternate Ending**. The Mini App offers the same action. It appears only when
+the original has a valid saved pre-finale checkpoint.
+
+The bridge creates a separate, already-started session named after the original
+with “— Alternate Ending” added. It copies the story only through the checkpoint,
+along with the character setup, models, preferences and local continuity as they
+were then. It does **not** copy the original finale, epilogue or their later facts.
+Continue the new session normally to explore another resolution.
+
+The original stays closed. Returning to it later and explicitly requesting another
+alternate ending creates another independent session. Repeated delivery of the
+same button action returns the same branch instead of making accidental copies.
+
+External memory is isolated by the new session's tags and document IDs inside the
+chat's Hindsight bank. Seeding failure does not point the branch at the original's
+memories: the copied transcript and local continuity remain usable, and the UI
+reports degraded external memory. A later ordinary memory retain uses the new
+session's identity.
+
+`/branch` still selects existing response variants; it is not Alternate Ending.
+A finale freezes its earlier story history, so `/reset` cannot discard that
+checkpoint after the finale begins. Start a new story instead.
+
 ## Narrative Style
 
 Open `/narrative` to choose how the **current story** is told. You also choose

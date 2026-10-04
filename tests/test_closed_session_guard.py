@@ -180,3 +180,25 @@ def test_only_assistant_epilogue_can_use_the_internal_commit_window(session_db):
                 "INSERT INTO messages(chat_id,session_id,role,content,created_at) "
                 "VALUES('chat','s1','user','extra input',9)"
             )
+
+
+def test_reset_during_finale_is_rejected_before_deleting_telegram_or_external_memory(session_db, monkeypatch):
+    from test_narrative_checkpoints import enter, prepared
+
+    _, db, session = session_db
+    prepared(session_db)
+    enter(db)
+    monkeypatch.setattr(
+        message_commands, "delete_outgoing_messages", lambda *a, **k: pytest.fail("Deleted finale output")
+    )
+    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: pytest.fail("Deleted user input"))
+    with pytest.raises(ValueError, match="finale"):
+        message_commands.reset_session(
+            db,
+            "token",
+            "chat",
+            session,
+            memory_service=SimpleNamespace(purge_session=lambda *a: pytest.fail("Purged finale memory")),
+            npc_service=SimpleNamespace(purge_session=lambda *a: pytest.fail("Purged finale NPCs")),
+        )
+    assert load_ending_state(db, "chat", "s1").lifecycle == "finale"

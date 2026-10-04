@@ -86,3 +86,10 @@ def closed_session_allows_input(
         except (ValueError, TypeError, RecursionError):
             continue
     return False
+
+
+def guard_story_reset(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
+    guard_story_mutation(db, chat_id, session_id)
+    ending = load_ending_row(db, chat_id, session_id)
+    if ending is not None and ending["lifecycle"] == "finale":
+        raise ClosedStoryError("This story has entered its finale. Start a new story instead of resetting it.")

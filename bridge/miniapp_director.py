@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any
 
+from bridge.alternate_ending import create_alternate_ending
+from bridge.alternate_ending_memory import seed_alternate_ending_memory
 from bridge.director_room import (
     apply_arc_guidance,
     apply_controls,
@@ -168,9 +171,35 @@ def get_ending(services: Any, who: MiniAppIdentity, values: dict) -> dict:
         return saved_ending(scope.db, scope.chat_id, scope.session["session_id"])
 
 
+def alternate_ending(services: Any, who: MiniAppIdentity, values: dict) -> dict:
+    require_confirmation(values)
+    revision = digest(values, "revision")
+    checkpoint = text(values, "checkpoint_id", 100)
+    operation = text(values, "operation_id", 100)
+    with session_scope(services, who, values, write=True) as scope:
+        require_ending_revision(scope.db, scope.chat_id, scope.session["session_id"], revision)
+        result = create_alternate_ending(
+            scope.db,
+            scope.chat_id,
+            scope.session["session_id"],
+            checkpoint,
+            operation,
+            seed_memory=partial(seed_alternate_ending_memory, app_settings=services.config),
+        )
+        return {
+            "applied": result.applied,
+            "session": result.session,
+            "memory_status": result.memory_status,
+            "message": "Alternate Ending is ready. The original completed story remains unchanged."
+            if result.applied
+            else "The saved alternate story is finishing memory setup.",
+        }
+
+
 def routes() -> list[ApiRoute]:
     return [
         ApiRoute("GET", "/director", get_director),
+        ApiRoute("POST", "/director/alternate-ending", alternate_ending, "alternate_ending"),
         ApiRoute("GET", "/director/ending", get_ending),
         ApiRoute("PATCH", "/director/ending-controls", save_ending_controls),
         ApiRoute("POST", "/director/begin-finale", begin_finale),

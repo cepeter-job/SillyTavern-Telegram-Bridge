@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 import time
 
+from bridge.closed_session_guard import guard_story_mutation
 from bridge.delivery_port import DeliveryPort
 from bridge.generation import _generation_generate_rendered_reply, build_chat_messages
 from bridge.generation_recovery import _generation_operation_recovery
@@ -39,6 +40,7 @@ def regenerate_last(
     app_settings: AppSettings,
     rag_service: RagService,
 ) -> None:
+    guard_story_mutation(db, chat_id, session["session_id"])
     session_id = session["session_id"]
     recovery = _generation_operation_recovery(delivery_port)
 

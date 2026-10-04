@@ -11,6 +11,7 @@ import time
 from collections.abc import Callable, Sequence
 
 from bridge.card_content import build_world_info, replace_macros
+from bridge.closed_session_guard import guard_story_mutation, story_mutation_message
 from bridge.conversation_lifecycle import conversation_state
 from bridge.job_store import enqueue_job
 from bridge.light_novel_format import CHOICE_MATURITY_POLICY, parse_choice_response, validate_choices
@@ -197,6 +198,8 @@ def attach_turn(
 
 
 def current_choice_story(db: sqlite3.Connection, record: ChoiceSet) -> str | None:
+    if story_mutation_message(db, record.chat_id, record.session_id):
+        return None
     state = conversation_state(db, record.chat_id, record.session_id)
     if not state.started or state.epoch != record.epoch or state.mode != "lightnovel" or record.state != "open":
         return None
@@ -297,6 +300,7 @@ def ensure_choices(
     record = load_choice_set(db, nonce)
     if record is None or record.session_id != session["session_id"]:
         raise ValueError("Choice expired")
+    guard_story_mutation(db, record.chat_id, record.session_id)
     story = current_choice_story(db, record)
     if story is None or record.generation_status == "ready":
         return record

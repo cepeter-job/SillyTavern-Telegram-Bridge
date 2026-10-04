@@ -5,6 +5,7 @@ import sqlite3
 import time
 from dataclasses import replace
 
+from bridge.closed_session_guard import guard_ending_configuration
 from bridge.light_novel_repository import invalidate_choice_sets
 from bridge.narrative_repository import (
     load_narrative_default_row,
@@ -131,6 +132,8 @@ def save_session_narrative_settings(
 ) -> None:
     payload = _encode_settings(settings)
     with write_transaction(db):
+        current = load_session_narrative_settings(db, chat_id, session_id)
+        guard_ending_configuration(db, chat_id, session_id, current.to_dict(), settings.to_dict())
         store_narrative_settings_row(db, chat_id, session_id, payload, time.time())
         invalidate_choice_sets(db, chat_id, session_id)
 
@@ -171,6 +174,7 @@ def apply_narrative_preference(
             changed = change_narrative_setting(current, field, value)
         else:
             raise ValueError("Choose an available Narrative Style action.")
+        guard_ending_configuration(db, chat_id, session_id, current.to_dict(), changed.to_dict())
         if not store_narrative_settings_if_revision(
             db, chat_id, session_id, _encode_settings(changed), expected_revision, time.time()
         ):

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from bridge.card_content import card_fields_from_file
 from bridge.cards import send_session_menu
 from bridge.character_identity import reconcile_session_character
+from bridge.closed_session_guard import closed_session_allows_input, guard_story_mutation, story_mutation_message
 from bridge.context_compaction import ContextWindowBudgetError, context_history_candidate_limit
 from bridge.context_diagnostics import context_stats_key
 from bridge.continuation import continue_last
@@ -84,6 +85,7 @@ def reset_session(
     memory_service: MemoryService,
     npc_service: NpcService,
 ) -> None:
+    guard_story_mutation(db, chat_id, session["session_id"])
     if db.in_transaction:
         raise RuntimeError("Reset cannot perform external cleanup inside a caller transaction")
     with hindsight_session_lock(chat_id, session["session_id"]):
@@ -175,6 +177,7 @@ def generate_and_store_reply(
     rag_service: RagService,
 ) -> None:
     """Assemble context, run generation, persist the reply, and deliver it."""
+    guard_story_mutation(db, chat_id, session_id)
     provider_port = provider_port.for_usage(chat_id, session_id, "story")
     if not require_started(db, chat_id, session_id):
         send_text(token, chat_id, START_REQUIRED)
@@ -436,7 +439,11 @@ def prepare_message(
     )
     session_id = session["session_id"]
     request_context = RequestContext(db, session_id, actor_id, app_settings=app_settings)
-    if operation_id is not None and operation_phase(db, operation_id) == "local_committed":
+    closing_notice = story_mutation_message(db, chat_id, session_id)
+    if closing_notice and not closed_session_allows_input(db, chat_id, session_id, actor_id, command):
+        delivery_port.send_text(token, chat_id, closing_notice)
+        return None
+    if not closing_notice and operation_id is not None and operation_phase(db, operation_id) == "local_committed":
         recovery_command = _operation_command(text)
         recovery_fields = card_fields_from_file(session["character_file"], app_settings=app_settings)
         if recovery_command == "/regen":

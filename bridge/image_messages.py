@@ -7,6 +7,7 @@ import sqlite3
 import time
 
 from bridge.card_content import card_fields_from_file
+from bridge.closed_session_guard import guard_story_mutation
 from bridge.conversation_lifecycle import START_REQUIRED, require_started
 from bridge.delivery_progress import bind_committed_turn
 from bridge.generation import build_chat_messages, render_session_response
@@ -51,6 +52,7 @@ def process_image_message(
     app_settings: AppSettings,
     rag_service: RagService,
 ) -> None:
+    guard_story_mutation(db, chat_id, session["session_id"])
     if not require_started(db, chat_id, session["session_id"]):
         send_text(token, chat_id, START_REQUIRED)
         return

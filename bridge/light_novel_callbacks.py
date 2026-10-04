@@ -7,6 +7,7 @@ import logging
 import sqlite3
 from collections.abc import Callable
 
+from bridge.closed_session_guard import guard_story_mutation
 from bridge.conversation_lifecycle import conversation_state
 from bridge.job_service import JobSubmission
 from bridge.light_novel_contracts import LightNovelRuntime
@@ -62,6 +63,7 @@ def route_light_novel_callback(
                 raise ValueError("Choice expired")
             if get_meta(db, f"active_session:{chat_id}", "default") != record.session_id:
                 raise ValueError("Choice expired")
+            guard_story_mutation(db, chat_id, record.session_id)
             state = conversation_state(db, chat_id, record.session_id)
             if record.state == "consumed":
                 raise ValueError("Choice already used")

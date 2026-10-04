@@ -15,6 +15,7 @@ import urllib.request
 from pathlib import Path
 
 from bridge.card_content import card_fields_from_file, safe_character_path
+from bridge.closed_session_guard import guard_story_mutation
 from bridge.generation_settings import get_generation_settings
 from bridge.image_reference import ImageReference, load_character_reference
 from bridge.image_routing import (
@@ -379,6 +380,7 @@ def build_scene_image_prompt(
     max_chars: int = IMAGE_PROMPT_MAX_CHARS,
 ) -> str:
     """Build a bounded visual prompt from committed story state without mutating it."""
+    guard_story_mutation(db, chat_id, session["session_id"])
     prompt_max_chars = max(1, min(int(max_chars), IMAGE_PROMPT_MAX_CHARS))
     session_id = str(session["session_id"])
     scene = scene_state_text(db, chat_id, session_id)
@@ -535,6 +537,7 @@ def handle_imagine_scene(
     provider_port: ProviderPort,
     app_settings: AppSettings,
 ) -> None:
+    guard_story_mutation(db, chat_id, session["session_id"])
     selection, size = session_image_settings(
         db,
         chat_id,
@@ -570,6 +573,7 @@ def handle_imagine_custom_prompt(
     *,
     app_settings: AppSettings,
 ) -> None:
+    guard_story_mutation(db, chat_id, session["session_id"])
     selection, size = session_image_settings(
         db,
         chat_id,

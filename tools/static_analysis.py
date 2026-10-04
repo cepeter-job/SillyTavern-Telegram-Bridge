@@ -52,6 +52,8 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
+    "bridge/closed_session_guard.py",
+    "bridge/closed_story_schema.py",
     "bridge/epilogue_contracts.py",
     "bridge/epilogue_service.py",
     "bridge/ending_reconciliation.py",
@@ -250,6 +252,7 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.light_novel_callbacks": frozenset(
         [
+            "bridge.closed_session_guard",
             "bridge.narrative_context",
             "bridge.narrative_values",
             "bridge.light_novel_contracts",
@@ -300,6 +303,7 @@ LOW_LEVEL_IMPORTS = {
     "bridge.light_novel_repository": frozenset(["bridge.repository_contracts"]),
     "bridge.light_novel_service": frozenset(
         [
+            "bridge.closed_session_guard",
             "bridge.narrative_context",
             "bridge.card_content",
             "bridge.persona_service",

@@ -16,6 +16,7 @@ import time
 from functools import partial as _partial
 
 from bridge.background import submit_background
+from bridge.closed_session_guard import guard_story_mutation
 from bridge.delivery_port import DeliveryPort
 from bridge.extension_context import PostRetainContext
 from bridge.extension_registry import extension_registry_snapshot as _extension_registry_snapshot
@@ -126,6 +127,7 @@ def refresh_scene_state_now(
     provider_port: ProviderPort,
     app_settings: AppSettings,
 ) -> dict[str, object] | None:
+    guard_story_mutation(db, chat_id, session["session_id"])
     if db.in_transaction:
         raise RuntimeError("Scene-state refresh cannot call a provider inside a transaction")
     session_id = str(session["session_id"])

@@ -119,7 +119,7 @@ def claim_ending_work(db: sqlite3.Connection, chat_id: str, session_id: str, tok
         db.execute(
             "UPDATE ending_state SET work_token=?,work_started_at=?,last_attempt_at=?,last_error='' "
             "WHERE chat_id=? AND session_id=? "
-            "AND lifecycle IN ('resolution_committed','epilogue_pending','epilogue_committed') "
+            "AND lifecycle IN ('resolution_committed','epilogue_pending','epilogue_committed','closed') "
             "AND (work_token='' OR work_started_at<?)",
             (token, now, now, chat_id, session_id, now - 600),
         ).rowcount

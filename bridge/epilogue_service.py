@@ -317,6 +317,17 @@ def complete_epilogue(
     if db.in_transaction:
         raise ValueError("Epilogue work cannot run inside a caller's write transaction")
     if current.lifecycle == "closed":
+        if current.epilogue_committed_rowid is not None and all(
+            delivery_complete(db, rowid)
+            for rowid in (current.resolution_rowid, current.epilogue_committed_rowid)
+            if rowid is not None
+        ):
+            return EndingWorkResult("closed", "The story has ended.", True, True)
+        lease = secrets.token_hex(16)
+        with write_transaction(db):
+            claimed = claim_ending_work(db, chat_id, sid, lease, time.time())
+        if not claimed:
+            return EndingWorkResult("closed", "Ending delivery is already in progress.", True, False)
         try:
             delivered = deliver_committed_ending(db, token, chat_id, sid, delivery_port=delivery_port)
             with write_transaction(db):
@@ -326,6 +337,9 @@ def complete_epilogue(
             return EndingWorkResult(
                 "closed", "The ending is saved. Retry delivery without regenerating it.", True, False
             )
+        finally:
+            with write_transaction(db):
+                release_ending_work(db, chat_id, sid, lease)
     if current.lifecycle not in {"resolution_committed", "epilogue_pending", "epilogue_committed"}:
         return EndingWorkResult(current.lifecycle, "The story has not reached its committed resolution.")
     if not manual and current.last_error and current.last_attempt_at > time.time() - 60:

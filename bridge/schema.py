@@ -1,6 +1,7 @@
 import sqlite3
 import time
 
+from bridge.closed_story_schema import migrate_closed_story_guards
 from bridge.conversation_schema import migrate_conversation_modes
 from bridge.delivery_schema import migrate_delivery_progress, migrate_job_delivery_intents
 from bridge.director_schema import migrate_director_runtime
@@ -499,6 +500,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(14, "ending_readiness", migrate_ending_readiness),
     _Migration(15, "finale_checkpoint_guards", migrate_finale_checkpoint_guards),
     _Migration(16, "ending_workflow", migrate_ending_workflow),
+    _Migration(17, "closed_story_guards", migrate_closed_story_guards),
 )
 
 

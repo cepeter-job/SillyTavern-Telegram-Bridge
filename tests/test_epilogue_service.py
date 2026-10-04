@@ -289,3 +289,27 @@ def test_ordinary_story_cannot_claim_an_epilogue_phase(session_db):
     state = run_reconciliation(session_db, lambda *a, **k: proposal(phase="epilogue"))
     assert state.story_phase != "epilogue"
     assert load_ending_state(db, "chat", "s1").lifecycle == "open"
+
+
+def test_reentrant_closed_delivery_recovery_is_coalesced(session_db):
+    db, _, _ = resolved(session_db)
+    complete(session_db, producer_for(db, []))
+    ending = load_ending_state(db, "chat", "s1")
+    with write_transaction(db):
+        db.execute(
+            "DELETE FROM assistant_delivery_progress WHERE assistant_rowid=?", (ending.epilogue_committed_rowid,)
+        )
+        db.execute("UPDATE messages SET telegram_message_ids='[]' WHERE id=?", (ending.epilogue_committed_rowid,))
+    actual, sent = deliveries(db)
+    inner_results = []
+
+    def reenter(*args, **kwargs):
+        inner_results.append(complete(session_db, lambda *a, **k: pytest.fail("Closed provider"), actual))
+        return actual.send_reply(*args, **kwargs)
+
+    from dataclasses import replace
+
+    result = complete(session_db, lambda *a, **k: pytest.fail("Closed provider"), replace(actual, send_reply=reenter))
+    assert result.completed and result.delivered
+    assert len(sent) == 1
+    assert len(inner_results) == 1 and not inner_results[0].delivered

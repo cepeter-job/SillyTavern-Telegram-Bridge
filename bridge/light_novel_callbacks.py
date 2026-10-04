@@ -129,6 +129,7 @@ def route_light_novel_callback(
                     (chat_id, record.session_id, record.nonce),
                 ).fetchone()
                 if existing:
+                    retry_panel_pending = True
                     feedback = "Choices are already queued"
                 else:
                     if not mark_choice_retry_pending(db, record.nonce, time.time()):

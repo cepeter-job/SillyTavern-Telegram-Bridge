@@ -4,8 +4,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [0.3.000] - 2026-10-04
 
-Development milestone for the Narrative Engine implementation. This branch does
-not publish a release or change an installed deployment.
+The 0.3 series adds the complete Narrative Engine, AI Director, closed stories
+and independent alternate endings.
 
 ### Added
 
@@ -31,9 +31,20 @@ not publish a release or change an installed deployment.
 - Full Closed Story execution with multi-turn finales, a separate Story-model
   epilogue, bounded restart recovery and immutable completed originals.
 - Ending controls and explicit finale confirmation in Telegram and the Mini App.
+- Alternate Ending creates an independent session from an immutable pre-finale
+  checkpoint, with local continuity restored and Hindsight recall isolated to
+  the new session. Completed originals are never reopened.
+- Greeting photos from the opening message image URL, or the selected character
+  PNG, with delivery receipts so a failed photo does not resend the opening text.
+- Light Novel choices vary motive and approach without assuming altruism or
+  forcing cruelty. Off-screen scenes retain narrative-steering choices.
 
 ### Fixed
 
+- Provider-escaped roleplay paragraph breaks render as real Telegram newlines
+  without decoding code blocks or literal paths.
+- Deleted opening messages no longer send orphan greeting photos; their image
+  URLs and delivery receipts are removed transactionally with the message.
 - Reset clears derived narrative state while preserving Narrative Style and
   personal defaults. Its local cleanup is atomic after successful memory purge.
 - Optional NumPy acceleration now falls back to existing Python vector math when

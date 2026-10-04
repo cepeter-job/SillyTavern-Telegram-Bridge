@@ -357,3 +357,37 @@ def test_greeting_photo_failure_recovery_only_retries_photo(novel_db, monkeypatc
     )
     assert sent == ["text", "photo", "photo"]
     assert json.loads(db.execute("SELECT telegram_message_ids FROM messages").fetchone()[0]) == [71, 72]
+
+
+def test_greeting_photo_skips_a_deleted_opening(novel_db, monkeypatch):
+    db, _session, settings = novel_db
+    with write_transaction(db):
+        rowid = db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+            ("chat", "story", "assistant", "Hello", 1.0),
+        ).lastrowid
+        set_meta(db, f"greeting_photo_url:{rowid}", "https://images.example/portrait.png")
+        db.execute("DELETE FROM messages WHERE rowid=?", (rowid,))
+    sent = []
+    monkeypatch.setattr(greetings, "telegram_request", lambda *a, **kw: sent.append(a) or {"message_id": 81})
+    greetings._deliver_greeting_photo(db, "token", "chat", "story", rowid, "Hello", app_settings=settings)
+    assert sent == []
+
+
+def test_greeting_media_metadata_lives_only_with_its_message(novel_db):
+    from bridge.metadata import get_meta
+
+    db, _session, _settings = novel_db
+    with write_transaction(db):
+        rowid = db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+            ("chat", "story", "assistant", "Hello", 1.0),
+        ).lastrowid
+        set_meta(db, f"greeting_photo:{rowid}", "81")
+        set_meta(db, f"greeting_photo_url:{rowid}", "https://images.example/portrait.png")
+        set_meta(db, "unrelated_setting", "preserved")
+    with write_transaction(db):
+        db.execute("DELETE FROM messages WHERE rowid=?", (rowid,))
+    assert get_meta(db, f"greeting_photo:{rowid}", "") == ""
+    assert get_meta(db, f"greeting_photo_url:{rowid}", "") == ""
+    assert get_meta(db, "unrelated_setting", "") == "preserved"

@@ -195,6 +195,9 @@ def test_choice_only_generation_and_inline_repair_follow_offscreen_policy(novel_
     assert "narrative steering" in system.lower()
     assert "do not fabricate off-screen user actions" in system
     assert "the USER can choose in this scene" not in system
+    assert "For in-world user actions only" in system
+    assert "For narrative steering choices" in system
+    assert "Phrase each action from the USER" not in system
 
 
 def test_inline_story_choices_receive_narrative_style(novel_db):
@@ -209,6 +212,9 @@ def test_inline_story_choices_receive_narrative_style(novel_db):
     assert "cinematic/objective" in messages[0]["content"]
     assert "narrative steering" in messages[0]["content"].lower()
     assert "Character and world facts." in messages[0]["content"]
+    assert "For in-world user actions only" in messages[0]["content"]
+    assert "For narrative steering choices" in messages[0]["content"]
+    assert "Phrase each action from the USER" not in messages[0]["content"]
 
 
 @pytest.mark.parametrize("action", ["lnchoice", "lnnext"])

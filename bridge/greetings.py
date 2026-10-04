@@ -87,6 +87,13 @@ def _deliver_greeting_photo(
     *,
     app_settings: AppSettings,
 ) -> None:
+    # Text delivery may have yielded to reset/deletion; do not send orphan media.
+    row = db.execute(
+        "SELECT 1 FROM messages WHERE rowid=? AND chat_id=? AND session_id=? AND role='assistant'",
+        (rowid, chat_id, session_id),
+    ).fetchone()
+    if row is None:
+        return
     key = f"greeting_photo:{rowid}"
     if get_meta(db, key, ""):
         return

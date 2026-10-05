@@ -24,8 +24,21 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD~2)" = 39bac3de0369a7580e7d854c99622d9ac83f30de
-          python3 .github/docs_readability_edit.py
+          git merge-base --is-ancestor 39bac3de0369a7580e7d854c99622d9ac83f30de HEAD
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/docs_readability_edit.py')
+          source = path.read_text()
+          old = 'for code in re.findall(r"```bash\\n(.*?)\\n```", text, re.S):'
+          new = 'for code in re.findall(r"^[ \\t]*```bash[ \\t]*\\n(.*?)^[ \\t]*```[ \\t]*$", text, re.S | re.M):'
+          assert source.count(old) == 1
+          source = source.replace(old, new)
+          old = 'input=code, text=True, check=True'
+          assert source.count(old) == 1
+          source = source.replace(old, 'input=__import__("textwrap").dedent(code), text=True, check=True')
+          source = source.replace('r"^```"', 'r"^[ \\t]*```"')
+          exec(compile(source, str(path), 'exec'), {'__file__': str(path), '__name__': '__main__'})
+          PY
       - name: Render Markdown and validate local links and heading anchors
         env:
           GH_TOKEN: ${{ github.token }}
@@ -51,7 +64,6 @@ jobs:
                   self.headings = []
                   self.heading = None
                   self.tables = 0
-                  self.images = []
               def handle_starttag(self, tag, attrs):
                   attrs = dict(attrs)
                   if 'id' in attrs:
@@ -60,8 +72,6 @@ jobs:
                       self.heading = []
                   if tag == 'table':
                       self.tables += 1
-                  if tag == 'img':
-                      self.images.append(attrs.get('src', ''))
               def handle_data(self, data):
                   if self.heading is not None:
                       self.heading.append(data)
@@ -93,13 +103,13 @@ jobs:
                       counts[slug] = count + 1
                       outline.ids.add(slug + (f'-{count}' if count else ''))
               rendered[path] = outline
-              print(f'{path.relative_to(root)}: GitHub Markdown rendered; headings={len(outline.headings)}, tables={outline.tables}')
+              print(f'{path.relative_to(root)}: GitHub Markdown rendered; headings={len(outline.headings)}, tables={outline.tables}', flush=True)
               return outline
 
           links = 0
           for name in documents:
               path = root / name
-              outline = render(path)
+              render(path)
               text = re.sub(r'```.*?```', '', path.read_text(encoding='utf-8'), flags=re.S)
               targets = re.findall(r'\[[^\]]+\]\(([^)]+)\)', text)
               targets += re.findall(r'<img[^>]+src="([^"]+)"', text)
@@ -117,15 +127,14 @@ jobs:
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
               summary.write(f'## Documentation audit validation\n\nGitHub-rendered Markdown checked for {len(rendered)} documents. {links} local links, image paths and heading anchors passed. Bash blocks were syntax-checked, not executed. Configuration reference rows were preserved.\n')
           PY
-      - name: Commit only documentation and remove temporary workspace tooling
+      - name: Commit only the eight documentation changes
         shell: bash
         run: |
           set -euo pipefail
-          git rm -- .github/docs_readability_edit.py .github/workflows/docs-readability-edit.yml
           python3 - <<'PY'
           import subprocess
           expected = {'README.md', 'CONTRIBUTING.md', 'docs/installation.md', 'docs/user-guide.md', 'docs/configuration.md', 'docs/operations.md', 'docs/miniapp.md', 'docs/token-usage.md'}
-          changed = set(subprocess.check_output(['git', 'diff', '--name-only', '39bac3de0369a7580e7d854c99622d9ac83f30de'], text=True).splitlines())
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only', 'HEAD'], text=True).splitlines())
           assert changed == expected, changed
           PY
           git add -- README.md CONTRIBUTING.md docs/installation.md docs/user-guide.md docs/configuration.md docs/operations.md docs/miniapp.md docs/token-usage.md

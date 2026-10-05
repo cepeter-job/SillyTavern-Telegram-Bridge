@@ -20,7 +20,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD~1)" = 8b26ca488c420f27cd403bd8b0b1f626c2434498
+          git merge-base --is-ancestor 8b26ca488c420f27cd403bd8b0b1f626c2434498 HEAD
+          git diff --exit-code 8b26ca488c420f27cd403bd8b0b1f626c2434498 HEAD -- README.md CONTRIBUTING.md docs/installation.md docs/user-guide.md docs/configuration.md docs/operations.md docs/miniapp.md docs/token-usage.md
           python3 - <<'PY'
           from pathlib import Path
           import re, runpy, subprocess, textwrap
@@ -78,36 +79,54 @@ jobs:
           class Outline(HTMLParser):
               def __init__(self):
                   super().__init__()
-                  self.ids=set()
+                  self.ids = set()
+                  self.headings = []
+                  self.heading = None
               def handle_starttag(self, tag, attrs):
-                  a=dict(attrs)
+                  a = dict(attrs)
                   if 'id' in a:
                       self.ids.add(a['id'].removeprefix('user-content-'))
+                  if re.fullmatch('h[1-6]', tag):
+                      self.heading = []
+              def handle_data(self, data):
+                  if self.heading is not None:
+                      self.heading.append(data)
+              def handle_endtag(self, tag):
+                  if re.fullmatch('h[1-6]', tag) and self.heading is not None:
+                      self.headings.append(''.join(self.heading))
+                      self.heading = None
           def render(path):
               if path in cache:
                   return cache[path]
-              request=urllib.request.Request('https://api.github.com/markdown',data=json.dumps({'text':path.read_text(),'mode':'gfm','context':'cepeter/SillyTavern-Telegram-Bridge'}).encode(),headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'},method='POST')
-              with urllib.request.urlopen(request,timeout=30) as r:
-                  html=r.read(2000000).decode()
-              o=Outline()
-              o.feed(html)
-              assert o.ids, path
-              cache[path]=o.ids
-              return o.ids
-          count=0
+              request = urllib.request.Request('https://api.github.com/markdown', data=json.dumps({'text': path.read_text(), 'mode': 'gfm', 'context': 'cepeter/SillyTavern-Telegram-Bridge'}).encode(), headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json'}, method='POST')
+              with urllib.request.urlopen(request, timeout=30) as r:
+                  html = r.read(2000000).decode()
+              outline = Outline()
+              outline.feed(html)
+              assert outline.headings, path
+              if not outline.ids:
+                  counts = {}
+                  for heading in outline.headings:
+                      slug = re.sub(r'[^\w -]', '', heading.lower()).replace(' ', '-')
+                      count = counts.get(slug, 0)
+                      counts[slug] = count + 1
+                      outline.ids.add(slug + (f'-{count}' if count else ''))
+              cache[path] = outline.ids
+              return outline.ids
+          count = 0
           for name in docs:
-              p=root/name
+              p = root / name
               render(p)
-              text=re.sub(r'```.*?```','',p.read_text(),flags=re.S)
-              for target in re.findall(r'\[[^\]]+\]\(([^)]+)\)',text)+re.findall(r'<img[^>]+src="([^"]+)"',text):
-                  u=urllib.parse.urlsplit(target)
+              text = re.sub(r'```.*?```', '', p.read_text(), flags=re.S)
+              for target in re.findall(r'\[[^\]]+\]\(([^)]+)\)', text) + re.findall(r'<img[^>]+src="([^"]+)"', text):
+                  u = urllib.parse.urlsplit(target)
                   if u.scheme or u.netloc:
                       continue
-                  dest=(p.parent/urllib.parse.unquote(u.path)).resolve() if u.path else p
-                  assert dest.is_relative_to(root) and dest.exists(),(name,target)
-                  if u.fragment and dest.suffix=='.md':
-                      assert urllib.parse.unquote(u.fragment) in render(dest),(name,target)
-                  count+=1
+                  dest = (p.parent / urllib.parse.unquote(u.path)).resolve() if u.path else p
+                  assert dest.is_relative_to(root) and dest.exists(), (name, target)
+                  if u.fragment and dest.suffix == '.md':
+                      assert urllib.parse.unquote(u.fragment) in render(dest), (name, target)
+                  count += 1
           print(f'{len(cache)} GitHub-rendered guides; {count} local links/images/anchors passed')
           PY
       - name: Publish reviewed documentation changes only

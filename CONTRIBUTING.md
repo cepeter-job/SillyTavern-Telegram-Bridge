@@ -96,6 +96,18 @@ belong in `docs/installation.md`; configuration tables and operational runbooks
 have separate owners. Link to detailed guidance instead of maintaining several
 copies. Keep relative links and heading anchors valid when moving sections.
 
+For each procedure, tell the reader where to run it, what they need beforehand,
+what to enter and what success looks like. Put recovery instructions next to
+steps that can fail. Mark examples and placeholders explicitly. Prefer one
+recommended starting path to several competing quick starts, and keep destructive
+actions visibly separate from routine troubleshooting.
+
+Use plain explanations before internal terms: for example, say "saved reply"
+before discussing a committed delivery, and explain that a stale form needs a
+fresh review. Keep real button labels, error messages, limits and safety warnings
+exact. A more natural tone must not weaken an important restriction or imply a
+feature is available when it is not.
+
 Verify behavior against source and the executable command catalog. Distinguish
 current behavior, examples, estimates and proposed features. Document additional
 model calls when they affect a user's choice. Use generic public values and keep

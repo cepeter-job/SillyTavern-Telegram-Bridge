@@ -7,6 +7,11 @@ Open **Manage → Advanced settings → Usage** in the Mini App. Choose **Last
 24 hours**, **Last 7 days**, or **Last 30 days**, and **Current session** or
 **All my sessions**. Refresh after a request completes to see new activity.
 
+This page helps you understand which models and helper tasks are using tokens.
+A token is a unit of text used by a model; it is not always a whole word. The
+tracker shows what providers reported to the bridge, not a bill or your remaining
+subscription allowance. Use your provider's account page for billing.
+
 ## Reading the numbers
 
 The tracker records **provider-reported token counts**. The estimates in
@@ -35,9 +40,32 @@ Charts use UTC with a rolling time window, so the first calendar day may be
 partial. Totals are not provider invoices, prices, subscription limits or remaining
 quota. No money amounts or billing estimates are generated.
 
+### A worked example
+
+Suppose a provider reports **1,000 input tokens**, including **600 cached input
+tokens**, and **200 output tokens**, including **50 reasoning tokens**. The total
+is **1,200**, not 1,850. Cached input is already inside Input, and reasoning is
+already inside Output. This example explains the counters; it does not imply a
+price or that every provider reports both details.
+
+If output usage is missing, a dash means **unknown**, not free. A partially
+reported request can contribute its known input count while still lowering
+Fully reported coverage. Do not compare a partially reported total with an
+invoice as though every token had been counted.
+
+### Why a short reply can use many tokens
+
+Input can include the character card, instructions, lore and earlier messages,
+not just the message you typed. Choices, summaries, image-prompt preparation and
+Director work can add their own requests. Use the task breakdown and
+[model-call guide](user-guide.md#model-calls-and-token-use) to see which feature
+is responsible before changing settings.
+
 ## What is covered
 
-Tracking starts only after a bridge version containing the usage ledger is installed and restarted. Existing conversations do not contain historical provider usage, so there is no backfill.
+Tracking starts after a bridge version with usage tracking is installed and
+restarted. Old messages do not contain the provider's original counters, so the
+bridge cannot reconstruct historical usage from them.
 
 Covered session-owned calls include ordinary stories, edited and image replies,
 regeneration/continuation, response-language rendering, Humanizer, Light Novel
@@ -59,8 +87,9 @@ the bridge does not silently retry the story or estimate them.
 
 ## Privacy and retention
 
-The SQLite ledger stores session identity, model, task, completion time, status,
-duration and optional numeric counters. It does **not** store prompts, response
+The local SQLite database stores a usage record with the session, model, task,
+completion time, status, duration and any available numeric counters. It does
+**not** store prompts, response
 text, credentials, provider URLs or upstream request identifiers. Query scope is
 derived from signed Telegram identity, not a client-supplied chat ID. All-session
 reports remain within that private chat.
@@ -80,8 +109,9 @@ deleting migration records. See [backup and restore](operations.md#database-migr
 
 ### Director calls
 
-Canonical planning is recorded under `director`; committed-story reconciliation
-uses `director_reconcile`. An automatic reassessment runs only when an event or
+Scene planning appears under `director`. Updating the helper record to match
+saved story messages appears under `director_reconcile`. An automatic
+reassessment runs only when an event or
 cadence requires it. A malformed version-1 proposal may get one repair request; an
 unsupported schema version is rejected without repair. Those requests remain
 visible as actual usage, not a fabricated billing amount.

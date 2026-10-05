@@ -296,7 +296,7 @@ def source_is_valid(db: sqlite3.Connection, source: MemorySource) -> bool:
     )
 
 
-def store_segment(db: sqlite3.Connection, source: MemorySource) -> bool:
+def store_segment(db: sqlite3.Connection, source: MemorySource, *, advance_coverage: bool = True) -> bool:
     with write_transaction(db):
         if not source_is_valid(db, source):
             return False
@@ -319,7 +319,7 @@ def store_segment(db: sqlite3.Connection, source: MemorySource) -> bool:
             ),
         )
         row = db.execute("SELECT length(content) FROM messages WHERE id=?", (source.end_id,)).fetchone()
-        if row and row[0] == source.end_offset:
+        if advance_coverage and row and row[0] == source.end_offset:
             db.execute(
                 "UPDATE memory_layer_state SET covered_id=MAX(covered_id,?) WHERE chat_id=? AND session_id=? "
                 "AND session_created_at=? AND layer=?",

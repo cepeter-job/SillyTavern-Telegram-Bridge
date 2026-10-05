@@ -15,6 +15,7 @@ from settings_test_support import make_test_settings
 from bridge.application_composition import initialize_extensions
 from bridge.delivery_port import DeliveryPort
 from bridge.input_flow_service import InputFlowService
+from bridge.memory_contracts import MemoryBlock
 from bridge.memory_service import MemoryService
 from bridge.model_router import ModelRouter
 from bridge.npc_service import NpcService
@@ -106,8 +107,12 @@ def make_test_provider_port(*, generate_backend=None) -> ProviderPort:
 def make_test_memory_service(*, purge_session_memory=None) -> MemoryService:
     """Return an explicit MemoryService for tests that do not compose startup."""
     return MemoryService(
-        recall_context=lambda *_args, **_kwargs: "",
-        summary_for_prompt=lambda *_args, **_kwargs: "",
+        resolve_scope=lambda *_args, **_kwargs: None,
+        scoped_recall=lambda *_args, **_kwargs: MemoryBlock(),
+        scoped_episodes=lambda *_args, **_kwargs: MemoryBlock(),
+        scoped_summary=lambda *_args, **_kwargs: MemoryBlock(),
+        scoped_scene=lambda *_args, **_kwargs: MemoryBlock(),
+        validate_blocks=lambda _db, _scope, blocks: blocks,
         summary_state=lambda *_args, **_kwargs: ("", 0),
         retain_session=lambda *_args, **_kwargs: None,
         purge_session_memory=(

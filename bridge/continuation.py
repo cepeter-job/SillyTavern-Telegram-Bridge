@@ -117,6 +117,8 @@ def continue_last(
         fields,
         instruction,
         history_rows,
+        through_rowid=memory_prompt.scope.through_rowid if memory_prompt.scope else None,
+        memory_scope=memory_prompt.scope,
     )
     messages = build_chat_messages(
         session,
@@ -127,6 +129,7 @@ def continue_last(
         episodic_context=memory_prompt.episodic,
         npc_context=npc_context,
         session_summary=memory_prompt.summary,
+        scene_context=memory_prompt.scene,
         narrative_context=narrative_context_for_session(db, chat_id, session_id, "story"),
         persona_service=persona_service,
         rag_context=rag_service.context_for_prompt(db, chat_id, instruction, rag_bundle),

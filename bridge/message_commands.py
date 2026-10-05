@@ -224,6 +224,8 @@ def generate_and_store_reply(
         fields,
         text,
         history_rows,
+        through_rowid=memory_prompt.scope.through_rowid if memory_prompt.scope else None,
+        memory_scope=memory_prompt.scope,
     )
     context_stats: dict[str, object] = {}
     try:
@@ -238,6 +240,7 @@ def generate_and_store_reply(
             episodic_context=episodic_context,
             npc_context=npc_context,
             session_summary=session_summary,
+            scene_context=memory_prompt.scene,
             rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
             group_context=group_context,
             narrative_context=narrative_context_for_session(db, chat_id, session_id, "story"),

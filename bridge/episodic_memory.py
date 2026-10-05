@@ -8,7 +8,6 @@ recalled later.
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
 import time
 
@@ -69,28 +68,22 @@ def store_episodic_memory(
     normalized = _normalized_summary(summary)
     existing = db.execute(
         """
-        SELECT m.memory_id,m.summary,COALESCE(v.visibility,'shared'),COALESCE(v.known_by_json,'[]')
+        SELECT m.memory_id,m.summary,COALESCE(v.visibility,'shared'),COALESCE(v.known_by_json,'[]'),
+               m.source_start_rowid,m.source_end_rowid
         FROM episodic_memories AS m
         LEFT JOIN episodic_memory_visibility AS v ON v.memory_id=m.memory_id
         WHERE m.chat_id=? AND m.session_id=? AND m.kind=?
         """,
         (chat_id, session_id, kind),
     ).fetchall()
-    for memory_id, existing_summary, _existing_visibility, existing_known_by in existing:
-        if _normalized_summary(existing_summary) != normalized:
-            continue
-        if mode == "restricted":
-            current_names = _decode_known_by(existing_known_by)
-            merged = _normalize_known_by((*current_names, *names))
-            db.execute(
-                """
-                INSERT OR REPLACE INTO episodic_memory_visibility(
-                    memory_id,chat_id,session_id,visibility,known_by_json
-                ) VALUES(?,?,?,?,?)
-                """,
-                (int(memory_id), chat_id, session_id, "restricted", json.dumps(merged, ensure_ascii=False)),
-            )
-        return False
+    for _memory_id, existing_summary, existing_visibility, existing_known_by, start, end in existing:
+        if (
+            _normalized_summary(existing_summary) == normalized
+            and (start, end) == (source_start_rowid, source_end_rowid)
+            and existing_visibility == mode
+            and {name.casefold() for name in _decode_known_by(existing_known_by)} == {name.casefold() for name in names}
+        ):
+            return False
     cursor = db.execute(
         """
         INSERT INTO episodic_memories(
@@ -168,51 +161,6 @@ def purge_episodic_memories(db: sqlite3.Connection, chat_id: str, session_id: st
     return len(memory_ids)
 
 
-_QUERY_STOPWORDS = frozenset(
-    {
-        "a",
-        "an",
-        "and",
-        "are",
-        "at",
-        "for",
-        "from",
-        "has",
-        "have",
-        "how",
-        "in",
-        "into",
-        "is",
-        "it",
-        "its",
-        "of",
-        "on",
-        "that",
-        "the",
-        "this",
-        "to",
-        "was",
-        "were",
-        "what",
-        "when",
-        "where",
-        "who",
-        "why",
-        "with",
-        "you",
-        "your",
-    }
-)
-
-
-def _relevance_terms(value: str) -> set[str]:
-    return {
-        token
-        for token in re.findall(r"[A-Za-z0-9_'-]+", str(value or "").casefold(), flags=re.UNICODE)
-        if len(token) >= 2 and token not in _QUERY_STOPWORDS
-    }
-
-
 def episodic_context_for_prompt(
     db: sqlite3.Connection,
     chat_id: str,
@@ -223,49 +171,7 @@ def episodic_context_for_prompt(
     limit: int = 6,
     max_chars: int = EPISODIC_CONTEXT_MAX_CHARS,
 ) -> str:
-    query_terms = _relevance_terms(query)
-    if not query_terms or limit <= 0 or max_chars <= 0:
-        return ""
-    rows = db.execute(
-        """
-        SELECT m.memory_id,m.kind,m.importance,m.summary,m.source_end_rowid,
-               COALESCE(v.visibility,'shared'),COALESCE(v.known_by_json,'[]')
-        FROM episodic_memories AS m
-        LEFT JOIN episodic_memory_visibility AS v ON v.memory_id=m.memory_id
-        WHERE m.chat_id=? AND m.session_id=?
-        ORDER BY m.memory_id DESC
-        LIMIT 200
-        """,
-        (chat_id, session["session_id"]),
-    ).fetchall()
-    ranked = []
-    active_character = str(_fields.get("name") or "").strip().casefold()
-    for memory_id, kind, importance, summary, source_end_rowid, visibility, known_by_json in rows:
-        if str(visibility).casefold() == "restricted":
-            allowed = {name.casefold() for name in _decode_known_by(known_by_json)}
-            if not active_character or active_character not in allowed:
-                continue
-        overlap = len(query_terms & _relevance_terms(summary))
-        if overlap <= 0:
-            continue
-        ranked.append(
-            (
-                overlap,
-                float(importance),
-                int(source_end_rowid),
-                int(memory_id),
-                str(kind),
-                str(summary),
-            )
-        )
-    ranked.sort(key=lambda item: item[:4], reverse=True)
-    lines: list[str] = []
-    length = 0
-    for _overlap, _importance, _rowid, _memory_id, kind, summary in ranked[:limit]:
-        line = f"[{kind}] {summary.strip()}"
-        projected = length + len(line) + (1 if lines else 0)
-        if projected > max_chars:
-            break
-        lines.append(line)
-        length = projected
-    return "\n".join(lines)
+    from bridge.memory_scope_store import read_episodic_block, resolve_memory_scope
+
+    scope = resolve_memory_scope(db, chat_id, session, _fields)
+    return read_episodic_block(db, scope, query, limit=limit, max_chars=max_chars).text if scope else ""

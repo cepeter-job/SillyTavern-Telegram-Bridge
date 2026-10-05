@@ -6,17 +6,19 @@ import bridge.model_selection as _owner_model_selection
 
 ensure_application_extensions()
 
+import json
 import tempfile
 import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import bridge.main as _m_main
 import bridge.memory_curator as _m_memory_curator
 import bridge.message_commands as _m_message_commands
 import bridge.scene_state as _m_scene_state
 import bridge.session_naming as _m_session_naming
+from bridge.memory_artifact_store import read_scene_block
+from bridge.memory_scope_store import resolve_memory_scope
 
 
 class SceneStateEngineTests(SettingsTestCase):
@@ -52,16 +54,28 @@ class SceneStateEngineTests(SettingsTestCase):
         )
         self.db.commit()
 
-    def test_refresh_uses_utility_model_and_injects_state_into_continuity(self):
+    def test_refresh_uses_utility_model_and_supplies_classified_scene_channel(self):
         self._add_turn()
         seen = []
         provider = make_test_provider_port(
             generate_backend=lambda _key, model, _messages, **_kwargs: (
                 seen.append(model)
-                or (
-                    '{"location":"Central station","weather":"heavy rain",'
-                    '"participants":{"Mira":{"clothing":"blue coat","holding":"red umbrella"}},'
-                    '"facts":["The group just arrived."]}'
+                or json.dumps(
+                    {
+                        "state": {
+                            "location": "Central station",
+                            "weather": "heavy rain",
+                            "participants": {"Mira": {"clothing": "blue coat", "holding": "red umbrella"}},
+                            "facts": ["The group just arrived."],
+                        },
+                        "blocks": [
+                            {
+                                "text": "Mira holds a red umbrella at Central station in heavy rain.",
+                                "visibility": "shared",
+                                "known_by": [],
+                            }
+                        ],
+                    }
                 )
             )
         )
@@ -74,13 +88,12 @@ class SceneStateEngineTests(SettingsTestCase):
             provider_port=provider,
             app_settings=self.app_settings_builder.build(),
         )
-        prompt_state = _m_main.session_summary_for_prompt(
-            self.db, "chat", self.session, provider_port=provider, app_settings=self.app_settings_builder.build()
-        )
+        scope = resolve_memory_scope(self.db, "chat", self.session, {"name": "Mira"})
+        prompt_state = read_scene_block(self.db, scope).text
 
         self.assertEqual(seen, ["utility::model"])
         self.assertEqual(state["location"], "Central station")
-        self.assertIn("Structured current scene state", prompt_state)
+        self.assertIn("Central station", prompt_state)
         self.assertIn("red umbrella", prompt_state)
 
     def test_parser_rejects_unknown_top_level_keys(self):
@@ -147,7 +160,12 @@ class SceneStateEngineTests(SettingsTestCase):
         def fake_generate(_key, _model, _messages, **_kwargs):
             self.assertFalse(self.db.in_transaction)
             calls.append("generate")
-            return '{"location":"Candidate station"}'
+            return json.dumps(
+                {
+                    "state": {"location": "Candidate station"},
+                    "blocks": [{"text": "Candidate station", "visibility": "shared", "known_by": []}],
+                }
+            )
 
         def reject_stale(
             db,

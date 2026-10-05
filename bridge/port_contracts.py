@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable, Mapping
-from typing import Any, ParamSpec, Protocol, TypeVar
+from typing import Any, Literal, ParamSpec, Protocol, TypeVar
 
+from bridge.memory_contracts import MemoryBlock, MemoryReadScope
 from bridge.provider_errors import ProviderRequestError
 from bridge.provider_health_values import HealthAttempt, HealthSnapshot, HealthTransition
 from bridge.request_types import PreparedMessage, RequestContext
@@ -281,3 +282,32 @@ class DeleteSession(Protocol):
         active_session_id: str,
         operation_id: int | str | None = None,
     ) -> tuple[bool, str]: ...
+
+
+class ResolveMemoryScope(Protocol):
+    def __call__(
+        self,
+        db: sqlite3.Connection,
+        chat_id: str,
+        session: dict[str, str],
+        fields: dict[str, str],
+        *,
+        through_rowid: int | None = None,
+        principals: tuple[str, ...] | None = None,
+        consumer: Literal["character", "narrator"] = "character",
+        historical: bool | None = None,
+    ) -> MemoryReadScope | None: ...
+
+
+class ScopedRecall(Protocol):
+    def __call__(self, db: sqlite3.Connection, scope: MemoryReadScope, query: str) -> MemoryBlock: ...
+
+
+class ScopedRead(Protocol):
+    def __call__(self, db: sqlite3.Connection, scope: MemoryReadScope) -> MemoryBlock: ...
+
+
+class ValidateMemoryBlocks(Protocol):
+    def __call__(
+        self, db: sqlite3.Connection, scope: MemoryReadScope, blocks: tuple[MemoryBlock, ...]
+    ) -> tuple[MemoryBlock, ...]: ...

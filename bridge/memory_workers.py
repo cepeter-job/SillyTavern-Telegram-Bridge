@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 
 from bridge import memory_backend
 from bridge.card_content import card_fields_from_file
 from bridge.episodic_extraction import extract_episodic_memories_result
+from bridge.memory_fact_store import index_fact_is_current
 from bridge.memory_store import (
     acknowledge_job,
     claim_jobs,
@@ -48,6 +50,76 @@ def _claim_current(db, claim):
     )
 
 
+def _retire_fact_document(db, document_id):
+    db.execute("UPDATE memory_fact_index SET state='retired' WHERE document_id=?", (document_id,))
+    db.execute(
+        "INSERT INTO memory_retired_documents(chat_id,session_id,document_id) "
+        "SELECT chat_id,session_id,document_id FROM memory_fact_index WHERE document_id=? "
+        "ON CONFLICT(chat_id,session_id,document_id) DO UPDATE SET deleted=0,next_attempt_at=0",
+        (document_id,),
+    )
+
+
+def _run_fact_index(db, claim, fields, *, app_settings):
+    """Reserve native-fact progress before raw archival work, within the shared call budget."""
+    rows = db.execute(
+        "SELECT document_id FROM memory_fact_index WHERE chat_id=? AND session_id=? "
+        "AND session_created_at=? AND state='pending' ORDER BY created_at,document_id LIMIT 4",
+        (claim.chat_id, claim.session_id, claim.session_created_at),
+    ).fetchall()
+    calls = 0
+    for (document_id,) in rows:
+        with memory_backend.hindsight_session_lock(claim.chat_id, claim.session_id):
+            with write_transaction(db):
+                if not _claim_current(db, claim):
+                    return "stale_source", calls
+                db.execute(
+                    "UPDATE memory_jobs SET lease_deadline=? WHERE lease_token=?", (time.time() + 900, claim.token)
+                )
+                fact = index_fact_is_current(db, document_id)
+                if fact is None:
+                    _retire_fact_document(db, document_id)
+                    continue
+            if memory_backend.memory_mode(db, claim.chat_id) != "on":
+                return "disabled", calls
+            calls += 1
+            retained = memory_backend._retain_with_client(
+                claim.chat_id,
+                claim.session_id,
+                document_id,
+                fields.get("name", "Story"),
+                fact.fact.summary,
+                "Locally accepted native story fact; audience is enforced by SQLite",
+                "native_fact",
+                "Hindsight native fact retain unavailable for chat %s",
+                app_settings=app_settings,
+            )
+            with write_transaction(db):
+                if (
+                    not _claim_current(db, claim)
+                    or index_fact_is_current(db, document_id) is None
+                    or memory_backend.memory_mode(db, claim.chat_id) != "on"
+                ):
+                    _retire_fact_document(db, document_id)
+                    return "stale_source", calls
+                if not retained:
+                    db.execute(
+                        "UPDATE memory_fact_index SET last_error='retain_failed' WHERE document_id=?",
+                        (document_id,),
+                    )
+                    return "retain_failed", calls
+                db.execute(
+                    "UPDATE memory_fact_index SET state='retained',last_error='' WHERE document_id=?",
+                    (document_id,),
+                )
+                db.execute(
+                    "INSERT OR REPLACE INTO hindsight_documents(chat_id,session_id,document_id,kind,created_at) "
+                    "VALUES(?,?,?,'native_fact',?)",
+                    (claim.chat_id, claim.session_id, document_id, time.time()),
+                )
+    return "complete", calls
+
+
 def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_settings):
     if db.in_transaction:
         raise RuntimeError("Memory workers require a committed source")
@@ -68,7 +140,13 @@ def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_sett
                     ):
                         fail_job(db, claim, "work_failed")
                         return "work_failed"
-            for _ in range(MAX_SEGMENTS_PER_RUN):
+            fact_calls = 0
+            if claim.layer == "hindsight":
+                result, fact_calls = _run_fact_index(db, claim, fields, app_settings=app_settings)
+                if result != "complete":
+                    fail_job(db, claim, result)
+                    return result
+            for _ in range(MAX_SEGMENTS_PER_RUN - fact_calls):
                 source = next_source_segment(
                     db, claim.chat_id, claim.session_id, claim.layer, through_id=claim.target_id
                 )
@@ -114,12 +192,15 @@ def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_sett
                             source_end_rowid=source.end_id,
                             provider_port=provider_port,
                             app_settings=app_settings,
-                            source_valid=lambda captured=source: source_is_valid(db, captured),
+                            source_valid=lambda captured=source: (
+                                _claim_current(db, claim) and source_is_valid(db, captured)
+                            ),
+                            source_ref=source,
                         )
                         if extraction.status != "complete":
                             result = "stale_source"
                             break
-                    if not store_segment(db, source):
+                    if claim.layer == "hindsight" and not store_segment(db, source):
                         result = "stale_source"
                         break
             else:
@@ -129,6 +210,16 @@ def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_sett
                     is None
                     else "deferred"
                 )
+            if (
+                claim.layer == "hindsight"
+                and result == "complete"
+                and db.execute(
+                    "SELECT 1 FROM memory_fact_index WHERE chat_id=? AND session_id=? AND session_created_at=? "
+                    "AND state='pending' LIMIT 1",
+                    (claim.chat_id, claim.session_id, claim.session_created_at),
+                ).fetchone()
+            ):
+                result = "deferred"
         else:
             result = _run_derived_layer(
                 db, claim, session, fields, provider_port=provider_port, app_settings=app_settings
@@ -263,6 +354,54 @@ def _memory_worker(services, claim):
         db.close()
 
 
+def _retired_memory_worker(services, chat_id, session_id, token):
+    db = services.db_factory()
+    try:
+        memory_backend.cleanup_retired_memory_documents(
+            db,
+            chat_id,
+            session_id,
+            app_settings=services.config,
+            lease_token=token,
+        )
+    finally:
+        with write_transaction(db):
+            db.execute(
+                "UPDATE memory_retired_documents SET lease_token='',lease_deadline=0 WHERE lease_token=?",
+                (token,),
+            )
+        db.close()
+
+
+def _dispatch_retirement(services, db):
+    now = time.time()
+    token = uuid.uuid4().hex
+    with write_transaction(db):
+        row = db.execute(
+            "SELECT chat_id,session_id FROM memory_retired_documents r WHERE deleted=0 AND lease_token='' "
+            "AND next_attempt_at<=? AND COALESCE((SELECT value FROM meta "
+            "WHERE key='memory_mode:'||r.chat_id),'on')='on' "
+            "ORDER BY next_attempt_at,attempts,chat_id,session_id LIMIT 1",
+            (now,),
+        ).fetchone()
+        if row is None:
+            return None
+        db.execute(
+            "UPDATE memory_retired_documents SET lease_token=?,lease_deadline=? WHERE rowid IN ("
+            "SELECT rowid FROM memory_retired_documents WHERE chat_id=? AND session_id=? AND deleted=0 "
+            "AND lease_token='' AND next_attempt_at<=? ORDER BY document_id LIMIT 16)",
+            (token, now + 900, *row, now),
+        )
+    if services.background.submit("hindsight_retain", _retired_memory_worker, services, row[0], row[1], token):
+        return 1
+    with write_transaction(db):
+        db.execute(
+            "UPDATE memory_retired_documents SET lease_token='',lease_deadline=0,next_attempt_at=? WHERE lease_token=?",
+            (now + 5, token),
+        )
+    return 0
+
+
 def dispatch_memory_backlog(services, db, *, startup=False):
     if startup:
         # One runtime owns the process; startup recovers interrupted claims.
@@ -270,9 +409,19 @@ def dispatch_memory_backlog(services, db, *, startup=False):
             db.execute("UPDATE memory_jobs SET lease_token='',lease_deadline=0 WHERE lease_token<>''")
     else:
         recover_expired_jobs(db)
+    with write_transaction(db):
+        db.execute(
+            "UPDATE memory_retired_documents SET lease_token='',lease_deadline=0 "
+            "WHERE lease_token<>'' AND (? OR lease_deadline<=?)",
+            (int(startup), time.time()),
+        )
     active = db.execute("SELECT count(*) FROM memory_jobs WHERE lease_token<>''").fetchone()[0]
-    if active >= MAX_ACTIVE_CLAIMS:
+    retired_active = db.execute("SELECT 1 FROM memory_retired_documents WHERE lease_token<>'' LIMIT 1").fetchone()
+    if active >= MAX_ACTIVE_CLAIMS or retired_active:
         return 0
+    retirement = _dispatch_retirement(services, db)
+    if retirement is not None:
+        return retirement
     enabled = db.execute(
         "SELECT DISTINCT layer FROM memory_jobs WHERE layer NOT IN ('hindsight','curator') OR "
         "COALESCE((SELECT value FROM meta WHERE key='memory_mode:' || memory_jobs.chat_id),'on')='on'"

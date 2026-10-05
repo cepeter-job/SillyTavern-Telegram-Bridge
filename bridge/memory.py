@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 import time
@@ -9,8 +10,6 @@ from functools import partial as _partial
 
 from bridge.background import submit_background
 from bridge.delivery_port import DeliveryPort
-from bridge.episodic_extraction import extract_episodic_memories
-from bridge.extension_registry import apply_summary_context_hooks as _apply_summary_context_hooks
 from bridge.extension_registry import run_post_retain_hooks as _run_post_retain_hooks
 from bridge.extension_registry import run_summary_clear_hooks as _run_summary_clear_hooks
 from bridge.generation_settings import get_generation_settings
@@ -19,8 +18,14 @@ from bridge.limits import (
     SUMMARY_MAX_CHARS,
     SUMMARY_MAX_OUTPUT_TOKENS,
     SUMMARY_RECENT_MESSAGES,
-    SUMMARY_TRIGGER_MESSAGES,
     SUMMARY_UPDATE_INTERVAL,
+)
+from bridge.memory_artifact_store import (
+    parse_classified_blocks,
+    parse_classified_response,
+    previous_classified_artifact,
+    read_summary_block,
+    store_artifact_visibility,
 )
 from bridge.memory_backend import (
     _memory_hindsight_conversation_snapshot,
@@ -45,6 +50,7 @@ from bridge.memory_backend import hindsight_tags as hindsight_tags
 from bridge.memory_backend import memory_recall_filter as memory_recall_filter
 from bridge.memory_backend import recall_memory_context as recall_memory_context
 from bridge.memory_backend import remember_fact as remember_fact
+from bridge.memory_scope_store import resolve_memory_scope
 from bridge.memory_store import enqueue_memory
 from bridge.metadata import set_meta
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
@@ -268,6 +274,9 @@ def generate_session_summary_result(
     if not rows:
         return SessionSummaryResult("", 0, True)
     existing, covered_until = get_session_summary(db, chat_id, session["session_id"])
+    classified_previous = previous_classified_artifact(db, chat_id, session["session_id"], "summary")
+    if not classified_previous:
+        covered_until = 0
     stable_rows = rows if force else rows[:-SUMMARY_RECENT_MESSAGES]
     if not stable_rows:
         return SessionSummaryResult(existing, covered_until, True)
@@ -291,7 +300,7 @@ def generate_session_summary_result(
     )
     summary = existing
     completed_covered = covered_until
-    previous = "" if force and not durable else existing
+    previous = "" if force and not durable else classified_previous
     processed_segments = 0
     while pending:
         if max_segments is not None and processed_segments >= max_segments:
@@ -331,8 +340,12 @@ def generate_session_summary_result(
                     "You compress a fictional roleplay chat for future continuity. Preserve "
                     "current location, characters, relationships, established facts, goals, "
                     "unresolved hooks, tone, and the latest scene state. Do not invent facts, "
-                    "do not give advice, and do not include meta commentary. Output only a "
-                    "concise continuity summary."
+                    "do not give advice, and do not include meta commentary. Return a JSON object with blocks. "
+                    "Each block has text, visibility (shared or restricted), and known_by (character names). "
+                    "Classify explicitly: shared means established public knowledge; restricted lists only actual "
+                    "knowers. Split public continuity from private facts. Preserve prior audiences unless the "
+                    "new transcript explicitly establishes additional knowledge. Never infer that all present "
+                    "characters know a private thought or off-screen event."
                 ),
             },
             {"role": "user", "content": f"{prompt_prefix}\n\n{source}"},
@@ -348,8 +361,12 @@ def generate_session_summary_result(
                     session_id=f"summary:{chat_id}:{session['session_id']}",
                     settings=settings,
                 )
-                .strip()[:SUMMARY_MAX_CHARS]
+                .strip()
             )
+            classified = parse_classified_blocks(parse_classified_response(produced))
+            produced = "\n".join(item["text"] for item in classified)
+            if len(produced) > SUMMARY_MAX_CHARS:
+                raise ValueError("Classified summary exceeds its output bound")
         except Exception:
             logging.warning(
                 "Session summary generation failed for %s/%s", chat_id, session["session_id"], exc_info=True
@@ -366,26 +383,11 @@ def generate_session_summary_result(
                 "(chat_id,session_id,summary,covered_until_rowid,updated_at) VALUES(?,?,?,?,?)",
                 (chat_id, session["session_id"], produced, completed_rowid, time.time()),
             )
+            store_artifact_visibility(db, chat_id, session["session_id"], "summary", classified)
             source_snapshot = _summary_generation_snapshot(db, chat_id, session["session_id"])
-        summary = previous = produced
+        summary = produced
+        previous = json.dumps({"blocks": classified}, ensure_ascii=False)
         completed_covered = completed_rowid
-        if not force and not durable:
-            try:
-                extract_episodic_memories(
-                    db,
-                    chat_id,
-                    session,
-                    source_text="\n".join(rendered),
-                    source_start_rowid=int(segment[0][0]),
-                    source_end_rowid=completed_rowid,
-                    expected_source=(source_snapshot[0], source_snapshot[1], source_snapshot[2]),
-                    provider_port=provider_port,
-                    app_settings=app_settings,
-                )
-            except Exception:
-                logging.warning(
-                    "Episodic memory extraction failed for %s/%s", chat_id, session["session_id"], exc_info=True
-                )
         pending = pending[len(segment) :]
         processed_segments += 1
     if _summary_generation_snapshot(db, chat_id, session["session_id"]) != source_snapshot:
@@ -400,11 +402,9 @@ def session_summary_for_prompt(
     *,
     provider_port: ProviderPort,
     app_settings: AppSettings,
+    fields: dict[str, str] | None = None,
+    through_rowid: int | None = None,
 ) -> str:
-    summary, _covered_until = get_session_summary(db, chat_id, session["session_id"])
-    count = db.execute(
-        "SELECT COUNT(*) FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"])
-    ).fetchone()[0]
-    if count >= SUMMARY_TRIGGER_MESSAGES:
-        summary = generate_session_summary(db, chat_id, session, provider_port=provider_port, app_settings=app_settings)
-    return _apply_summary_context_hooks(summary, db, chat_id, session)
+    """Read-only compatibility adapter; an unidentified character has no authority."""
+    scope = resolve_memory_scope(db, chat_id, session, fields or {}, through_rowid=through_rowid)
+    return read_summary_block(db, scope).text if scope else ""

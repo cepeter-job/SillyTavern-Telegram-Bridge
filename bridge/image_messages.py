@@ -91,6 +91,8 @@ def process_image_message(
         fields,
         caption,
         history_rows,
+        through_rowid=memory_prompt.scope.through_rowid if memory_prompt.scope else None,
+        memory_scope=memory_prompt.scope,
     )
     messages = build_chat_messages(
         session,
@@ -102,6 +104,7 @@ def process_image_message(
         episodic_context=episodic_context,
         npc_context=npc_context,
         session_summary=session_summary,
+        scene_context=memory_prompt.scene,
         rag_context=rag_service.context_for_prompt(db, chat_id, caption, rag_bundle),
         group_context=group_context,
         persona_service=persona_service,

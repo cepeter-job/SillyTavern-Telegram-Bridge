@@ -53,10 +53,20 @@ is also bounded by source and reader scope.
 
 ## Forward migrations and backfill
 
-The implementation preserves the existing dependency/storage choices and
-migration history through migration 23. Opening an isolated older database
-uses the ordinary forward migrations; the evaluator creates a new temporary
-database through the production database factory.
+The implementation preserves the existing dependency/storage choices and all
+applied migration history through migration 23. Forward migration 24 adds the
+raw archival attempt ledger and document/due-work indexes. Opening an isolated
+older database uses the ordinary forward migrations; the evaluator creates a
+new temporary database through the production database factory.
+
+Migration 24 conservatively seeds one unfinished legacy watch per recorded raw
+identity from Hindsight source segments or explicit source_segment mappings.
+Accepted, pending and invalid recorded segments are included. A mapping without
+a source segment supplies no proven incarnation; its incarnation and dispatch
+time remain unknown. These records prove an identity was recorded, not that a
+historical request was dispatched, is active or finished. Unrecorded identities
+cannot be reconstructed. This one-time backfill is linear in recorded raw IDs;
+it does not change canonical history, accepted coverage or purge floors.
 
 Existing unclassified artifacts are fail-closed for character prompt authority.
 Backfill/replay runs through the durable layer jobs and accepted canonical
@@ -75,11 +85,15 @@ They are synthetic transport annotations, not a recommended story format.
 
 ## Recovery and lifecycle operations
 
-Worker admission is bounded to one active memory claim, with at most eight
-source/external calls per run. Native fact indexes reserve part of the Hindsight
-call budget. Claims carry lease ownership, accepted target, incarnation,
-rewrite identity and purge epoch. Failure uses bounded retry delay rather than
-busy looping. Pending jobs and private drafts survive process restart.
+Worker admission is bounded to one active memory claim. Extraction, raw
+archival and native index work use the existing eight-source/external-call
+allowance per run; native fact indexes reserve part of the Hindsight allowance.
+Retirement cleanup has a separate batch of at most 16 document deletions, and
+raw recovery inspects at most 16 due attempt rows per invocation. Eight is not
+a combined ingestion-plus-cleanup API-call bound. Claims carry lease ownership,
+accepted target, incarnation, rewrite identity and purge epoch. Failure uses
+bounded retry delay rather than busy looping. Pending jobs and private drafts
+survive process restart.
 
 An expired lease can be recovered; an active lease must not be stolen. Startup
 recovery assumes one owning application runtime. External retain can succeed
@@ -87,14 +101,44 @@ before a local acknowledgment is lost. Retrying the same deterministic document
 ID replaces the external document and commits a current local acknowledgment.
 It must not re-extract a still-valid native fact merely to repeat its index call.
 
-Raw archival attempts are also durable before dispatch. A pending raw part uses
-segment validity 2, while accepted source/offset readers require validity 1;
-reservation does not advance successful coverage. Current failed attempts reuse
-the same identity, including after an unrelated suffix rewrite. Raw source and
-mapping acceptance are atomic after source, ownership, mode and incarnation
-checks. Stale or uncertain late completion reopens authoritative retirement,
-even if an earlier cleanup already succeeded. Both durable workers and manual
-alternate-session seeding use this protocol.
+Each actual raw retain gets a unique durable attempt token in the same short
+transaction as its source reservation, before the remote call. A pending raw
+part uses segment validity 2, while accepted source/offset readers require
+validity 1; reservation does not advance successful coverage. Current failed
+attempts reuse the deterministic document ID, including after an unrelated
+suffix rewrite, but each dispatch owns a separate token.
+
+A positive synchronous retain result is committed as known completion before
+the source acceptance or stale-retirement transaction. Successful source,
+coverage, mapping and owned-token resolution remain atomic after the existing
+source, claim, mode and incarnation checks. Failed reopening or process loss
+therefore leaves an independently discoverable obligation. Completion of a
+successor cannot remove an older request's token. A timeout, failed transport,
+expired lease or lost process is not proof that the upstream request stopped.
+
+Startup/ordinary dispatch, manual seed and direct cleanup reconcile bounded
+due batches without requiring a surviving session, job or pending source.
+Current accepted/pending exact-incarnation sources remain protected. Stale or
+orphan attempts reopen retirement even after an earlier successful deletion.
+Known completion can be reclaimed atomically with that reconciliation.
+
+Before each remote DELETE, cleanup records whether any raw attempt was
+outstanding. Its local acknowledgment may finish retirement only when none was
+outstanding at DELETE start, none remains at acknowledgment, and the cleanup
+lease still belongs to that caller. This prevents an older DELETE response from
+erasing a later retain/reopening. Unfinished watches use a 300-second retry
+interval; a due ordinary claim gets a turn between recurring-watch batches.
+Future watch debt does not prevent fresh valid source work from progressing.
+
+Ordinary successful new attempts add an intent INSERT in the reservation
+transaction, one short known-completion commit and an owned-token DELETE in
+finalization. They leave no recurring watch unless an older or legacy
+uncertainty exists. Ambiguous or legacy attempts have no automatic expiry:
+per-poll work is bounded, but cumulative metadata and lifetime deletion traffic
+are not hard-bounded. Arbitrarily delayed upstream writes can recreate an old
+object between cleanup opportunities. Continued removal requires enabled
+memory, future cleanup opportunities and a functioning provider; local source
+authority remains denied throughout.
 
 Edits, regeneration, deletes and moves invalidate affected suffix authority and
 journal source rewrites. An unrelated later mutation preserves accepted earlier
@@ -125,8 +169,12 @@ authorization in the new session.
   pending work due again.
 - **External purge** advances epoch/floor, retires external index authority and
   deletes session-attributable documents with verification/retry. Automatic
-  workers cannot resurrect pre-purge source/index documents. Eligible native
-  local facts remain usable; purge is not a promise to erase canonical history.
+  workers cannot dispatch a new pre-purge source/index retain. A previously
+  dispatched raw request may still finish and remains covered by its durable
+  watch. Raw retirements stay pending after bulk deletion verification for the
+  normal owned per-document acknowledgment, at the cost of an extra bounded
+  cleanup pass. Eligible native local facts remain usable; purge is not a
+  promise to erase canonical history.
   Proven native curator drafts, checkpoints and coverage remain intact for the
   next publication; an overlapping curator lease is revoked without
   acknowledging its unfinished work.
@@ -225,6 +273,7 @@ is separate, even when it covers the same architectural boundary.
 | Delete/recreate incarnation | incarnation.delete-recreate | tests/test_story_memory_scope.py; tests/test_story_memory_retirement.py |
 | Long head/middle/tail and bounded work | coverage.complete-long-source; transport.input-sensitivity | tests/test_memory_complete_parts.py |
 | Rejection/outage/lost ACK/lease/restart | retry.* | tests/test_durable_memory_workers.py; tests/test_story_memory_index.py |
+| Raw crash/reopening, overlapping requests, DELETE/purge ACK and recorded-identity migration | These race/recovery assertions are pytest-only | tests/test_raw_retirement_recovery.py; tests/test_memory_final_integration.py |
 | Empty/malformed/stale acceptance | Marker-free sources/parts processed in later CLI scenarios; explicit empty/malformed/stale assertions are pytest-only | tests/test_story_memory_index.py; tests/test_memory_complete_parts.py; tests/test_memory_final_integration.py |
 | Purge/native facts | purge.floor | tests/test_story_memory_scope.py; tests/test_memory_final_integration.py (native curator continuation and raw late retirement) |
 | Five route final payloads, appended contracts/images/scene | budget.accepted-final-request; budget.protected-overflow (ordinary accepted route) | tests/test_final_budget_routes.py; tests/test_final_generation_budget.py |
@@ -270,13 +319,12 @@ successful measured run.
 
 The saved standalone invocation used 10 measured queries and one excluded
 warm-up, launched directly from an unrelated empty working directory after the
-final integration source fix was committed. It passed **23 of 23 executed cases
-and all 73 assertions**. The JSON records the clean measured source revision
-b19da0078d68bd463e2b2a31e4f1cb45ada990db, an empty git status, and SHA-256 of
-both evaluator source files. The subsequent result/documentation commit records
-the measurement of that source revision. A later typing correction spells out
-the same pending-source constructor fields explicitly and preserves runtime
-behavior; this recorded run precedes that correction.
+raw-retirement recovery source fix was committed. It passed **23 of 23 executed
+cases and all 73 assertions**. The JSON records the clean measured source revision
+afaebafea36a3ad07839b55445af77672b43868a, an empty git status, and SHA-256 of
+both evaluator source files. The separate result/documentation commit records
+the measurement of that exact source revision; it does not relabel the previous
+b19da007 measurement. Source and tests stayed frozen during the refresh.
 Python was 3.11.16; SQLite was 3.53.1. Fixture SHA-256 was
 6bd668c68d946775991fdda3890a9c839a125c75a7139df3b92a7118ce810d6c.
 
@@ -286,13 +334,13 @@ Python was 3.11.16; SQLite was 3.53.1. Fixture SHA-256 was
 | Distinct accepted native episodes | 302 |
 | Messages later than the unique target | 295 |
 | Distinct episodes later than the unique target | 297 |
-| Setup | 3,161.162 ms |
-| Production turn ingestion | 14,649.793 ms |
-| Primary episode/index/archive drain | 34,096.896 ms |
-| Query median, 10 samples | 41.368 ms |
-| Query nearest-rank p95, 10 samples | 56.974 ms |
-| Peak traced Python heap, whole evaluation | 40,864,426 bytes |
-| SQLite pages before purge/deletion | 1,998,848 bytes |
+| Setup | 1,288.693 ms |
+| Production turn ingestion | 14,021.959 ms |
+| Primary episode/index/archive drain | 68,019.485 ms |
+| Query median, 10 samples | 43.651 ms |
+| Query nearest-rank p95, 10 samples | 45.207 ms |
+| Peak traced Python heap, whole evaluation | 40,875,761 bytes |
+| SQLite pages before purge/deletion | 2,023,424 bytes |
 | SQLite WAL at that observation | 0 bytes |
 | Stub requests, all scenarios | 1,892 |
 | Largest serialized stub request | 164,799 bytes |
@@ -314,6 +362,11 @@ captured earlier ordinary generation request contained that phrase once in raw
 history, with zero occurrences in its other prompt inputs. Thus this run
 demonstrates a real limitation: derived memory authorization cannot establish
 secrecy for an independently supplied canonical transcript.
+
+This ordinary scripted workload does not measure the accumulating metadata or
+lifetime cleanup traffic of indefinite ambiguous/legacy watches. The separate
+pytest regressions exercise those recovery and ownership contracts; their
+assertions are not added to the CLI's 23-case score.
 
 Device disk waits varied between development attempts. These observations
 describe this run's synthetic workload and traced process. They are not a

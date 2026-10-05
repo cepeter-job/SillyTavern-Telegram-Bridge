@@ -277,7 +277,7 @@ set -euo pipefail
 cd ~/sillytavern-telegram-bridge
 read -r -p "Paste the reviewed release tag, including v: " tag
 [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Expected a version tag such as v0.3.002" >&2; exit 1; }
-git switch main
+test "$(git branch --show-current)" = main || { echo "Expected the installed main branch; stop and review this checkout" >&2; exit 1; }
 test -z "$(git status --porcelain)" || { echo "Source checkout has local changes; save and review them first" >&2; exit 1; }
 
 signers="$HOME/.config/sillytavern-telegram/trusted-maintainers"

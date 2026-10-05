@@ -146,7 +146,8 @@ sudo tailscale set --operator="bridge-user"
 ```
 
 Replace `bridge-user` with the Linux username that runs the bridge, not the
-administrator's username. That grants local operator access, not Funnel authorization. The Mini App still
+administrator's username. That grants local operator access, not Funnel
+authorization. The Mini App still
 requires a signed Telegram launch and an allowed Telegram user ID. Follow the
 [Mini App setup guide](miniapp.md#setup-with-tailscale-funnel) for listener handling
 and troubleshooting.
@@ -165,7 +166,9 @@ journalctl --user -u sillytavern-telegram.service -n 80 --no-pager
 The configuration check should finish without an error, and systemd should show
 `active (running)`. If the status or log opens a scrollable view, press `q` to
 return to the terminal. If the check fails, correct the named setting before
-starting or restarting the service; do not reset your database to fix a typo. Then open the bot and follow the
+starting or restarting the service; do not reset your database to fix a typo.
+
+Then open the bot and follow the
 [first conversation walkthrough](user-guide.md#your-first-conversation).
 A running process alone does not verify your model account: send a short message
 after `/start` to check the complete path.

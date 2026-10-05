@@ -88,7 +88,8 @@ the bridge does not silently retry the story or estimate them.
 ## Privacy and retention
 
 The local SQLite database stores a usage record with the session, model, task,
-completion time, status, duration and any available numeric counters. It does **not** store prompts, response
+completion time, status, duration and any available numeric counters. It does
+**not** store prompts, response
 text, credentials, provider URLs or upstream request identifiers. Query scope is
 derived from signed Telegram identity, not a client-supplied chat ID. All-session
 reports remain within that private chat.
@@ -109,7 +110,8 @@ deleting migration records. See [backup and restore](operations.md#database-migr
 ### Director calls
 
 Scene planning appears under `director`. Updating the helper record to match
-saved story messages appears under `director_reconcile`. An automatic reassessment runs only when an event or
+saved story messages appears under `director_reconcile`. An automatic
+reassessment runs only when an event or
 cadence requires it. A malformed version-1 proposal may get one repair request; an
 unsupported schema version is rejected without repair. Those requests remain
 visible as actual usage, not a fabricated billing amount.

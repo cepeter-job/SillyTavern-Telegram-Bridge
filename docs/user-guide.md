@@ -344,9 +344,11 @@ abilities and importance.
 `/status` shows your style, point of view and current scene/thread. A **stale**
 narrative record means the helper record has not yet caught up with the latest
 saved messages or settings; it does not mean your messages were lost. The record
-describes saved story facts, not proposed future events. It is separate from `/scene`, which tracks
+describes saved story facts, not proposed future events. It is separate from
+`/scene`, which tracks
 physical surroundings and continuity. Updating the narrative record in the
-background is called reconciliation. It uses the Utility model and is reported as `director_reconcile` usage. Opening a style
+background is called reconciliation. It uses the Utility model and is reported
+as `director_reconcile` usage. Opening a style
 panel or status page makes no model request. If reconciliation fails, your
 saved story stays intact and generation keeps the selected policy rather than
 pretending stale facts are current.
@@ -359,7 +361,8 @@ facts, and characters do not learn them just because you opened the panel.
 
 The room shows the current scene, viewpoint, storyline (thread), accepted
 direction and recent decisions. You can read the plan without turning it into
-something that has happened in the story. **Reassess now** asks the configured Director model for a fresh plan.
+something that has happened in the story. **Reassess now** asks the configured
+Director model for a fresh plan.
 It can use provider quota. **Choose thread** plans a future scene without rewriting
 anything already committed.
 
@@ -393,7 +396,8 @@ yourself. Continuing the story first expires that old confirmation. The bridge
 saves an immutable pre-finale checkpoint before entering the finale.
 
 The finale can span several turns. Once the resolution has been saved and
-the bridge has updated its story record, the Director prepares a brief and the Story model writes a **separate
+the bridge has updated its story record, the Director prepares a brief and the
+Story model writes a **separate
 epilogue**. Its time jump may show the immediate aftermath or a later future, but
 must preserve your agency and deliberately unresolved facts.
 

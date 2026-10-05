@@ -154,10 +154,11 @@ keep their original ending immutable.
 
 A completed story with a valid checkpoint offers **Alternate Ending** in Director
 Room. Confirming creates an independent session and switches to it when the
-original is still active. The app tracks this as an operation belonging to you and the original session.
-Retrying that operation retrieves its result instead of creating a second branch; a later explicit request can create a different alternate ending.
-The original stays closed. A memory warning means external seeding was unavailable,
-not that the new local story was lost.
+original is still active. The app tracks this as an operation belonging to you
+and the original session. Retrying that operation retrieves its result instead
+of creating a second branch; a later explicit request can create a different
+alternate ending. The original stays closed. A memory warning means the copied
+history could not be added to external memory, not that the new local story was lost.
 
 ## Setup with Tailscale Funnel
 
@@ -193,7 +194,8 @@ authorization. Run the bridge installer as that user, not as the administrator.
 
 Funnel makes the HTTPS address reachable from the public internet. Telegram's
 signed login and the allowed-user list still protect the app; being on your
-private Tailscale network is not the app's login mechanism. The installer discovers a `/miniapp/` URL when the configured URL is
+private Tailscale network is not the app's login mechanism. The installer
+discovers a `/miniapp/` URL when the configured URL is
 blank. With no public URL and no Funnel setup, the listener stays disabled.
 
 Discovery reuses an exact existing public mapping or selects an unused HTTPS

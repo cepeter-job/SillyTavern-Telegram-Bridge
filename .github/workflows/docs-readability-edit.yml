@@ -1,0 +1,138 @@
+name: Documentation workspace edit
+
+on:
+  push:
+    branches: [docs/user-friendly-guides-20261005]
+    paths: [.github/workflows/docs-readability-edit.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  edit-and-validate:
+    if: github.repository == 'cepeter/SillyTavern-Telegram-Bridge' && github.ref == 'refs/heads/docs/user-friendly-guides-20261005'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out only the documentation work branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: docs/user-friendly-guides-20261005
+          fetch-depth: 0
+      - name: Apply source-pinned edits and existing documentation checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD~2)" = 39bac3de0369a7580e7d854c99622d9ac83f30de
+          python3 .github/docs_readability_edit.py
+      - name: Render Markdown and validate local links and heading anchors
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import urllib.parse
+          import urllib.request
+          from html.parser import HTMLParser
+          from pathlib import Path
+
+          root = Path.cwd()
+          documents = ['README.md', 'CONTRIBUTING.md', 'docs/installation.md', 'docs/user-guide.md', 'docs/configuration.md', 'docs/operations.md', 'docs/miniapp.md', 'docs/token-usage.md']
+          rendered = {}
+
+          class Outline(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.ids = set()
+                  self.headings = []
+                  self.heading = None
+                  self.tables = 0
+                  self.images = []
+              def handle_starttag(self, tag, attrs):
+                  attrs = dict(attrs)
+                  if 'id' in attrs:
+                      self.ids.add(attrs['id'].removeprefix('user-content-'))
+                  if re.fullmatch('h[1-6]', tag):
+                      self.heading = []
+                  if tag == 'table':
+                      self.tables += 1
+                  if tag == 'img':
+                      self.images.append(attrs.get('src', ''))
+              def handle_data(self, data):
+                  if self.heading is not None:
+                      self.heading.append(data)
+              def handle_endtag(self, tag):
+                  if re.fullmatch('h[1-6]', tag) and self.heading is not None:
+                      self.headings.append(''.join(self.heading))
+                      self.heading = None
+
+          def render(path):
+              if path in rendered:
+                  return rendered[path]
+              text = path.read_text(encoding='utf-8')
+              request = urllib.request.Request(
+                  'https://api.github.com/markdown',
+                  data=json.dumps({'text': text, 'mode': 'gfm', 'context': 'cepeter/SillyTavern-Telegram-Bridge'}).encode(),
+                  headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN'], 'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json', 'User-Agent': 'sttb-docs-workspace-check'},
+                  method='POST',
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  html = response.read(2000000).decode('utf-8')
+              outline = Outline()
+              outline.feed(html)
+              assert outline.headings, f'No rendered headings: {path}'
+              if not outline.ids:
+                  counts = {}
+                  for heading in outline.headings:
+                      slug = re.sub(r'[^\w -]', '', heading.lower()).replace(' ', '-')
+                      count = counts.get(slug, 0)
+                      counts[slug] = count + 1
+                      outline.ids.add(slug + (f'-{count}' if count else ''))
+              rendered[path] = outline
+              print(f'{path.relative_to(root)}: GitHub Markdown rendered; headings={len(outline.headings)}, tables={outline.tables}')
+              return outline
+
+          links = 0
+          for name in documents:
+              path = root / name
+              outline = render(path)
+              text = re.sub(r'```.*?```', '', path.read_text(encoding='utf-8'), flags=re.S)
+              targets = re.findall(r'\[[^\]]+\]\(([^)]+)\)', text)
+              targets += re.findall(r'<img[^>]+src="([^"]+)"', text)
+              for target in targets:
+                  parsed = urllib.parse.urlsplit(target)
+                  if parsed.scheme or parsed.netloc:
+                      continue
+                  destination = (path.parent / urllib.parse.unquote(parsed.path)).resolve() if parsed.path else path
+                  assert destination.is_relative_to(root), f'Link escapes repository: {name}: {target}'
+                  assert destination.exists(), f'Missing target: {name}: {target}'
+                  if parsed.fragment and destination.suffix.lower() == '.md':
+                      assert urllib.parse.unquote(parsed.fragment) in render(destination).ids, f'Missing heading: {name}: {target}'
+                  links += 1
+          print(f'Rendered {len(rendered)} Markdown documents; {links} local links/images/anchors checked')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+              summary.write(f'## Documentation audit validation\n\nGitHub-rendered Markdown checked for {len(rendered)} documents. {links} local links, image paths and heading anchors passed. Bash blocks were syntax-checked, not executed. Configuration reference rows were preserved.\n')
+          PY
+      - name: Commit only documentation and remove temporary workspace tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -- .github/docs_readability_edit.py .github/workflows/docs-readability-edit.yml
+          python3 - <<'PY'
+          import subprocess
+          expected = {'README.md', 'CONTRIBUTING.md', 'docs/installation.md', 'docs/user-guide.md', 'docs/configuration.md', 'docs/operations.md', 'docs/miniapp.md', 'docs/token-usage.md'}
+          changed = set(subprocess.check_output(['git', 'diff', '--name-only', '39bac3de0369a7580e7d854c99622d9ac83f30de'], text=True).splitlines())
+          assert changed == expected, changed
+          PY
+          git add -- README.md CONTRIBUTING.md docs/installation.md docs/user-guide.md docs/configuration.md docs/operations.md docs/miniapp.md docs/token-usage.md
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'docs: clarify setup, recovery and everyday workflows'
+          git push origin HEAD:refs/heads/docs/user-friendly-guides-20261005
+          printf 'documentation_head=%s\n' "$(git rev-parse HEAD)"
+          git diff --stat 39bac3de0369a7580e7d854c99622d9ac83f30de HEAD

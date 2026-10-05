@@ -10,6 +10,7 @@ from bridge.ending_schema import migrate_ending_readiness
 from bridge.ending_work_schema import migrate_ending_workflow
 from bridge.finale_checkpoint_schema import migrate_finale_checkpoint_guards
 from bridge.greeting_media_schema import migrate_greeting_media_cleanup
+from bridge.memory_archival_schema import migrate_archival_attempts
 from bridge.memory_draft_schema import migrate_complete_memory_parts
 from bridge.memory_schema import migrate_durable_memory
 from bridge.memory_scope_schema import migrate_memory_knowledge
@@ -514,6 +515,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(21, "temporal_memory_knowledge", migrate_memory_knowledge),
     _Migration(22, "indexed_memory_evidence", migrate_memory_search),
     _Migration(23, "complete_memory_parts", migrate_complete_memory_parts),
+    _Migration(24, "raw_archival_attempts", migrate_archival_attempts),
 )
 
 

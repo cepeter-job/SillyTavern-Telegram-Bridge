@@ -16,6 +16,7 @@ from bridge.memory_store import (
     claim_jobs,
     fail_job,
     next_source_segment,
+    reconcile_archival_attempts,
     recover_expired_jobs,
     source_is_valid,
 )
@@ -276,7 +277,7 @@ def _retired_memory_worker(services, chat_id, session_id, token):
         db.close()
 
 
-def _dispatch_retirement(services, db):
+def _dispatch_retirement(services, db, *, allow_watches=True):
     now = time.time()
     token = uuid.uuid4().hex
     with write_transaction(db):
@@ -284,17 +285,30 @@ def _dispatch_retirement(services, db):
             "SELECT chat_id,session_id FROM memory_retired_documents r WHERE deleted=0 AND lease_token='' "
             "AND next_attempt_at<=? AND COALESCE((SELECT value FROM meta "
             "WHERE key='memory_mode:'||r.chat_id),'on')='on' "
+            "AND (? OR NOT EXISTS(SELECT 1 FROM memory_archival_attempts a "
+            "WHERE a.document_id=r.document_id AND a.finished=0)) "
             "ORDER BY next_attempt_at,attempts,chat_id,session_id LIMIT 1",
-            (now,),
+            (now, int(allow_watches)),
         ).fetchone()
         if row is None:
             return None
         db.execute(
             "UPDATE memory_retired_documents SET lease_token=?,lease_deadline=? WHERE rowid IN ("
-            "SELECT rowid FROM memory_retired_documents WHERE chat_id=? AND session_id=? AND deleted=0 "
-            "AND lease_token='' AND next_attempt_at<=? ORDER BY document_id LIMIT 16)",
-            (token, now + 900, *row, now),
+            "SELECT rowid FROM memory_retired_documents r WHERE chat_id=? AND session_id=? AND deleted=0 "
+            "AND lease_token='' AND next_attempt_at<=? AND (? OR NOT EXISTS("
+            "SELECT 1 FROM memory_archival_attempts a WHERE a.document_id=r.document_id AND a.finished=0)) "
+            "ORDER BY document_id LIMIT 16)",
+            (token, now + 900, *row, now, int(allow_watches)),
         )
+        if db.execute(
+            "SELECT 1 FROM memory_retired_documents r JOIN memory_archival_attempts a "
+            "ON a.document_id=r.document_id WHERE r.lease_token=? AND a.finished=0 LIMIT 1",
+            (token,),
+        ).fetchone():
+            db.execute(
+                "INSERT INTO meta(key,value) VALUES('memory_retirement_turn','normal') "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+            )
     if services.background.submit("hindsight_retain", _retired_memory_worker, services, row[0], row[1], token):
         return 1
     with write_transaction(db):
@@ -312,6 +326,11 @@ def dispatch_memory_backlog(services, db, *, startup=False):
             db.execute("UPDATE memory_jobs SET lease_token='',lease_deadline=0 WHERE lease_token<>''")
     else:
         recover_expired_jobs(db)
+    try:
+        reconcile_archival_attempts(db)
+    except Exception:
+        logging.warning("Raw archival recovery deferred", exc_info=True)
+        return 0
     with write_transaction(db):
         db.execute(
             "UPDATE memory_retired_documents SET lease_token='',lease_deadline=0 "
@@ -322,7 +341,12 @@ def dispatch_memory_backlog(services, db, *, startup=False):
     retired_active = db.execute("SELECT 1 FROM memory_retired_documents WHERE lease_token<>'' LIMIT 1").fetchone()
     if active >= MAX_ACTIVE_CLAIMS or retired_active:
         return 0
-    retirement = _dispatch_retirement(services, db)
+    normal_turn = (
+        db.execute("SELECT 1 FROM meta WHERE key='memory_retirement_turn' AND value='normal'").fetchone() is not None
+    )
+    # Recurring uncertainty cannot monopolize the retirement-first dispatcher.
+    # Finite retirements retain priority; watches alternate with due normal work.
+    retirement = _dispatch_retirement(services, db, allow_watches=not normal_turn)
     if retirement is not None:
         return retirement
     enabled = db.execute(
@@ -330,6 +354,12 @@ def dispatch_memory_backlog(services, db, *, startup=False):
         "COALESCE((SELECT value FROM meta WHERE key='memory_mode:' || memory_jobs.chat_id),'on')='on'"
     ).fetchall()
     claims = claim_jobs(db, layers=tuple(row[0] for row in enabled), limit=MAX_ACTIVE_CLAIMS - active)
+    if claims:
+        with write_transaction(db):
+            db.execute(
+                "INSERT INTO meta(key,value) VALUES('memory_retirement_turn','retirement') "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+            )
     dispatched = 0
     for claim in claims:
         if claim.layer in {"hindsight", "curator"} and memory_backend.memory_mode(db, claim.chat_id) != "on":
@@ -339,4 +369,6 @@ def dispatch_memory_backlog(services, db, *, startup=False):
             dispatched += 1
         else:
             fail_job(db, claim, "executor_rejected")
+    if normal_turn and not claims:
+        return _dispatch_retirement(services, db) or 0
     return dispatched

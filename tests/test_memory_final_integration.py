@@ -150,16 +150,20 @@ def test_raw_late_completion_is_retired_without_stale_mapping(runtime, route, ch
 def test_raw_late_completion_reopens_already_cleaned_retirement(runtime, route):
     settings, db, archive = runtime
     row = append(db, "Old canonical source")
+    observations = []
 
     def late(kwargs):
         change_source(db, row, "rewrite")
         cleanup(db, settings)
-        assert db.execute(
-            "SELECT deleted FROM memory_retired_documents WHERE document_id=?", (kwargs["document_id"],)
-        ).fetchone() == (1,)
+        observations.append(
+            db.execute(
+                "SELECT deleted FROM memory_retired_documents WHERE document_id=?", (kwargs["document_id"],)
+            ).fetchone()
+        )
 
     archive.on_retain = late
     assert seed_or_worker(route, db, settings) == ("degraded" if route == "seed" else "stale_source")
+    assert observations == [(0,)]  # A successful deletion cannot finish an outstanding request.
     old_id = archive.retained[0]["document_id"]
     assert old_id in archive.remote
     assert db.execute(
@@ -452,3 +456,38 @@ def test_raw_mapping_failure_rolls_back_source_acceptance_and_retries(runtime, r
     assert seed_or_worker(route, db, settings) == ("ready" if route == "seed" else "complete")
     assert archive.retained[-1]["document_id"] == document_id
     assert db.execute("SELECT covered_id FROM memory_layer_state WHERE layer='hindsight'").fetchone() == (row,)
+
+
+@pytest.mark.parametrize("route", ["worker", "seed"])
+def test_raw_failed_stale_reopening_recovers_after_restart(runtime, route):
+    settings, db, archive = runtime
+    row = append(db, "Old source with a delayed remote completion")
+    earlier_cleanup = []
+
+    def late(kwargs):
+        change_source(db, row, "rewrite")
+        earlier_cleanup.append(memory_backend.cleanup_retired_memory_documents(db, "c", "s", app_settings=settings))
+        db.execute(
+            "CREATE TRIGGER reject_stale_reopening BEFORE UPDATE ON memory_retired_documents "
+            "BEGIN SELECT RAISE(ABORT,'synthetic stale reopening failure'); END"
+        )
+        db.commit()
+
+    archive.on_retain = late
+    assert seed_or_worker(route, db, settings) == ("degraded" if route == "seed" else "work_failed")
+    old_id = archive.retained[0]["document_id"]
+    assert earlier_cleanup == [True]
+    assert old_id in archive.deleted and old_id in archive.remote
+    assert load_source(db, old_id) is None
+    assert db.execute("SELECT 1 FROM hindsight_documents WHERE document_id=?", (old_id,)).fetchone() is None
+    db.execute("DROP TRIGGER reject_stale_reopening")
+    db.commit()
+    archive.on_retain = None
+    reopened = db_connect(app_settings=settings)
+    try:
+        assert seed_or_worker(route, reopened, settings) == ("ready" if route == "seed" else "complete")
+        cleanup(reopened, settings)
+        assert old_id not in archive.remote
+        assert load_source(reopened, old_id) is None
+    finally:
+        reopened.close()

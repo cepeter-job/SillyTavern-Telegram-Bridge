@@ -29,12 +29,18 @@ from bridge.memory_fact_store import index_fact_is_current, remember_local_fact
 from bridge.memory_scope_store import eligible_fact, ranked_fact_block, resolve_memory_scope, scope_is_current
 from bridge.memory_store import (
     ARCHIVAL_PENDING,
+    ARCHIVAL_WATCH_SECONDS,
     MemoryClaim,
     MemorySource,
+    archival_attempts_outstanding,
+    begin_archival_attempt,
     claim_is_current,
+    finish_archival_attempt,
     next_source_segment,
     purge_external_memory,
+    reconcile_archival_attempts,
     reserve_archival_source,
+    resolve_archival_attempt,
     retire_archival_source,
     retire_derived_layer,
     source_is_valid,
@@ -389,9 +395,14 @@ def _retirement_would_delete_current_source(db: sqlite3.Connection, document_id:
 def cleanup_retired_memory_documents(
     db: sqlite3.Connection, chat_id: str, session_id: str, *, app_settings: AppSettings, lease_token: str = ""
 ) -> bool:
-    """Bounded retry uses only persisted retired IDs, including orphaned sessions."""
+    """Process one due batch; an unfinished raw request retains a future watch."""
     if db.in_transaction:
         raise RuntimeError("Memory cleanup cannot run in a transaction")
+    try:
+        reconcile_archival_attempts(db, chat_id=chat_id, session_id=session_id)
+    except Exception:
+        logging.warning("Raw archival recovery deferred for chat %s", chat_id, exc_info=True)
+        return False
     rows = db.execute(
         "SELECT document_id FROM memory_retired_documents WHERE chat_id=? AND session_id=? AND deleted=0 "
         "AND next_attempt_at<=? AND lease_token=? ORDER BY document_id LIMIT 16",
@@ -402,15 +413,19 @@ def cleanup_retired_memory_documents(
     with hindsight_session_lock(chat_id, session_id):
         for (document_id,) in rows:
             succeeded = False
+            outstanding_at_start = False
             try:
-                if memory_mode(db, chat_id) != "on" or _retirement_would_delete_current_source(db, document_id):
-                    raise ValueError("Retirement is not currently eligible")
                 with write_transaction(db):
+                    if memory_mode(db, chat_id) != "on" or _retirement_would_delete_current_source(db, document_id):
+                        raise ValueError("Retirement is not currently eligible")
                     if not db.execute(
                         "SELECT 1 FROM memory_retired_documents WHERE document_id=? AND deleted=0 AND lease_token=?",
                         (document_id, lease_token),
                     ).fetchone():
                         continue
+                    # Even a token resolved during DELETE may have written after
+                    # the remote deletion took effect, before its response/ACK.
+                    outstanding_at_start = archival_attempts_outstanding(db, document_id)
                     if lease_token:
                         db.execute(
                             "UPDATE memory_retired_documents SET lease_deadline=? "
@@ -423,17 +438,28 @@ def cleanup_retired_memory_documents(
             except Exception:
                 logging.warning("Retired memory document cleanup deferred")
             with write_transaction(db):
+                terminal = succeeded and not outstanding_at_start and not archival_attempts_outstanding(db, document_id)
                 db.execute(
                     "UPDATE memory_retired_documents SET deleted=?,attempts=attempts+1,"
-                    "next_attempt_at=CASE WHEN ? THEN 0 ELSE ?+MIN(300,5*(1 << MIN(attempts,6))) END "
-                    "WHERE chat_id=? AND session_id=? AND document_id=? AND lease_token=?",
-                    (int(succeeded), int(succeeded), time.time(), chat_id, session_id, document_id, lease_token),
+                    "next_attempt_at=CASE WHEN ? THEN 0 WHEN ? THEN ? ELSE ?+MIN(300,5*(1 << MIN(attempts,6))) END "
+                    "WHERE chat_id=? AND session_id=? AND document_id=? AND deleted=0 AND lease_token=?",
+                    (
+                        int(terminal),
+                        int(terminal),
+                        int(succeeded),
+                        time.time() + ARCHIVAL_WATCH_SECONDS,
+                        time.time(),
+                        chat_id,
+                        session_id,
+                        document_id,
+                        lease_token,
+                    ),
                 )
             if not succeeded:
                 return False
     return not db.execute(
-        "SELECT 1 FROM memory_retired_documents WHERE chat_id=? AND session_id=? AND deleted=0",
-        (chat_id, session_id),
+        "SELECT 1 FROM memory_retired_documents WHERE chat_id=? AND session_id=? AND deleted=0 AND next_attempt_at<=?",
+        (chat_id, session_id, time.time()),
     ).fetchone()
 
 
@@ -520,6 +546,7 @@ def retain_archival_source(
                 return "disabled"
             if not reserve_archival_source(db, source, claim=claim):
                 return "stale_source"
+            attempt_token = begin_archival_attempt(db, source)
         retained = _retain_with_client(
             source.chat_id,
             source.session_id,
@@ -532,27 +559,34 @@ def retain_archival_source(
             app_settings=app_settings,
         )
         try:
+            if retained:
+                finish_archival_attempt(db, attempt_token)
             with write_transaction(db):
                 if not source_is_valid(db, source):
                     retire_archival_source(db, source)
+                    resolve_archival_attempt(db, attempt_token)
                     return "stale_source"
                 if claim is not None and not claim_is_current(db, claim):
+                    resolve_archival_attempt(db, attempt_token)
                     return "stale_source"
                 if memory_mode(db, source.chat_id) != "on":
+                    resolve_archival_attempt(db, attempt_token)
                     return "disabled"
                 if not retained:
                     return "retain_failed"
                 if not store_segment(db, source):
                     retire_archival_source(db, source)
+                    resolve_archival_attempt(db, attempt_token)
                     return "stale_source"
                 db.execute(
                     "INSERT OR REPLACE INTO hindsight_documents(chat_id,session_id,document_id,kind,created_at) "
                     "VALUES(?,?,?,'source_segment',?)",
                     (source.chat_id, source.session_id, source.document_id, time.time()),
                 )
+                resolve_archival_attempt(db, attempt_token)
                 return "complete"
         except Exception:
-            # The reservation survives rollback and can retry an uncertain remote success.
+            # The separate dispatch obligation survives invalidation and rollback.
             logging.warning("Raw archival acceptance deferred for chat %s", source.chat_id, exc_info=True)
             return "work_failed"
 
@@ -668,7 +702,12 @@ def _write_hindsight_successful_purge_state(db: sqlite3.Connection, chat_id: str
     with write_transaction(db):
         db.execute("DELETE FROM hindsight_documents WHERE chat_id=? AND session_id=?", (chat_id, session_id))
         db.execute(
-            "UPDATE memory_retired_documents SET deleted=1 WHERE chat_id=? AND session_id=?", (chat_id, session_id)
+            "UPDATE memory_retired_documents SET deleted=CASE WHEN EXISTS("
+            "SELECT 1 FROM memory_segments g WHERE g.document_id=memory_retired_documents.document_id "
+            "AND g.layer='hindsight') OR EXISTS(SELECT 1 FROM memory_archival_attempts a "
+            "WHERE a.document_id=memory_retired_documents.document_id) THEN 0 ELSE 1 END,next_attempt_at=0 "
+            "WHERE chat_id=? AND session_id=?",
+            (chat_id, session_id),
         )
 
 
@@ -731,6 +770,11 @@ def seed_session_memory_now(
     with hindsight_session_lock(chat_id, session_id):
         if memory_mode(db, chat_id) != "on":
             return "disabled"
+        try:
+            reconcile_archival_attempts(db, chat_id=chat_id, session_id=session_id)
+        except Exception:
+            logging.warning("Raw archival recovery deferred for chat %s", chat_id, exc_info=True)
+            return "degraded"
         if not _memory_hindsight_session_exists(db, chat_id, session_id):
             return "degraded"
         for _ in range(8):

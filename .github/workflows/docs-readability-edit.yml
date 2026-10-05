@@ -37,6 +37,9 @@ jobs:
           assert source.count(old) == 1
           source = source.replace(old, 'input=__import__("textwrap").dedent(code), text=True, check=True')
           source = source.replace('r"^```"', 'r"^[ \\t]*```"')
+          old = 'Path(name).write_text(text, encoding="utf-8")'
+          assert source.count(old) == 1
+          source = source.replace(old, 'Path(name).write_text(text.rstrip() + "\\n", encoding="utf-8")')
           exec(compile(source, str(path), 'exec'), {'__file__': str(path), '__name__': '__main__'})
           PY
       - name: Render Markdown and validate local links and heading anchors

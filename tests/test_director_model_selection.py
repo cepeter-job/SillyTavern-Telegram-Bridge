@@ -96,7 +96,13 @@ def test_target_panel_shows_three_routes_and_reasoning(setup, monkeypatch):
     assert "Utility: utility::worker" in payload["text"]
     assert "Director: director::planner" in payload["text"]
     assert "Director reasoning: High (8192)" in payload["text"]
-    actions = {b["callback_data"] for row in payload["reply_markup"]["inline_keyboard"] for b in row}
+    rows = payload["reply_markup"]["inline_keyboard"]
+    assert [[button["callback_data"] for button in row] for row in rows[:3]] == [
+        ["modeltarget:story", "models:story-reasoning"],
+        ["modeltarget:utility", "models:utility-reasoning"],
+        ["modeltarget:director", "models:director-reasoning"],
+    ]
+    actions = {b["callback_data"] for row in rows for b in row}
     assert {"modeltarget:director", "models:director-reasoning"} <= actions
     quote = payload["text"].split("\n\nConfigure models:")[0]
     assert payload["entities"][0]["length"] == len(quote.encode("utf-16-le")) // 2

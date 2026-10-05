@@ -340,7 +340,7 @@ def _handle_entities(
     if command == "/world" or command.startswith("/world "):
         send_world_menu(token, chat_id, session["world_file"], request_context=request_context)
         return True
-    if command == "/providers":
+    if command in {"/provider", "/providers"}:
         send_model_target_menu(
             token,
             chat_id,

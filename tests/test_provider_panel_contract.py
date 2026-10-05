@@ -44,7 +44,8 @@ def test_provider_subcommands_explain_panel_without_running_or_opening_it(monkey
     assert not is_long_running_command(command)
 
 
-def test_plain_providers_opens_target_selection(monkeypatch):
+@pytest.mark.parametrize("command", ["/providers", "/provider"])
+def test_plain_provider_commands_open_target_selection(monkeypatch, command):
     calls = []
     monkeypatch.setattr(command_routes, "send_model_target_menu", lambda *a, **k: calls.append((a, k)))
     monkeypatch.setattr(command_routes, "task_model_for_session", lambda *a, **k: "utility::model")
@@ -55,7 +56,7 @@ def test_plain_providers_opens_target_selection(monkeypatch):
         "",
         {},
         "chat",
-        "/providers",
+        command,
         {},
         "session",
         "story::model",

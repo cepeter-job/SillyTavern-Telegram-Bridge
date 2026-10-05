@@ -213,7 +213,7 @@ is separate, even when it covers the same architectural boundary.
 | Delete/recreate incarnation | incarnation.delete-recreate | tests/test_story_memory_scope.py; tests/test_story_memory_retirement.py |
 | Long head/middle/tail and bounded work | coverage.complete-long-source; transport.input-sensitivity | tests/test_memory_complete_parts.py |
 | Rejection/outage/lost ACK/lease/restart | retry.* | tests/test_durable_memory_workers.py; tests/test_story_memory_index.py |
-| Empty/malformed/stale acceptance | Real empty source rows processed in primary drain; explicit categories are pytest-only | tests/test_story_memory_index.py; tests/test_memory_complete_parts.py |
+| Empty/malformed/stale acceptance | Marker-free sources/parts processed in later CLI scenarios; explicit empty/malformed/stale assertions are pytest-only | tests/test_story_memory_index.py; tests/test_memory_complete_parts.py |
 | Purge/native facts | purge.floor | tests/test_story_memory_scope.py |
 | Five route final payloads, appended contracts/images/scene | budget.accepted-final-request; budget.protected-overflow (ordinary accepted route) | tests/test_final_budget_routes.py; tests/test_final_generation_budget.py |
 | Actual normalized/fallback/recovery/continuation attempts | Not counted as CLI execution | tests/test_provider_attempt_budget.py; tests/test_late_budget_delivery.py |
@@ -287,8 +287,9 @@ committed. Python was 3.11.16; SQLite was 3.53.1. Fixture SHA-256 was
 | Unexpected unconfigured I/O attempts | 0 |
 
 All 150,054 characters of the long source were covered by 13 contiguous
-source parts. Its head, middle and tail facts were present. Empty assistant
-sources also completed without inventing facts. The injected control kept
+source parts. Its head, middle and tail facts were present. Later CLI scenarios
+also processed marker-free assistant sources and source parts without inventing
+facts. The injected control kept
 complete source coverage but removed the tail fact; the CLI exited 1 with
 only coverage.complete-long-source failing.
 

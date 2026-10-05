@@ -87,6 +87,15 @@ before a local acknowledgment is lost. Retrying the same deterministic document
 ID replaces the external document and commits a current local acknowledgment.
 It must not re-extract a still-valid native fact merely to repeat its index call.
 
+Raw archival attempts are also durable before dispatch. A pending raw part uses
+segment validity 2, while accepted source/offset readers require validity 1;
+reservation does not advance successful coverage. Current failed attempts reuse
+the same identity, including after an unrelated suffix rewrite. Raw source and
+mapping acceptance are atomic after source, ownership, mode and incarnation
+checks. Stale or uncertain late completion reopens authoritative retirement,
+even if an earlier cleanup already succeeded. Both durable workers and manual
+alternate-session seeding use this protocol.
+
 Edits, regeneration, deletes and moves invalidate affected suffix authority and
 journal source rewrites. An unrelated later mutation preserves accepted earlier
 prefixes; a harmless append preserves captured unchanged source parts. Historical
@@ -118,6 +127,9 @@ authorization in the new session.
   deletes session-attributable documents with verification/retry. Automatic
   workers cannot resurrect pre-purge source/index documents. Eligible native
   local facts remain usable; purge is not a promise to erase canonical history.
+  Proven native curator drafts, checkpoints and coverage remain intact for the
+  next publication; an overlapping curator lease is revoked without
+  acknowledging its unfinished work.
 - **Summary/scene/curator Clear** resets the associated published and private
   derived layer state. Use the application lifecycle API, not SQL that removes
   only a visible artifact parent.
@@ -213,8 +225,8 @@ is separate, even when it covers the same architectural boundary.
 | Delete/recreate incarnation | incarnation.delete-recreate | tests/test_story_memory_scope.py; tests/test_story_memory_retirement.py |
 | Long head/middle/tail and bounded work | coverage.complete-long-source; transport.input-sensitivity | tests/test_memory_complete_parts.py |
 | Rejection/outage/lost ACK/lease/restart | retry.* | tests/test_durable_memory_workers.py; tests/test_story_memory_index.py |
-| Empty/malformed/stale acceptance | Marker-free sources/parts processed in later CLI scenarios; explicit empty/malformed/stale assertions are pytest-only | tests/test_story_memory_index.py; tests/test_memory_complete_parts.py |
-| Purge/native facts | purge.floor | tests/test_story_memory_scope.py |
+| Empty/malformed/stale acceptance | Marker-free sources/parts processed in later CLI scenarios; explicit empty/malformed/stale assertions are pytest-only | tests/test_story_memory_index.py; tests/test_memory_complete_parts.py; tests/test_memory_final_integration.py |
+| Purge/native facts | purge.floor | tests/test_story_memory_scope.py; tests/test_memory_final_integration.py (native curator continuation and raw late retirement) |
 | Five route final payloads, appended contracts/images/scene | budget.accepted-final-request; budget.protected-overflow (ordinary accepted route) | tests/test_final_budget_routes.py; tests/test_final_generation_budget.py |
 | Actual normalized/fallback/recovery/continuation attempts | Not counted as CLI execution | tests/test_provider_attempt_budget.py; tests/test_late_budget_delivery.py |
 | Derived complete publication, Clear and NPC replay | Not counted as CLI execution | tests/test_memory_complete_parts.py; tests/test_memory_stage3_lifecycle.py |
@@ -257,12 +269,13 @@ successful measured run.
 ## Recorded run
 
 The saved standalone invocation used 10 measured queries and one excluded
-warm-up, launched by the regression suite from an unrelated empty working
-directory. It passed **23 of 23 executed cases and all 73 assertions**. The
-JSON records git revision 171015c9318eded5b7a2b5a910e2ab5c2ff5a0ce plus the
-uncommitted Stage 4 file status and SHA-256 of both evaluator source files.
-This identifies the measured source tree without claiming it was already
-committed. Python was 3.11.16; SQLite was 3.53.1. Fixture SHA-256 was
+warm-up, launched directly from an unrelated empty working directory after the
+final integration source fix was committed. It passed **23 of 23 executed cases
+and all 73 assertions**. The JSON records the clean measured source revision
+b19da0078d68bd463e2b2a31e4f1cb45ada990db, an empty git status, and SHA-256 of
+both evaluator source files. The subsequent result/documentation commit records
+the measurement of that source revision.
+Python was 3.11.16; SQLite was 3.53.1. Fixture SHA-256 was
 6bd668c68d946775991fdda3890a9c839a125c75a7139df3b92a7118ce810d6c.
 
 | Observation | Measured value |
@@ -271,13 +284,13 @@ committed. Python was 3.11.16; SQLite was 3.53.1. Fixture SHA-256 was
 | Distinct accepted native episodes | 302 |
 | Messages later than the unique target | 295 |
 | Distinct episodes later than the unique target | 297 |
-| Setup | 1,357.953 ms |
-| Production turn ingestion | 13,969.894 ms |
-| Primary episode/index/archive drain | 37,494.546 ms |
-| Query median, 10 samples | 40.051 ms |
-| Query nearest-rank p95, 10 samples | 41.807 ms |
-| Peak traced Python heap, whole evaluation | 40,841,979 bytes |
-| SQLite pages before purge/deletion | 1,990,656 bytes |
+| Setup | 3,161.162 ms |
+| Production turn ingestion | 14,649.793 ms |
+| Primary episode/index/archive drain | 34,096.896 ms |
+| Query median, 10 samples | 41.368 ms |
+| Query nearest-rank p95, 10 samples | 56.974 ms |
+| Peak traced Python heap, whole evaluation | 40,864,426 bytes |
+| SQLite pages before purge/deletion | 1,998,848 bytes |
 | SQLite WAL at that observation | 0 bytes |
 | Stub requests, all scenarios | 1,892 |
 | Largest serialized stub request | 164,799 bytes |
@@ -289,9 +302,10 @@ committed. Python was 3.11.16; SQLite was 3.53.1. Fixture SHA-256 was
 All 150,054 characters of the long source were covered by 13 contiguous
 source parts. Its head, middle and tail facts were present. Later CLI scenarios
 also processed marker-free assistant sources and source parts without inventing
-facts. The injected control kept
-complete source coverage but removed the tail fact; the CLI exited 1 with
-only coverage.complete-long-source failing.
+facts. The historical injected control, recorded before the final integration
+fix, kept complete source coverage but removed the tail fact; its CLI exited 1
+with only coverage.complete-long-source failing. This artifact refresh did not
+rerun that control. The full CI regression executes the nonzero detector again.
 
 The mixed-secret historical memory channel excluded the phrase. A separately
 captured earlier ordinary generation request contained that phrase once in raw

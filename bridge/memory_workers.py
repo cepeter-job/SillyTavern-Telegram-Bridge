@@ -251,6 +251,7 @@ def _memory_worker(services, claim):
     db = services.db_factory()
     try:
         if not _claim_current(db, claim):
+            fail_job(db, claim, "stale_source")
             return
         session = services.session.load(db, claim.chat_id, claim.session_id, services.config.default_model)
         fields = card_fields_from_file(session["character_file"], app_settings=services.config)

@@ -12,7 +12,6 @@ import unittest
 from unittest.mock import Mock, patch
 
 import bridge.main as _m_main
-import bridge.memory_curator as _m_memory_curator
 
 
 class BackgroundLifecycleTests(SettingsTestCase):
@@ -64,7 +63,7 @@ class BackgroundLifecycleTests(SettingsTestCase):
             _m_main.begin_background_shutdown()
             self.assertFalse(_background.background_jobs_accepting())
             self.assertIsNone(_background._DURABLE_BACKLOG_DISPATCHER)
-            self.assertFalse(_m_memory_curator.submit_background("tts", lambda: None))
+            self.assertFalse(_background.submit_background("tts", lambda: None))
         finally:
             _background._BACKGROUND_ACCEPTING = old_accepting
             _background._DURABLE_BACKLOG_DISPATCHER = old_dispatcher

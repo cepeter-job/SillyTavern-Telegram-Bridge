@@ -7,9 +7,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 import time
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import TypedDict
 
 from bridge.sqlite_store import write_transaction
 
@@ -49,7 +52,7 @@ class MemorySource:
     content: str
 
 
-def enqueue_memory(db, chat_id, session_id, layer) -> bool:
+def enqueue_memory(db: sqlite3.Connection, chat_id: str, session_id: str, layer: str) -> bool:
     with write_transaction(db):
         cursor = db.execute(
             "INSERT INTO memory_jobs(chat_id,session_id,session_created_at,layer,target_id) "
@@ -63,7 +66,7 @@ def enqueue_memory(db, chat_id, session_id, layer) -> bool:
     return bool(cursor.rowcount)
 
 
-def recover_expired_jobs(db, *, now=None) -> int:
+def recover_expired_jobs(db: sqlite3.Connection, *, now: float | None = None) -> int:
     now = time.time() if now is None else now
     with write_transaction(db):
         return db.execute(
@@ -72,7 +75,14 @@ def recover_expired_jobs(db, *, now=None) -> int:
         ).rowcount
 
 
-def claim_jobs(db, *, now=None, layers=None, limit=MAX_CLAIMS, lease_seconds=LEASE_SECONDS):
+def claim_jobs(
+    db: sqlite3.Connection,
+    *,
+    now: float | None = None,
+    layers: Iterable[str] | None = None,
+    limit: int = MAX_CLAIMS,
+    lease_seconds: float = LEASE_SECONDS,
+) -> list[MemoryClaim]:
     now = time.time() if now is None else now
     recover_expired_jobs(db, now=now)
     claims = []
@@ -105,7 +115,19 @@ def claim_jobs(db, *, now=None, layers=None, limit=MAX_CLAIMS, lease_seconds=LEA
                     "WHERE chat_id=? AND session_id=? AND session_created_at=? AND layer=?",
                     row[:4],
                 ).fetchone()
-                claims.append(MemoryClaim(*row, token, *identity))
+                claims.append(
+                    MemoryClaim(
+                        str(row[0]),
+                        str(row[1]),
+                        float(row[2]),
+                        str(row[3]),
+                        int(row[4]),
+                        int(row[5]),
+                        token,
+                        int(identity[0]),
+                        int(identity[1]),
+                    )
+                )
                 if len(claims) >= min(MAX_CLAIMS, max(1, limit)):
                     break
         finally:
@@ -113,11 +135,11 @@ def claim_jobs(db, *, now=None, layers=None, limit=MAX_CLAIMS, lease_seconds=LEA
     return claims
 
 
-def _scope(claim):
+def _scope(claim: MemoryClaim) -> tuple[str, str, float, str, str, int]:
     return (claim.chat_id, claim.session_id, claim.session_created_at, claim.layer, claim.token, claim.version)
 
 
-def acknowledge_job(db, claim) -> bool:
+def acknowledge_job(db: sqlite3.Connection, claim: MemoryClaim) -> bool:
     with write_transaction(db):
         accepted = bool(
             db.execute(
@@ -146,7 +168,14 @@ def acknowledge_job(db, claim) -> bool:
         return accepted
 
 
-def fail_job(db, claim, error="work_failed", *, now=None, deferred=False) -> bool:
+def fail_job(
+    db: sqlite3.Connection,
+    claim: MemoryClaim,
+    error: str = "work_failed",
+    *,
+    now: float | None = None,
+    deferred: bool = False,
+) -> bool:
     # Only internal safe codes are persisted, never provider text or transcript.
     safe_error = (
         error
@@ -166,11 +195,19 @@ def fail_job(db, claim, error="work_failed", *, now=None, deferred=False) -> boo
         )
 
 
-def _digest(role, content):
+def _digest(role: str, content: str) -> str:
     return hashlib.sha256(json.dumps([role, content], ensure_ascii=False).encode()).hexdigest()
 
 
-def next_source_segment(db, chat_id, session_id, layer, *, max_chars=SEGMENT_CHARS, through_id=None):
+def next_source_segment(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    layer: str,
+    *,
+    max_chars: int = SEGMENT_CHARS,
+    through_id: int | None = None,
+) -> MemorySource | None:
     state = db.execute(
         "SELECT s.created_at,COALESCE(l.rewrite_identity,0),COALESCE(l.purge_epoch,0),"
         "COALESCE(l.covered_id,0) FROM sessions s "
@@ -236,7 +273,7 @@ def next_source_segment(db, chat_id, session_id, layer, *, max_chars=SEGMENT_CHA
     return None
 
 
-def source_is_valid(db, source) -> bool:
+def source_is_valid(db: sqlite3.Connection, source: MemorySource) -> bool:
     state = db.execute(
         "SELECT s.created_at,l.rewrite_identity,l.purge_epoch FROM sessions s JOIN memory_layer_state l "
         "ON l.chat_id=s.chat_id AND l.session_id=s.session_id AND l.session_created_at=s.created_at "
@@ -259,7 +296,7 @@ def source_is_valid(db, source) -> bool:
     )
 
 
-def store_segment(db, source) -> bool:
+def store_segment(db: sqlite3.Connection, source: MemorySource) -> bool:
     with write_transaction(db):
         if not source_is_valid(db, source):
             return False
@@ -291,7 +328,7 @@ def store_segment(db, source) -> bool:
     return True
 
 
-def invalidate_memory(db, chat_id, session_id, *, purge_epoch):
+def invalidate_memory(db: sqlite3.Connection, chat_id: str, session_id: str, *, purge_epoch: int) -> None:
     with write_transaction(db):
         db.execute("UPDATE memory_segments SET valid=0 WHERE chat_id=? AND session_id=?", (chat_id, session_id))
         db.execute(
@@ -305,7 +342,15 @@ def invalidate_memory(db, chat_id, session_id, *, purge_epoch):
         )
 
 
-def external_memory_boundary(db, chat_id, session_id, layer="hindsight"):
+class ExternalMemoryBoundary(TypedDict):
+    session_created_at: float
+    purge_epoch: int
+    source_floor_id: int
+
+
+def external_memory_boundary(
+    db: sqlite3.Connection, chat_id: str, session_id: str, layer: str = "hindsight"
+) -> ExternalMemoryBoundary | None:
     """Expose purge floor/epoch for future semantic indexing without deleting native facts."""
     row = db.execute(
         "SELECT l.session_created_at,l.purge_epoch,l.source_floor_id FROM memory_layer_state l JOIN sessions s "
@@ -313,12 +358,23 @@ def external_memory_boundary(db, chat_id, session_id, layer="hindsight"):
         "WHERE l.chat_id=? AND l.session_id=? AND l.layer=?",
         (chat_id, session_id, layer),
     ).fetchone()
-    return dict(zip(("session_created_at", "purge_epoch", "source_floor_id"), row, strict=True)) if row else None
+    return (
+        ExternalMemoryBoundary(session_created_at=float(row[0]), purge_epoch=int(row[1]), source_floor_id=int(row[2]))
+        if row
+        else None
+    )
 
 
-def purge_external_memory(db, chat_id, session_id, *, purge_epoch):
+def purge_external_memory(db: sqlite3.Connection, chat_id: str, session_id: str, *, purge_epoch: int) -> None:
     """Fence external work and retain only future accepted source after explicit purge."""
     with write_transaction(db):
+        # Keep cleanup mappings until remote deletion succeeds; retirement blocks recall now.
+        db.execute(
+            "INSERT INTO memory_retired_documents(chat_id,session_id,document_id) "
+            "SELECT chat_id,session_id,document_id FROM hindsight_documents WHERE chat_id=? AND session_id=? "
+            "ON CONFLICT(chat_id,session_id,document_id) DO UPDATE SET deleted=0",
+            (chat_id, session_id),
+        )
         for layer in ("hindsight", "curator"):
             db.execute(
                 "INSERT OR IGNORE INTO memory_layer_state(chat_id,session_id,session_created_at,layer) "
@@ -344,7 +400,7 @@ def purge_external_memory(db, chat_id, session_id, *, purge_epoch):
         )
 
 
-def pending_memory_invalidation(db, chat_id, session_id, layer):
+def pending_memory_invalidation(db: sqlite3.Connection, chat_id: str, session_id: str, layer: str) -> int | None:
     """Earliest unreconciled rewrite, available to retrieval before worker recovery."""
     row = db.execute(
         "SELECT l.invalidated_from_id FROM memory_layer_state l JOIN sessions s "
@@ -352,4 +408,4 @@ def pending_memory_invalidation(db, chat_id, session_id, layer):
         "WHERE l.chat_id=? AND l.session_id=? AND l.layer=?",
         (chat_id, session_id, layer),
     ).fetchone()
-    return row[0] if row else None
+    return int(row[0]) if row and row[0] is not None else None

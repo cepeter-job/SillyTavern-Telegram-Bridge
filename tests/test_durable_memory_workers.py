@@ -11,6 +11,14 @@ from bridge.memory_store import claim_jobs
 from bridge.metadata import set_meta
 
 
+@pytest.fixture(autouse=True)
+def forbid_real_hindsight_client(monkeypatch):
+    def forbidden(**kwargs):
+        pytest.fail("Durable memory tests must explicitly fake the Hindsight client")
+
+    monkeypatch.setattr(memory_backend, "hindsight_client", forbidden)
+
+
 def add(db, text="A durable event"):
     db.execute(
         "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat','s1','user',?,1)", (text,)
@@ -253,7 +261,10 @@ def test_external_purge_keeps_native_progress_and_only_retains_new_turns(session
     add(db, "pre-purge event")
     db.execute("UPDATE memory_layer_state SET covered_id=1 WHERE layer<>'hindsight'")
     db.commit()
-    monkeypatch.setattr(memory_backend, "_purge_hindsight_session_backend", lambda *a, **k: 0)
+    from test_memory_native_backend import _FakeHindsight
+
+    client = _FakeHindsight()
+    monkeypatch.setattr(memory_backend, "hindsight_client", lambda **kwargs: client)
     retained = []
     monkeypatch.setattr(memory_backend, "_retain_with_client", lambda *a, **k: retained.append(a) or True)
     purge_hindsight_session(db, "chat", "s1", app_settings=settings)
@@ -294,7 +305,10 @@ def test_external_purge_preserves_native_curator_items(session_db, monkeypatch):
         "memory_curator:chat:s1",
         '{"items":[{"key":"arrival","text":"Alice arrived","kind":"event"}],"through_rowid":1}',
     )
-    monkeypatch.setattr(memory_backend, "_purge_hindsight_session_backend", lambda *a, **k: 0)
+    from test_memory_native_backend import _FakeHindsight
+
+    client = _FakeHindsight()
+    monkeypatch.setattr(memory_backend, "hindsight_client", lambda **kwargs: client)
     purge_hindsight_session(db, "chat", "s1", app_settings=settings)
     assert get_curated_memory_state(db, "chat", "s1")[0][0]["text"] == "Alice arrived"
 
@@ -372,3 +386,115 @@ def test_durable_summary_coverage_uses_canonical_ids_with_backdated_append(sessi
     )
     assert result == "complete"
     assert db.execute("SELECT covered_until_rowid FROM session_summaries").fetchone()[0] == 2
+
+
+def test_failed_public_purge_excludes_explicit_recall_and_preserves_cleanup_retry(session_db, monkeypatch):
+    from test_memory_native_backend import _FakeHindsight
+
+    from bridge.memory import purge_hindsight_session
+
+    settings, db, session = session_db
+    client = _FakeHindsight()
+    monkeypatch.setattr(memory_backend, "hindsight_client", lambda **kwargs: client)
+    assert memory_backend.remember_fact(
+        db, "chat", session, {"name": "Alice"}, "The key is blue", app_settings=settings
+    )
+    old_id = client.retained[-1]["document_id"]
+    client.recall = lambda **kwargs: SimpleNamespace(
+        results=[
+            SimpleNamespace(document_id=document_id, text="The key is blue")
+            for document_id in client.documents.documents
+        ]
+    )
+    assert len(memory_backend.recall_memory_results(db, "chat", session, "key", app_settings=settings)) == 1
+    original_list = client.documents.list_documents
+
+    async def unavailable(**kwargs):
+        raise RuntimeError("synthetic remote failure")
+
+    monkeypatch.setattr(client.documents, "list_documents", unavailable)
+    with pytest.raises(RuntimeError, match="cleanup failed"):
+        purge_hindsight_session(db, "chat", "s1", app_settings=settings)
+    assert memory_backend.recall_memory_results(db, "chat", session, "key", app_settings=settings) == []
+    assert db.execute("SELECT document_id FROM hindsight_documents").fetchall() == [(old_id,)]
+    assert db.execute("SELECT deleted FROM memory_retired_documents WHERE document_id=?", (old_id,)).fetchone() == (0,)
+
+    # A new explicit request must not revive a retired identity, even before cleanup recovers.
+    assert memory_backend.remember_fact(
+        db, "chat", session, {"name": "Alice"}, "The key is blue", app_settings=settings
+    )
+    new_id = client.retained[-1]["document_id"]
+    assert new_id != old_id
+    recalled = memory_backend.recall_memory_results(db, "chat", session, "key", app_settings=settings)
+    assert [item.document_id for item in recalled] == [new_id]
+    assert memory_backend.cleanup_retired_memory_documents(db, "chat", "s1", app_settings=settings)
+    assert old_id in client.documents.deleted
+    assert new_id not in client.documents.deleted
+    assert [
+        item.document_id
+        for item in memory_backend.recall_memory_results(db, "chat", session, "key", app_settings=settings)
+    ] == [new_id]
+    monkeypatch.setattr(client.documents, "list_documents", original_list)
+    assert purge_hindsight_session(db, "chat", "s1", app_settings=settings) > 0
+    assert {old_id, new_id} <= set(client.documents.deleted)
+    assert db.execute("SELECT count(*) FROM hindsight_documents").fetchone()[0] == 0
+    assert db.execute("SELECT count(*) FROM memory_retired_documents WHERE deleted=0").fetchone()[0] == 0
+    assert memory_backend.recall_memory_results(db, "chat", session, "key", app_settings=settings) == []
+
+
+@pytest.mark.parametrize("replace_token", [False, True])
+def test_delayed_dispatch_stale_closure_releases_only_its_own_lease(session_db, replace_token):
+    from bridge.memory_workers import dispatch_memory_backlog
+    from bridge.sqlite_store import db_connect
+
+    settings, db, _ = session_db
+    add(db)
+    scheduled = []
+
+    def accept(_kind, worker, *args):
+        scheduled.append((worker, args))
+        return True
+
+    services = SimpleNamespace(
+        config=settings,
+        background=SimpleNamespace(submit=accept),
+        db_factory=lambda: db_connect(app_settings=settings),
+        session=SimpleNamespace(load=lambda *args: pytest.fail("Stale closure must not reconstruct a session")),
+    )
+    assert dispatch_memory_backlog(services, db) == 1
+    worker, args = scheduled[0]
+    abandoned = args[-1]
+    db.execute("UPDATE messages SET content='Rewritten before accepted dispatch starts'")
+    db.commit()
+    replacement = None
+    if replace_token:
+        db.execute("UPDATE memory_jobs SET lease_deadline=0 WHERE layer=?", (abandoned.layer,))
+        db.commit()
+        replacement = claim_jobs(db, layers=(abandoned.layer,))[0]
+        assert replacement.token != abandoned.token
+        replacement_state = db.execute("SELECT * FROM memory_jobs WHERE layer=?", (abandoned.layer,)).fetchone()
+
+    worker(*args)
+    row = db.execute(
+        "SELECT lease_token,completed_version,dirty_version,last_error FROM memory_jobs WHERE layer=?",
+        (abandoned.layer,),
+    ).fetchone()
+    assert row[1] == 0
+    assert row[2] > abandoned.version
+    assert db.execute("SELECT count(*) FROM memory_jobs WHERE dirty_version>completed_version").fetchone()[0] == 6
+    if replacement:
+        assert db.execute("SELECT * FROM memory_jobs WHERE layer=?", (abandoned.layer,)).fetchone() == replacement_state
+        assert row[0] == replacement.token
+        assert row[3] == ""
+        assert claim_jobs(db) == []
+    else:
+        assert row[0] == ""
+        assert row[3] == "stale_source"
+        assert dispatch_memory_backlog(services, db) == 1
+        assert scheduled[-1][1][-1].layer != abandoned.layer
+
+
+def test_durable_worker_module_fails_before_real_client_construction(session_db):
+    settings, _, _ = session_db
+    with pytest.raises(pytest.fail.Exception, match="must explicitly fake"):
+        memory_backend.hindsight_client(app_settings=settings)

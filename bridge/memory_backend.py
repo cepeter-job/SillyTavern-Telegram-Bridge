@@ -320,7 +320,7 @@ def recall_memory_results(
         return []
 
 
-def memory_document_is_current(db, chat_id, session_id, document_id):
+def memory_document_is_current(db: sqlite3.Connection, chat_id: str, session_id: str, document_id: str) -> bool:
     """Local retirement is authoritative even when remote deletion failed."""
     if (
         not document_id
@@ -350,7 +350,7 @@ def memory_document_is_current(db, chat_id, session_id, document_id):
     )
 
 
-async def _delete_retired_with_client(client, bank_id, documents):
+async def _delete_retired_with_client(client: Any, bank_id: str, documents: list[str]) -> None:
     for document_id in documents:
         try:
             await client.documents.delete_document(bank_id=bank_id, document_id=document_id)
@@ -359,7 +359,9 @@ async def _delete_retired_with_client(client, bank_id, documents):
                 raise
 
 
-def cleanup_retired_memory_documents(db, chat_id, session_id, *, app_settings):
+def cleanup_retired_memory_documents(
+    db: sqlite3.Connection, chat_id: str, session_id: str, *, app_settings: AppSettings
+) -> bool:
     """Bounded, retryable cleanup; retirement remains authoritative locally."""
     if db.in_transaction:
         raise RuntimeError("Memory cleanup cannot run in a transaction")
@@ -538,14 +540,14 @@ def _memory_hindsight_conversation_snapshot(
     return conversation, fingerprint
 
 
-def _prepare_hindsight_purge_state(db, chat_id, session_id):
+def _prepare_hindsight_purge_state(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
     with hindsight_session_lock(chat_id, session_id), write_transaction(db):
         next_epoch = _memory_hindsight_epoch(db, chat_id, session_id) + 1
         purge_external_memory(db, chat_id, session_id, purge_epoch=next_epoch)
         store_meta_value(db, _memory_hindsight_epoch_key(chat_id, session_id), str(next_epoch))
 
 
-def _write_hindsight_successful_purge_state(db, chat_id, session_id):
+def _write_hindsight_successful_purge_state(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
     with write_transaction(db):
         db.execute("DELETE FROM hindsight_documents WHERE chat_id=? AND session_id=?", (chat_id, session_id))
         db.execute(
@@ -600,6 +602,9 @@ def remember_fact(
         ).fetchone():
             return False
         document_id = hindsight_explicit_document_id(session_id, fact)
+        epoch = _memory_hindsight_epoch(db, chat_id, session_id)
+        if epoch:
+            document_id += f"-epoch-{epoch}"
         return _retain_with_client(
             chat_id,
             session_id,

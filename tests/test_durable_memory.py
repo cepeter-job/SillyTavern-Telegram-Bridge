@@ -282,3 +282,27 @@ def test_forward_migration_respects_existing_external_purge_epoch():
     assert claim_jobs(db, layers=("hindsight",)) == []
     assert len(claim_jobs(db, layers=("episodes",))) == 1
     db.close()
+
+
+@pytest.mark.parametrize("rollback", [False, True])
+def test_external_purge_retires_all_mappings_atomically_without_losing_cleanup_ids(db, rollback):
+    from bridge.memory_store import external_memory_boundary, purge_external_memory
+
+    append(db)
+    db.executemany(
+        "INSERT INTO hindsight_documents VALUES('c','s',?,?,3)",
+        [("explicit-old", "explicit"), ("source-old", "source_segment"), ("curated-old", "curated")],
+    )
+    db.commit()
+    try:
+        with write_transaction(db):
+            purge_external_memory(db, "c", "s", purge_epoch=1)
+            if rollback:
+                raise RuntimeError("abort purge")
+    except RuntimeError:
+        assert rollback
+    assert db.execute("SELECT count(*) FROM hindsight_documents").fetchone()[0] == 3
+    assert set(db.execute("SELECT document_id,deleted FROM memory_retired_documents")) == (
+        set() if rollback else {("explicit-old", 0), ("source-old", 0), ("curated-old", 0)}
+    )
+    assert external_memory_boundary(db, "c", "s")["purge_epoch"] == (0 if rollback else 1)

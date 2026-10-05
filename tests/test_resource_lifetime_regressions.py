@@ -92,7 +92,9 @@ def test_runtime_startup_failure_releases_acquired_resources(monkeypatch, tmp_pa
     import bridge.runtime_lifecycle as lifecycle
 
     db = sqlite3.connect(":memory:")
-    db.execute("CREATE TABLE light_novel_choice_sets(generation_status TEXT, lease_token TEXT, lease_until REAL)")
+    from bridge.schema import initialize_database_schema
+
+    initialize_database_schema(db)
     events = []
 
     def fail():

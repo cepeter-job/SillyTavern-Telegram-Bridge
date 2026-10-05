@@ -183,10 +183,10 @@ def send_model_target_menu(
         "inline_keyboard": [
             [
                 {"text": "📖 Story model", "callback_data": "modeltarget:story"},
-                {"text": "🛠️ Utility model", "callback_data": "modeltarget:utility"},
+                {"text": "🧠 Story reasoning", "callback_data": "models:story-reasoning"},
             ],
             [
-                {"text": "🧠 Story reasoning", "callback_data": "models:story-reasoning"},
+                {"text": "🛠️ Utility model", "callback_data": "modeltarget:utility"},
                 {"text": "🧠 Utility reasoning", "callback_data": "models:utility-reasoning"},
             ],
             [

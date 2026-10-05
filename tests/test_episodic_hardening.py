@@ -1,10 +1,11 @@
 import sqlite3
 
+import pytest
 from persisted_state_test_support import read_episodic_memories
+from test_story_memory_scope import db as db
 
 from bridge import episodic_memory as episodic
 from bridge.episodic_extraction import parse_episodic_candidates
-from bridge.memory_service import MemoryService
 from bridge.schema import initialize_database_schema
 
 
@@ -23,88 +24,39 @@ def _fields(name="Mira"):
 
 
 def test_parser_keeps_restricted_memory_only_with_explicit_known_by():
-    source = (
+    result = parse_episodic_candidates(
         '[{"kind":"secret","importance":0.95,"summary":"Mira knows the vault code.",'
-        '"visibility":"restricted","known_by":["Mira"]},'
-        '{"kind":"secret","importance":0.99,"summary":"Unknown secret.",'
-        '"visibility":"restricted","known_by":[]},'
-        '{"kind":"secret","importance":0.93,"summary":"Legacy unscoped secret."},'
-        '{"kind":"fact","importance":0.90,"summary":"The gate is public.",'
-        '"visibility":"shared","known_by":["Mira"]}]'
+        '"visibility":"restricted","known_by":["Mira"]}]'
     )
-
-    result = parse_episodic_candidates(source)
-
-    assert [(item.kind, item.visibility, item.known_by, item.summary) for item in result] == [
-        ("secret", "restricted", ("Mira",), "Mira knows the vault code."),
-        ("fact", "shared", (), "The gate is public."),
-    ]
+    assert [(item.kind, item.visibility, item.known_by) for item in result] == [("secret", "restricted", ("mira",))]
+    with pytest.raises(ValueError):
+        parse_episodic_candidates('[{"kind":"secret","importance":0.93,"summary":"Unclassified secret."}]')
 
 
-def test_retrieval_filters_restricted_memory_by_active_character():
-    db = _db()
-    try:
-        episodic.store_episodic_memory(
-            db,
-            "chat",
-            "s1",
-            kind="fact",
-            importance=0.8,
-            summary="The red key is publicly displayed.",
-            source_start_rowid=1,
-            source_end_rowid=8,
-            visibility="shared",
-        )
-        episodic.store_episodic_memory(
-            db,
-            "chat",
-            "s1",
-            kind="secret",
-            importance=0.95,
-            summary="Mira hid the red key behind the portrait.",
-            source_start_rowid=9,
-            source_end_rowid=16,
-            visibility="restricted",
-            known_by=("Mira",),
-        )
-        db.commit()
+def test_retrieval_filters_restricted_memory_by_active_character(db):
+    from test_story_memory_scope import accept, append
 
-        mira = episodic.episodic_context_for_prompt(db, "chat", _session(), _fields("Mira"), "red key")
-        bob = episodic.episodic_context_for_prompt(db, "chat", _session(), _fields("Bob"), "red key")
-
-        assert "publicly displayed" in mira
-        assert "behind the portrait" in mira
-        assert "publicly displayed" in bob
-        assert "behind the portrait" not in bob
-    finally:
-        db.close()
+    append(db)
+    accept(db, "The red key is publicly displayed.", audience=(), visibility="shared")
+    append(db)
+    accept(db, "Mira hid the red key behind the portrait.")
+    mira = episodic.episodic_context_for_prompt(db, "c", _session("s"), _fields("Mira"), "red key")
+    bob = episodic.episodic_context_for_prompt(db, "c", _session("s"), _fields("Bob"), "red key")
+    assert "publicly displayed" in mira and "behind the portrait" in mira
+    assert "publicly displayed" in bob and "behind the portrait" not in bob
 
 
-def test_edit_prompt_suppresses_episodic_recall_before_history_rewrite():
-    calls = []
-    service = MemoryService(
-        recall_context=lambda *_args, **_kwargs: "",
-        summary_for_prompt=lambda *_args, **_kwargs: "summary",
-        summary_state=lambda *_args, **_kwargs: ("summary", 10),
-        retain_session=lambda *_args, **_kwargs: None,
-        purge_session_memory=lambda *_args, **_kwargs: 0,
-        episodic_context=lambda *_args, **_kwargs: calls.append(1) or "stale episode",
-    )
-    db = _db()
-    try:
-        context = service.prompt_context(
-            db,
-            "chat",
-            _session(),
-            _fields(),
-            "edited text",
-            edited_user_rowid=5,
-        )
+def test_edit_prompt_keeps_earlier_eligible_episode_and_excludes_future(db):
+    from test_story_memory_artifacts import service
+    from test_story_memory_scope import accept, append
 
-        assert context.episodic == ""
-        assert calls == []
-    finally:
-        db.close()
+    append(db)
+    accept(db, "early red key fact")
+    edited = append(db)
+    accept(db, "stale red key episode")
+    context = service().prompt_context(db, "c", _session("s"), _fields(), "red key", edited_user_rowid=edited)
+    assert "early red key fact" in context.episodic
+    assert "stale" not in context.episodic
 
 
 def test_invalidate_episodic_memories_removes_edited_and_later_ranges():

@@ -15,14 +15,36 @@ import time
 import weakref
 from collections.abc import Iterator
 from contextlib import contextmanager
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import urlsplit
 
 from bridge.limits import (
-    HINDSIGHT_CONTEXT_MAX_CHARS,
     HINDSIGHT_DEFAULT_URL,
     HINDSIGHT_RECALL_MAX_TOKENS,
     HINDSIGHT_RETAIN_MAX_MESSAGES,
+)
+from bridge.memory_contracts import MemoryBlock, MemoryReadScope
+from bridge.memory_fact_store import index_fact_is_current, remember_local_fact
+from bridge.memory_scope_store import eligible_fact, ranked_fact_block, resolve_memory_scope, scope_is_current
+from bridge.memory_store import (
+    ARCHIVAL_PENDING,
+    ARCHIVAL_WATCH_SECONDS,
+    MemoryClaim,
+    MemorySource,
+    archival_attempts_outstanding,
+    begin_archival_attempt,
+    claim_is_current,
+    finish_archival_attempt,
+    next_source_segment,
+    purge_external_memory,
+    reconcile_archival_attempts,
+    reserve_archival_source,
+    resolve_archival_attempt,
+    retire_archival_source,
+    retire_derived_layer,
+    source_is_valid,
+    store_segment,
 )
 from bridge.meta_repository import delete_meta_value, load_meta_value, store_meta_value
 from bridge.metadata import get_meta
@@ -280,7 +302,7 @@ def memory_recall_filter(
     db: sqlite3.Connection, chat_id: str, session: dict[str, str], character_name: str
 ) -> list[str]:
     tags = hindsight_tags(chat_id, session["session_id"], character_name)
-    return [tags[1]]
+    return [tags[1], "native-fact"]
 
 
 def recall_memory_results(
@@ -292,8 +314,12 @@ def recall_memory_results(
     max_tokens: int = HINDSIGHT_RECALL_MAX_TOKENS,
     *,
     app_settings: AppSettings,
+    read_scope: MemoryReadScope | None = None,
 ) -> list[Any]:
     if memory_mode(db, chat_id) != "on" or not query.strip():
+        return []
+    scope = read_scope or resolve_memory_scope(db, chat_id, session, {"name": character_name})
+    if scope is None or not scope_is_current(db, scope, external=True):
         return []
     try:
         with hindsight_client_scope(app_settings=app_settings) as client:
@@ -305,12 +331,149 @@ def recall_memory_results(
                 tags=memory_recall_filter(
                     db, chat_id, session, character_name or session.get("character_file", "unknown")
                 ),
-                tags_match="any_strict",
+                tags_match="all_strict",
+                types=["world", "experience"],
+                include_entities=False,
+                include_chunks=False,
+                include_source_facts=False,
+                prefer_observations=False,
             )
-            return list(getattr(results, "results", []) or [])
+            accepted = []
+            seen: set[str] = set()
+            if not scope_is_current(db, scope, external=True):
+                return []
+            for item in list(getattr(results, "results", []) or []):
+                document_id = str(getattr(item, "document_id", "") or "")
+                if getattr(item, "type", None) not in {"world", "experience"} or document_id in seen:
+                    continue
+                if not memory_document_is_current(db, chat_id, session["session_id"], document_id):
+                    continue
+                indexed = index_fact_is_current(db, document_id)
+                fact = eligible_fact(db, scope, indexed.memory_id) if indexed else None
+                if fact is not None:
+                    seen.add(document_id)
+                    accepted.append(SimpleNamespace(document_id=document_id, text=fact.fact.summary, type=item.type))
+            return accepted
     except Exception:
         logging.warning("Hindsight recall unavailable for chat %s", chat_id, exc_info=True)
         return []
+
+
+def memory_document_is_current(db: sqlite3.Connection, chat_id: str, session_id: str, document_id: str) -> bool:
+    """Only retained local native-fact documents may contribute semantic rank."""
+    row = db.execute(
+        "SELECT 1 FROM memory_fact_index WHERE document_id=? AND chat_id=? AND session_id=? AND state='retained'",
+        (document_id, chat_id, session_id),
+    ).fetchone()
+    return bool(row and index_fact_is_current(db, document_id))
+
+
+async def _delete_retired_with_client(client: Any, bank_id: str, documents: list[str]) -> None:
+    for document_id in documents:
+        try:
+            await client.documents.delete_document(bank_id=bank_id, document_id=document_id)
+        except Exception as exc:
+            if not _hindsight_not_found(exc):
+                raise
+
+
+def _retirement_would_delete_current_source(db: sqlite3.Connection, document_id: str) -> bool:
+    return bool(
+        db.execute(
+            "SELECT 1 FROM memory_segments g JOIN sessions s ON s.chat_id=g.chat_id AND s.session_id=g.session_id "
+            "AND s.created_at=g.session_created_at WHERE g.document_id=? AND g.valid IN (1,?)",
+            (document_id, ARCHIVAL_PENDING),
+        ).fetchone()
+        or db.execute(
+            "SELECT 1 FROM memory_fact_index f JOIN sessions s ON s.chat_id=f.chat_id AND s.session_id=f.session_id "
+            "AND s.created_at=f.session_created_at WHERE f.document_id=? AND f.state<>'retired'",
+            (document_id,),
+        ).fetchone()
+    )
+
+
+def cleanup_retired_memory_documents(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    *,
+    app_settings: AppSettings,
+    lease_token: str = "",
+    blocking_only: bool = False,
+) -> bool:
+    """Process one due batch, optionally excluding recurring raw watches."""
+    if db.in_transaction:
+        raise RuntimeError("Memory cleanup cannot run in a transaction")
+    try:
+        reconcile_archival_attempts(db, chat_id=chat_id, session_id=session_id)
+    except Exception:
+        logging.warning("Raw archival recovery deferred for chat %s", chat_id, exc_info=True)
+        return False
+    # Recurring uncertainty is serviced by retirement turns, not the ingestion
+    # prerequisite. Filter the batch as well as its remaining-debt check so
+    # watched failures or earlier IDs cannot consume finite cleanup work.
+    rows = db.execute(
+        "SELECT document_id FROM memory_retired_documents r WHERE chat_id=? AND session_id=? AND deleted=0 "
+        "AND next_attempt_at<=? AND lease_token=? AND (NOT ? OR NOT EXISTS("
+        "SELECT 1 FROM memory_archival_attempts a WHERE a.document_id=r.document_id AND a.finished=0)) "
+        "ORDER BY document_id LIMIT 16",
+        (chat_id, session_id, time.time(), lease_token, int(blocking_only)),
+    ).fetchall()
+    if not rows:
+        return True
+    with hindsight_session_lock(chat_id, session_id):
+        for (document_id,) in rows:
+            succeeded = False
+            outstanding_at_start = False
+            try:
+                with write_transaction(db):
+                    if memory_mode(db, chat_id) != "on" or _retirement_would_delete_current_source(db, document_id):
+                        raise ValueError("Retirement is not currently eligible")
+                    if not db.execute(
+                        "SELECT 1 FROM memory_retired_documents WHERE document_id=? AND deleted=0 AND lease_token=?",
+                        (document_id, lease_token),
+                    ).fetchone():
+                        continue
+                    # Even a token resolved during DELETE may have written after
+                    # the remote deletion took effect, before its response/ACK.
+                    outstanding_at_start = archival_attempts_outstanding(db, document_id)
+                    if lease_token:
+                        db.execute(
+                            "UPDATE memory_retired_documents SET lease_deadline=? "
+                            "WHERE chat_id=? AND session_id=? AND deleted=0 AND lease_token=?",
+                            (time.time() + 900, chat_id, session_id, lease_token),
+                        )
+                with hindsight_client_scope(app_settings=app_settings) as client:
+                    asyncio.run(_delete_retired_with_client(client, hindsight_bank_id(chat_id), [document_id]))
+                succeeded = True
+            except Exception:
+                logging.warning("Retired memory document cleanup deferred")
+            with write_transaction(db):
+                terminal = succeeded and not outstanding_at_start and not archival_attempts_outstanding(db, document_id)
+                db.execute(
+                    "UPDATE memory_retired_documents SET deleted=?,attempts=attempts+1,"
+                    "next_attempt_at=CASE WHEN ? THEN 0 WHEN ? THEN ? ELSE ?+MIN(300,5*(1 << MIN(attempts,6))) END "
+                    "WHERE chat_id=? AND session_id=? AND document_id=? AND deleted=0 AND lease_token=?",
+                    (
+                        int(terminal),
+                        int(terminal),
+                        int(succeeded),
+                        time.time() + ARCHIVAL_WATCH_SECONDS,
+                        time.time(),
+                        chat_id,
+                        session_id,
+                        document_id,
+                        lease_token,
+                    ),
+                )
+            if not succeeded:
+                return False
+    return not db.execute(
+        "SELECT 1 FROM memory_retired_documents r WHERE chat_id=? AND session_id=? AND deleted=0 "
+        "AND next_attempt_at<=? AND (NOT ? OR NOT EXISTS("
+        "SELECT 1 FROM memory_archival_attempts a WHERE a.document_id=r.document_id AND a.finished=0))",
+        (chat_id, session_id, time.time(), int(blocking_only)),
+    ).fetchone()
 
 
 def recall_memory_context(
@@ -322,13 +485,23 @@ def recall_memory_context(
     *,
     app_settings: AppSettings,
 ) -> str:
-    results = recall_memory_results(db, chat_id, session, query, fields["name"], app_settings=app_settings)
-    sections = []
-    for result in results:
-        text = str(getattr(result, "text", "") or "").strip()
-        if text:
-            sections.append("- " + text)
-    return "\n".join(sections)[:HINDSIGHT_CONTEXT_MAX_CHARS]
+    scope = resolve_memory_scope(db, chat_id, session, fields)
+    return recall_scoped_memory(db, scope, query, app_settings=app_settings).text if scope else ""
+
+
+def recall_scoped_memory(
+    db: sqlite3.Connection, scope: MemoryReadScope, query: str, *, app_settings: AppSettings
+) -> MemoryBlock:
+    results = recall_memory_results(
+        db,
+        scope.chat_id,
+        {"session_id": scope.session_id},
+        query,
+        scope.principals[0] if scope.principals else "",
+        app_settings=app_settings,
+        read_scope=scope,
+    )
+    return ranked_fact_block(db, scope, [str(getattr(result, "document_id", "") or "") for result in results])
 
 
 def _retain_with_client(
@@ -343,7 +516,7 @@ def _retain_with_client(
     *,
     app_settings: AppSettings,
 ) -> bool:
-    """Retain one document via a short-lived Hindsight client; failures are logged, not raised."""
+    """Retain one document; native mapping acceptance belongs to its fenced worker."""
     try:
         with hindsight_client_scope(app_settings=app_settings) as client:
             client.retain(
@@ -356,14 +529,79 @@ def _retain_with_client(
                     "session_id": session_id,
                     "character": character_name,
                 },
-                tags=hindsight_tags(chat_id, session_id, character_name),
+                tags=hindsight_tags(chat_id, session_id, character_name)
+                + (["native-fact"] if kind == "native_fact" else []),
                 retain_async=False,
             )
-            _record_hindsight_document(chat_id, session_id, document_id, kind, app_settings=app_settings)
+            if kind not in {"native_fact", "source_segment"}:
+                _record_hindsight_document(chat_id, session_id, document_id, kind, app_settings=app_settings)
             return True
     except Exception:
         logging.warning(log_message, chat_id, exc_info=True)
         return False
+
+
+def retain_archival_source(
+    db: sqlite3.Connection,
+    source: MemorySource,
+    character_name: str,
+    context: str,
+    *,
+    app_settings: AppSettings,
+    claim: MemoryClaim | None = None,
+) -> str:
+    """Reserve, dispatch and fence raw acceptance using the same worker/manual protocol."""
+    if db.in_transaction:
+        raise RuntimeError("Archival retain requires committed source")
+    with hindsight_session_lock(source.chat_id, source.session_id):
+        with write_transaction(db):
+            if memory_mode(db, source.chat_id) != "on":
+                return "disabled"
+            if not reserve_archival_source(db, source, claim=claim):
+                return "stale_source"
+            attempt_token = begin_archival_attempt(db, source)
+        retained = _retain_with_client(
+            source.chat_id,
+            source.session_id,
+            source.document_id,
+            character_name,
+            source.content,
+            context,
+            "source_segment",
+            "Hindsight segment retain unavailable for chat %s",
+            app_settings=app_settings,
+        )
+        try:
+            if retained:
+                finish_archival_attempt(db, attempt_token)
+            with write_transaction(db):
+                if not source_is_valid(db, source):
+                    retire_archival_source(db, source)
+                    resolve_archival_attempt(db, attempt_token)
+                    return "stale_source"
+                if claim is not None and not claim_is_current(db, claim):
+                    resolve_archival_attempt(db, attempt_token)
+                    return "stale_source"
+                if memory_mode(db, source.chat_id) != "on":
+                    resolve_archival_attempt(db, attempt_token)
+                    return "disabled"
+                if not retained:
+                    return "retain_failed"
+                if not store_segment(db, source):
+                    retire_archival_source(db, source)
+                    resolve_archival_attempt(db, attempt_token)
+                    return "stale_source"
+                db.execute(
+                    "INSERT OR REPLACE INTO hindsight_documents(chat_id,session_id,document_id,kind,created_at) "
+                    "VALUES(?,?,?,'source_segment',?)",
+                    (source.chat_id, source.session_id, source.document_id, time.time()),
+                )
+                resolve_archival_attempt(db, attempt_token)
+                return "complete"
+        except Exception:
+            # The separate dispatch obligation survives invalidation and rollback.
+            logging.warning("Raw archival acceptance deferred for chat %s", source.chat_id, exc_info=True)
+            return "work_failed"
 
 
 def _memory_hindsight_epoch_key(
@@ -407,6 +645,7 @@ def clear_curated_memory_state(db: sqlite3.Connection, chat_id: str, session_id:
         revision = int(load_meta_value(db, revision_key, "0") or 0)
         store_meta_value(db, revision_key, str(revision + 1))
         delete_meta_value(db, f"memory_curator:{chat_id}:{session_id}")
+        retire_derived_layer(db, chat_id, session_id, "curator")
 
 
 def _memory_hindsight_session_exists(
@@ -465,42 +704,29 @@ def _memory_hindsight_conversation_snapshot(
     return conversation, fingerprint
 
 
-def _write_hindsight_successful_purge_state(
-    db: sqlite3.Connection,
-    chat_id: str,
-    session_id: str,
-) -> None:
-    def write_purge_state() -> None:
-        db.execute(
-            "DELETE FROM hindsight_documents WHERE chat_id=? AND session_id=?",
-            (str(chat_id), str(session_id)),
-        )
-        next_epoch = (
-            _memory_hindsight_epoch(
-                db,
-                chat_id,
-                session_id,
-            )
-            + 1
-        )
-        db.execute(
-            "INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)",
-            (
-                _memory_hindsight_epoch_key(
-                    chat_id,
-                    session_id,
-                ),
-                str(next_epoch),
-            ),
-        )
+def _prepare_hindsight_purge_state(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
+    with hindsight_session_lock(chat_id, session_id), write_transaction(db):
+        next_epoch = _memory_hindsight_epoch(db, chat_id, session_id) + 1
+        purge_external_memory(db, chat_id, session_id, purge_epoch=next_epoch)
+        store_meta_value(db, _memory_hindsight_epoch_key(chat_id, session_id), str(next_epoch))
 
+
+def _write_hindsight_successful_purge_state(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
     with write_transaction(db):
-        write_purge_state()
+        db.execute("DELETE FROM hindsight_documents WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+        db.execute(
+            "UPDATE memory_retired_documents SET deleted=CASE WHEN EXISTS("
+            "SELECT 1 FROM memory_segments g WHERE g.document_id=memory_retired_documents.document_id "
+            "AND g.layer='hindsight') OR EXISTS(SELECT 1 FROM memory_archival_attempts a "
+            "WHERE a.document_id=memory_retired_documents.document_id) THEN 0 ELSE 1 END,next_attempt_at=0 "
+            "WHERE chat_id=? AND session_id=?",
+            (chat_id, session_id),
+        )
 
 
 def _retain_session_memory_backend(
     chat_id: str, session: dict[str, str], character_name: str, conversation: str, *, app_settings: AppSettings
-) -> None:
+) -> bool:
     session_id = str(session["session_id"])
     with hindsight_session_lock(chat_id, session_id):
         session_db = db_connect(app_settings=app_settings)
@@ -512,9 +738,9 @@ def _retain_session_memory_backend(
         finally:
             session_db.close()
         if not exists:
-            return
+            return False
         document_id = hindsight_conversation_document_id(session_id)
-        _retain_with_client(
+        return _retain_with_client(
             chat_id,
             session_id,
             document_id,
@@ -536,26 +762,7 @@ def remember_fact(
     *,
     app_settings: AppSettings,
 ) -> bool:
-    if not fact.strip():
-        return False
-    session_id = str(session["session_id"])
-    with hindsight_session_lock(chat_id, session_id):
-        if not db.execute(
-            "SELECT 1 FROM sessions WHERE chat_id=? AND session_id=?", (str(chat_id), session_id)
-        ).fetchone():
-            return False
-        document_id = hindsight_explicit_document_id(session_id, fact)
-        return _retain_with_client(
-            chat_id,
-            session_id,
-            document_id,
-            fields["name"],
-            f"User explicitly stated: {fact.strip()[:4000]}",
-            f"Explicit user memory request for character {fields['name']}",
-            "explicit",
-            "Hindsight explicit retain unavailable for chat %s",
-            app_settings=app_settings,
-        )
+    return bool(remember_local_fact(db, str(chat_id), session["session_id"], fields.get("name", ""), fact))
 
 
 def seed_session_memory_now(
@@ -565,27 +772,39 @@ def seed_session_memory_now(
     *,
     app_settings: AppSettings,
 ) -> str:
-    """Retain only this session's copied transcript using its canonical document identity."""
+    """Seed all canonical target rows, in complete deterministic bounded parts.
+
+    Alternate ending startup retries this function; successful parts are retained
+    once and failed parts retain the same document identity on the next attempt.
+    """
     if db.in_transaction:
         raise ValueError("Memory seeding cannot run inside a write transaction")
-    if memory_mode(db, chat_id) != "on":
-        return "disabled"
-    session_id = session["session_id"]
+    session_id = str(session["session_id"])
     with hindsight_session_lock(chat_id, session_id):
+        if memory_mode(db, chat_id) != "on":
+            return "disabled"
+        try:
+            reconcile_archival_attempts(db, chat_id=chat_id, session_id=session_id)
+        except Exception:
+            logging.warning("Raw archival recovery deferred for chat %s", chat_id, exc_info=True)
+            return "degraded"
         if not _memory_hindsight_session_exists(db, chat_id, session_id):
             return "degraded"
-        conversation, _fingerprint = _memory_hindsight_conversation_snapshot(db, chat_id, session_id)
-        if not conversation:
-            return "ready"
-        retained = _retain_with_client(
-            chat_id,
-            session_id,
-            hindsight_conversation_document_id(session_id),
-            session.get("title", "Story"),
-            conversation,
-            "Restored pre-finale conversation in an independent session",
-            "conversation",
-            "Hindsight branch seeding unavailable for chat %s",
-            app_settings=app_settings,
-        )
-        return "ready" if retained else "degraded"
+        for _ in range(8):
+            source = next_source_segment(db, chat_id, session_id, "hindsight")
+            if source is None:
+                return "ready"
+            if memory_mode(db, chat_id) != "on":
+                return "disabled"
+            if not source_is_valid(db, source):
+                return "degraded"
+            result = retain_archival_source(
+                db,
+                source,
+                session.get("title", "Story"),
+                f"Independent target transcript: {source.role}; offsets={source.start_offset}:{source.end_offset}",
+                app_settings=app_settings,
+            )
+            if result != "complete":
+                return "disabled" if result == "disabled" else "degraded"
+        return "ready" if next_source_segment(db, chat_id, session_id, "hindsight") is None else "degraded"

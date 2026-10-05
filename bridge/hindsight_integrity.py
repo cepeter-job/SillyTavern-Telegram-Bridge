@@ -41,6 +41,8 @@ class HindsightStaleGuard:
     ]
     run_post_retain_hooks: Callable[..., None]
 
+    invalidate_before_purge: Callable[[sqlite3.Connection, str, str], None] | None = None
+
     def retain(
         self,
         db: sqlite3.Connection,
@@ -148,6 +150,8 @@ class HindsightStaleGuard:
         session_id: str,
     ) -> int:
         with self.session_lock(chat_id, session_id):
+            if self.invalidate_before_purge is not None:
+                self.invalidate_before_purge(db, chat_id, session_id)
             deleted = self.purge_backend(
                 db,
                 chat_id,

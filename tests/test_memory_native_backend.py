@@ -187,24 +187,19 @@ class MemoryNativeBackendTests(SettingsTestCase):
         self.db.commit()
 
     def test_fixture_does_not_schedule_unrelated_post_retain_workers(self):
-        import bridge.scene_state as scene_state
-
         self._add_message()
-        with (
-            patch.object(_m_memory, "submit_background", return_value=False),
-            patch.object(scene_state, "submit_background", return_value=False) as scene_submit,
-            patch.object(_m_memory_curator, "submit_background", return_value=False) as curator_submit,
-        ):
-            _m_memory.retain_session_memory(
-                self.db,
-                "chat",
-                self.session,
-                self.fields,
-                provider_port=self.provider,
-                app_settings=self.app_settings_builder.build(),
-            )
-        scene_submit.assert_not_called()
-        curator_submit.assert_not_called()
+        _m_memory.retain_session_memory(
+            self.db,
+            "chat",
+            self.session,
+            self.fields,
+            provider_port=self.provider,
+            app_settings=self.app_settings_builder.build(),
+        )
+        self.assertEqual(
+            self.db.execute("SELECT completed_version,lease_token FROM memory_jobs WHERE layer='hindsight'").fetchone(),
+            (0, ""),
+        )
 
     def test_memory_module_owns_guard_and_persistence_helpers(self):
         shell_source = (Path(__file__).parents[1] / "bridge" / "memory.py").read_text(encoding="utf-8")
@@ -328,7 +323,7 @@ class MemoryNativeBackendTests(SettingsTestCase):
             0,
         )
 
-    def test_failed_remote_purge_preserves_epoch_and_mapping(self):
+    def test_failed_remote_purge_fences_epoch_and_preserves_cleanup_mapping(self):
         mapped = _m_memory.hindsight_conversation_document_id(self.session["session_id"])
         self.db.execute(
             "INSERT INTO hindsight_documents(chat_id,session_id,document_id,kind,created_at) VALUES(?,?,?,?,?)",
@@ -365,7 +360,7 @@ class MemoryNativeBackendTests(SettingsTestCase):
 
         self.assertEqual(
             _m_session_naming.get_meta(self.db, key, ""),
-            "5",
+            "6",
         )
         self.assertEqual(
             self.db.execute(
@@ -375,104 +370,74 @@ class MemoryNativeBackendTests(SettingsTestCase):
             1,
         )
 
-    def test_public_retain_rejects_stale_transcript(self):
+    def _request_claim(self):
+        from bridge.memory_store import claim_jobs
+
         self._add_message()
-        queued = []
+        _m_memory.retain_session_memory(
+            self.db,
+            "chat",
+            self.session,
+            self.fields,
+            provider_port=self.provider,
+            app_settings=self.app_settings_builder.build(),
+        )
+        return claim_jobs(self.db, layers=("hindsight",))[0]
+
+    def test_public_retain_rejects_stale_transcript(self):
+        from bridge.memory_store import claim_jobs
+        from bridge.memory_workers import run_memory_claim
+
+        claim = self._request_claim()
         fake = _FakeHindsight()
         memory_backend.hindsight_client = lambda *, app_settings=None: fake
-
-        with patch.object(
-            _m_memory,
-            "submit_background",
-            side_effect=lambda name, fn, *args, **kwargs: queued.append((name, fn, args, kwargs)),
-        ):
-            _m_memory.retain_session_memory(
-                self.db,
-                "chat",
-                self.session,
-                self.fields,
-                provider_port=self.provider,
-                app_settings=self.app_settings_builder.build(),
-            )
-
-        hindsight_jobs = [item for item in queued if item[0] == "hindsight_retain"]
-        self.assertEqual(len(hindsight_jobs), 1)
-
         self.db.execute(
             "UPDATE messages SET content='new text' WHERE chat_id=? AND session_id=?",
             ("chat", self.session["session_id"]),
         )
         self.db.commit()
-
-        _name, fn, args, kwargs = hindsight_jobs[0]
-        fn(*args, **kwargs)
-
+        self.assertEqual(
+            run_memory_claim(self.db, claim, self.session, self.fields, app_settings=self.app_settings_builder.build()),
+            "stale_source",
+        )
         self.assertEqual(fake.retained, [])
+        # Expired/interrupted claim recovery rebuilds the current transcript.
+        self.db.execute("UPDATE memory_jobs SET lease_deadline=0,next_attempt_at=0")
+        self.db.commit()
+        claim = claim_jobs(self.db, layers=("hindsight",))[0]
+        self.assertEqual(
+            run_memory_claim(self.db, claim, self.session, self.fields, app_settings=self.app_settings_builder.build()),
+            "complete",
+        )
+        self.assertEqual(fake.retained[0]["content"], "new text")
 
     def test_public_purge_invalidates_already_queued_retain(self):
-        self._add_message()
-        queued = []
+        from bridge.memory_workers import run_memory_claim
+
+        claim = self._request_claim()
         fake = _FakeHindsight()
         memory_backend.hindsight_client = lambda *, app_settings=None: fake
-
-        with patch.object(
-            _m_memory,
-            "submit_background",
-            side_effect=lambda name, fn, *args, **kwargs: queued.append((name, fn, args, kwargs)),
-        ):
-            _m_memory.retain_session_memory(
-                self.db,
-                "chat",
-                self.session,
-                self.fields,
-                provider_port=self.provider,
-                app_settings=self.app_settings_builder.build(),
-            )
-
-        hindsight_jobs = [item for item in queued if item[0] == "hindsight_retain"]
-        self.assertEqual(len(hindsight_jobs), 1)
-
         _m_main.purge_hindsight_session(
             self.db, "chat", self.session["session_id"], app_settings=self.app_settings_builder.build()
         )
-
-        _name, fn, args, kwargs = hindsight_jobs[0]
-        fn(*args, **kwargs)
-
+        self.assertEqual(
+            run_memory_claim(self.db, claim, self.session, self.fields, app_settings=self.app_settings_builder.build()),
+            "stale_source",
+        )
         self.assertEqual(fake.retained, [])
 
     def test_public_queued_retain_skips_deleted_session(self):
-        self._add_message()
-        queued = []
+        from bridge.memory_workers import run_memory_claim
+
+        claim = self._request_claim()
         fake = _FakeHindsight()
         memory_backend.hindsight_client = lambda *, app_settings=None: fake
-
-        with patch.object(
-            _m_memory,
-            "submit_background",
-            side_effect=lambda name, fn, *args, **kwargs: queued.append((name, fn, args, kwargs)),
-        ):
-            _m_memory.retain_session_memory(
-                self.db,
-                "chat",
-                self.session,
-                self.fields,
-                provider_port=self.provider,
-                app_settings=self.app_settings_builder.build(),
-            )
-
-        hindsight_jobs = [item for item in queued if item[0] == "hindsight_retain"]
-        self.assertEqual(len(hindsight_jobs), 1)
-
-        self.db.execute(
-            "DELETE FROM sessions WHERE chat_id=? AND session_id=?",
-            ("chat", self.session["session_id"]),
-        )
+        self.db.execute("DELETE FROM sessions WHERE chat_id=? AND session_id=?", ("chat", self.session["session_id"]))
         self.db.commit()
-
-        _name, fn, args, kwargs = hindsight_jobs[0]
-        fn(*args, **kwargs)
-
+        self.assertEqual(
+            run_memory_claim(self.db, claim, self.session, self.fields, app_settings=self.app_settings_builder.build()),
+            "stale_source",
+        )
         self.assertEqual(fake.retained, [])
 
     def test_direct_guard_runs_post_retain_hook_when_memory_off(self):

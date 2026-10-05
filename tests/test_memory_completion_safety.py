@@ -7,12 +7,34 @@ import pytest
 from application_test_setup import make_test_memory_service, make_test_provider_port
 from settings_test_support import make_test_settings
 
-from bridge import group_commands, memory, memory_curator, message_commands
+from bridge import (
+    codex_transport,
+    group_commands,
+    memory,
+    memory_backend,
+    memory_curator,
+    message_commands,
+    provider_transport,
+)
 from bridge.memory_backend import hindsight_session_lock
 from bridge.metadata import set_meta
 from bridge.npc_service import NpcService
 from bridge.session_core import create_session, delete_session_data
 from bridge.sqlite_store import db_connect, write_transaction
+
+
+@pytest.fixture(autouse=True)
+def forbid_real_external_clients(monkeypatch):
+    def unexpected(*args, **kwargs):
+        pytest.fail("Compatibility tests require explicit fake provider/Hindsight transport")
+
+    monkeypatch.setattr(memory_backend, "hindsight_client", unexpected)
+    monkeypatch.setattr(provider_transport, "strict_urlopen", unexpected)
+    monkeypatch.setattr(codex_transport, "resolve_access_token", unexpected)
+
+
+def classified_summary(text):
+    return json.dumps({"blocks": [{"text": text, "visibility": "shared", "known_by": []}]})
 
 
 @pytest.fixture
@@ -120,7 +142,7 @@ def test_curator_reset_discards_inflight_completion(session_db, monkeypatch, cha
         assert items == [{"key": "manual", "text": "Reviewed fact"}]
 
 
-def test_curator_acceptance_and_retain_are_ordered_before_concurrent_purge(session_db, monkeypatch):
+def test_curator_acceptance_preserves_native_state_without_remote_rewrite_during_purge(session_db, monkeypatch):
     settings, db, session = session_db
     add_rows(db, 2)
     accepted = threading.Event()
@@ -128,11 +150,11 @@ def test_curator_acceptance_and_retain_are_ordered_before_concurrent_purge(sessi
     events = []
     errors = []
     lock_was_free = []
-    original_store = memory_curator._repo_store_meta_value
+    original_publish = memory_curator.publish_derived
 
-    def store(connection, key, value):
-        original_store(connection, key, value)
-        if key == memory_curator.memory_curator_key("chat", "s1"):
+    def publish(connection, chat_id, session_id, layer, payload, through):
+        original_publish(connection, chat_id, session_id, layer, payload, through)
+        if layer == "curator":
             accepted.set()
 
     def purge_worker():
@@ -161,7 +183,7 @@ def test_curator_acceptance_and_retain_are_ordered_before_concurrent_purge(sessi
         events.append("purge")
         return 1
 
-    monkeypatch.setattr(memory_curator, "_repo_store_meta_value", store)
+    monkeypatch.setattr(memory_curator, "publish_derived", publish)
     monkeypatch.setattr(memory_curator, "_retain_with_client", retain)
     monkeypatch.setattr(memory, "_purge_hindsight_session_backend", purge)
     thread = threading.Thread(target=purge_worker)
@@ -182,8 +204,8 @@ def test_curator_acceptance_and_retain_are_ordered_before_concurrent_purge(sessi
         thread.join(5)
     assert not thread.is_alive()
     assert errors == []
-    assert lock_was_free == [False]
-    assert events == ["retain", "purge"]
+    assert events == ["purge"]
+    assert memory_curator.get_curated_memory_state(db, "chat", "s1")[0][0]["text"] == "Current fact"
 
 
 def test_session_deletion_removes_curated_state_before_session_id_reuse(session_db):
@@ -211,7 +233,7 @@ def test_summary_coverage_stops_at_processed_rows(session_db, force):
             return "[]"
         assert not db.in_transaction
         prompts.append(messages[-1]["content"])
-        return "Summary of supplied complete rows."
+        return classified_summary("Summary of supplied complete rows.")
 
     memory.generate_session_summary(
         db,
@@ -223,36 +245,51 @@ def test_summary_coverage_stops_at_processed_rows(session_db, force):
     )
     summary, covered = memory.get_session_summary(db, "chat", "s1")
     assert summary
-    assert covered == 40
-    assert all(f"END_{n:02d}" in "\n".join(prompts) for n in range(1, 41))
-    assert len(prompts) >= 2
-    assert all(len(prompt.split("\n\n", 1)[1]) <= 50000 for prompt in prompts)
+    assert covered == 8
+    assert all(f"END_{n:02d}" in "\n".join(prompts) for n in range(1, 9))
+    assert "TURN_09" not in "\n".join(prompts)
+    assert len(prompts) == 8
+    assert all(len(prompt.split("\n\nCanonical source part:\n", 1)[1]) <= 12000 for prompt in prompts)
     assert db.execute("SELECT count(*) FROM messages").fetchone()[0] == (40 if force else 64)
 
 
-def test_summary_prior_summary_overhead_preserves_whole_rows(session_db):
+def test_summary_unproven_prior_state_replays_complete_rows_from_floor(session_db):
     settings, db, session = session_db
     add_rows(db, 64)
-    db.execute("INSERT INTO session_summaries VALUES(?,?,?,?,?)", ("chat", "s1", "prior " * 2000, 1, 1.0))
-    db.commit()
+    from bridge.memory_artifact_store import store_artifact_visibility
+
+    with write_transaction(db):
+        db.execute("INSERT INTO session_summaries VALUES(?,?,?,?,?)", ("chat", "s1", "prior " * 2000, 1, 1.0))
+        store_artifact_visibility(
+            db,
+            "chat",
+            "s1",
+            "summary",
+            [
+                {"text": "prior " * 800, "visibility": "shared", "known_by": []},
+                {"text": "prior " * 800, "visibility": "shared", "known_by": []},
+                {"text": "prior " * 400, "visibility": "shared", "known_by": []},
+            ],
+        )
     prompts = []
 
     def generate(_key, _model, messages, **_kwargs):
         if str(_kwargs.get("session_id", "")).startswith("episodic:"):
             return "[]"
         prompts.append(messages[-1]["content"])
-        return "Updated continuity."
+        return classified_summary("Updated continuity.")
 
     memory.generate_session_summary(
         db, "chat", session, provider_port=make_test_provider_port(generate_backend=generate), app_settings=settings
     )
-    assert memory.get_session_summary(db, "chat", "s1")[1] == 40
-    assert "prior " in prompts[0]
-    assert all(f"END_{n:02d}" in "\n".join(prompts) for n in range(2, 41))
-    assert all(len(prompt.split("\n\n", 1)[1]) <= 50000 for prompt in prompts)
+    assert memory.get_session_summary(db, "chat", "s1")[1] == 8
+    # An opaque legacy aggregate without a complete-part checkpoint is replayed.
+    assert "TURN_01" in prompts[0]
+    assert all(f"END_{n:02d}" in "\n".join(prompts) for n in range(1, 9))
+    assert all(len(prompt.split("\n\nCanonical source part:\n", 1)[1]) <= 12000 for prompt in prompts)
 
 
-def test_summary_oversized_row_is_not_marked_covered(session_db):
+def test_summary_malformed_oversized_part_is_not_marked_covered(session_db):
     settings, db, session = session_db
     add_rows(db, 1, size=51000)
     prompts = []
@@ -266,7 +303,9 @@ def test_summary_oversized_row_is_not_marked_covered(session_db):
     )
     assert memory.get_session_summary(db, "chat", "s1") == ("", 0)
     assert result == ""
-    assert prompts == []
+    assert len(prompts) == 1
+    source = prompts[0][2][-1]["content"].split("\n\nCanonical source part:\n", 1)[1]
+    assert len(source) == 12000
     assert len(db.execute("SELECT content FROM messages").fetchone()[0]) > 51000
 
 
@@ -281,7 +320,7 @@ def test_summary_later_segment_failure_preserves_only_completed_coverage(session
         prompts.append(messages[-1]["content"])
         if len(prompts) == 2:
             raise RuntimeError("synthetic later segment failure")
-        return "Completed prefix."
+        return classified_summary("Completed prefix.")
 
     result = memory.generate_session_summary(
         db,
@@ -315,7 +354,7 @@ def test_summary_command_reports_incomplete_regeneration(session_db, monkeypatch
         calls.append(True)
         if failure == "old" or len(calls) == 2:
             raise RuntimeError("synthetic provider failure")
-        return "Processed prefix"
+        return classified_summary("Processed prefix")
 
     monkeypatch.setattr(group_commands, "send_typing", lambda *a, **k: None)
     monkeypatch.setattr(group_commands, "send_text", lambda token, chat_id, text: sent.append(text))
@@ -363,7 +402,7 @@ def test_summary_rejects_completion_after_source_changes(session_db, monkeypatch
             expected = ("Newer accepted summary", 2)
             with write_transaction(db):
                 db.execute("INSERT INTO session_summaries VALUES(?,?,?,?,?)", ("chat", "s1", expected[0], 2, 99.0))
-        return "Obsolete summary from the old story"
+        return classified_summary("Obsolete summary from the old story")
 
     result = memory.generate_session_summary_result(
         db,
@@ -429,7 +468,17 @@ def test_episodic_completion_after_invalidation_does_not_restore_old_facts(sessi
         else:
             with write_transaction(db):
                 db.execute("UPDATE messages SET content='New canonical story' WHERE rowid=1")
-        return '[{"kind":"fact","importance":0.9,"summary":"Obsolete fact from before the change"}]'
+        return json.dumps(
+            [
+                {
+                    "kind": "fact",
+                    "importance": 0.9,
+                    "summary": "Obsolete fact from before the change",
+                    "visibility": "shared",
+                    "known_by": [],
+                }
+            ]
+        )
 
     inserted = extract_episodic_memories(
         db,
@@ -485,7 +534,12 @@ def test_episodic_candidate_batch_rolls_back_together(session_db, monkeypatch):
         return original(*args, **kwargs)
 
     monkeypatch.setattr(episodic_extraction, "store_episodic_memory", store)
-    raw = '[{"kind":"fact","importance":0.9,"summary":"First"},{"kind":"fact","importance":0.9,"summary":"Second"}]'
+    raw = json.dumps(
+        [
+            {"kind": "fact", "importance": 0.9, "summary": summary, "visibility": "shared", "known_by": []}
+            for summary in ("First", "Second")
+        ]
+    )
     with pytest.raises(RuntimeError, match="second candidate"):
         episodic_extraction.extract_episodic_memories(
             db,
@@ -501,7 +555,7 @@ def test_episodic_candidate_batch_rolls_back_together(session_db, monkeypatch):
     assert db.execute("SELECT count(*) FROM episodic_memories").fetchone()[0] == 0
 
 
-def test_duplicate_episodic_visibility_update_is_committed(session_db):
+def test_duplicate_fact_with_new_audience_adds_an_attestation(session_db):
     from bridge.episodic_extraction import extract_episodic_memories
     from bridge.episodic_memory import store_episodic_memory
 
@@ -529,24 +583,26 @@ def test_duplicate_episodic_visibility_update_is_committed(session_db):
         provider_port=make_test_provider_port(generate_backend=lambda *a, **k: raw),
         app_settings=settings,
     )
-    assert inserted == 0
+    assert inserted == 1
     assert not db.in_transaction
-    assert db.execute("SELECT visibility,known_by_json FROM episodic_memory_visibility").fetchone() == (
-        "restricted",
-        '["Mara"]',
-    )
+    assert db.execute(
+        "SELECT visibility,known_by_json FROM episodic_memory_visibility ORDER BY memory_id"
+    ).fetchall() == [
+        ("shared", "[]"),
+        ("restricted", '["mara"]'),
+    ]
 
 
 @pytest.mark.parametrize("change", ["reset", "edit"])
 def test_summary_does_not_start_episodic_work_from_invalidated_segment(session_db, monkeypatch, change):
     settings, db, session = session_db
     add_rows(db, 32, size=30)
-    original = memory.extract_episodic_memories
     calls = []
     monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
     monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
 
-    def invalidate_before_extract(*args, **kwargs):
+    def generate(*_args, **kwargs):
+        calls.append(kwargs.get("session_id"))
         if change == "reset":
             message_commands.reset_session(
                 db, "token", "chat", session, memory_service=make_test_memory_service(), npc_service=NpcService()
@@ -554,15 +610,8 @@ def test_summary_does_not_start_episodic_work_from_invalidated_segment(session_d
         else:
             with write_transaction(db):
                 db.execute("UPDATE messages SET content='Replacement facts' WHERE rowid=1")
-        return original(*args, **kwargs)
+        return classified_summary("A summary of the original segment.")
 
-    def generate(*_args, **kwargs):
-        calls.append(kwargs.get("session_id"))
-        if str(kwargs.get("session_id", "")).startswith("episodic:"):
-            return '[{"kind":"fact","importance":0.9,"summary":"Old fact"}]'
-        return "A summary of the original segment."
-
-    monkeypatch.setattr(memory, "extract_episodic_memories", invalidate_before_extract)
     result = memory.generate_session_summary_result(
         db,
         "chat",

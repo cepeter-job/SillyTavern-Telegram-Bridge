@@ -98,6 +98,11 @@ def test_unconfirmed_story_continuation_requires_fresh_readiness(session_db):
 
 
 def test_checkpoint_freezes_configuration_and_memory_at_its_own_boundary(session_db):
+    from bridge.memory_artifact_store import store_artifact_visibility
+    from bridge.memory_contracts import MemoryFact
+    from bridge.memory_fact_store import accept_source_facts
+    from bridge.memory_store import next_source_segment
+
     db = prepared(session_db)
     through = load_narrative_clock(db, "chat", "s1")["latest_rowid"]
     set_task_model(db, "chat", "s1", "utility::small", "utility")
@@ -105,13 +110,16 @@ def test_checkpoint_freezes_configuration_and_memory_at_its_own_boundary(session
     set_director_reasoning(db, "chat", "s1", 8192)
     with write_transaction(db):
         db.execute("INSERT INTO session_summaries VALUES('chat','s1','Only pre-finale facts',?,1)", (through,))
-        memory = db.execute(
-            "INSERT INTO episodic_memories(chat_id,session_id,kind,importance,summary,"
-            "source_start_rowid,source_end_rowid,created_at) "
-            "VALUES('chat','s1','event',1,'Mara chose freedom',?,?,1)",
-            (through, through),
-        ).lastrowid
-        db.execute("INSERT INTO episodic_memory_visibility VALUES(?,'chat','s1','private','[\"Mara\"]')", (memory,))
+        source = next_source_segment(db, "chat", "s1", "episodes", through_id=through)
+        assert source is not None and source.end_id <= through
+        assert accept_source_facts(db, source, [MemoryFact("event", 1, "Mara chose freedom", "restricted", ("Mara",))])
+        store_artifact_visibility(
+            db,
+            "chat",
+            "s1",
+            "summary",
+            [{"text": "Only pre-finale facts", "visibility": "shared", "known_by": []}],
+        )
         npc = db.execute(
             "INSERT INTO npc_entities(chat_id,session_id,canonical_name,display_name,aliases_json,"
             "first_seen_rowid,last_seen_rowid,created_at,updated_at) "
@@ -122,12 +130,19 @@ def test_checkpoint_freezes_configuration_and_memory_at_its_own_boundary(session
             "INSERT INTO npc_fields VALUES(?,'role','\"rebel\"','mutable','private','[\"Mara\"]',?,1)", (npc, through)
         )
         db.execute("INSERT INTO scene_states VALUES('chat','s1','{\"location\":\"Gate\"}',?,1)", (through,))
+        store_artifact_visibility(
+            db,
+            "chat",
+            "s1",
+            "scene",
+            [{"text": "Location: Gate", "visibility": "shared", "known_by": []}],
+        )
         db.execute("INSERT INTO meta(key,value) VALUES('api_key:chat:s1','MUST_NOT_COPY_SECRET')")
         db.execute("INSERT INTO meta(key,value) VALUES('pending:chat:s1','MUST_NOT_COPY_PENDING')")
     cp = enter(db)
     body = cp.payload
     assert body["memory"]["summary"]["summary"] == "Only pre-finale facts"
-    assert body["memory"]["episodic"][0]["visibility"] == "private"
+    assert body["memory"]["episodic"][0]["visibility"] == "restricted"
     assert body["memory"]["npcs"][0]["fields"][0]["value_json"] == '"rebel"'
     assert body["physical_scene"]["state_json"] == '{"location":"Gate"}'
     assert body["config"]["task_models"]["director"] == "director::planner"

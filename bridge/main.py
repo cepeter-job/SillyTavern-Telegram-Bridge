@@ -34,7 +34,6 @@ from bridge.director_goals import director_goal_policy
 from bridge.embedding_port import EmbeddingPort
 from bridge.embedding_transport import embed_rag_batch, embed_rag_text
 from bridge.environment import bootstrap_environment
-from bridge.episodic_memory import episodic_context_for_prompt
 from bridge.group_core import (
     advance_group_turn,
     claim_group_user_turn,
@@ -68,10 +67,12 @@ from bridge.memory import (
     get_session_summary,
     purge_hindsight_session,
     retain_session_memory,
-    session_summary_for_prompt,
 )
-from bridge.memory_backend import recall_memory_context
+from bridge.memory_artifact_store import read_scene_block, read_summary_block
+from bridge.memory_backend import recall_scoped_memory
 from bridge.memory_diagnostics import MemoryDiagnostics
+from bridge.memory_scope_runtime import resolve_session_memory_scope
+from bridge.memory_scope_store import read_episodic_block, validate_memory_blocks
 from bridge.memory_service import MemoryService as _MemoryService
 from bridge.message_commands import generate_and_store_reply, prepare_message
 from bridge.miniapp_config import load_miniapp_config
@@ -225,12 +226,12 @@ def _build_startup_services(
         director_policy=director_goal_policy,
     )
     memory = _MemoryService(
-        recall_context=_partial(recall_memory_context, app_settings=config),
-        summary_for_prompt=(
-            lambda db, chat_id, session: session_summary_for_prompt(
-                db, chat_id, session, provider_port=provider, app_settings=config
-            )
-        ),
+        resolve_scope=_partial(resolve_session_memory_scope, app_settings=config, load_group_state=group.state),
+        scoped_recall=_partial(recall_scoped_memory, app_settings=config),
+        scoped_episodes=read_episodic_block,
+        scoped_summary=read_summary_block,
+        scoped_scene=read_scene_block,
+        validate_blocks=validate_memory_blocks,
         summary_state=get_session_summary,
         retain_session=(
             lambda db, chat_id, session, fields: retain_session_memory(
@@ -245,7 +246,6 @@ def _build_startup_services(
             )
         ),
         purge_session_memory=_partial(purge_hindsight_session, app_settings=config),
-        episodic_context=episodic_context_for_prompt,
     )
     npc = _NpcService()
     session = _SessionService(

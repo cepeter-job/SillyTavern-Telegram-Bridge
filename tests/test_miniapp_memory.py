@@ -132,7 +132,7 @@ def test_summary_regeneration_reports_partial_completion(tmp_path):
         calls.append(True)
         if len(calls) == 2:
             raise RuntimeError("synthetic second segment failure")
-        return "Processed prefix"
+        return '{"blocks":[{"text":"Processed prefix","visibility":"shared","known_by":[]}]}'
 
     s.provider = make_test_provider_port(generate_backend=generate)
     result = regenerate_summary(s, w, p)

@@ -117,13 +117,9 @@ class CompositionConfigTests(SettingsTestCase):
             register_backlog_dispatcher=lambda _callback: None,
             begin_shutdown=lambda: None,
         )
-        memory = MemoryService(
-            recall_context=lambda *_args, **_kwargs: "",
-            summary_for_prompt=lambda *_args, **_kwargs: "",
-            summary_state=lambda *_args, **_kwargs: ("", 0),
-            retain_session=lambda *_args, **_kwargs: None,
-            purge_session_memory=lambda *_args, **_kwargs: 0,
-        )
+        from application_test_setup import make_test_memory_service
+
+        memory = make_test_memory_service()
         group_director = object()
         persona = object()
         sync = object()

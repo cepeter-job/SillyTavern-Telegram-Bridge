@@ -120,6 +120,7 @@ def regenerate_last(
         session,
         fields,
         user_text,
+        through_rowid=last_user_rowid,
     )
     npc_context = npc_service.context_for_prompt(
         db,
@@ -128,7 +129,8 @@ def regenerate_last(
         fields,
         user_text,
         history_rows,
-        through_rowid=last_user_rowid,
+        through_rowid=memory_prompt.scope.through_rowid if memory_prompt.scope else last_user_rowid,
+        memory_scope=memory_prompt.scope,
     )
     messages = build_chat_messages(
         session,
@@ -139,6 +141,8 @@ def regenerate_last(
         episodic_context=memory_prompt.episodic,
         npc_context=npc_context,
         session_summary=memory_prompt.summary,
+        scene_context=memory_prompt.scene,
+        defer_compaction=True,
         narrative_context=narrative_context_for_session(
             db, chat_id, session_id, "story", through_rowid=last_user_rowid
         ),

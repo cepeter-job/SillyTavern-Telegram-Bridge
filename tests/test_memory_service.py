@@ -41,146 +41,106 @@ from bridge.memory_service import MemoryPromptContext, MemoryService
 
 class MemoryServiceTests(SettingsTestCase):
     def setUp(self):
+        from bridge.memory_contracts import MemoryReadScope
+
         self.db = sqlite3.connect(":memory:")
         self.session = {"session_id": "session-1", "character_file": "mira.png"}
         self.fields = {"name": "Mira"}
+        self.scope = MemoryReadScope("chat", "session-1", 1.0, 19, 0, ("mira",), historical=True)
+        self.calls = []
 
     def tearDown(self):
         self.db.close()
 
-    def _service(
-        self,
-        *,
-        recall=None,
-        summary=None,
-        summary_state=None,
-        retain=None,
-        purge=None,
-    ):
-        return MemoryService(
-            recall_context=recall or (lambda *_args, **_kwargs: "memory"),
-            summary_for_prompt=summary or (lambda *_args, **_kwargs: "summary"),
-            summary_state=summary_state or (lambda *_args, **_kwargs: ("summary", 0)),
-            retain_session=retain or (lambda *_args, **_kwargs: None),
-            purge_session_memory=purge or (lambda *_args, **_kwargs: 0),
-        )
+    def _service(self, **overrides):
+        from bridge.memory_contracts import MemoryBlock
 
-    def test_normal_prompt_context_combines_recall_and_summary(self):
-        calls = []
-        service = self._service(
-            recall=lambda db, chat_id, session, fields, query: (
-                calls.append(("recall", chat_id, session["session_id"], fields["name"], query)) or "remembered fact"
-            ),
-            summary=lambda db, chat_id, session: (
-                calls.append(("summary", chat_id, session["session_id"])) or "continuity summary"
-            ),
-            summary_state=lambda *_args: (_ for _ in ()).throw(
-                AssertionError("normal prompt must not read summary state")
+        def reader(channel):
+            def read(db, scope, *args):
+                self.assertIs(scope, self.scope)
+                self.calls.append(channel)
+                return MemoryBlock(channel + " material", channel=channel)
+
+            return read
+
+        values = dict(
+            resolve_scope=lambda *args, **kwargs: self.scope,
+            scoped_recall=reader("recall"),
+            scoped_episodes=reader("episodic"),
+            scoped_summary=reader("summary"),
+            scoped_scene=reader("scene"),
+            validate_blocks=lambda db, scope, blocks: self.calls.append("validate") or blocks,
+            summary_state=lambda *args: ("stored summary", 23),
+            retain_session=lambda *args: None,
+            purge_session_memory=lambda *args: 0,
+        )
+        values.update(overrides)
+        return MemoryService(**values)
+
+    def test_normal_prompt_context_combines_independent_scoped_readers(self):
+        result = self._service().prompt_context(self.db, "chat", self.session, self.fields, "Where are we?")
+        self.assertEqual(
+            (result.recall, result.episodic, result.summary, result.scene),
+            (
+                "recall material",
+                "episodic material",
+                "summary material",
+                "scene material",
             ),
         )
+        self.assertIs(result.scope, self.scope)
+        self.assertEqual(self.calls, ["summary", "scene", "episodic", "recall", "validate"])
 
-        result = service.prompt_context(
+    def test_edit_adapter_resolves_pre_user_boundary_before_every_read(self):
+        resolved = []
+        service = self._service(resolve_scope=lambda *args, **kwargs: resolved.append(kwargs) or self.scope)
+        result = service.prompt_context(self.db, "chat", self.session, self.fields, "edited", edited_user_rowid=20)
+        self.assertEqual(resolved[0]["through_rowid"], 19)
+        self.assertIs(resolved[0]["historical"], True)
+        self.assertIs(result.scope, self.scope)
+        self.assertEqual(self.calls[-1], "validate")
+
+    def test_unresolved_scope_never_reads_memory(self):
+        result = self._service(resolve_scope=lambda *args, **kwargs: None).prompt_context(
             self.db,
             "chat",
             self.session,
             self.fields,
-            "Where are we?",
+            "query",
         )
+        self.assertEqual(result, MemoryPromptContext())
+        self.assertEqual(self.calls, [])
 
-        self.assertEqual(
-            result,
-            MemoryPromptContext(
-                recall="remembered fact",
-                summary="continuity summary",
-            ),
-        )
-        self.assertEqual(
-            calls,
-            [
-                ("recall", "chat", "session-1", "Mira", "Where are we?"),
-                ("summary", "chat", "session-1"),
-            ],
-        )
+    def test_final_validation_controls_all_rendered_channels(self):
+        from bridge.memory_contracts import MemoryBlock
 
-    def test_edit_covered_by_summary_suppresses_summary_without_regeneration(self):
-        summary_calls = []
-        service = self._service(
-            recall=lambda *_args: "memory",
-            summary=lambda *_args: summary_calls.append("called") or "stale summary",
-            summary_state=lambda _db, chat_id, session_id: (
-                "stored summary",
-                42,
-            ),
-        )
-
-        result = service.prompt_context(
-            self.db,
-            "chat",
-            self.session,
-            self.fields,
-            "edited text",
-            edited_user_rowid=20,
-        )
-
-        self.assertEqual(result.recall, "memory")
-        self.assertEqual(result.summary, "")
-        self.assertEqual(summary_calls, [])
-
-    def test_edit_not_covered_by_summary_uses_normal_summary_provider(self):
-        service = self._service(
-            recall=lambda *_args: "memory",
-            summary=lambda *_args: "safe summary",
-            summary_state=lambda *_args: ("older summary", 9),
-        )
-
-        result = service.prompt_context(
-            self.db,
-            "chat",
-            self.session,
-            self.fields,
-            "edited text",
-            edited_user_rowid=20,
-        )
-
-        self.assertEqual(
-            result,
-            MemoryPromptContext(recall="memory", summary="safe summary"),
-        )
+        result = self._service(
+            validate_blocks=lambda db, scope, blocks: tuple(MemoryBlock(channel=block.channel) for block in blocks)
+        ).prompt_context(self.db, "chat", self.session, self.fields, "query")
+        self.assertEqual((result.recall, result.episodic, result.summary, result.scene), ("", "", "", ""))
 
     def test_retain_delegates_to_injected_provider(self):
         calls = []
-        service = self._service(
-            retain=lambda db, chat_id, session, fields: calls.append((db, chat_id, session, fields))
+        self._service(retain_session=lambda *args: calls.append(args)).retain(
+            self.db,
+            "chat",
+            self.session,
+            self.fields,
         )
-
-        service.retain(self.db, "chat", self.session, self.fields)
-
-        self.assertEqual(
-            calls,
-            [(self.db, "chat", self.session, self.fields)],
-        )
+        self.assertEqual(calls, [(self.db, "chat", self.session, self.fields)])
 
     def test_purge_session_returns_injected_provider_result(self):
         calls = []
-        service = self._service(purge=lambda db, chat_id, session_id: calls.append((db, chat_id, session_id)) or 7)
-
-        result = service.purge_session(self.db, "chat", "session-1")
-
+        result = self._service(purge_session_memory=lambda *args: calls.append(args) or 7).purge_session(
+            self.db,
+            "chat",
+            "session-1",
+        )
         self.assertEqual(result, 7)
         self.assertEqual(calls, [(self.db, "chat", "session-1")])
 
     def test_summary_status_delegates_to_summary_state_provider(self):
-        calls = []
-        service = self._service(
-            summary_state=lambda db, chat_id, session_id: (
-                calls.append((db, chat_id, session_id)) or ("stored summary", 23)
-            )
-        )
-
-        result = service.summary_status(self.db, "chat", "session-1")
-
-        self.assertEqual(result, ("stored summary", 23))
-        self.assertEqual(calls, [(self.db, "chat", "session-1")])
+        self.assertEqual(self._service().summary_status(self.db, "chat", "session-1"), ("stored summary", 23))
 
 
 class MemoryServiceMessageIntegrationTests(SettingsTestCase):

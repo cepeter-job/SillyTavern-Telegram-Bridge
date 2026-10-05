@@ -35,7 +35,7 @@ def test_media_migration_removes_only_orphan_receipts():
     from bridge.schema import SCHEMA_MIGRATIONS
 
     with closing(sqlite3.connect(":memory:")) as db:
-        run_migrations(db, SCHEMA_MIGRATIONS[:-1])
+        run_migrations(db, tuple(item for item in SCHEMA_MIGRATIONS if item.version < 19))
         db.execute(
             "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat','s','assistant','Hello',1)"
         )

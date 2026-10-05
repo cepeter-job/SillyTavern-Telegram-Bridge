@@ -13,14 +13,6 @@ from bridge.memory_store import claim_jobs
 from bridge.metadata import set_meta
 
 
-@pytest.fixture(autouse=True)
-def forbid_real_hindsight_client(monkeypatch):
-    def forbidden(**kwargs):
-        pytest.fail("Durable memory tests must explicitly fake the Hindsight client")
-
-    monkeypatch.setattr(memory_backend, "hindsight_client", forbidden)
-
-
 def add(db, text="A durable event"):
     db.execute(
         "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat','s1','user',?,1)", (text,)
@@ -554,5 +546,5 @@ def test_delayed_dispatch_stale_closure_releases_only_its_own_lease(session_db, 
 
 def test_durable_worker_module_fails_before_real_client_construction(session_db):
     settings, _, _ = session_db
-    with pytest.raises(pytest.fail.Exception, match="must explicitly fake"):
+    with pytest.raises(pytest.fail.Exception, match=r"^Memory runtime test reached unconfigured native/external I/O$"):
         memory_backend.hindsight_client(app_settings=settings)

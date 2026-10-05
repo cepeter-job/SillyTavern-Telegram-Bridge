@@ -3,10 +3,21 @@
 [Back to README](../README.md) · [Installation](installation.md) ·
 [User guide](user-guide.md) · [Troubleshooting](operations.md#troubleshooting)
 
-For a guided installation, edit the private files the installer created. You
-usually need only the bot settings and one provider to start. The reference
-tables below cover optional services and advanced controls.
+Use this guide when you need to change a setting or connect a provider. A guided
+installation already creates your private configuration; you do not need to
+copy every example below or fill in every optional setting.
 
+There are two files to understand. **`.env`** holds bot settings, paths and
+credentials. The **provider YAML catalog** lists the services and models you can
+choose. The catalog refers to a credential by its environment-variable name;
+the actual key stays in `.env`.
+
+For a first provider, read [Minimum settings](#minimum-required-configuration)
+and the [provider example](#provider-catalog). For a working installation, start
+with [Change a setting safely](#change-a-setting-safely), then look up just the
+setting you need. The larger tables remain a full reference.
+
+- [Change a setting safely](#change-a-setting-safely)
 - [Minimum settings](#minimum-required-configuration)
 - [Environment reference](#environment-variable-reference)
 - [Context limits](#context-planning-and-diagnostics)
@@ -22,10 +33,13 @@ recommended location is:
 ~/.local/share/sillytavern-telegram/.env
 ```
 
-For a manual/custom installation only, create it from the maintained example without overwriting an existing private file:
+For a manual/custom installation only, create it from the maintained example
+without overwriting an existing private file. Run the following block from the
+bridge checkout; change the `cd` path if yours is different.
 
 ```bash
 set -euo pipefail
+cd ~/sillytavern-telegram-bridge
 env="$HOME/.local/share/sillytavern-telegram/.env"
 mkdir -p "$(dirname "$env")"
 test ! -e "$env" || { echo "Refusing to overwrite $env" >&2; exit 1; }
@@ -47,9 +61,41 @@ service after changing `.env`.
 > read. Set it in the process or systemd environment when using a non-default
 > path; putting it only inside the alternate file cannot select that same file.
 
+### Change a setting safely
+
+1. Open the existing private `.env` or provider catalog in your text editor.
+   Change only the setting you need. Keep a private copy before a larger edit.
+2. Save the file. Put comments on their own lines, and do not define the same
+   `.env` key twice. **Do not run `source .env`**: the bridge reads this file
+   itself; it is not a shell script.
+3. From the installed checkout, check the configuration:
+
+   ```bash
+   cd ~/sillytavern-telegram-bridge
+   ./.venv/bin/python sillytavern_telegram_bridge.py --check
+   ```
+
+4. If the check succeeds, restart and inspect the service:
+
+   ```bash
+   systemctl --user restart sillytavern-telegram.service
+   systemctl --user status sillytavern-telegram.service --no-pager
+   ```
+
+Correct a reported error before restarting. A successful configuration check
+validates the local setup; it does not prove that your provider account has
+credit or can run the selected model. Send a short Telegram reply to test that.
+
+In the tables, `$SILLYTAVERN_BRIDGE_HOME` and similar expressions describe how a
+default path is derived. For custom paths in `.env`, use a full filesystem path
+rather than assuming that shell variables will be expanded there.
+
 ### Minimum required configuration
 
-The bridge validates these values before polling Telegram:
+These four settings identify your bot, allowed users, starting character and
+starting model. Replace every example value. They are only the bot-side part of
+the setup: the matching provider entry, its credential and its allowed hostname
+must also be configured as shown in [Provider catalog](#provider-catalog).
 
 ```dotenv
 SILLYTAVERN_TELEGRAM_BOT_TOKEN=replace-me
@@ -72,6 +118,10 @@ See the [minimal provider example](#provider-catalog).
 SillyTavern installation lives elsewhere.
 
 ### Environment variable reference
+
+Leave optional values at their defaults unless you need that feature. A default
+URL for Hindsight, embeddings or voice does not install or start that service.
+The tables describe available settings, not a list of required dependencies.
 
 #### Bot, model, and catalog
 
@@ -297,10 +347,15 @@ These variables are consumed by `install.sh`/`bridge.install_support` while prep
 
 ## Provider catalog
 
-The bridge uses its own **private YAML provider catalog**; it does not import SillyTavern provider credentials/settings. For a manual/custom setup, start from the maintained example without overwriting an existing private catalog:
+The bridge uses its own **private YAML provider catalog**. It does not copy
+provider credentials or connection settings from the SillyTavern web frontend.
+
+For a manual/custom setup, start from the maintained example below. Run it from
+the bridge checkout. It stops rather than replacing an existing private catalog.
 
 ```bash
 set -euo pipefail
+cd ~/sillytavern-telegram-bridge
 catalog="$HOME/.local/share/sillytavern-telegram/sillytavern_telegram_providers.yaml"
 mkdir -p "$(dirname "$catalog")"
 test ! -e "$catalog" || { echo "Refusing to overwrite $catalog" >&2; exit 1; }
@@ -326,12 +381,26 @@ providers:
     discover_model_metadata: true
 ```
 
-Then place the referenced credential in your private environment file:
+This is a template, not a live endpoint. Replace `https://provider.example/v1`
+with the API base address supplied by your provider, and `provider-one/model-a`
+with its exact model ID. Keep indentation as shown and use spaces, not tabs.
+`provider-one` is your local provider label; it is also the part before `::` in
+`SILLYTAVERN_MODEL`.
+
+Then add or update the matching credential and hostname in your existing private
+`.env` file. Do not append a second copy of a key that is already present:
 
 ```dotenv
 PROVIDER_ONE_API_KEY=replace-me
 SILLYTAVERN_PROVIDER_ALLOWED_HOSTS=provider.example
 ```
+
+`api_key_env: PROVIDER_ONE_API_KEY` names the variable to read; it is not the key
+itself. The hostname entry contains only the host, such as `provider.example`,
+not `https://provider.example/v1`. When adding a provider, preserve any other
+hosts you still use in the comma-separated allowlist. Finish with the
+[check and restart steps](#change-a-setting-safely), then open `/providers` in
+Telegram and try the configured Story model.
 
 ### Native OpenAI Codex OAuth
 
@@ -375,8 +444,9 @@ SILLYTAVERN_PROVIDER_ALLOWED_HOSTS=chatgpt.com,auth.openai.com
 ```
 
 ```bash
-python sillytavern_telegram_bridge.py --codex-login
-python sillytavern_telegram_bridge.py --codex-status
+cd ~/sillytavern-telegram-bridge
+./.venv/bin/python sillytavern_telegram_bridge.py --codex-login
+./.venv/bin/python sillytavern_telegram_bridge.py --codex-status
 ```
 
 On a VPS, run `--codex-login` in an interactive SSH terminal (`ssh -t` when
@@ -475,9 +545,9 @@ panel-only; typing a provider subcommand returns guidance instead of running it.
 
 ### Outbound host policy
 
-The YAML catalog describes **where** to call; it does not grant network trust.
-External endpoints must also be present in the corresponding environment
-allowlist. An empty external-host list is fail-closed.
+The YAML catalog says **where** the provider is. The environment allowlist says
+**which hosts the bridge may contact**. Both must agree. An empty external-host
+list blocks external requests; it does not mean that every host is allowed.
 
 ```dotenv
 SILLYTAVERN_PROVIDER_ALLOWED_HOSTS=provider.example,images.example
@@ -493,6 +563,11 @@ Hindsight is intentionally different: its third-party SDK is accepted only at a 
 ---
 
 ## Provider runtime health and fallback
+
+A cooldown is a temporary pause after errors. It helps avoid sending the same
+failing request repeatedly. A fallback is a different model tried when the
+selected provider cannot complete an eligible request. These are different from
+refreshing the model list, which only updates the choices shown in the picker.
 
 The bridge observes actual text-generation requests independently of model
 discovery. One transient failure is shown as degraded; three consecutive network,

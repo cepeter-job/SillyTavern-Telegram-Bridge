@@ -3,8 +3,14 @@
 [Back to README](../README.md) · [Installation](installation.md) ·
 [Configuration](configuration.md) · [Mini App](miniapp.md)
 
-Run these commands as the Linux user who owns the bridge. The default checkout
-is `~/sillytavern-telegram-bridge`; use your chosen location if it differs.
+Use this guide to check the bot, update it or recover a saved story. Terminal
+commands run on the Linux host as the user who installed the bridge, not inside
+Telegram and not in a root shell. The default checkout is
+`~/sillytavern-telegram-bridge`; adjust that path for a custom installation.
+
+For a failed reply, try the matching [recovery action](user-guide.md#retry-regenerate-or-continue)
+first. Reinstalling, resetting the story or restoring an older database is not
+the first step for a provider timeout.
 
 - [Service controls](#service-controls)
 - [Troubleshooting](#troubleshooting)
@@ -12,19 +18,26 @@ is `~/sillytavern-telegram-bridge`; use your chosen location if it differs.
 - [Signed updates](#automatic-signed-update)
 - [Manual update](#manual-update)
 - [Backup and restore](#database-migrations-backup-and-restore)
+- [Closed-story recovery](#closed-story-recovery)
+- [Alternate-ending recovery](#alternate-ending-recovery)
 
 ## Service controls
 
-Check configuration and recent service activity:
+Check the local configuration, service status and recent log in that order:
 
 ```bash
 cd ~/sillytavern-telegram-bridge
 ./.venv/bin/python sillytavern_telegram_bridge.py --check
-systemctl --user status sillytavern-telegram.service
+systemctl --user status sillytavern-telegram.service --no-pager
 journalctl --user -u sillytavern-telegram.service -n 100 --no-pager
 ```
 
-Restart after editing `.env`:
+`--check` validates local configuration. `active (running)` means the service
+process is up; it does not prove that the provider can answer. The log is the
+place to look for the actual error. If a command opens a scrollable view, press
+`q` to return to the terminal.
+
+After a configuration edit passes `--check`, restart to load it:
 
 ```bash
 systemctl --user restart sillytavern-telegram.service
@@ -40,8 +53,10 @@ To check whether the user service can remain active after logout:
 loginctl show-user "$USER" -p Linger
 ```
 
-If it reports `Linger=no`, an administrator can enable it with
-`sudo loginctl enable-linger "$USER"`. The installer also offers lingering setup.
+`Linger=yes` means the user service may keep running after you log out.
+If it reports `Linger=no`, run `sudo loginctl enable-linger "$USER"` from the
+bridge user's terminal, or ask an administrator to enable it for that username.
+Do not substitute the root account. The installer also offers lingering setup.
 
 ## Troubleshooting
 
@@ -75,6 +90,10 @@ See [provider diagnostics](configuration.md#provider-diagnostics-and-catalog-mai
 for the difference between model discovery, manual probes and runtime health.
 
 ### Memory OOM diagnostics
+
+OOM means out of memory. RSS is the amount of physical RAM currently attributed
+to the process. These diagnostics help explain memory growth; they do not add
+RAM or impose a new memory limit.
 
 Memory diagnostics are off by default. To investigate unexplained bridge memory
 growth, add this to the private `.env`, then restart:
@@ -116,14 +135,24 @@ The maintained assets are `SillyTavern-Telegram-Bridge-vX.Y.Z.zip` and its
 `.sha256` file. Verify the checksum and authenticate the corresponding signed tag
 before using an archive. Extract into a fresh directory.
 
-The repository retains only the latest GitHub release and tag. Earlier release
-history remains in [CHANGELOG.md](../CHANGELOG.md) and Git history; keep local
-backups needed for recovery.
+Choose a published release and read its notes before updating. A tag or commit
+on `main` is not by itself a published release. Release archives contain code,
+not your private settings or stories; keep your own backups for recovery.
+[CHANGELOG.md](../CHANGELOG.md) records the release history.
 
 ### Automatic signed /update
 
 Open `/update` in Telegram or the Mini App's System page. Review the release and
-confirm installation. The updater requires:
+confirm installation. Let the update finish before requesting it again. Then
+check the running version and send a short test message. You normally do not
+need to run Git commands or edit the trust file for each release.
+
+**Running** is the code loaded by the current process; **Installed** describes
+the files on disk. If only Installed has changed, investigate the restart rather
+than assuming the bot is already using the update.
+
+The checks below explain why the updater may refuse a request. Do not bypass
+them to force an update. The updater requires:
 
 - A clean Git checkout on `main` and an SSH-signed annotated release tag.
 - An external allowed-signers file containing trusted public release keys.
@@ -232,44 +261,64 @@ Use a fresh backup destination if `prehardening-live-backup` already exists.
 
 ### Manual update
 
-Use this when the signed updater refuses a dependency change or when you need a
-reviewed offline installation. Back up private configuration and native data as
-well as the database. For an installer-managed Git checkout:
+Use this when `/update` reports changed runtime dependencies, or when you need
+to install a specific reviewed release. This procedure is for an
+installer-managed **Git checkout**. Back up the database, private configuration
+and native SillyTavern data first; see [Backup and restore](#database-migrations-backup-and-restore).
+
+Open the [releases page](https://github.com/cepeter/SillyTavern-Telegram-Bridge/releases),
+read the notes, and copy the exact tag of the release you chose. The terminal
+block below asks for that tag rather than guessing from the highest tag in Git.
+Run it from an interactive Bash terminal as the bridge user. Check the two paths
+before running it if you use a custom checkout or trust file.
 
 ```bash
 set -euo pipefail
 cd ~/sillytavern-telegram-bridge
+read -r -p "Paste the reviewed release tag, including v: " tag
+[[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Expected a version tag such as v0.3.002" >&2; exit 1; }
 git switch main
-test -z "$(git status --porcelain)" || { echo "Source checkout is dirty" >&2; exit 1; }
+test -z "$(git status --porcelain)" || { echo "Source checkout has local changes; save and review them first" >&2; exit 1; }
 
 signers="$HOME/.config/sillytavern-telegram/trusted-maintainers"
-git fetch origin --tags --prune --prune-tags
-tag="$(git tag --list 'v*' --sort=-version:refname | sed -n '1p')"
-test -n "$tag" || { echo "No release tag found" >&2; exit 1; }
-
+git fetch origin "refs/tags/$tag:refs/tags/$tag"
 git -c gpg.format=ssh \
   -c "gpg.ssh.allowedSignersFile=$signers" \
   -c gpg.minTrustLevel=fully verify-tag "$tag"
+git merge-base --is-ancestor HEAD "$tag^{commit}" || { echo "This is not a forward update; stop and review the checkout and backup" >&2; exit 1; }
 
 ./.venv/bin/python sillytavern_telegram_bridge.py --backup-database
 systemctl --user stop sillytavern-telegram.service
 git checkout -B main "$tag^{commit}"
 ./install.sh --no-start
 ./.venv/bin/python sillytavern_telegram_bridge.py --check
+systemctl --user daemon-reload
 systemctl --user start sillytavern-telegram.service
+systemctl --user status sillytavern-telegram.service --no-pager
 ```
 
-The signature is verified before the checkout moves. Do not substitute
-`git pull origin main`; it may include unpublished changes. If a command fails
-after the stop, inspect the error before restarting. Verify the running revision
-and a short bot exchange after the update.
+The signature and forward-update checks happen before the service stops or the
+checkout moves. Existing tags are not pruned or force-replaced. A dirty checkout
+or a failed signature needs investigation, not a `git reset --hard` workaround.
+Do not substitute `git pull origin main`; it may include unpublished changes.
+
+If a command fails after the stop, leave the service stopped while you inspect
+the error. Once the configuration check succeeds, start the service and verify
+its running revision and one Telegram exchange. A downgrade across database
+schema changes needs the matching pre-upgrade snapshot; the block deliberately
+refuses to guess that recovery path.
 
 For a release ZIP, verify the checksum and signed-release authenticity, extract
 to a fresh directory, install locked dependencies, run `--check`, and point your
-service at the new directory. An archive install does not support automatic
-Git-based `/update`.
+service at the new directory. Do not overlay an older installation. An archive
+install does not support automatic Git-based `/update`.
 
 ### Database migrations, backup and restore
+
+A backup preserves your current data; a restore replaces it with an older saved
+copy. Restoring is for recovery, not ordinary troubleshooting. Messages and
+settings created after the chosen snapshot will not be present in that restored
+copy, so check its date and keep the current database too.
 
 New releases apply ordered forward migrations recorded in `schema_migrations`.
 The [schema definition](../bridge/schema.py) is the current migration reference.
@@ -332,38 +381,48 @@ or operational failure.
 
 ## Closed-story recovery
 
-The ending lifecycle and explicit committed message IDs are durable. Runtime
-startup and bounded periodic scans admit unfinished ending work only after
-service composition; migrations never call a provider. Normal reply delivery
-keeps its existing owner and acknowledgements. The recovery worker acquires a
-per-chat lock and a durable ending lease; expired leases can be reclaimed.
+Open Director Room to see whether the ending is waiting for generation, already
+saved, or only missing from Telegram. After a provider error, use `/retry` or
+**Recover saved ending**. Check the result before submitting another recovery.
+A failed model call does not start an unlimited automatic retry loop.
 
-`RESOLUTION_COMMITTED` resumes epilogue preparation. A committed epilogue resumes
-reconciliation and closure without another Story call. `CLOSED` resumes only
-missing delivery. Inspect Director Room and use `/retry` after a provider error;
-a failed model call is not an unlimited automatic retry loop. Read-only ending
-recovery never generates new expressions, speech or images. Database guards also
-reject stale queued writes that try to alter a completed original.
+The bridge resumes the unfinished step. It does not write a second epilogue just
+because Telegram failed to deliver the first one. Read-only recovery does not
+generate new expressions, speech or images, and a completed original stays closed.
+
+For operators reading logs, `RESOLUTION_COMMITTED` means epilogue preparation can
+resume. A committed epilogue needs its story record updated and closure completed,
+not another Story call. `CLOSED` needs only missing delivery completed. Startup
+and periodic scans schedule this work after services are ready; database
+migrations never call a provider. A per-chat lock and expiring work lease prevent
+workers from claiming the same recovery at once. Database guards reject stale
+queued writes to a completed original.
 
 Keep a database backup before an upgrade. Recovery tests cover transaction
 rollback and simulated restarts, not physical host power-loss behavior.
 
 ## Alternate-ending recovery
 
-Alternate Ending has one durable request identity and a deterministic target
-session. Creating the target, copying the checkpoint prefix and restoring local
-state is one transaction. A failed local copy leaves no half-created session;
-restart recovery resumes the same admitted request.
+Check the session list and the operation result before requesting another
+Alternate Ending. Retrying the same operation returns the same new session;
+making a later, separate request can create another branch. The original ending
+stays closed.
 
-Optional Hindsight seeding runs afterward under a reclaimable lease, using only
-the target's deterministic conversation document and strict session tag. A normal
-seeding error completes the branch as degraded instead of retrying indefinitely.
-A process interruption can resume after the lease expires without creating
-another target. An applied request retains a small provenance receipt; its
-transient operation payload is discarded. Source deletion after the local copy
-does not delete the independent target.
+A Hindsight warning means the copied history could not be added to external
+memory. It does not mean the local story was lost. The new session can still use
+its copied messages and local continuity, and it does not borrow the original
+finale's memories. See [Try an alternate ending](user-guide.md#try-an-alternate-ending)
+for the normal workflow.
 
-Source message IDs, Telegram delivery state, queued jobs, response variants and
-callback records are not reused by the target. Snapshot references are remapped
-to its new transcript identities. Prefix copying streams rows and keeps only the
-bounded set of references required by the checkpoint in memory.
+For operators, the new session, checkpoint messages and local state are created
+in one database transaction. A failed local copy leaves no half-created session.
+Restart recovery uses the same durable request identity. Optional Hindsight
+seeding follows under an expiring lease and uses only the new session's document
+and tags. A normal seeding error completes with a warning rather than retrying
+forever; interrupted work can resume after the lease expires.
+
+The new session receives its own message IDs and work records. It does not reuse
+source Telegram delivery state, jobs, response variants or callbacks. Once the
+local copy is complete, deleting the source does not delete the new session.
+Copying reads rows incrementally and retains only the checkpoint references it
+needs in memory.

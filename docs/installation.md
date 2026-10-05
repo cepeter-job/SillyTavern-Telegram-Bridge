@@ -3,9 +3,17 @@
 [Back to README](../README.md) · [First conversation](user-guide.md#your-first-conversation) ·
 [Configuration](configuration.md) · [Operations](operations.md)
 
-The supported installer runs the bridge as your normal Linux user and keeps it
-running through a user systemd service. Run the installer as that user, not as
-root. It may ask for administrator access to install missing system packages.
+This guide takes you from an empty Linux account to your first Telegram reply.
+Run the terminal commands on the computer or VPS that will host the bot. Your
+phone or desktop Telegram app is where you will chat after installation.
+
+Use a normal Linux account, not root. The installer creates a user systemd
+service: a background service owned by that account. It may ask for administrator
+access to install missing system packages, but do not put `sudo` before the
+installer itself. Keep the host online while using the bot.
+
+Already installed? Use [Updates](#updates) rather than starting over. Your
+existing stories and private settings do not need to be reset.
 
 ## Before you start
 
@@ -14,10 +22,16 @@ Have these ready:
 | Item | What to enter |
 |---|---|
 | Telegram bot token | The token for your bot from [BotFather](https://t.me/BotFather). |
-| Allowed users | Your numeric Telegram user ID; use commas for multiple IDs, not usernames. |
-| Story model | A route such as `provider-one::model-a`. The first part identifies the provider; the second is its exact model ID. |
-| Provider connection | Its API endpoint and credential, when the chosen transport needs one. |
+| Allowed users | Your own numeric Telegram account ID, not an `@username`, bot token or group ID. Use commas for multiple users. |
+| Story model | The exact model ID from your provider. A route such as `provider-one::model-a` combines a provider label with that model ID. |
+| Provider connection | The provider's API base address and API key when required. Use its API address, not the website's dashboard URL. |
 | Existing SillyTavern data | The application location and native user to use, if you already have an installation. |
+
+A bot token identifies **your bot**; an API key pays for or authorizes **model
+requests**; the numeric user ID identifies **you**. They are different values.
+Keep both credentials private. An ID-lookup tool does not need your bot token or
+provider key. Values such as `provider-one`, `model-a` and `123456789` in these
+guides are examples to replace, not a working account configuration.
 
 You do not need Hindsight, an embedding server or the Mini App to begin text
 chat. If there is no SillyTavern installation, the installer prepares isolated
@@ -28,13 +42,26 @@ Supported system package managers are `apt-get` (Debian/Ubuntu), `dnf` or `yum`
 
 ## Guided install
 
-Download the installer and run it in a terminal:
+Download the installer and run it in an interactive terminal. On a VPS, use your
+SSH or PuTTY session. Keep the terminal open for the setup questions.
+
+If the download reports `curl: command not found`, install curl and the HTTPS
+certificate package first. For Debian or Ubuntu, run:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y curl ca-certificates
+```
+
+On another supported distribution, use its package manager for the equivalent
+packages. Then download the installer. The `&&` separators below stop the next
+step from running if the download or permission change fails.
 
 ```bash
 curl --proto '=https' --tlsv1.2 --fail --location \
   https://raw.githubusercontent.com/cepeter/SillyTavern-Telegram-Bridge/main/install.sh \
-  -o /tmp/sillytavern-telegram-install.sh
-chmod 700 /tmp/sillytavern-telegram-install.sh
+  -o /tmp/sillytavern-telegram-install.sh &&
+chmod 700 /tmp/sillytavern-telegram-install.sh &&
 /tmp/sillytavern-telegram-install.sh
 ```
 
@@ -55,6 +82,12 @@ dependencies, verifies the newest signed release and creates the user service.
 It keeps a Git checkout on local branch `main` so signed `/update` can work later.
 The standard trust file lives outside the checkout; see [Trust model](#trust-model).
 
+Follow the prompts in order: select the data location when asked, enter the
+missing bot settings, then enter the model connection details. Secret input is
+hidden, so nothing may appear while you type a token or key. That is expected.
+Review the reported paths before continuing, especially when you have several
+SillyTavern installations.
+
 It asks only for missing required settings and hides secret input. Existing
 private `.env` values and custom service units are preserved. Choose
 **Configure later** to leave incomplete configuration in place with the service
@@ -67,7 +100,12 @@ Keep the generated file at:
 ```
 
 Edit this file for later changes. Copying `.env.example` over it would replace
-your private settings.
+your private settings. See [changing configuration safely](configuration.md#change-a-setting-safely)
+for the edit, check and restart steps.
+
+To resume deferred setup, run `./install.sh` from `~/sillytavern-telegram-bridge`
+in an interactive terminal. Rerunning it uses the existing checkout; it does
+not automatically advance that checkout to a newer release.
 
 ### Finding your SillyTavern data
 
@@ -104,10 +142,12 @@ If the bridge user needs permission to manage the local daemon, an administrator
 can run:
 
 ```bash
-sudo tailscale set --operator="$USER"
+sudo tailscale set --operator="bridge-user"
 ```
 
-That grants local operator access, not Funnel authorization. The Mini App still
+Replace `bridge-user` with the Linux username that runs the bridge, not the
+administrator's username. That grants local operator access, not Funnel
+authorization. The Mini App still
 requires a signed Telegram launch and an allowed Telegram user ID. Follow the
 [Mini App setup guide](miniapp.md#setup-with-tailscale-funnel) for listener handling
 and troubleshooting.
@@ -123,15 +163,20 @@ systemctl --user status sillytavern-telegram.service
 journalctl --user -u sillytavern-telegram.service -n 80 --no-pager
 ```
 
-The configuration check should finish successfully and systemd should report
-`active (running)`. Then open the bot and follow the
+The configuration check should finish without an error, and systemd should show
+`active (running)`. If the status or log opens a scrollable view, press `q` to
+return to the terminal. If the check fails, correct the named setting before
+starting or restarting the service; do not reset your database to fix a typo.
+
+Then open the bot and follow the
 [first conversation walkthrough](user-guide.md#your-first-conversation).
 A running process alone does not verify your model account: send a short message
 after `/start` to check the complete path.
 
 The installer enables the user service and can enable lingering so it continues
 after you log out. See [service controls](operations.md#service-controls) for
-restart, stop and lingering checks.
+restart, stop and lingering checks. Here, **lingering** means that Linux keeps
+your user services running after your terminal or SSH session closes.
 
 ## Updates
 

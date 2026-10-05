@@ -7,17 +7,22 @@
 Chat with your SillyTavern characters from Telegram. Choose a character, pick an
 opening message, and continue the story from your phone or desktop.
 
-The bridge reads native SillyTavern character cards, Personas, World Info and
-System Prompts. It keeps Telegram conversations in separate sessions and connects
-directly to your configured model provider. An optional Mini App gives you a
-larger interface for managing characters, sessions and settings inside Telegram.
+The bridge runs on a Linux computer or VPS and connects Telegram to your model
+provider. Keep that computer running; your phone is the chat interface, not the
+server. You can use existing SillyTavern cards and settings, or start with the
+installer's sample character. You do not need to install the SillyTavern web
+frontend just to try the bridge.
+
+Each story has its own session. The optional Mini App adds screens for managing
+characters, sessions and settings inside Telegram; it is not needed for text chat.
 
 **New here?** Follow the quick start below, then the
 [first conversation walkthrough](docs/user-guide.md#your-first-conversation).
 
 ## What you need
 
-- A Linux machine with user systemd for the supported installer.
+- A Linux computer or VPS with a normal, non-root account and user systemd
+  services. Systemd keeps the bot running after setup.
 - A Telegram bot token from [BotFather](https://t.me/BotFather) and your numeric
   Telegram user ID.
 - Access to a supported text model provider. The guided setup asks for its API
@@ -31,30 +36,40 @@ you can start with ordinary text chat.
 
 ## Quick start
 
-Run these commands as the Linux user who will run the bot:
+Open a terminal on the Linux machine that will run the bot. When using a VPS,
+run this in your SSH or PuTTY terminal, **not in Telegram**. Sign in as the
+normal Linux user who will own the installation; do not run the installer with
+`sudo` or as root.
 
 ```bash
 curl --proto '=https' --tlsv1.2 --fail --location \
   https://raw.githubusercontent.com/cepeter/SillyTavern-Telegram-Bridge/main/install.sh \
-  -o /tmp/sillytavern-telegram-install.sh
-chmod 700 /tmp/sillytavern-telegram-install.sh
+  -o /tmp/sillytavern-telegram-install.sh &&
+chmod 700 /tmp/sillytavern-telegram-install.sh &&
 /tmp/sillytavern-telegram-install.sh
 ```
 
-Choose **Standard install**. The wizard finds existing SillyTavern data, asks for
-missing configuration, installs a verified signed release and starts the user
-service. Keep your bot token, allowed user ID and provider details ready. Existing
-private configuration is preserved.
+Choose **Standard install** for your first setup. The wizard asks for missing bot
+and provider settings, looks for existing SillyTavern data, and prepares the
+service. Keep your bot token, numeric Telegram user ID, provider API address and
+model ID ready. Existing private configuration is preserved. A first install
+verifies a signed release before using its code.
 
-Choose **Install + Tailscale Mini App** if you also want the management interface.
-That option requires Tailscale 1.52+ already installed and signed in. You can add
-the Mini App later. Choose **Configure later** to prepare the installation and
-finish configuration before starting the bot.
+When setup finishes, check that the service is running and follow
+[Basic bot use](#basic-bot-use) below. If `curl` is missing, setup cannot start,
+or the service does not run, use the [installation walkthrough](docs/installation.md)
+before trying the command again.
 
-The normal download uses **trust on first use (TOFU)**: its embedded maintainer
-key verifies the release. For the full walkthrough, supported Linux package
-managers and an independently trusted setup, see
-[Installation](docs/installation.md).
+**Optional:** choose **Install + Tailscale Mini App** only when you also need the
+management interface and have Tailscale 1.52+ installed and signed in. Text chat
+works without it, and you can add it later. During configuration, **Configure
+later** lets you stop safely and return when you have the missing details.
+
+The download uses **trust on first use (TOFU)**: you initially trust the public
+signing key supplied by this installer. Later updates verify release signatures
+against your saved trust file. See the [trust explanation](docs/installation.md#trust-model)
+for independent key verification. Rerunning the installer is not a substitute
+for the [signed update procedure](docs/operations.md#automatic-signed-update).
 
 ## What you can do
 
@@ -84,24 +99,31 @@ explains the tradeoffs.
 
 ## Basic bot use
 
-1. Open your bot's private chat and send `/character`. Follow the setup panel to
-   choose a character, Narrative Style, mode and session. Optional Persona, World and System Prompt
-   choices can be skipped.
-2. Use `/providers` to check the **Story** model. **Utility** is the model used
-   for summaries and other helpers; it can inherit Story. **Director** plans the
-   narrative and can inherit Utility.
-3. Send `/start` and choose the character's Default or Alternate greeting.
-4. Send normal messages to continue the story.
-5. Use `/session` to switch stories, `/settings` to adjust generation, and
-   `/narrative` to change viewpoint and story focus, `/director` to inspect plans
-   and endings, and `/status` to see narrative continuity and the context budget.
+In Telegram, open your bot's **private chat**:
 
-Telegram `/help` is the **canonical command reference**. For a particular action,
-ask for focused help, such as `/help scene refresh`.
+1. Send `/character` and choose a card. For a first test, choose **Player-centric**
+   and **Normal**. Skip optional Persona, World Info and System Prompt choices,
+   then choose or create a session and tap **Apply**.
+2. Open `/providers` and check the **Story** model, which writes the replies.
+   You do not need three different models: Utility can use Story, and Director
+   can use Utility. The [user guide](docs/user-guide.md#choosing-models) explains
+   when separate models are useful.
+3. Send `/start`, preview the Default or Alternate greetings, and choose one.
+   You should see the character's opening message.
+4. Send normal messages to continue the story. For example:
+   `*I look around the room.* "Where should we go next?"`
 
-If a new session says `Please use /start command.`, choose its greeting before
-sending dialogue. For an interrupted response, see
-[retry and recovery](docs/user-guide.md#retry-regenerate-or-continue).
+Use `/session` to return to an earlier story and `/status` to check which story
+is active. `/settings` changes generation settings; `/narrative` changes viewpoint
+and focus. Explore `/director` for planning and endings after the first exchange
+works.
+
+Telegram `/help` is the **canonical command reference**. For one action, try
+`/help scene refresh` rather than reading every command at once.
+
+`Please use /start command.` means that this session has not sent its greeting
+yet. It does not mean you need to reinstall the bot. If a reply fails, return to
+that session and use the [retry and recovery guide](docs/user-guide.md#retry-regenerate-or-continue).
 
 ## Documentation
 
@@ -113,6 +135,10 @@ sending dialogue. For an interrupted response, see
 | Restart, update, back up or troubleshoot the bridge | [Operations](docs/operations.md) |
 | Use the Telegram management interface | [Mini App](docs/miniapp.md) |
 | Understand reported model usage and missing counts | [Token usage](docs/token-usage.md) |
+
+The six guides above describe how to use and maintain the bot. Dated files under
+`docs/audits/` and `docs/superpowers/` are development records, not alternative
+installation instructions.
 
 For project maintenance, see [Contributing](CONTRIBUTING.md), the
 [Changelog](CHANGELOG.md), [Security policy](SECURITY.md) and

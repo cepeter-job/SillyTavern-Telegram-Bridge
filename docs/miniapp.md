@@ -7,15 +7,25 @@ The Mini App is an optional management interface inside Telegram. You still chat
 with characters through the bot. Use the app when a larger screen makes it easier
 to browse cards, edit settings or review usage.
 
+Already configured? Start with [Open the Mini App](#open-the-mini-app) and
+[Find what you need](#find-what-you-need). To enable it for the first time, go to
+[Setup with Tailscale Funnel](#setup-with-tailscale-funnel). A problem opening a
+form or completing a task is covered in [Troubleshooting](#troubleshooting).
+
 ## Open the Mini App
 
 After setup, open your bot's **private chat** and use its Bridge menu. Launching
 from Telegram supplies the signed identity the app needs. Only users listed in
 `SILLYTAVERN_TELEGRAM_ALLOWED_USERS` can open it.
 
-A copied browser URL is not a separate login. If the session expires, reopen the
-app from Telegram. The default signed-launch lifetime is one hour. Main Mini App
-profile/deep links also need BotFather configuration.
+You should see Home with the current story and bridge status. A copied browser
+URL is not a separate login: Telegram supplies the login information when you
+launch the app. If it expires, close the app and reopen it from the bot chat.
+The default launch lifetime is one hour. Opening through a main Mini App profile
+or deep link also needs the corresponding BotFather configuration.
+
+If there is no Bridge menu, check that Mini App setup finished and the service
+restarted. Sending ordinary messages to the bot still works without this menu.
 
 The app manages private-chat sessions. Group chats and Forum Topics are not
 authorized by a launch link. Allowed users can edit shared native characters,
@@ -45,11 +55,15 @@ separate Narrative Style controls.
 Choose a character to create a new normal session, then send `/start` in Telegram
 for its opening. This leaves your existing conversation intact.
 
-The Optimizer uses Utility to prepare an original/proposed preview. You can add
-a Manual suggestion, review changes, then **Apply** or **Discard**. Apply checks
-the original card revision and consumes the proposal once. An existing-filename
-upload also needs a replacement preview. Active/default/referenced cards cannot
-be deleted, and restores check the reviewed revision.
+The Optimizer asks the Utility model to prepare a preview. Compare the original
+and proposed fields, add a Manual suggestion when needed, then choose **Apply**
+or **Discard**. Until you apply it, the installed card is unchanged. If the card
+changed while you were reviewing, prepare a fresh preview instead of forcing the
+old one through. Optimizing and ranking can consume model tokens.
+
+Uploading a filename that already exists also requires a replacement review.
+Cards used by active sessions, defaults or other references cannot be deleted;
+a restore checks that the file still matches the version you reviewed.
 
 S–D badges are model-generated assessments. They use the shared
 [rank assets](../assets/character-ranks/README.md); a static badge is used when
@@ -91,15 +105,60 @@ limit is 10 MB. Full-text search remains available without embeddings.
 
 ### Slow operations and stale forms
 
-Long tasks have an operation ID and a queued/running/completed outcome under
-**System → Operations**. Identical retries reuse an admitted operation. Check its
-status before submitting another task. After a restart, interrupted work is
-marked for review rather than silently replayed.
+For a task that takes time, open **System → Operations** before submitting it
+again. Each task has an operation ID so you can find the same request:
+
+| State | What to do |
+|---|---|
+| **Queued** | The request is waiting for a worker. Do not submit another copy. |
+| **Running** | Work has started. Check this operation for the result. |
+| **Completed** | Open its result; an optimizer preview can be reviewed from here. |
+| **Interrupted** | The process restarted. Inspect the result before retrying because part of the action may already have happened. |
+
+Identical retries reuse the accepted operation. Interrupted work is marked for
+review rather than silently started over.
 
 A completed optimizer preview can be reopened from Operations without another
 model call. Apply still checks the originating user/session and card revision.
 Forms keep the session they were opened for; changing the active session does not
 redirect an old confirmation. Refresh and review again when a form is stale.
+
+## Director Room
+
+Choose **Manage → Director Room** to read scene plans, the current viewpoint,
+storylines and recent decisions. Planning text is not story dialogue or character
+knowledge. **Next scene only** and **Persistent objective** are separate controls;
+only the latter remains until you explicitly change or clear it. The same
+persistent objective is available through Telegram `/group goal`.
+
+Choose an established thread to guide the next scene, or use **Reassess now** for a
+provider-backed Director check. The confirmation makes the extra model call
+explicit. Repeated requests reuse the existing job, and an old rendered page
+cannot retarget its edit to a different active session.
+
+Director settings offer Adaptive, 4/6/10-turn and custom 1–100-turn cadence, plus a
+reasoning budget separate from Utility. **Choose models** opens Story/Utility/
+Director routing. Text is rendered safely; saving a long objective preserves the
+full supported 4,000 characters even when Telegram shows a shorter preview.
+
+### Ending controls
+
+Director Room includes the story's ending mode, optional goal, finale-confirmation
+preference and current lifecycle. **Begin finale** requires explicit consent and
+checks the displayed story revision. **Recover saved ending** is a bounded job
+that resumes only unfinished epilogue work or delivery. **View ending** reads the
+saved prose without a provider call. Completed sessions offer **New Story** and
+keep their original ending immutable.
+
+### Alternate endings
+
+A completed story with a valid checkpoint offers **Alternate Ending** in Director
+Room. Confirming creates an independent session and switches to it when the
+original is still active. The app tracks this as an operation belonging to you
+and the original session. Retrying that operation retrieves its result instead
+of creating a second branch; a later explicit request can create a different
+alternate ending. The original stays closed. A memory warning means the copied
+history could not be added to external memory, not that the new local story was lost.
 
 ## Setup with Tailscale Funnel
 
@@ -127,13 +186,16 @@ stop the service and follow the [manual update procedure](operations.md#manual-u
 Custom service units require an explicit `--replace-service` and are backed up.
 
 An administrator can grant local daemon access with
-`sudo tailscale set --operator="$USER"`. This does not grant Funnel policy
-authorization. Run the bridge installer as the bridge user.
+`sudo tailscale set --operator="bridge-user"`. Replace `bridge-user` with the
+Linux username running the bridge. This does not grant Funnel policy
+authorization. Run the bridge installer as that user, not as the administrator.
 
 ### URL and listener handling
 
-Funnel is public; authentication comes from Telegram, not membership in your
-tailnet. The installer discovers a `/miniapp/` URL when the configured URL is
+Funnel makes the HTTPS address reachable from the public internet. Telegram's
+signed login and the allowed-user list still protect the app; being on your
+private Tailscale network is not the app's login mechanism. The installer
+discovers a `/miniapp/` URL when the configured URL is
 blank. With no public URL and no Funnel setup, the listener stays disabled.
 
 Discovery reuses an exact existing public mapping or selects an unused HTTPS
@@ -210,40 +272,3 @@ names, portraits and status from the authenticated bridge.
     <td><img src="assets/miniapp-concept/manage.webp" alt="Mini App Manage design preview" width="280"></td>
   </tr>
 </table>
-
-## Director Room
-
-Choose **Manage → Director Room** to inspect hidden scene plans, current viewpoint,
-threads and recent decisions. Planning text is not story dialogue or character
-knowledge. **Next scene only** and **Persistent objective** are separate controls;
-only the latter remains until you explicitly change or clear it. The same
-persistent objective is available through Telegram `/group goal`.
-
-Choose an established thread to guide the next scene, or use **Reassess now** for a
-provider-backed Director check. The confirmation makes the extra model call
-explicit. Repeated requests reuse the existing job, and an old rendered page
-cannot retarget its edit to a different active session.
-
-Director settings offer Adaptive, 4/6/10-turn and custom 1–100-turn cadence, plus a
-reasoning budget separate from Utility. **Choose models** opens Story/Utility/
-Director routing. Text is rendered safely; saving a long objective preserves the
-full supported 4,000 characters even when Telegram shows a shorter preview.
-
-### Ending controls
-
-Director Room includes the story's ending mode, optional goal, finale-confirmation
-preference and current lifecycle. **Begin finale** requires explicit consent and
-checks the displayed story revision. **Recover saved ending** is a bounded job
-that resumes only unfinished epilogue work or delivery. **View ending** reads the
-saved prose without a provider call. Completed sessions offer **New Story** and
-keep their original ending immutable.
-
-### Alternate endings
-
-A completed story with a valid checkpoint offers **Alternate Ending** in Director
-Room. Confirming creates an independent session and switches to it when the
-original is still active. The action runs through the existing actor-bound jobs
-queue. Retrying the same operation retrieves its result instead of creating a
-second branch; a later explicit request can create a different alternate ending.
-The original stays closed. A memory warning means external seeding was unavailable,
-not that the new local story was lost.

@@ -3,8 +3,13 @@
 [Back to README](../README.md) · [Installation](installation.md) ·
 [Configuration](configuration.md) · [Troubleshooting](operations.md#troubleshooting)
 
-Start with a normal conversation. Add memory, images, voice or group controls
-when they solve a problem for your story.
+Start with [Your first conversation](#your-first-conversation). You can leave
+optional features alone until you have exchanged a few messages with a character.
+The remaining sections are references to return to as you need them, not a setup
+checklist you must finish before chatting.
+
+Commands beginning with `/` go in Telegram. Terminal commands in the installation
+and operations guides run on the Linux host instead.
 
 - [Your first conversation](#your-first-conversation)
 - [Everyday controls](#everyday-controls)
@@ -12,6 +17,7 @@ when they solve a problem for your story.
 - [Models, context and memory](#models-context-and-memory)
 - [Narrative Style](#narrative-style)
 - [Director Room](#director-room)
+- [Closed stories and alternate endings](#closed-story-and-the-epilogue)
 - [Light Novel choices](#light-novel-mode)
 - [Characters and native data](#characters-and-native-data)
 - [Images, voice and documents](#images-voice-and-documents)
@@ -20,6 +26,8 @@ when they solve a problem for your story.
 ## Your first conversation
 
 After [installing the bridge](installation.md), open your bot's private chat.
+For this first test, use **Player-centric**, **Normal** and the configured Story
+model. You can explore other styles and helper models afterward.
 
 1. Send `/character` and choose a PNG character card.
 2. Choose a **Narrative Style**. **Player-centric** keeps the focus on your
@@ -33,6 +41,17 @@ After [installing the bridge](installation.md), open your bot's private chat.
 6. Send `/start`, preview the character's Default or Alternate greetings, and
    choose one. Then send your first message.
 
+You should now see the character's opening message. Try a short reply such as:
+
+```text
+*I pause at the doorway.* "Were you expecting someone?"
+```
+
+If the character answers, the basic setup works. Use `/status` to check the
+active session and `/session` when you need to return to it later. If no answer
+arrives, check [Troubleshooting](operations.md#troubleshooting) before sending
+several retries.
+
 Setup is a draft until you tap Apply. Applying setup does not start the story;
 `/start` sends the card's opening message. That greeting does not need a Story
 generation request. Light Novel mode then makes a separate request for its first
@@ -45,21 +64,35 @@ a different opening, create another session or confirm a reset.
 
 ### A few terms
 
-| Term | Meaning |
+| Term | What it means here |
 |---|---|
-| **Character** | The card for the character the model plays. |
-| **Persona** | The identity and description you use in the story. |
-| **World Info** | Lorebooks containing setting or character facts. |
-| **System Prompt** | Instructions that guide how the model responds. |
-| **Session** | One story, with its own transcript and selected settings. |
+| **Character** | A card describing a character or cast for the model to play. |
+| **Persona** | The identity and description you use for your own role in the story. |
+| **World Info / lorebook** | A collection of setting or character facts that can be added to the prompt. |
+| **System Prompt** | Instructions that guide the model's responses. |
+| **Session** | One story, with its own message history and selected settings. |
+| **Provider** | The service the bridge contacts to run a model. |
+| **Route** | A provider and model together, written as `provider-id::model-id`. |
 | **Story model** | The model that writes the roleplay. |
-| **Utility model** | The model used for summaries, choices and other helpers. It can inherit Story. |
+| **Utility model** | The model used for summaries, some choice strategies and other helpers. |
+| **Director model** | The model that plans scene direction and endings, rather than writing the ordinary reply. |
+| **Inherit** | Use the model selected for another role instead of choosing a separate one. Utility can inherit Story; Director can inherit Utility. |
+| **Context window** | How much text a model can handle in one request, measured in tokens. It is not the size of your saved story. |
+| **Native data** | SillyTavern's existing cards, lorebooks, prompts and Persona files. Edits to these files can affect other stories that use them. |
+| **Thread / viewpoint** | A thread is a storyline being followed; a viewpoint is the character or perspective through which a scene is told. |
+
+You do not have to memorize these terms. The relevant command or page is linked
+from each workflow below.
 
 ## Everyday controls
 
-Most commands open a panel. Tap its buttons to make a choice. If it asks for
-text, your next message completes that step; `/cancel` backs out. If a panel has
-expired or belongs to a previous session, reopen the command.
+Most commands open a panel with buttons. Tap once and let the action finish.
+When a panel asks for text, your next message is treated as that answer rather
+than story dialogue; send `/cancel` to back out first.
+
+An expired panel is usually just an old set of buttons. Reopen the command to
+get controls for the current session. Switching sessions does not make an old
+confirmation apply to the new story.
 
 | When you want to… | Use |
 |---|---|
@@ -136,9 +169,10 @@ attempts, including interrupted attempts across restarts. It skips Telegram
 chunks whose acknowledgements were recorded. A deleted or replaced answer can
 no longer be recovered.
 
-A crash between Telegram accepting a message and the bridge recording the
-acknowledgement can leave delivery uncertain. Recovery reduces duplicate delivery;
-it cannot guarantee that every message is delivered exactly once.
+Occasionally Telegram may receive a message just before the bridge crashes,
+leaving the bridge unsure whether it arrived. Recovery can then produce a
+duplicate. Check the chat before retrying again; the bridge cannot promise
+exactly-once delivery through every interruption.
 
 ### Streaming and long replies
 
@@ -155,7 +189,9 @@ and Humanizer have different preview behavior, described below.
 
 `/reset` opens a confirmation before clearing the active conversation and its
 memory. It keeps the session and selected Character, mode, Persona, World,
-System Prompt and Narrative Style, then returns it to an unstarted state. Send `/start` again.
+System Prompt and Narrative Style, then waits for a new opening greeting. Send
+`/start` again. Do not use Reset just because a reply or choice panel failed;
+try the matching recovery action first.
 
 Reset clears variants, failed turns, summaries, curated/episodic memory, NPC state
 and old choices. It also clears narrative scenes, threads and derived planning
@@ -173,8 +209,13 @@ verified, destructive local cleanup is refused. Other sessions are unaffected.
 
 Use `/providers` to choose Story, Utility and Director independently for the current
 session. Story writes the prose. Utility handles summaries and extraction. Director
-plans the next scene. An unset Director model inherits Utility, then Story. Both Story and Utility reasoning are configured from `/providers`. Director adds
-its own independent reasoning control there and in Director Room.
+plans the next scene. You can start with one model for all three roles: leave
+Utility and Director inherited rather than choosing a separate model for each.
+An unset Director model inherits Utility, then Story.
+
+Both Story and Utility reasoning are configured from `/providers`. Director has
+its own reasoning control there and in Director Room. Reasoning is the model's
+additional thinking work; higher budgets can increase waiting time and token use.
 Reasoning support depends on the provider; a zero budget can mean the backend
 default rather than disabled reasoning.
 
@@ -265,90 +306,6 @@ dialogue or links, the original rendered reply is kept. These checks cannot prov
 that meaning is unchanged. There is no automatic weekly reference refresh or
 prompt promotion. Attribution remains in [Third-party notices](../THIRD_PARTY_NOTICES.md).
 
-## Director Room
-
-Open `/director`, or **Manage → Director Room** in the Mini App, to see what the
-Director is planning. This is a private planning view: plans do not become story
-facts, and characters do not learn them just because you opened the panel.
-
-The room shows the current scene, viewpoint, thread, accepted direction and recent
-decisions. **Reassess now** asks the configured Director model for a fresh plan.
-It can use provider quota. **Choose thread** plans a future scene without rewriting
-anything already committed.
-
-Use **Next scene only** for a temporary instruction such as “Stay with Mara at the
-gate.” It expires when the scene changes or its source history/settings become
-invalid. A **Persistent objective** stays active until you change or clear it. The
-AI Director cannot silently remove that objective. Both forms still reserve your
-character's dialogue, thoughts and consequential decisions for you.
-
-**Adaptive** cadence is the default. Stable/setup scenes allow up to 10 completed
-Story turns between checks, development 6, escalation 4 and climax 2. Meaningful
-scene or thread changes can trigger a check sooner. Advanced controls offer fixed
-4/6/10-turn intervals or a custom whole-number interval from 1 to 100. Ordinary
-turns below the threshold make no extra Director call.
-
-A Director outage does not change your Narrative Style or erase a reply. The bridge
-keeps valid guidance and otherwise continues conservatively from committed state.
-Stale or malformed plans are not applied. The Mini App and Telegram controls reject
-edits from an old panel rather than silently overwrite a newer decision.
-
-## Closed Story and the epilogue
-
-Choose **Closed Story** in the Advanced step after selecting a character, or open
-**Director Room → Ending settings** for an existing story. The default remains
-Open-ended. An optional Ending Goal gives the Director a destination without
-scripting your character's decisions. Its revisions and reasons remain visible.
-
-A finale starts automatically when current story evidence supports it. Turn on
-**Ask before finale** to review the Director's reason and press **Begin finale**
-yourself. Continuing the story first expires that old confirmation. The bridge
-saves an immutable pre-finale checkpoint before entering the finale.
-
-The finale can span several turns. Once its actual resolution is committed and
-reconciled, the Director prepares a brief and the Story model writes a **separate
-epilogue**. Its time jump may show the immediate aftermath or a later future, but
-must preserve your agency and deliberately unresolved facts.
-
-A completed story is read-only. New story messages receive:
-
-> This story has ended. Please start new story.
-
-Editing, regeneration, choices, `/reset`, new images and other creative work cannot
-reopen the original. Status, history, usage and Director Room remain available.
-Choose **New Story** or `/character` to start a different session.
-
-When an epilogue or its delivery is interrupted, use `/retry` or **Recover saved
-ending**. The bridge retries the unfinished stage, not the already committed
-resolution or epilogue. A Telegram outage does not undo a saved ending. A provider
-failure pauses automatic retries to avoid repeatedly spending tokens.
-
-### Try an alternate ending
-
-Open the completed story's **Director Room → Ending settings** and choose
-**Alternate Ending**. The Mini App offers the same action. It appears only when
-the original has a valid saved pre-finale checkpoint.
-
-The bridge creates a separate, already-started session named after the original
-with “— Alternate Ending” added. It copies the story only through the checkpoint,
-along with the character setup, models, preferences and local continuity as they
-were then. It does **not** copy the original finale, epilogue or their later facts.
-Continue the new session normally to explore another resolution.
-
-The original stays closed. Returning to it later and explicitly requesting another
-alternate ending creates another independent session. Repeated delivery of the
-same button action returns the same branch instead of making accidental copies.
-
-External memory is isolated by the new session's tags and document IDs inside the
-chat's Hindsight bank. Seeding failure does not point the branch at the original's
-memories: the copied transcript and local continuity remain usable, and the UI
-reports degraded external memory. A later ordinary memory retain uses the new
-session's identity.
-
-`/branch` still selects existing response variants; it is not Alternate Ending.
-A finale freezes its earlier story history, so `/reset` cannot discard that
-checkpoint after the finale begins. Start a new story instead.
-
 ## Narrative Style
 
 Open `/narrative` to choose how the **current story** is told. You also choose
@@ -384,14 +341,104 @@ recommend it, but never turn it on automatically. Narrative Style controls
 how the story is told; Grounded User controls assumptions about your character's
 abilities and importance.
 
-`/status` shows your style, point of view, current scene/thread and whether the
-narrative record is current or stale. That record describes committed story
-facts, not proposed future events. It is separate from `/scene`, which tracks
-physical surroundings and continuity. Background reconciliation uses the
-Utility model and is reported as `director_reconcile` usage. Opening a style
+`/status` shows your style, point of view and current scene/thread. A **stale**
+narrative record means the helper record has not yet caught up with the latest
+saved messages or settings; it does not mean your messages were lost. The record
+describes saved story facts, not proposed future events. It is separate from
+`/scene`, which tracks
+physical surroundings and continuity. Updating the narrative record in the
+background is called reconciliation. It uses the Utility model and is reported
+as `director_reconcile` usage. Opening a style
 panel or status page makes no model request. If reconciliation fails, your
 saved story stays intact and generation keeps the selected policy rather than
 pretending stale facts are current.
+
+## Director Room
+
+Open `/director`, or **Manage → Director Room** in the Mini App, to see what the
+Director is planning. This is a private planning view: plans do not become story
+facts, and characters do not learn them just because you opened the panel.
+
+The room shows the current scene, viewpoint, storyline (thread), accepted
+direction and recent decisions. You can read the plan without turning it into
+something that has happened in the story. **Reassess now** asks the configured
+Director model for a fresh plan.
+It can use provider quota. **Choose thread** plans a future scene without rewriting
+anything already committed.
+
+Use **Next scene only** for a temporary instruction such as “Stay with Mara at the
+gate.” It expires when the scene changes or its source history/settings become
+invalid. A **Persistent objective** stays active until you change or clear it. The
+AI Director cannot silently remove that objective. Both forms still reserve your
+character's dialogue, thoughts and consequential decisions for you.
+
+**Adaptive** cadence is the default. Stable/setup scenes allow up to 10 completed
+Story turns between checks, development 6, escalation 4 and climax 2. Meaningful
+scene or thread changes can trigger a check sooner. Advanced controls offer fixed
+4/6/10-turn intervals or a custom whole-number interval from 1 to 100. Ordinary
+turns below the threshold make no extra Director call.
+
+A Director outage does not change your Narrative Style or erase a reply. The bridge
+keeps valid guidance and otherwise continues conservatively from committed state.
+Stale or malformed plans are not applied. The Mini App and Telegram controls reject
+edits from an old panel rather than silently overwrite a newer decision.
+
+## Closed Story and the epilogue
+
+Choose **Closed Story** in the Advanced step after selecting a character, or open
+**Director Room → Ending settings** for an existing story. The default remains
+Open-ended. An optional Ending Goal gives the Director a destination without
+scripting your character's decisions. Its revisions and reasons remain visible.
+
+A finale starts automatically when current story evidence supports it. Turn on
+**Ask before finale** to review the Director's reason and press **Begin finale**
+yourself. Continuing the story first expires that old confirmation. The bridge
+saves an immutable pre-finale checkpoint before entering the finale.
+
+The finale can span several turns. Once the resolution has been saved and
+the bridge has updated its story record, the Director prepares a brief and the
+Story model writes a **separate
+epilogue**. Its time jump may show the immediate aftermath or a later future, but
+must preserve your agency and deliberately unresolved facts.
+
+A completed story is read-only. New story messages receive:
+
+> This story has ended. Please start new story.
+
+Editing, regeneration, choices, `/reset`, new images and other creative work cannot
+reopen the original. Status, history, usage and Director Room remain available.
+Choose **New Story** or `/character` to start a different session.
+
+When an epilogue or its delivery is interrupted, use `/retry` or **Recover saved
+ending**. The bridge retries the unfinished stage, not the already committed
+resolution or epilogue. A Telegram outage does not undo a saved ending. A provider
+failure pauses automatic retries to avoid repeatedly spending tokens.
+
+### Try an alternate ending
+
+Open the completed story's **Director Room → Ending settings** and choose
+**Alternate Ending**. The Mini App offers the same action. It appears only when
+the original has a valid saved pre-finale checkpoint.
+
+The bridge creates a separate, already-started session named after the original
+with “— Alternate Ending” added. It copies the story only through the checkpoint,
+along with the character setup, models, preferences and local continuity as they
+were then. It does **not** copy the original finale, epilogue or their later facts.
+Continue the new session normally to explore another resolution.
+
+The original stays closed. Returning to it later and explicitly requesting another
+alternate ending creates another independent session. Repeated delivery of the
+same button action returns the same branch instead of making accidental copies.
+
+The new session keeps its external memories separate from the original ending.
+If Hindsight cannot receive the copied history, the app reports a memory warning.
+Your new local story is still there: you can use its copied transcript and local
+continuity without borrowing memories from the original finale. Later memory
+updates use the new session's identity.
+
+`/branch` still selects existing response variants; it is not Alternate Ending.
+A finale freezes its earlier story history, so `/reset` cannot discard that
+checkpoint after the finale begins. Start a new story instead.
 
 ## Light Novel mode
 
@@ -419,8 +466,10 @@ for you. You can always type your own reply;
 doing so invalidates the old choices. Double taps and stale buttons cannot submit
 another committed user turn from the same choice.
 
-If generation fails, **Retry Choices** repairs only the choices. It does not
-regenerate the saved story. `/lightnovel` restores a missing panel.
+If the story arrived but the choices did not, tap **Retry Choices** once. It
+requests choices for the saved story; it does not rewrite that story. Reopen
+`/lightnovel` when the panel itself is missing. You can also type your own reply
+instead of waiting for choices. A retry can still consume model tokens.
 
 Choice context differs by strategy. A sees the assembled Story prompt. B/C and
 A's repair pass use a bounded snapshot of Character, Persona, relevant World
@@ -467,8 +516,15 @@ Invalid previews leave the installed card unchanged.
 
 S–D rank badges are model opinions, not objective quality scores. Ranking and
 optimization send card text to the Utility provider and can use tokens. Applied
-changes request a new rank; an unavailable rank leaves the card usable. The
-[rank asset manifest](../assets/character-ranks/README.md) holds asset provenance.
+changes request a new rank; an unavailable rank leaves the card usable.
+
+New ranks are tied to the card's content, so copying unchanged bytes to another
+data directory does not by itself remove the rank. Older records used a file's
+location and filesystem details. The bridge can upgrade those records only when
+the original recorded file still proves that the card is unchanged. If that
+original is gone, rerank the current card rather than editing the database to
+force a stale badge back into view. The
+[rank asset manifest](../assets/character-ranks/README.md) records the badge artwork.
 
 ### Personas, Worlds and prompts
 

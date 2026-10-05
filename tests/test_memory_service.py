@@ -89,7 +89,7 @@ class MemoryServiceTests(SettingsTestCase):
             ),
         )
         self.assertIs(result.scope, self.scope)
-        self.assertEqual(self.calls, ["episodic", "summary", "scene", "recall", "validate"])
+        self.assertEqual(self.calls, ["summary", "scene", "episodic", "recall", "validate"])
 
     def test_edit_adapter_resolves_pre_user_boundary_before_every_read(self):
         resolved = []

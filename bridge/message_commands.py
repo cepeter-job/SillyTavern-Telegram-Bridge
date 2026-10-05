@@ -16,8 +16,8 @@ from bridge.closed_session_guard import (
     guard_story_reset,
     story_mutation_message,
 )
-from bridge.context_compaction import ContextWindowBudgetError, context_history_candidate_limit
-from bridge.context_diagnostics import context_stats_key
+from bridge.context_compaction import context_history_candidate_limit
+from bridge.context_diagnostics import record_context_attempts
 from bridge.continuation import continue_last
 from bridge.conversation_lifecycle import (
     START_REQUIRED,
@@ -31,7 +31,7 @@ from bridge.edit_messages import edit_last_user
 from bridge.ending_runtime import recover_ending_workflow
 from bridge.episodic_memory import purge_episodic_memories
 from bridge.failed_turns import clear_failed_turn
-from bridge.generation import build_chat_messages, render_response_language
+from bridge.generation import build_chat_messages, finalize_generation_messages, render_response_language
 from bridge.generation_settings import get_generation_settings
 from bridge.group_service import GroupService
 from bridge.humanize import render_humanized_response
@@ -227,31 +227,25 @@ def generate_and_store_reply(
         through_rowid=memory_prompt.scope.through_rowid if memory_prompt.scope else None,
         memory_scope=memory_prompt.scope,
     )
-    context_stats: dict[str, object] = {}
-    try:
-        messages = timed_call(
-            "prompt_assembly",
-            _partial(build_chat_messages, app_settings=app_settings),
-            session,
-            fields,
-            text,
-            history_rows,
-            memory_context=memory_context,
-            episodic_context=episodic_context,
-            npc_context=npc_context,
-            session_summary=session_summary,
-            scene_context=memory_prompt.scene,
-            rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
-            group_context=group_context,
-            narrative_context=narrative_context_for_session(db, chat_id, session_id, "story"),
-            persona_service=persona_service,
-            app_settings=app_settings,
-            context_stats=context_stats,
-        )
-    except ContextWindowBudgetError as exc:
-        set_meta(db, context_stats_key(chat_id, session_id), json.dumps(exc.stats, sort_keys=True))
-        raise
-    set_meta(db, context_stats_key(chat_id, session_id), json.dumps(context_stats, sort_keys=True))
+    messages = timed_call(
+        "prompt_assembly",
+        _partial(build_chat_messages, app_settings=app_settings),
+        session,
+        fields,
+        text,
+        history_rows,
+        memory_context=memory_context,
+        episodic_context=episodic_context,
+        npc_context=npc_context,
+        session_summary=session_summary,
+        scene_context=memory_prompt.scene,
+        rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
+        group_context=group_context,
+        narrative_context=narrative_context_for_session(db, chat_id, session_id, "story"),
+        persona_service=persona_service,
+        app_settings=app_settings,
+        defer_compaction=True,
+    )
     identity = (
         telegram_message_id
         if telegram_message_id is not None
@@ -266,6 +260,15 @@ def generate_and_store_reply(
     )
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
+    generation_settings = get_generation_settings(db, chat_id, session_id)
+    messages = finalize_generation_messages(
+        db,
+        chat_id,
+        dict(session, model_id=current_model),
+        messages,
+        generation_settings,
+        app_settings=app_settings,
+    )
     send_typing(token, chat_id)
     language = session.get("response_language") or "auto"
     fixed_language = normalize_response_language(language) != "auto"
@@ -298,19 +301,19 @@ def generate_and_store_reply(
         except Exception:
             logging.debug("Streaming Telegram edit failed", exc_info=True)
 
-    generation_settings = get_generation_settings(db, chat_id, session_id)
     generation_session_id = f"telegram:{chat_id}:{session_id}"
-    reply = timed_call(
-        "provider_generation",
-        provider_port.generate,
-        api_key,
-        current_model,
-        messages,
-        session_id=generation_session_id,
-        settings=generation_settings,
-        stream_callback=stream_update if stream_message_id else None,
-        app_settings=app_settings,
-    )
+    with record_context_attempts(db, chat_id, session_id) as observe_context:
+        reply = timed_call(
+            "provider_generation",
+            provider_port.with_context_observer(observe_context).generate,
+            api_key,
+            current_model,
+            messages,
+            session_id=generation_session_id,
+            settings=generation_settings,
+            stream_callback=stream_update if stream_message_id else None,
+            app_settings=app_settings,
+        )
     if novel_turn:
         reply = novel_turn.extract(reply)
     reply += rag_service.citation_footer(db, chat_id, text, rag_bundle)

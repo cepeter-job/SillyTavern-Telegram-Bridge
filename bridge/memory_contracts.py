@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Literal
 
@@ -62,3 +63,62 @@ class MemoryPromptContext:
     scene: str = ""
     scope: MemoryReadScope | None = None
     evidence: tuple[MemoryEvidence, ...] = ()
+
+
+QUERY_STOPWORDS = frozenset(
+    {
+        "a",
+        "an",
+        "and",
+        "are",
+        "at",
+        "for",
+        "from",
+        "has",
+        "have",
+        "how",
+        "in",
+        "into",
+        "is",
+        "it",
+        "its",
+        "of",
+        "on",
+        "that",
+        "the",
+        "this",
+        "to",
+        "was",
+        "were",
+        "what",
+        "when",
+        "where",
+        "who",
+        "why",
+        "with",
+        "you",
+        "your",
+    }
+)
+
+
+def ordered_relevance_terms(value: str, *, limit: int = 24) -> list[str]:
+    """Use bounded Unicode lexical terms; never interpret user input as FTS syntax."""
+    terms = dict.fromkeys(
+        token[:64]
+        for token in re.findall(r"[^\W_]+(?:['-][^\W_]+)*", str(value or "")[:4096].casefold())
+        if len(token) >= 2 and token not in QUERY_STOPWORDS
+    )
+    return list(terms)[: max(0, limit)]
+
+
+def relevance_terms(value: str) -> set[str]:
+    return set(ordered_relevance_terms(value, limit=128))
+
+
+def expand_memory_query(query: str, principals: tuple[str, ...], scene: str) -> str:
+    """Expand from already authorized scene blocks and resolved active readers only."""
+    terms = ordered_relevance_terms(query, limit=12)
+    terms.extend(ordered_relevance_terms(" ".join(principals[:8]), limit=6))
+    terms.extend(ordered_relevance_terms(scene, limit=24))
+    return " ".join(list(dict.fromkeys(terms))[:24])

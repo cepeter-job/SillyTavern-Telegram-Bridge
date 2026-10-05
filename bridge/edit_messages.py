@@ -8,9 +8,10 @@ import time
 
 from bridge.card_content import card_fields_from_file
 from bridge.closed_session_guard import guard_story_mutation
+from bridge.context_diagnostics import record_context_attempts
 from bridge.delivery_progress import DeliveryTargetExpired
 from bridge.episodic_memory import invalidate_episodic_memories_from_row
-from bridge.generation import build_chat_messages, render_session_response
+from bridge.generation import build_chat_messages, finalize_generation_messages, render_session_response
 from bridge.generation_settings import get_generation_settings
 from bridge.light_novel_repository import regeneration_choice_panel_message_ids
 from bridge.light_novel_turn import begin_novel_turn
@@ -182,6 +183,7 @@ def regenerate_edited_turn(
         npc_context=npc_context,
         session_summary=memory_prompt.summary,
         scene_context=memory_prompt.scene,
+        defer_compaction=True,
         narrative_context=narrative_context_for_session(
             db, chat_id, session_id, "story", through_rowid=max(0, int(user_rowid) - 1)
         ),
@@ -189,7 +191,6 @@ def regenerate_edited_turn(
         rag_context=rag_service.context_for_prompt(db, chat_id, new_text, rag_bundle),
         app_settings=app_settings,
     )
-    send_typing(token, chat_id)
     generation_settings = get_generation_settings(
         db,
         chat_id,
@@ -198,13 +199,27 @@ def regenerate_edited_turn(
     novel_turn = begin_novel_turn(db, chat_id, session, "edit", operation_id)
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
-    reply = provider_port.for_usage(chat_id, session_id, "edit").generate(
-        api_key,
-        session["model_id"],
+    messages = finalize_generation_messages(
+        db,
+        chat_id,
+        session,
         messages,
-        session_id=f"telegram:{chat_id}:{session_id}",
-        settings=generation_settings,
+        generation_settings,
+        app_settings=app_settings,
     )
+    send_typing(token, chat_id)
+    with record_context_attempts(db, chat_id, session_id) as observe_context:
+        reply = (
+            provider_port.for_usage(chat_id, session_id, "edit")
+            .with_context_observer(observe_context)
+            .generate(
+                api_key,
+                session["model_id"],
+                messages,
+                session_id=f"telegram:{chat_id}:{session_id}",
+                settings=generation_settings,
+            )
+        )
     if novel_turn:
         reply = novel_turn.extract(reply)
     reply += rag_service.citation_footer(db, chat_id, new_text, rag_bundle)

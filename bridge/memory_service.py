@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from bridge.memory_contracts import MemoryPromptContext as MemoryPromptContext
+from bridge.memory_contracts import expand_memory_query
 from bridge.port_contracts import (
     PurgeSessionMemory,
     ReadSummaryState,
@@ -62,10 +63,11 @@ class MemoryService:
         if scope is None:
             return MemoryPromptContext()
         # Capture local evidence before slow recall, then revalidate every returned pointer.
-        episodes = self.scoped_episodes(db, scope, query)
         summary = self.scoped_summary(db, scope)
         scene = self.scoped_scene(db, scope)
-        recall = self.scoped_recall(db, scope, query)
+        expanded_query = expand_memory_query(query, scope.principals, scene.text)
+        episodes = self.scoped_episodes(db, scope, expanded_query)
+        recall = self.scoped_recall(db, scope, expanded_query)
         recall, episodes, summary, scene = self.validate_blocks(db, scope, (recall, episodes, summary, scene))
         return MemoryPromptContext(
             recall.text,

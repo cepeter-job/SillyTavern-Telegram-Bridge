@@ -10,7 +10,7 @@ from bridge.limits import EPISODIC_CONTEXT_MAX_CHARS, HINDSIGHT_CONTEXT_MAX_CHAR
 from bridge.memory_artifact_store import read_artifact_block
 from bridge.memory_contracts import MemoryBlock, MemoryEvidence, MemoryReadScope
 from bridge.memory_fact_store import StoredMemoryFact, index_fact_is_current, load_current_fact, normalize_principals
-from bridge.memory_relevance import relevance_terms
+from bridge.memory_search_store import MAX_SEARCH_CANDIDATES, search_fact_ids
 from bridge.memory_store import external_memory_boundary, request_source_cutoff
 
 
@@ -112,7 +112,13 @@ def _fact_block(
         key = " ".join(stored.fact.summary.split()).casefold()
         if key in seen:
             continue
-        line = f"[{stored.fact.kind}] {stored.fact.summary}"
+        pointer = stored.evidence
+        source = (
+            f"assertion {pointer.explicit_event_id}"
+            if pointer.explicit_event_id
+            else f"message {pointer.source_start_rowid}, chars {pointer.start_offset}:{pointer.end_offset}"
+        )
+        line = f"[{stored.fact.kind}] {stored.fact.summary} (source: {source}; fact {stored.memory_id})"
         if size + len(line) + bool(lines) > max_chars:
             continue
         seen.add(key)
@@ -134,28 +140,20 @@ def read_episodic_block(
 ) -> MemoryBlock:
     if limit <= 0 or max_chars <= 0:
         return MemoryBlock(channel="episodic")
-    terms = relevance_terms(query)
-    candidates: list[tuple[int, float, int, StoredMemoryFact]] = []
-    for row in db.execute(
-        "SELECT memory_id FROM memory_fact_provenance WHERE chat_id=? AND session_id=? "
-        "AND session_created_at=? AND valid=1 ORDER BY memory_id DESC LIMIT 200",
-        (scope.chat_id, scope.session_id, scope.session_created_at),
-    ).fetchall():
-        stored = eligible_fact(db, scope, int(row[0]))
-        if stored is None:
-            continue
-        overlap = len(terms & relevance_terms(stored.fact.summary))
-        if not overlap and stored.provenance_kind != "explicit":
-            continue
-        candidates.append((overlap, stored.fact.importance, stored.memory_id, stored))
-    candidates.sort(key=lambda item: item[:3], reverse=True)
-    return _fact_block([(item[3], "") for item in candidates], "episodic", limit=limit, max_chars=max_chars)
+    if not scope_is_current(db, scope):
+        return MemoryBlock(channel="episodic")
+    facts = [
+        (stored, "")
+        for memory_id in search_fact_ids(db, scope, query)
+        if (stored := eligible_fact(db, scope, memory_id)) is not None
+    ]
+    return _fact_block(facts, "episodic", limit=min(6, limit), max_chars=max_chars)
 
 
 def ranked_fact_block(db: sqlite3.Connection, scope: MemoryReadScope, document_ids: list[str]) -> MemoryBlock:
     facts: list[tuple[StoredMemoryFact, str]] = []
     if scope_is_current(db, scope, external=True):
-        for document_id in document_ids:
+        for document_id in list(dict.fromkeys(document_ids))[:MAX_SEARCH_CANDIDATES]:
             row = db.execute(
                 "SELECT memory_id FROM memory_fact_index WHERE document_id=? AND state='retained'",
                 (document_id,),
@@ -172,24 +170,42 @@ def validate_memory_blocks(
     db: sqlite3.Connection, scope: MemoryReadScope, blocks: tuple[MemoryBlock, ...]
 ) -> tuple[MemoryBlock, ...]:
     validated: list[MemoryBlock] = []
+    ranked: dict[str, list[tuple[StoredMemoryFact, str]]] = {}
+    scores: dict[tuple[str, str], float] = {}
+    chosen: dict[tuple[str, str], tuple[str, StoredMemoryFact, str]] = {}
+    for block in blocks:
+        if block.channel in {"summary", "scene"}:
+            continue
+        facts: list[tuple[StoredMemoryFact, str]] = []
+        ranked[block.channel] = facts
+        if not scope_is_current(db, scope, external=block.channel == "recall"):
+            continue
+        seen: set[tuple[str, str]] = set()
+        for rank, evidence in enumerate(block.evidence[:MAX_SEARCH_CANDIDATES]):
+            stored = eligible_fact(db, scope, evidence.memory_id) if evidence.memory_id else None
+            if stored is None or (evidence.document_id and not index_fact_is_current(db, evidence.document_id)):
+                continue
+            key = (stored.fact.kind, " ".join(stored.fact.summary.split()).casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            # Reciprocal-rank fusion combines lexical and semantic votes; local
+            # evidence is rehydrated first, including independent audience grants.
+            scores[key] = scores.get(key, 0.0) + 1.0 / (60 + rank + 1)
+            if key not in chosen or evidence.document_id:
+                chosen[key] = (block.channel, stored, evidence.document_id)
+    for key in sorted(scores, key=lambda key: (-scores[key], -chosen[key][1].fact.importance, key))[:6]:
+        channel, stored, document_id = chosen[key]
+        ranked[channel].append((stored, document_id))
     for block in blocks:
         if block.channel in {"summary", "scene"}:
             validated.append(read_artifact_block(db, scope, block.channel, required_evidence=block.evidence))
-            continue
-        facts: list[tuple[StoredMemoryFact, str]] = []
-        if not scope_is_current(db, scope, external=block.channel == "recall"):
-            validated.append(MemoryBlock(channel=block.channel))
-            continue
-        for evidence in block.evidence:
-            if evidence.memory_id:
-                stored = eligible_fact(db, scope, evidence.memory_id)
-                if stored and (not evidence.document_id or index_fact_is_current(db, evidence.document_id)):
-                    facts.append((stored, evidence.document_id))
-        validated.append(
-            _fact_block(
-                facts,
-                block.channel,
-                max_chars=HINDSIGHT_CONTEXT_MAX_CHARS if block.channel == "recall" else EPISODIC_CONTEXT_MAX_CHARS,
+        else:
+            validated.append(
+                _fact_block(
+                    ranked.get(block.channel, []),
+                    block.channel,
+                    max_chars=HINDSIGHT_CONTEXT_MAX_CHARS if block.channel == "recall" else EPISODIC_CONTEXT_MAX_CHARS,
+                )
             )
-        )
     return tuple(validated)

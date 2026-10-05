@@ -8,9 +8,11 @@ import logging
 import time
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 
 from bridge.codex_transport import generate_codex_response
 from bridge.config import GENERATION_DEFAULTS
+from bridge.context_attempt_budget import check_attempt_budget
 from bridge.limits import DEFAULT_MAX_TOKENS, PROVIDER_TEXT_RESPONSE_MAX_BYTES
 from bridge.model_router import ModelRouter
 from bridge.network_security import strict_urlopen, validate_provider_endpoint
@@ -169,6 +171,8 @@ def anthropic_generate(
     *,
     app_settings: AppSettings,
     usage_callback: UsageCallback | None = None,
+    context_observer: Callable[[dict[str, object]], None] | None = None,
+    context_model: str = "",
 ) -> str:
     system_parts = [str(message.get("content") or "") for message in messages if message.get("role") == "system"]
     conversation = []
@@ -209,6 +213,16 @@ def anthropic_generate(
     stops = _parse_stop_sequences(settings.get("stop_sequences"))
     if stops:
         body["stop_sequences"] = stops[:4]
+    wire_messages = ([{"role": "system", "content": body["system"]}] if "system" in body else []) + conversation
+    check_attempt_budget(
+        wire_messages,
+        context_model or actual_model,
+        int(settings["max_tokens"]),
+        transport="anthropic_messages",
+        app_settings=app_settings,
+        context_observer=context_observer,
+        stage="anthropic",
+    )
     endpoint = str(spec.get("api_endpoint") or spec.get("api") or "").rstrip("/")
     validate_provider_endpoint(endpoint, environ=app_settings.environ)
     endpoint = endpoint if endpoint.endswith("/messages") else endpoint + "/messages"
@@ -364,20 +378,28 @@ def opencode_muse_generate(
     *,
     app_settings: AppSettings,
     usage_callback: UsageCallback | None = None,
+    context_observer: Callable[[dict[str, object]], None] | None = None,
+    context_model: str = "",
 ) -> str:
     endpoint = str(spec.get("api_endpoint") or spec.get("api") or "https://opencode.ai/zen/v1").rstrip("/")
     validate_provider_endpoint(endpoint, environ=app_settings.environ)
     inputs = []
     for message in messages:
         content = message.get("content")
+        parts: list[dict[str, object]] = []
         if isinstance(content, list):
-            content = "\\n".join(str(item.get("text") or "") for item in content if isinstance(item, dict))
-        inputs.append(
-            {
-                "role": str(message.get("role") or "user"),
-                "content": [{"type": "input_text", "text": str(content or "")}],
-            }
-        )
+            for item in content:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("type") == "image_url":
+                    image_url = item.get("image_url")
+                    if isinstance(image_url, dict) and image_url.get("url"):
+                        parts.append({"type": "input_image", "image_url": str(image_url["url"])})
+                else:
+                    parts.append({"type": "input_text", "text": str(item.get("text") or "")})
+        else:
+            parts.append({"type": "input_text", "text": str(content or "")})
+        inputs.append({"role": str(message.get("role") or "user"), "content": parts})
     requested = int(settings.get("max_tokens") or 0)
     body = {
         "model": actual_model,
@@ -392,6 +414,18 @@ def opencode_muse_generate(
     # and Chat Completions. The latest 9router fixes (#4132/#4188/#4215)
     # require the quartet even when the caller supplied no tools.
     _merge_opencode_responses_tools(body)
+    wire_messages = list(inputs)
+    if body.get("tools"):
+        wire_messages.append({"role": "system", "content": json.dumps(body["tools"], ensure_ascii=False)})
+    check_attempt_budget(
+        wire_messages,
+        context_model or actual_model,
+        requested,
+        transport="opencode_muse",
+        app_settings=app_settings,
+        context_observer=context_observer,
+        stage="muse",
+    )
     request = urllib.request.Request(  # noqa: S310 -- Request is opened only through DNS-pinned strict_urlopen
         endpoint + "/responses",
         data=json.dumps(body).encode("utf-8"),
@@ -423,6 +457,8 @@ def generate_provider_text(
     *,
     app_settings: AppSettings,
     usage_callback: UsageCallback | None = None,
+    context_observer: Callable[[dict[str, object]], None] | None = None,
+    context_model: str = "",
 ) -> str:
     """Generate through the selected bridge provider adapter."""
     route = model_router.route(model)
@@ -432,6 +468,16 @@ def generate_provider_text(
     transport = str(spec.get("transport") or "chat_completions")
     generation = dict(GENERATION_DEFAULTS)
     generation.update(settings or {})
+    selected_model = context_model or f"{provider_id}::{actual_model}"
+    check_attempt_budget(
+        messages,
+        selected_model,
+        int(generation["max_tokens"]),
+        transport=transport,
+        app_settings=app_settings,
+        context_observer=context_observer,
+        stage="routed",
+    )
     if transport == "openai_codex":
         return generate_codex_response(
             actual_model,
@@ -444,6 +490,8 @@ def generate_provider_text(
             cancel_event=cancel_event,
             app_settings=app_settings,
             usage_callback=usage_callback,
+            context_observer=context_observer,
+            context_model=selected_model,
         )
     if transport == "opencode_muse":
         return opencode_muse_generate(
@@ -455,6 +503,8 @@ def generate_provider_text(
             request_timeout=request_timeout,
             app_settings=app_settings,
             usage_callback=usage_callback,
+            context_observer=context_observer,
+            context_model=selected_model,
         )
     if transport == "anthropic_messages":
         anthropic_key = _resolve_provider_credential(
@@ -470,6 +520,8 @@ def generate_provider_text(
             request_timeout=request_timeout,
             app_settings=app_settings,
             usage_callback=usage_callback,
+            context_observer=context_observer,
+            context_model=selected_model,
         )
     if transport not in {"chat_completions", "openai", "openai_compatible"}:
         raise RuntimeError(f"Provider transport '{transport}' is not supported")
@@ -508,6 +560,15 @@ def generate_provider_text(
         "X-Title": "SillyTavern Telegram Bridge",
     }
     headers.update(spec.get("extra_headers") or {})
+    check_attempt_budget(
+        body["messages"],
+        selected_model,
+        int(body["max_tokens"]),
+        transport=transport,
+        app_settings=app_settings,
+        context_observer=context_observer,
+        stage="chat",
+    )
     request = urllib.request.Request(  # noqa: S310 -- Request is opened only through DNS-pinned strict_urlopen
         endpoint,
         data=json.dumps(body).encode("utf-8"),
@@ -542,6 +603,8 @@ def generate_provider_text(
                             _recovery_attempt=_recovery_attempt + 1,
                             app_settings=app_settings,
                             usage_callback=usage_callback,
+                            context_observer=context_observer,
+                            context_model=selected_model,
                         )
                 http_status = getattr(response, "status", None)
                 if http_status is None:
@@ -577,13 +640,22 @@ def generate_provider_text(
                 )
                 continuation_body = dict(body)
                 continuation_body["messages"] = continuation_messages
-                continuation_request = urllib.request.Request(  # noqa: S310 -- Request is opened only through DNS-pinned strict_urlopen
-                    endpoint,
-                    data=json.dumps(continuation_body).encode("utf-8"),
-                    headers=headers,
-                    method="POST",
-                )
                 try:
+                    check_attempt_budget(
+                        continuation_messages,
+                        selected_model,
+                        int(continuation_body["max_tokens"]),
+                        transport=transport,
+                        app_settings=app_settings,
+                        context_observer=context_observer,
+                        stage="continuation",
+                    )
+                    continuation_request = urllib.request.Request(  # noqa: S310 -- opened through strict_urlopen
+                        endpoint,
+                        data=json.dumps(continuation_body).encode("utf-8"),
+                        headers=headers,
+                        method="POST",
+                    )
                     with strict_urlopen(
                         continuation_request,
                         timeout=180 if request_timeout is None else request_timeout,
@@ -641,6 +713,8 @@ def generate_provider_text(
                         _recovery_attempt=_recovery_attempt + 1,
                         app_settings=app_settings,
                         usage_callback=usage_callback,
+                        context_observer=context_observer,
+                        context_model=selected_model,
                     )
             raise RuntimeError(f"{provider_id} returned no visible content (finish_reason={finish_reason})")
 
@@ -667,13 +741,22 @@ def generate_provider_text(
             )
             continuation_body = dict(body)
             continuation_body["messages"] = continuation_messages
-            continuation_request = urllib.request.Request(  # noqa: S310 -- Request is opened only through DNS-pinned strict_urlopen
-                endpoint,
-                data=json.dumps(continuation_body).encode("utf-8"),
-                headers=headers,
-                method="POST",
-            )
             try:
+                check_attempt_budget(
+                    continuation_messages,
+                    selected_model,
+                    int(continuation_body["max_tokens"]),
+                    transport=transport,
+                    app_settings=app_settings,
+                    context_observer=context_observer,
+                    stage="continuation",
+                )
+                continuation_request = urllib.request.Request(  # noqa: S310 -- opened through strict_urlopen
+                    endpoint,
+                    data=json.dumps(continuation_body).encode("utf-8"),
+                    headers=headers,
+                    method="POST",
+                )
                 with strict_urlopen(
                     continuation_request,
                     timeout=(240 if request_timeout is None else request_timeout),

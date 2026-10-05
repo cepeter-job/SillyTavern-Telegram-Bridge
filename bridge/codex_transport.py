@@ -11,6 +11,8 @@ from typing import Any
 
 from bridge.codex_auth import codex_headers, resolve_access_token, validate_codex_endpoint
 from bridge.codex_models import codex_wire_model
+from bridge.config import GENERATION_DEFAULTS
+from bridge.context_attempt_budget import check_attempt_budget
 from bridge.network_security import strict_urlopen
 from bridge.provider_errors import ProviderTransportError, parse_retry_after, provider_category_for_status
 from bridge.settings import AppSettings
@@ -202,17 +204,13 @@ def generate_codex_response(
     *,
     app_settings: AppSettings,
     usage_callback: UsageCallback | None = None,
+    context_observer: Callable[[dict[str, object]], None] | None = None,
+    context_model: str = "",
     open_request: OpenRequest = strict_urlopen,
 ) -> str:
     """Generate visible assistant text through ChatGPT's native Codex backend."""
     if cancel_event is not None and cancel_event.is_set():
         return ""
-    endpoint = validate_codex_endpoint(spec, environ=app_settings.environ)
-    access_token = resolve_access_token(
-        app_settings.codex_oauth_file,
-        environ=app_settings.environ,
-        open_request=open_request,
-    )
     instructions, inputs = _codex_input(messages)
     body = {
         "model": codex_wire_model(actual_model),
@@ -225,10 +223,33 @@ def generate_codex_response(
     reasoning_effort = _reasoning_effort(actual_model, settings.get("reasoning_budget"))
     if reasoning_effort is not None:
         body["reasoning"] = {"effort": reasoning_effort, "summary": "auto"}
+    wire_messages = [{"role": "system", "content": instructions}, *inputs]
+    requested = int(settings.get("max_tokens") or GENERATION_DEFAULTS["max_tokens"])
+
+    def check_budget() -> None:
+        check_attempt_budget(
+            wire_messages,
+            context_model or actual_model,
+            requested,
+            transport="openai_codex",
+            app_settings=app_settings,
+            context_observer=context_observer,
+            stage="codex",
+        )
+
+    # Normalize and reject oversized requests before OAuth file/refresh access.
+    check_budget()
+    endpoint = validate_codex_endpoint(spec, environ=app_settings.environ)
+    access_token = resolve_access_token(
+        app_settings.codex_oauth_file,
+        environ=app_settings.environ,
+        open_request=open_request,
+    )
     encoded_body = json.dumps(body).encode("utf-8")
     for attempt in range(2):
         if cancel_event is not None and cancel_event.is_set():
             return ""
+        check_budget()
         request = urllib.request.Request(  # noqa: S310 -- opened only through DNS-pinned strict_urlopen
             endpoint + "/responses",
             data=encoded_body,

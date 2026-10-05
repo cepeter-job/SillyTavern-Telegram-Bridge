@@ -81,6 +81,8 @@ def claim_jobs(
     *,
     now: float | None = None,
     layers: Iterable[str] | None = None,
+    chat_id: str | None = None,
+    session_id: str | None = None,
     limit: int = MAX_CLAIMS,
     lease_seconds: float = LEASE_SECONDS,
 ) -> list[MemoryClaim]:
@@ -102,6 +104,8 @@ def claim_jobs(
         )
         try:
             for row in rows:
+                if (chat_id is not None and row[0] != chat_id) or (session_id is not None and row[1] != session_id):
+                    continue
                 if layers is not None and row[3] not in layers:
                     continue
                 token = uuid.uuid4().hex
@@ -134,6 +138,29 @@ def claim_jobs(
         finally:
             rows.close()
     return claims
+
+
+def claim_is_current(db: sqlite3.Connection, claim: MemoryClaim) -> bool:
+    return bool(
+        db.execute(
+            "SELECT 1 FROM memory_jobs j JOIN sessions s ON s.chat_id=j.chat_id AND s.session_id=j.session_id "
+            "AND s.created_at=j.session_created_at JOIN memory_layer_state l ON l.chat_id=j.chat_id "
+            "AND l.session_id=j.session_id AND l.session_created_at=j.session_created_at AND l.layer=j.layer "
+            "WHERE j.chat_id=? AND j.session_id=? AND j.layer=? "
+            "AND j.session_created_at=? AND j.lease_token=? AND j.claimed_version=? "
+            "AND l.rewrite_identity=? AND l.purge_epoch=?",
+            (
+                claim.chat_id,
+                claim.session_id,
+                claim.layer,
+                claim.session_created_at,
+                claim.token,
+                claim.version,
+                claim.rewrite_identity,
+                claim.purge_epoch,
+            ),
+        ).fetchone()
+    )
 
 
 def _scope(claim: MemoryClaim) -> tuple[str, str, float, str, str, int]:

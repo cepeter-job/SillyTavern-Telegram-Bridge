@@ -109,6 +109,8 @@ def extract_episodic_memories_result(
     source_valid: Callable[[], bool] | None = None,
     source_ref: MemorySource | None = None,
 ) -> EpisodicExtractionResult:
+    if len(source_text) > 50000:
+        raise ValueError("Episodic input is too large; supply bounded canonical source parts")
     if source_ref is not None and (
         source_text != source_ref.content
         or source_start_rowid != source_ref.start_id
@@ -143,7 +145,7 @@ def extract_episodic_memories_result(
                 "fact, goal, world_change, secret."
             ),
         },
-        {"role": "user", "content": str(source_text)[:50000]},
+        {"role": "user", "content": str(source_text)},
     ]
     settings = get_generation_settings(db, chat_id, session_id)
     settings.update(

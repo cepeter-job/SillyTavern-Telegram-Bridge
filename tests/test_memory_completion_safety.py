@@ -7,12 +7,30 @@ import pytest
 from application_test_setup import make_test_memory_service, make_test_provider_port
 from settings_test_support import make_test_settings
 
-from bridge import group_commands, memory, memory_curator, message_commands
+from bridge import (
+    codex_transport,
+    group_commands,
+    memory,
+    memory_backend,
+    memory_curator,
+    message_commands,
+    provider_transport,
+)
 from bridge.memory_backend import hindsight_session_lock
 from bridge.metadata import set_meta
 from bridge.npc_service import NpcService
 from bridge.session_core import create_session, delete_session_data
 from bridge.sqlite_store import db_connect, write_transaction
+
+
+@pytest.fixture(autouse=True)
+def forbid_real_external_clients(monkeypatch):
+    def unexpected(*args, **kwargs):
+        pytest.fail("Compatibility tests require explicit fake provider/Hindsight transport")
+
+    monkeypatch.setattr(memory_backend, "hindsight_client", unexpected)
+    monkeypatch.setattr(provider_transport, "strict_urlopen", unexpected)
+    monkeypatch.setattr(codex_transport, "resolve_access_token", unexpected)
 
 
 def classified_summary(text):
@@ -132,11 +150,11 @@ def test_curator_acceptance_preserves_native_state_without_remote_rewrite_during
     events = []
     errors = []
     lock_was_free = []
-    original_store = memory_curator._repo_store_meta_value
+    original_publish = memory_curator.publish_derived
 
-    def store(connection, key, value):
-        original_store(connection, key, value)
-        if key == memory_curator.memory_curator_key("chat", "s1"):
+    def publish(connection, chat_id, session_id, layer, payload, through):
+        original_publish(connection, chat_id, session_id, layer, payload, through)
+        if layer == "curator":
             accepted.set()
 
     def purge_worker():
@@ -165,7 +183,7 @@ def test_curator_acceptance_preserves_native_state_without_remote_rewrite_during
         events.append("purge")
         return 1
 
-    monkeypatch.setattr(memory_curator, "_repo_store_meta_value", store)
+    monkeypatch.setattr(memory_curator, "publish_derived", publish)
     monkeypatch.setattr(memory_curator, "_retain_with_client", retain)
     monkeypatch.setattr(memory, "_purge_hindsight_session_backend", purge)
     thread = threading.Thread(target=purge_worker)
@@ -227,14 +245,15 @@ def test_summary_coverage_stops_at_processed_rows(session_db, force):
     )
     summary, covered = memory.get_session_summary(db, "chat", "s1")
     assert summary
-    assert covered == 40
-    assert all(f"END_{n:02d}" in "\n".join(prompts) for n in range(1, 41))
-    assert len(prompts) >= 2
-    assert all(len(prompt.split("\n\n", 1)[1]) <= 50000 for prompt in prompts)
+    assert covered == 8
+    assert all(f"END_{n:02d}" in "\n".join(prompts) for n in range(1, 9))
+    assert "TURN_09" not in "\n".join(prompts)
+    assert len(prompts) == 8
+    assert all(len(prompt.split("\n\nCanonical source part:\n", 1)[1]) <= 12000 for prompt in prompts)
     assert db.execute("SELECT count(*) FROM messages").fetchone()[0] == (40 if force else 64)
 
 
-def test_summary_prior_summary_overhead_preserves_whole_rows(session_db):
+def test_summary_unproven_prior_state_replays_complete_rows_from_floor(session_db):
     settings, db, session = session_db
     add_rows(db, 64)
     from bridge.memory_artifact_store import store_artifact_visibility
@@ -263,13 +282,14 @@ def test_summary_prior_summary_overhead_preserves_whole_rows(session_db):
     memory.generate_session_summary(
         db, "chat", session, provider_port=make_test_provider_port(generate_backend=generate), app_settings=settings
     )
-    assert memory.get_session_summary(db, "chat", "s1")[1] == 40
-    assert "prior " in prompts[0]
-    assert all(f"END_{n:02d}" in "\n".join(prompts) for n in range(2, 41))
-    assert all(len(prompt.split("\n\n", 1)[1]) <= 50000 for prompt in prompts)
+    assert memory.get_session_summary(db, "chat", "s1")[1] == 8
+    # An opaque legacy aggregate without a complete-part checkpoint is replayed.
+    assert "TURN_01" in prompts[0]
+    assert all(f"END_{n:02d}" in "\n".join(prompts) for n in range(1, 9))
+    assert all(len(prompt.split("\n\nCanonical source part:\n", 1)[1]) <= 12000 for prompt in prompts)
 
 
-def test_summary_oversized_row_is_not_marked_covered(session_db):
+def test_summary_malformed_oversized_part_is_not_marked_covered(session_db):
     settings, db, session = session_db
     add_rows(db, 1, size=51000)
     prompts = []
@@ -283,7 +303,9 @@ def test_summary_oversized_row_is_not_marked_covered(session_db):
     )
     assert memory.get_session_summary(db, "chat", "s1") == ("", 0)
     assert result == ""
-    assert prompts == []
+    assert len(prompts) == 1
+    source = prompts[0][2][-1]["content"].split("\n\nCanonical source part:\n", 1)[1]
+    assert len(source) == 12000
     assert len(db.execute("SELECT content FROM messages").fetchone()[0]) > 51000
 
 

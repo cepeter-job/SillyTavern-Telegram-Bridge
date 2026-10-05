@@ -117,6 +117,7 @@ class ProviderGenerate(Protocol):
         force_non_stream: bool = False,
         request_timeout: float | None = None,
         usage_callback: UsageCallback | None = None,
+        context_observer: Callable[[dict[str, object]], None] | None = None,
     ) -> str: ...
 
 

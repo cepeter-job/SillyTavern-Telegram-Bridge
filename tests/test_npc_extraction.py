@@ -2,16 +2,31 @@ import json
 import sqlite3
 import time
 
+import pytest
 from application_test_setup import make_test_provider_port
 from persisted_state_test_support import find_test_npc
-from settings_test_support import SettingsBuilder
+from settings_test_support import make_test_settings
 
+from bridge import codex_transport, memory_backend, npc_extraction, persona_sync, provider_transport
 from bridge.application_composition import initialize_extensions
 from bridge.extension_registry import extension_registry_snapshot
 from bridge.npc_extraction import _parse_payload, refresh_npc_state_now
 from bridge.npc_repository import get_npc_extraction_coverage, set_npc_extraction_coverage
 from bridge.schema import initialize_database_schema
 from bridge.sqlite_store import write_transaction
+
+
+@pytest.fixture
+def synthetic_settings(tmp_path, monkeypatch):
+    def unexpected(*args, **kwargs):
+        pytest.fail("NPC tests require explicit synthetic settings and transports")
+
+    monkeypatch.setattr(npc_extraction, "persona_name", lambda *a, **k: "User")
+    monkeypatch.setattr(persona_sync, "_native_settings", unexpected)
+    monkeypatch.setattr(memory_backend, "hindsight_client", unexpected)
+    monkeypatch.setattr(provider_transport, "strict_urlopen", unexpected)
+    monkeypatch.setattr(codex_transport, "resolve_access_token", unexpected)
+    return make_test_settings(home=tmp_path)
 
 
 def _db():
@@ -112,7 +127,7 @@ def test_parser_returns_empty_for_malformed_or_unsupported_payload():
     assert _parse_payload(raw, primary_name="Alice", user_name="User")[0] == []
 
 
-def test_refresh_extracts_once_and_advances_coverage():
+def test_refresh_extracts_once_and_advances_coverage(synthetic_settings):
     db = _db()
     _messages(db)
     calls = []
@@ -131,11 +146,11 @@ def test_refresh_extracts_once_and_advances_coverage():
             _session(),
             _fields(),
             provider_port=provider,
-            app_settings=SettingsBuilder().build(),
+            app_settings=synthetic_settings,
         )
         coverage = get_npc_extraction_coverage(db, "chat", "s1")
         assert applied == 1
-        assert len(calls) == 1
+        assert len(calls) == 2
         assert calls[0][2] == "npc-state:chat:s1"
         assert find_test_npc(db, "chat", "s1", "maya torres") is not None
         assert coverage > 0
@@ -146,15 +161,15 @@ def test_refresh_extracts_once_and_advances_coverage():
             _session(),
             _fields(),
             provider_port=provider,
-            app_settings=SettingsBuilder().build(),
+            app_settings=synthetic_settings,
         )
         assert again == 0
-        assert len(calls) == 1
+        assert len(calls) == 2
     finally:
         db.close()
 
 
-def test_provider_failure_leaves_coverage_unchanged():
+def test_provider_failure_leaves_coverage_unchanged(synthetic_settings):
     db = _db()
     _messages(db)
 
@@ -168,7 +183,7 @@ def test_provider_failure_leaves_coverage_unchanged():
             _session(),
             _fields(),
             provider_port=make_test_provider_port(generate_backend=generate),
-            app_settings=SettingsBuilder().build(),
+            app_settings=synthetic_settings,
         )
         assert applied == 0
         assert get_npc_extraction_coverage(db, "chat", "s1") == 0
@@ -176,7 +191,7 @@ def test_provider_failure_leaves_coverage_unchanged():
         db.close()
 
 
-def test_stale_worker_is_rejected_when_coverage_rewinds_during_generation():
+def test_stale_worker_is_rejected_when_coverage_rewinds_during_generation(synthetic_settings):
     db = _db()
     ids = _messages(db, ("old", "old reply", "new", "new reply"))
     with write_transaction(db):
@@ -194,7 +209,7 @@ def test_stale_worker_is_rejected_when_coverage_rewinds_during_generation():
             _session(),
             _fields(),
             provider_port=make_test_provider_port(generate_backend=generate),
-            app_settings=SettingsBuilder().build(),
+            app_settings=synthetic_settings,
         )
         assert applied == 0
         assert find_test_npc(db, "chat", "s1", "maya") is None
@@ -203,7 +218,7 @@ def test_stale_worker_is_rejected_when_coverage_rewinds_during_generation():
         db.close()
 
 
-def test_deleted_session_during_generation_prevents_write():
+def test_deleted_session_during_generation_prevents_write(synthetic_settings):
     db = _db()
     _messages(db)
 
@@ -219,7 +234,7 @@ def test_deleted_session_during_generation_prevents_write():
             _session(),
             _fields(),
             provider_port=make_test_provider_port(generate_backend=generate),
-            app_settings=SettingsBuilder().build(),
+            app_settings=synthetic_settings,
         )
         assert applied == 0
         assert db.execute("SELECT COUNT(*) FROM npc_entities").fetchone()[0] == 0
@@ -227,7 +242,7 @@ def test_deleted_session_during_generation_prevents_write():
         db.close()
 
 
-def test_stale_worker_rejects_reused_rowid_after_branch_rewrite():
+def test_stale_worker_rejects_reused_rowid_after_branch_rewrite(synthetic_settings):
     db = _db()
     ids = _messages(db, ("old user", "old assistant"))
     target = ids[-1]
@@ -249,7 +264,7 @@ def test_stale_worker_rejects_reused_rowid_after_branch_rewrite():
             _session(),
             _fields(),
             provider_port=make_test_provider_port(generate_backend=generate),
-            app_settings=SettingsBuilder().build(),
+            app_settings=synthetic_settings,
         )
         assert applied == 0
         assert find_test_npc(db, "chat", "s1", "maya") is None
@@ -258,7 +273,7 @@ def test_stale_worker_rejects_reused_rowid_after_branch_rewrite():
         db.close()
 
 
-def test_existing_state_preserves_restricted_visibility_metadata_in_extractor_prompt():
+def test_existing_state_preserves_restricted_visibility_metadata_in_extractor_prompt(synthetic_settings):
     db = _db()
     _messages(db)
     prompts = []
@@ -287,7 +302,7 @@ def test_existing_state_preserves_restricted_visibility_metadata_in_extractor_pr
                 _session(),
                 _fields(),
                 provider_port=provider,
-                app_settings=SettingsBuilder().build(),
+                app_settings=synthetic_settings,
             )
             == 1
         )
@@ -298,7 +313,7 @@ def test_existing_state_preserves_restricted_visibility_metadata_in_extractor_pr
             _session(),
             _fields(),
             provider_port=provider,
-            app_settings=SettingsBuilder().build(),
+            app_settings=synthetic_settings,
         )
         second_prompt = prompts[1][1]["content"]
         assert '"visibility":"restricted"' in second_prompt

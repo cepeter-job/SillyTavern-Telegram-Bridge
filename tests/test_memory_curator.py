@@ -106,7 +106,7 @@ class MemoryCuratorTests(SettingsTestCase):
         finally:
             _m_memory_curator._retain_with_client = old_retain
 
-        self.assertEqual(seen_models, ["utility::model"])
+        self.assertEqual(seen_models, ["utility::model"] * 2)
         self.assertEqual(items[0]["key"], "family.sister")
         self.assertEqual(retained, [])
 

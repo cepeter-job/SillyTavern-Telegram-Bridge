@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 
 from bridge.context_compaction import context_profile
-from bridge.metadata import get_meta
+from bridge.metadata import get_meta, set_meta
 from bridge.settings import AppSettings
 
 _INT_FIELDS = {
+    "requested_output_tokens",
     "window_tokens",
     "output_reserve_tokens",
     "safety_margin_tokens",
@@ -18,11 +21,51 @@ _INT_FIELDS = {
     "final_tokens",
     "dropped_history",
 }
-_BOOL_FIELDS = {"rag_trimmed", "memory_trimmed", "npc_trimmed", "summary_trimmed", "over_budget"}
+_BOOL_FIELDS = {
+    "rag_trimmed",
+    "memory_trimmed",
+    "npc_trimmed",
+    "summary_trimmed",
+    "over_budget",
+    "output_reservation_only",
+    "estimated",
+    "allocation_invalid",
+}
 
 
 def context_stats_key(chat_id: str, session_id: str) -> str:
     return f"context_stats:{chat_id}:{session_id}"
+
+
+def save_context_stats(db: sqlite3.Connection, chat_id: str, session_id: str, stats: dict[str, object]) -> None:
+    """Persist only numbers, flags and known metadata; never prompt content."""
+    allowed = _INT_FIELDS | _BOOL_FIELDS | {"chars_per_token", "source", "model", "request_stage"}
+    redacted = {key: value for key, value in stats.items() if key in allowed}
+    set_meta(db, context_stats_key(chat_id, session_id), json.dumps(redacted, sort_keys=True))
+
+
+@contextmanager
+def record_context_attempts(
+    db: sqlite3.Connection, chat_id: str, session_id: str
+) -> Iterator[Callable[[dict[str, object]], None]]:
+    """Collect transport observations and persist on the application thread."""
+    attempts: list[dict[str, object]] = []
+    try:
+        yield attempts.append
+    finally:
+        if attempts:
+            raw = get_meta(db, context_stats_key(chat_id, session_id), "")
+            try:
+                previous = json.loads(raw) if raw else {}
+            except (TypeError, ValueError):
+                previous = {}
+            stats = (
+                {key: value for key, value in previous.items() if key == "dropped_history" or key.endswith("_trimmed")}
+                if isinstance(previous, dict)
+                else {}
+            )
+            stats.update(attempts[-1])
+            save_context_stats(db, chat_id, session_id, stats)
 
 
 def context_diagnostics_snapshot(
@@ -72,6 +115,9 @@ def context_diagnostics_snapshot(
         "codex-alias",
     }:
         result["source"] = source
+    for key in ("model", "request_stage"):
+        if isinstance(saved.get(key), str):
+            result[key] = saved[key][:160]
     for key in _BOOL_FIELDS:
         if isinstance(saved.get(key), bool):
             result[key] = saved[key]

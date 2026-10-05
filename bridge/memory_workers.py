@@ -12,10 +12,10 @@ from bridge.episodic_extraction import extract_episodic_memories_result
 from bridge.memory_fact_store import index_fact_is_current
 from bridge.memory_store import (
     acknowledge_job,
+    claim_is_current,
     claim_jobs,
     fail_job,
     next_source_segment,
-    pending_memory_invalidation,
     recover_expired_jobs,
     source_is_valid,
     store_segment,
@@ -28,26 +28,7 @@ MAX_ACTIVE_CLAIMS = 1  # matches the single memory executor; queued leases canno
 
 
 def _claim_current(db, claim):
-    return bool(
-        db.execute(
-            "SELECT 1 FROM memory_jobs j JOIN sessions s ON s.chat_id=j.chat_id AND s.session_id=j.session_id "
-            "AND s.created_at=j.session_created_at JOIN memory_layer_state l ON l.chat_id=j.chat_id "
-            "AND l.session_id=j.session_id AND l.session_created_at=j.session_created_at AND l.layer=j.layer "
-            "WHERE j.chat_id=? AND j.session_id=? AND j.layer=? "
-            "AND j.session_created_at=? AND j.lease_token=? AND j.claimed_version=? "
-            "AND l.rewrite_identity=? AND l.purge_epoch=?",
-            (
-                claim.chat_id,
-                claim.session_id,
-                claim.layer,
-                claim.session_created_at,
-                claim.token,
-                claim.version,
-                claim.rewrite_identity,
-                claim.purge_epoch,
-            ),
-        ).fetchone()
-    )
+    return claim_is_current(db, claim)
 
 
 def _retire_fact_document(db, document_id):
@@ -251,91 +232,21 @@ def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_sett
 
 
 def _run_derived_layer(db, claim, session, fields, *, provider_port, app_settings):
-    # Reconstruct all derived layer inputs after claim, never enqueue snapshots.
-    before = load_narrative_clock(db, claim.chat_id, claim.session_id)
-    if claim.layer == "summary":
-        from bridge.memory import generate_session_summary_result
+    from bridge.memory_derived import run_derived_layer
 
-        result = generate_session_summary_result(
-            db,
-            claim.chat_id,
-            session,
-            force=True,
-            durable=True,
-            max_segments=1,
-            provider_port=provider_port,
-            app_settings=app_settings,
-        )
-        if not result.complete and result.covered_until_rowid:
-            return "deferred"
-        covered = result.covered_until_rowid if result.complete else 0
-    elif claim.layer == "scene":
-        from bridge.scene_state import get_scene_state, refresh_scene_state_now
-
-        refresh_scene_state_now(
-            db,
-            "",
-            claim.chat_id,
-            session,
-            fields.get("name", "Story"),
-            through_rowid=claim.target_id,
-            provider_port=provider_port,
-            app_settings=app_settings,
-        )
-        covered = get_scene_state(db, claim.chat_id, claim.session_id)[1]
-    elif claim.layer == "curator":
-        from bridge.memory_curator import curate_memory_now, get_curated_memory_state
-
-        curate_memory_now(
-            db,
-            "",
-            claim.chat_id,
-            session,
-            fields.get("name", "Story"),
-            through_rowid=claim.target_id,
-            provider_port=provider_port,
-            app_settings=app_settings,
-        )
-        covered = get_curated_memory_state(db, claim.chat_id, claim.session_id)[1]
-    elif claim.layer == "npc":
-        from bridge.npc_extraction import refresh_npc_state_now
-        from bridge.npc_repository import get_npc_extraction_coverage
-        from bridge.npc_service import NpcService
-
-        with write_transaction(db):
-            if not _claim_current(db, claim):
-                return "stale_source"
-            boundary = pending_memory_invalidation(db, claim.chat_id, claim.session_id, "npc")
-            if boundary is not None:
-                NpcService().rollback_from_row(db, claim.chat_id, claim.session_id, boundary)
-        refresh_npc_state_now(
-            db,
-            claim.chat_id,
-            session,
-            fields,
-            through_rowid=claim.target_id,
-            provider_port=provider_port,
-            app_settings=app_settings,
-        )
-        covered = get_npc_extraction_coverage(db, claim.chat_id, claim.session_id)
-    else:
-        raise ValueError("Unknown durable memory layer")
-    after = load_narrative_clock(db, claim.chat_id, claim.session_id)
-    if (
-        before is None
-        or after is None
-        or any(before[k] != after[k] for k in ("session_created_at", "rewrite_revision"))
-    ):
-        return "stale_source"
-    if covered < claim.target_id:
-        return "work_failed"
-    with write_transaction(db):
-        db.execute(
-            "UPDATE memory_layer_state SET covered_id=? WHERE chat_id=? AND session_id=? "
-            "AND session_created_at=? AND layer=?",
-            (covered, claim.chat_id, claim.session_id, claim.session_created_at, claim.layer),
-        )
-    return "complete"
+    return run_derived_layer(
+        db,
+        claim,
+        session,
+        fields,
+        provider_port=provider_port,
+        app_settings=app_settings,
+        valid=lambda: (
+            _claim_current(db, claim)
+            and (claim.layer != "curator" or memory_backend.memory_mode(db, claim.chat_id) == "on")
+        ),
+        max_parts=MAX_SEGMENTS_PER_RUN,
+    )
 
 
 def _memory_worker(services, claim):

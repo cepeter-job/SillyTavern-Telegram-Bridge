@@ -91,7 +91,7 @@ class SceneStateEngineTests(SettingsTestCase):
         scope = resolve_memory_scope(self.db, "chat", self.session, {"name": "Mira"})
         prompt_state = read_scene_block(self.db, scope).text
 
-        self.assertEqual(seen, ["utility::model"])
+        self.assertEqual(seen, ["utility::model"] * 2)
         self.assertEqual(state["location"], "Central station")
         self.assertIn("Central station", prompt_state)
         self.assertIn("red umbrella", prompt_state)

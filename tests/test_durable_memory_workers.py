@@ -1,5 +1,6 @@
 """Exercise recoverable workers with real synthetic databases; fake external I/O only."""
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -117,18 +118,21 @@ def test_empty_extraction_succeeds_but_stale_snapshot_is_distinct(session_db):
 
 
 def test_summary_success_episode_failure_is_still_pending(session_db, monkeypatch):
-    from bridge import memory
     from bridge.memory_workers import run_memory_claim
 
     settings, db, session = session_db
     add(db)
-    monkeypatch.setattr(
-        memory, "generate_session_summary_result", lambda *a, **k: memory.SessionSummaryResult("summary", 1, True)
-    )
     summary = claim_jobs(db, layers=("summary",))[0]
     assert (
         run_memory_claim(
-            db, summary, session, {"name": "Alice"}, provider_port=make_test_provider_port(), app_settings=settings
+            db,
+            summary,
+            session,
+            {"name": "Alice"},
+            provider_port=make_test_provider_port(
+                generate_backend=lambda *a, **k: '{"blocks":[{"text":"summary","visibility":"shared","known_by":[]}]}'
+            ),
+            app_settings=settings,
         )
         == "complete"
     )
@@ -228,8 +232,21 @@ def test_durable_summary_runs_one_bounded_call_and_resumes_prefix(session_db):
         provider_port=provider,
         app_settings=settings,
     )
-    assert len(calls) == 2 and result.complete
-    assert result.covered_until_rowid == 30 and covered < 30
+    assert len(calls) == 2 and not result.complete
+    assert result.covered_until_rowid == 2 and covered == 1
+    for expected in range(3, 31):
+        result = generate_session_summary_result(
+            db,
+            "chat",
+            session,
+            force=True,
+            durable=True,
+            max_segments=1,
+            provider_port=provider,
+            app_settings=settings,
+        )
+        assert result.covered_until_rowid == expected
+        assert result.complete is (expected == 30)
     result = generate_session_summary_result(
         db,
         "chat",
@@ -240,7 +257,7 @@ def test_durable_summary_runs_one_bounded_call_and_resumes_prefix(session_db):
         provider_port=provider,
         app_settings=settings,
     )
-    assert result.complete and len(calls) == 2
+    assert result.complete and len(calls) == 30
 
 
 def test_claim_captured_before_purge_cannot_retain_rebuilt_source(session_db, monkeypatch):
@@ -355,12 +372,34 @@ def test_direct_sql_npc_rewrite_recovers_fixed_suffix_and_preserves_prior_field(
     db.execute("UPDATE messages SET content='Maya has red hair' WHERE id=2")
     db.commit()
     claim = claim_jobs(db, layers=("npc",))[0]
-    provider = make_test_provider_port(
-        generate_backend=lambda *a, **k: (
-            '{"npcs":[{"name":"Maya","aliases":[],"operations":[{"field":"appearance","op":"set",'
-            '"value":"red hair","mode":"fixed","visibility":"shared","known_by":[]}]}]}'
+    supplied = []
+
+    def extract_source(_key, _model, messages, **kwargs):
+        text = messages[-1]["content"].split("\n\nCanonical source part:\n", 1)[1]
+        supplied.append(text)
+        field, value = ("voice", "soft") if text == "Maya speaks softly" else ("appearance", "red hair")
+        return json.dumps(
+            {
+                "npcs": [
+                    {
+                        "name": "Maya",
+                        "aliases": [],
+                        "operations": [
+                            {
+                                "field": field,
+                                "op": "set",
+                                "value": value,
+                                "mode": "fixed",
+                                "visibility": "shared",
+                                "known_by": [],
+                            }
+                        ],
+                    }
+                ]
+            }
         )
-    )
+
+    provider = make_test_provider_port(generate_backend=extract_source)
     assert (
         run_memory_claim(db, claim, session, {"name": "Alice"}, provider_port=provider, app_settings=settings)
         == "complete"
@@ -369,6 +408,8 @@ def test_direct_sql_npc_rewrite_recovers_fixed_suffix_and_preserves_prior_field(
     fields = load_npc_fields(db, entity.npc_id)
     assert fields["voice"].value == "soft"
     assert fields["appearance"].value == "red hair"
+    # Without a persisted complete-prefix checkpoint, replay from the source floor.
+    assert supplied == ["Maya speaks softly", "Maya has red hair"]
 
 
 def test_durable_summary_coverage_uses_canonical_ids_with_backdated_append(session_db):

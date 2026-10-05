@@ -133,6 +133,7 @@ def context_metadata_for_model(model_selection: str, *, app_settings: AppSetting
     return {
         "provider_id": provider_id,
         "model_id": model_id,
+        "transport": str(spec.get("transport") or ""),
         "window_tokens": window,
         "chars_per_token": chars_per_token,
         "source": source,

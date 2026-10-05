@@ -10,8 +10,10 @@ from bridge.ending_schema import migrate_ending_readiness
 from bridge.ending_work_schema import migrate_ending_workflow
 from bridge.finale_checkpoint_schema import migrate_finale_checkpoint_guards
 from bridge.greeting_media_schema import migrate_greeting_media_cleanup
+from bridge.memory_draft_schema import migrate_complete_memory_parts
 from bridge.memory_schema import migrate_durable_memory
 from bridge.memory_scope_schema import migrate_memory_knowledge
+from bridge.memory_search_schema import migrate_memory_search
 from bridge.migrations import Migration as _Migration
 from bridge.migrations import run_migrations as _run_migrations
 from bridge.narrative_arc_schema import migrate_narrative_arc_evidence
@@ -510,6 +512,8 @@ SCHEMA_MIGRATIONS = (
     _Migration(19, "greeting_media_cleanup", migrate_greeting_media_cleanup),
     _Migration(20, "durable_story_memory", migrate_durable_memory),
     _Migration(21, "temporal_memory_knowledge", migrate_memory_knowledge),
+    _Migration(22, "indexed_memory_evidence", migrate_memory_search),
+    _Migration(23, "complete_memory_parts", migrate_complete_memory_parts),
 )
 
 

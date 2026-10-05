@@ -127,8 +127,19 @@ outstanding. Its local acknowledgment may finish retirement only when none was
 outstanding at DELETE start, none remains at acknowledgment, and the cleanup
 lease still belongs to that caller. This prevents an older DELETE response from
 erasing a later retain/reopening. Unfinished watches use a 300-second retry
-interval; a due ordinary claim gets a turn between recurring-watch batches.
-Future watch debt does not prevent fresh valid source work from progressing.
+interval; the dispatcher gives a due ordinary claim a turn between
+recurring-watch batches. The actual Hindsight worker uses a finite-cleanup
+prerequisite: both its selected batch and its remaining-debt query exclude
+unfinished raw watches. A failed finite due deletion still fails the claim and
+keeps the existing retry delay, mode/current-source checks and lease protection.
+Earlier watched IDs or their failures cannot consume that prerequisite batch.
+
+Dedicated retirement workers and direct cleanup still service all due debt.
+The ordinary turn can therefore advance native indexing and current raw
+coverage without waiting for every recurring watch to become simultaneously
+non-due. The same-session regression executes the submitted worker and checks
+accepted source/mapping/coverage, native indexing, remote objects and job
+acknowledgment while later retirement turns continue the durable watches.
 
 Ordinary successful new attempts add an intent INSERT in the reservation
 transaction, one short known-completion commit and an owned-token DELETE in
@@ -274,6 +285,7 @@ is separate, even when it covers the same architectural boundary.
 | Long head/middle/tail and bounded work | coverage.complete-long-source; transport.input-sensitivity | tests/test_memory_complete_parts.py |
 | Rejection/outage/lost ACK/lease/restart | retry.* | tests/test_durable_memory_workers.py; tests/test_story_memory_index.py |
 | Raw crash/reopening, overlapping requests, DELETE/purge ACK and recorded-identity migration | These race/recovery assertions are pytest-only | tests/test_raw_retirement_recovery.py; tests/test_memory_final_integration.py |
+| Same-session recurring-watch progress and finite cleanup failure/retry | Executed-worker assertions are pytest-only | tests/test_raw_retirement_fairness.py |
 | Empty/malformed/stale acceptance | Marker-free sources/parts processed in later CLI scenarios; explicit empty/malformed/stale assertions are pytest-only | tests/test_story_memory_index.py; tests/test_memory_complete_parts.py; tests/test_memory_final_integration.py |
 | Purge/native facts | purge.floor | tests/test_story_memory_scope.py; tests/test_memory_final_integration.py (native curator continuation and raw late retirement) |
 | Five route final payloads, appended contracts/images/scene | budget.accepted-final-request; budget.protected-overflow (ordinary accepted route) | tests/test_final_budget_routes.py; tests/test_final_generation_budget.py |
@@ -319,12 +331,13 @@ successful measured run.
 
 The saved standalone invocation used 10 measured queries and one excluded
 warm-up, launched directly from an unrelated empty working directory after the
-raw-retirement recovery source fix was committed. It passed **23 of 23 executed
-cases and all 73 assertions**. The JSON records the clean measured source revision
-afaebafea36a3ad07839b55445af77672b43868a, an empty git status, and SHA-256 of
-both evaluator source files. The separate result/documentation commit records
-the measurement of that exact source revision; it does not relabel the previous
-b19da007 measurement. Source and tests stayed frozen during the refresh.
+same-session worker fairness correction was committed. It passed **23 of 23
+executed cases and all 73 assertions**. The JSON records the clean measured
+source revision 24a21e68f1c4426550364177f042558803702ecc, an empty git status,
+and SHA-256 of both evaluator source files. The separate result/documentation
+commit records the measurement of that exact source revision. Earlier afaebaf
+and b19da007 measurements remain historical; source and tests stayed frozen
+during this refresh.
 Python was 3.11.16; SQLite was 3.53.1. Fixture SHA-256 was
 6bd668c68d946775991fdda3890a9c839a125c75a7139df3b92a7118ce810d6c.
 
@@ -334,13 +347,13 @@ Python was 3.11.16; SQLite was 3.53.1. Fixture SHA-256 was
 | Distinct accepted native episodes | 302 |
 | Messages later than the unique target | 295 |
 | Distinct episodes later than the unique target | 297 |
-| Setup | 1,288.693 ms |
-| Production turn ingestion | 14,021.959 ms |
-| Primary episode/index/archive drain | 68,019.485 ms |
-| Query median, 10 samples | 43.651 ms |
-| Query nearest-rank p95, 10 samples | 45.207 ms |
-| Peak traced Python heap, whole evaluation | 40,875,761 bytes |
-| SQLite pages before purge/deletion | 2,023,424 bytes |
+| Setup | 2,714.069 ms |
+| Production turn ingestion | 16,024.291 ms |
+| Primary episode/index/archive drain | 57,127.064 ms |
+| Query median, 10 samples | 43.945 ms |
+| Query nearest-rank p95, 10 samples | 57.300 ms |
+| Peak traced Python heap, whole evaluation | 40,875,817 bytes |
+| SQLite pages before purge/deletion | 2,019,328 bytes |
 | SQLite WAL at that observation | 0 bytes |
 | Stub requests, all scenarios | 1,892 |
 | Largest serialized stub request | 164,799 bytes |

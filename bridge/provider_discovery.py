@@ -140,6 +140,7 @@ def _context_windows_for_configured_models(
 
 def _codex_catalog_client_version(value: str) -> str:
     parts = value.strip().split("-", 1)[0].split(".")
+
     def is_version_part(part: str) -> bool:
         return part.isascii() and part.isdigit()
 

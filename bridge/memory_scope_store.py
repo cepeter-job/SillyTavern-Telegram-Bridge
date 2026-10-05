@@ -11,8 +11,7 @@ from bridge.memory_artifact_store import read_artifact_block
 from bridge.memory_contracts import MemoryBlock, MemoryEvidence, MemoryReadScope
 from bridge.memory_fact_store import StoredMemoryFact, index_fact_is_current, load_current_fact, normalize_principals
 from bridge.memory_relevance import relevance_terms
-from bridge.memory_store import external_memory_boundary
-from bridge.narrative_repository import load_narrative_clock
+from bridge.memory_store import external_memory_boundary, request_source_cutoff
 
 
 def resolve_memory_scope(
@@ -29,29 +28,35 @@ def resolve_memory_scope(
     if consumer not in {"character", "narrator"}:
         raise ValueError("Memory consumer must be explicitly character or narrator")
     session_id = session["session_id"]
-    clock = load_narrative_clock(db, chat_id, session_id)
-    if clock is None:
+    # One statement gives every request boundary the same SQLite read snapshot.
+    row = db.execute(
+        "SELECT s.created_at,COALESCE(n.rewrite_revision,0),"
+        "(SELECT COALESCE(MAX(id),0) FROM messages m WHERE m.chat_id=s.chat_id AND m.session_id=s.session_id),"
+        "(SELECT COALESCE(MAX(event_id),0) FROM memory_explicit_events e WHERE e.chat_id=s.chat_id "
+        "AND e.session_id=s.session_id AND e.session_created_at=s.created_at),"
+        "COALESCE((SELECT l.purge_epoch FROM memory_layer_state l WHERE l.chat_id=s.chat_id "
+        "AND l.session_id=s.session_id AND l.session_created_at=s.created_at AND l.layer='hindsight'),0),"
+        "(SELECT COALESCE(MAX(change_id),0) FROM memory_source_rewrites r WHERE r.chat_id=s.chat_id "
+        "AND r.session_id=s.session_id AND r.session_created_at=s.created_at) "
+        "FROM sessions s LEFT JOIN narrative_state n ON n.chat_id=s.chat_id AND n.session_id=s.session_id "
+        "WHERE s.chat_id=? AND s.session_id=?",
+        (chat_id, session_id),
+    ).fetchone()
+    if row is None:
         return None
-    event_cutoff = int(
-        db.execute(
-            "SELECT COALESCE(MAX(event_id),0) FROM memory_explicit_events WHERE chat_id=? AND session_id=? "
-            "AND session_created_at=?",
-            (chat_id, session_id, clock["session_created_at"]),
-        ).fetchone()[0]
-    )
-    boundary = external_memory_boundary(db, chat_id, session_id)
-    latest = int(clock["latest_rowid"])
+    latest = int(row[2])
     return MemoryReadScope(
         chat_id,
         session_id,
-        float(clock["session_created_at"]),
+        float(row[0]),
         latest if through_rowid is None else max(0, min(int(through_rowid), latest)),
-        int(clock["rewrite_revision"]),
+        int(row[1]),
         normalize_principals(principals if principals is not None else (fields.get("name", ""),)),
         consumer,
         through_rowid is not None if historical is None else historical,
-        event_cutoff,
-        boundary["purge_epoch"] if boundary else 0,
+        int(row[3]),
+        int(row[4]),
+        int(row[5]),
     )
 
 
@@ -91,7 +96,7 @@ def eligible_fact(db: sqlite3.Connection, scope: MemoryReadScope, memory_id: int
             scope.historical and scope.through_rowid <= stored.accepted_after_rowid
         ):
             return None
-    elif stored.evidence.source_end_rowid > scope.through_rowid:
+    elif stored.evidence.source_end_rowid > request_source_cutoff(db, scope):
         return None
     return stored
 

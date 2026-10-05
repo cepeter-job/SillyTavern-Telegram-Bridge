@@ -64,7 +64,8 @@ class TaskModelRoutingTests(SettingsTestCase):
         seen_models = []
         provider = make_test_provider_port(
             generate_backend=lambda _key, model, _messages, **_kwargs: (
-                seen_models.append(model) or "Blue key in drawer."
+                seen_models.append(model)
+                or '{"blocks":[{"text":"Blue key in drawer.","visibility":"shared","known_by":[]}]}'
             )
         )
         summary = _owner_memory.generate_session_summary(

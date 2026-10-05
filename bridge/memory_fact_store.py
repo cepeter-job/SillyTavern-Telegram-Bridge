@@ -22,8 +22,12 @@ def normalize_principals(names: Sequence[str]) -> tuple[str, ...]:
     )
 
 
-def classified_audience(visibility: str, known_by: Sequence[str]) -> tuple[str, tuple[str, ...]]:
-    if visibility not in {"shared", "restricted"} or not isinstance(known_by, (tuple, list)):
+def classified_audience(visibility: object, known_by: object) -> tuple[str, tuple[str, ...]]:
+    if (
+        not isinstance(visibility, str)
+        or visibility not in {"shared", "restricted"}
+        or not isinstance(known_by, (tuple, list))
+    ):
         raise ValueError("Memory classification must explicitly name shared or restricted visibility")
     if any(not isinstance(name, str) or not name.strip() for name in known_by):
         raise ValueError("Memory audience must contain character names")

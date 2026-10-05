@@ -168,7 +168,7 @@ def test_npc_pending_invalidation_fences_suffix_before_worker_recovery(db):
 
 def test_autonomous_scope_resolves_all_actual_character_cards(db, monkeypatch):
     import bridge.memory_scope_runtime as runtime
-    from bridge.group_core import save_group_state
+    from bridge.group_core import group_state, save_group_state
     from bridge.memory_scope_runtime import resolve_session_memory_scope
 
     append(db)
@@ -193,6 +193,7 @@ def test_autonomous_scope_resolves_all_actual_character_cards(db, monkeypatch):
         {"session_id": "s"},
         {"name": "Mira"},
         app_settings=make_test_settings(),
+        load_group_state=group_state,
     )
     assert resolved.principals == ("bob", "mira") and resolved.consumer == "character"
     from bridge.memory_scope_store import read_episodic_block

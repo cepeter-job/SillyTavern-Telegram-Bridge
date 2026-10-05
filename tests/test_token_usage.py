@@ -306,7 +306,7 @@ def test_continuity_summary_records_utility_tokens_for_its_session(tmp_path):
 
     def generate(*args, **kwargs):
         kwargs["usage_callback"](TokenUsage(60, 12, 72))
-        return "The companions agreed to meet by the gate."
+        return '{"blocks":[{"text":"The companions agreed to meet by the gate.","visibility":"shared","known_by":[]}]}'
 
     port = ProviderPort(generate, usage_recorder=partial(record_usage, db_factory=services.db_factory))
     db = services.db_factory()

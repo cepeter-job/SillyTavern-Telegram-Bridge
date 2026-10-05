@@ -9,6 +9,7 @@ from typing import Any
 from bridge.limits import SUMMARY_MAX_CHARS
 from bridge.memory_contracts import MemoryBlock, MemoryEvidence, MemoryReadScope
 from bridge.memory_fact_store import classified_audience, digest_value
+from bridge.memory_store import request_source_cutoff
 from bridge.narrative_repository import load_narrative_clock
 
 
@@ -129,7 +130,7 @@ def read_artifact_block(
     if row is None or row[0] != scope.session_created_at:
         return MemoryBlock(channel=kind)
     classification = load_artifact_classification(db, scope.chat_id, scope.session_id, kind)
-    if classification is None or classification[1] > scope.through_rowid:
+    if classification is None or classification[1] > request_source_cutoff(db, scope):
         return MemoryBlock(channel=kind)
     digest, through, blocks = classification
     evidence_digest = digest_value([digest, blocks])

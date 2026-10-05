@@ -41,7 +41,7 @@ def test_migration_6_creates_npc_tables():
     try:
         migrations = db.execute("SELECT version,name FROM schema_migrations ORDER BY version").fetchall()
         assert migrations[5] == (6, "npc_bank_core")
-        assert migrations[-13:] == [
+        assert migrations[7:] == [
             (8, "assistant_delivery_progress"),
             (9, "job_delivery_intents"),
             (10, "narrative_engine_foundation"),

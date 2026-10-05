@@ -732,6 +732,11 @@ class AuditRegressionTests(SettingsTestCase):
             self.db, "chat", self.app_settings_builder.default_model, app_settings=self.app_settings_builder.build()
         )
         _m_session_naming.set_meta(self.db, "memory_scope:chat", "user")
+        self.db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat',?,'user','Old fact',1)",
+            (session["session_id"],),
+        )
+        self.db.commit()
         calls = []
 
         class FakeClient:
@@ -754,8 +759,9 @@ class AuditRegressionTests(SettingsTestCase):
             )
         finally:
             memory_backend.hindsight_client = original_client
-        self.assertEqual(calls[0]["tags"], [f"session:{session['session_id']}"])
-        self.assertEqual(calls[0]["tags_match"], "any_strict")
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["tags"], [f"session:{session['session_id']}", "native-fact"])
+        self.assertEqual(calls[0]["tags_match"], "all_strict")
 
     def test_memory_scope_panel_is_removed_and_search_keeps_text_input(self):
         calls = []

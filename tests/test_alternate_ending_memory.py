@@ -49,7 +49,10 @@ def test_target_tags_and_document_ids_are_distinct_and_deterministic(session_db,
     assert "session:" + target["session_id"] in observed[0]["tags"]
     assert "session:s1" not in observed[0]["tags"]
     assert "The governor surrendered" not in observed[0]["content"]
-    assert memory_backend.memory_recall_filter(db, "chat", target, "") == ["session:" + target["session_id"]]
+    assert memory_backend.memory_recall_filter(db, "chat", target, "") == [
+        "session:" + target["session_id"],
+        "native-fact",
+    ]
     assert not db.in_transaction
 
 

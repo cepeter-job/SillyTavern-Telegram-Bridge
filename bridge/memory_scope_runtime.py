@@ -6,9 +6,9 @@ import sqlite3
 from typing import Literal
 
 from bridge.card_content import card_fields_from_file
-from bridge.group_core import group_state
 from bridge.memory_contracts import MemoryReadScope
 from bridge.memory_scope_store import resolve_memory_scope
+from bridge.port_contracts import GroupStateRead
 from bridge.settings import AppSettings
 
 
@@ -23,14 +23,24 @@ def resolve_session_memory_scope(
     consumer: Literal["character", "narrator"] = "character",
     historical: bool | None = None,
     app_settings: AppSettings,
+    load_group_state: GroupStateRead,
 ) -> MemoryReadScope | None:
     if principals is None:
-        state = group_state(db, chat_id, session["session_id"])
+        state = load_group_state(db, chat_id, session["session_id"])
         if state.get("enabled") and state.get("mode") == "autonomous":
             readers = [fields.get("name", "")]
-            for member in list(state.get("members") or [])[:16]:
+            members = state.get("members")
+            if not isinstance(members, (list, tuple)) or not members:
+                readers.append("unresolved ensemble membership")
+                members = []
+            for member in members[:16]:
+                if not isinstance(member, str) or not member.strip():
+                    readers.append("unresolved ensemble member")
+                    continue
                 try:
-                    name = card_fields_from_file(str(member), app_settings=app_settings).get("name", "")
+                    name = card_fields_from_file(member, app_settings=app_settings).get("name", "")
+                    if not isinstance(name, str) or not name.strip():
+                        name = ""
                 except (OSError, ValueError, KeyError):
                     name = ""
                 # An unresolved ensemble reader cannot silently disappear from an intersection.

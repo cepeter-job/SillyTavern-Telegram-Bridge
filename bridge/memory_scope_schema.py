@@ -2,8 +2,15 @@
 
 import sqlite3
 
+from bridge.memory_schema import _enqueue_sql, _invalidate_sql
+
 
 def migrate_memory_knowledge(db: sqlite3.Connection) -> None:
+    db.execute("""CREATE TABLE memory_source_rewrites(
+        change_id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id TEXT NOT NULL,session_id TEXT NOT NULL,
+        session_created_at REAL NOT NULL,source_rowid INTEGER NOT NULL)""")
+    db.execute("""CREATE INDEX memory_source_rewrite_scope_idx
+        ON memory_source_rewrites(chat_id,session_id,session_created_at,change_id)""")
     db.execute("""CREATE TABLE memory_explicit_events(
         event_id INTEGER PRIMARY KEY AUTOINCREMENT,chat_id TEXT NOT NULL,session_id TEXT NOT NULL,
         session_created_at REAL NOT NULL,principal TEXT NOT NULL,fact TEXT NOT NULL,
@@ -80,7 +87,8 @@ def migrate_memory_knowledge(db: sqlite3.Connection) -> None:
     db.execute("""CREATE TRIGGER memory_knowledge_session_deleted AFTER DELETE ON sessions BEGIN
         UPDATE memory_fact_provenance SET valid=0 WHERE chat_id=OLD.chat_id AND session_id=OLD.session_id;
         UPDATE memory_explicit_events SET valid=0 WHERE chat_id=OLD.chat_id AND session_id=OLD.session_id;
-        DELETE FROM memory_artifact_visibility WHERE chat_id=OLD.chat_id AND session_id=OLD.session_id; END""")
+        DELETE FROM memory_artifact_visibility WHERE chat_id=OLD.chat_id AND session_id=OLD.session_id;
+        DELETE FROM memory_source_rewrites WHERE chat_id=OLD.chat_id AND session_id=OLD.session_id; END""")
     db.execute("""CREATE TRIGGER memory_fact_external_purge AFTER UPDATE OF purge_epoch ON memory_layer_state
         WHEN NEW.layer='hindsight' AND OLD.purge_epoch<>NEW.purge_epoch BEGIN
         UPDATE memory_fact_index SET state='retired' WHERE chat_id=NEW.chat_id AND session_id=NEW.session_id
@@ -98,3 +106,35 @@ def migrate_memory_knowledge(db: sqlite3.Connection) -> None:
     db.execute("UPDATE memory_layer_state SET covered_id=0 WHERE layer IN ('episodes','summary','scene')")
     db.execute("""UPDATE memory_jobs SET dirty_version=dirty_version+1,next_attempt_at=0
         WHERE layer IN ('episodes','summary','scene')""")
+    _repair_memory_mutation_triggers(db)
+
+
+def _scoped_invalidation_sql(owner: str) -> str:
+    """Migration21 refines parent coverage while retaining migration20 source invalidation."""
+    sql = _invalidate_sql(owner)
+    for table, coverage in (("session_summaries", "covered_until_rowid"), ("scene_states", "updated_through_rowid")):
+        original = f"DELETE FROM {table} WHERE chat_id={owner}.chat_id AND session_id={owner}.session_id;"  # noqa: S608 -- fixed migration identifiers
+        if sql.count(original) != 1:
+            raise RuntimeError("The reviewed migration20 artifact invalidation contract changed")
+        sql = sql.replace(original, original[:-1] + f" AND {coverage}>={owner}.id;")
+    sql = sql.replace("layer IN ('hindsight','episodes')", "layer IN ('hindsight','episodes','summary','scene')")
+    rewrite_sql = f"""
+        INSERT INTO memory_source_rewrites(chat_id,session_id,session_created_at,source_rowid)
+        SELECT chat_id,session_id,created_at,{owner}.id FROM sessions
+        WHERE chat_id={owner}.chat_id AND session_id={owner}.session_id;
+        """  # noqa: S608 -- fixed OLD/NEW migration identifiers
+    return sql + rewrite_sql
+
+
+def _repair_memory_mutation_triggers(db: sqlite3.Connection) -> None:
+    db.execute("DROP TRIGGER memory_message_delete")
+    db.execute("DROP TRIGGER memory_message_update")
+    db.execute(f"""CREATE TRIGGER memory_message_delete AFTER DELETE ON messages BEGIN
+        {_scoped_invalidation_sql("OLD")} {_enqueue_sql("OLD")} END""")
+    db.execute(f"""CREATE TRIGGER memory_message_update
+        AFTER UPDATE OF content,role,chat_id,session_id ON messages
+        WHEN OLD.content IS NOT NEW.content OR OLD.role IS NOT NEW.role
+          OR OLD.chat_id IS NOT NEW.chat_id OR OLD.session_id IS NOT NEW.session_id
+        BEGIN {_scoped_invalidation_sql("OLD")} {_enqueue_sql("OLD")}
+          {_scoped_invalidation_sql("NEW")} {_enqueue_sql("NEW")}
+        END""")

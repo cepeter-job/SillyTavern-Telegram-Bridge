@@ -187,7 +187,7 @@ def test_migration_backfills_existing_rows_once_and_retires_legacy_documents():
     from bridge.schema import SCHEMA_MIGRATIONS
 
     db = sqlite3.connect(":memory:")
-    run_migrations(db, SCHEMA_MIGRATIONS[:-1])
+    run_migrations(db, tuple(migration for migration in SCHEMA_MIGRATIONS if migration.version < 20))
     db.execute(
         "INSERT INTO sessions(chat_id,session_id,title,character_file,model_id,persona_id,"
         "world_file,created_at,updated_at) VALUES('c','s','Story','','m','','',1,1)"
@@ -198,8 +198,10 @@ def test_migration_backfills_existing_rows_once_and_retires_legacy_documents():
     initialize_database_schema(db)
     assert db.execute("SELECT count(*) FROM memory_jobs").fetchone()[0] == 6
     assert db.execute("SELECT deleted FROM memory_retired_documents WHERE document_id='old-fixed'").fetchone() == (0,)
+    versions = dict(db.execute("SELECT layer,dirty_version FROM memory_jobs"))
+    assert versions == {"hindsight": 1, "episodes": 2, "summary": 2, "scene": 2, "npc": 1, "curator": 1}
     initialize_database_schema(db)
-    assert {r[0] for r in db.execute("SELECT dirty_version FROM memory_jobs")} == {1}
+    assert dict(db.execute("SELECT layer,dirty_version FROM memory_jobs")) == versions
     db.close()
 
 
@@ -269,7 +271,7 @@ def test_forward_migration_respects_existing_external_purge_epoch():
     from bridge.schema import SCHEMA_MIGRATIONS
 
     db = sqlite3.connect(":memory:")
-    run_migrations(db, SCHEMA_MIGRATIONS[:-1])
+    run_migrations(db, tuple(migration for migration in SCHEMA_MIGRATIONS if migration.version < 20))
     db.execute(
         "INSERT INTO sessions(chat_id,session_id,title,character_file,model_id,persona_id,"
         "world_file,created_at,updated_at) VALUES('c','s','Story','','m','','',1,1)"

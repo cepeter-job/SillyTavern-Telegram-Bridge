@@ -95,13 +95,13 @@ def _run_fact_index(db, claim, fields, *, app_settings):
                 app_settings=app_settings,
             )
             with write_transaction(db):
-                if (
-                    not _claim_current(db, claim)
-                    or index_fact_is_current(db, document_id) is None
-                    or memory_backend.memory_mode(db, claim.chat_id) != "on"
-                ):
+                if index_fact_is_current(db, document_id) is None:
                     _retire_fact_document(db, document_id)
                     return "stale_source", calls
+                if not _claim_current(db, claim):
+                    return "stale_source", calls
+                if memory_backend.memory_mode(db, claim.chat_id) != "on":
+                    return "disabled", calls
                 if not retained:
                     db.execute(
                         "UPDATE memory_fact_index SET last_error='retain_failed' WHERE document_id=?",

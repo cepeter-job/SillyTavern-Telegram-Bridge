@@ -211,7 +211,7 @@ def test_utility_reasoning_is_session_scoped_and_used_by_summary(tmp_path):
 
         def generate(_key, model, _messages, **kwargs):
             calls.append((model, kwargs["settings"]))
-            return "Blue key in drawer."
+            return '{"blocks":[{"text":"Blue key in drawer.","visibility":"shared","known_by":[]}]}'
 
         summary = generate_session_summary(
             db, "chat", session, force=True, provider_port=ProviderPort(generate), app_settings=settings

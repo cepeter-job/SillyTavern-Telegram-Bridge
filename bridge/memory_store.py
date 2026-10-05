@@ -14,6 +14,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TypedDict
 
+from bridge.memory_contracts import MemoryReadScope
 from bridge.sqlite_store import write_transaction
 
 MAX_CLAIMS = 1
@@ -409,3 +410,13 @@ def pending_memory_invalidation(db: sqlite3.Connection, chat_id: str, session_id
         (chat_id, session_id, layer),
     ).fetchone()
     return int(row[0]) if row and row[0] is not None else None
+
+
+def request_source_cutoff(db: sqlite3.Connection, scope: MemoryReadScope) -> int:
+    """Keep only the canonical prefix unchanged since this request captured its scope."""
+    row = db.execute(
+        "SELECT MIN(source_rowid) FROM memory_source_rewrites "
+        "WHERE chat_id=? AND session_id=? AND session_created_at=? AND change_id>?",
+        (scope.chat_id, scope.session_id, scope.session_created_at, scope.rewrite_event_cutoff),
+    ).fetchone()
+    return min(scope.through_rowid, max(0, int(row[0]) - 1)) if row and row[0] is not None else scope.through_rowid

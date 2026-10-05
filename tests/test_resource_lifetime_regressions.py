@@ -271,9 +271,27 @@ def test_hindsight_sync_operations_close_owned_event_loops(monkeypatch, tmp_path
 
     def exercise():
         if operation == "recall":
-            return memory_backend.recall_memory_results(
-                None, "chat", {"session_id": "session"}, "query", app_settings=settings
-            )
+            import sqlite3
+
+            from bridge.schema import initialize_database_schema
+
+            db = sqlite3.connect(":memory:")
+            try:
+                initialize_database_schema(db)
+                db.execute(
+                    "INSERT INTO sessions(chat_id,session_id,title,character_file,model_id,persona_id,"
+                    "world_file,created_at,updated_at) VALUES('chat','session','Story','','model','','',1,1)"
+                )
+                db.execute(
+                    "INSERT INTO messages(chat_id,session_id,role,content,created_at) "
+                    "VALUES('chat','session','user','Remember a fact.',1)"
+                )
+                db.commit()
+                return memory_backend.recall_memory_results(
+                    db, "chat", {"session_id": "session"}, "query", "Character", app_settings=settings
+                )
+            finally:
+                db.close()
         return memory_backend._retain_with_client(
             "chat",
             "session",

@@ -18,6 +18,7 @@ class MemoryReadScope:
     historical: bool = False
     explicit_event_cutoff: int = 0
     external_epoch: int = 0
+    rewrite_event_cutoff: int = 0
 
 
 @dataclass(frozen=True)

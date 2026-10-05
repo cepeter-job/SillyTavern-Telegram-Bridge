@@ -226,7 +226,7 @@ def _build_startup_services(
         director_policy=director_goal_policy,
     )
     memory = _MemoryService(
-        resolve_scope=_partial(resolve_session_memory_scope, app_settings=config),
+        resolve_scope=_partial(resolve_session_memory_scope, app_settings=config, load_group_state=group.state),
         scoped_recall=_partial(recall_scoped_memory, app_settings=config),
         scoped_episodes=read_episodic_block,
         scoped_summary=read_summary_block,

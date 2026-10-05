@@ -274,7 +274,9 @@ final integration source fix was committed. It passed **23 of 23 executed cases
 and all 73 assertions**. The JSON records the clean measured source revision
 b19da0078d68bd463e2b2a31e4f1cb45ada990db, an empty git status, and SHA-256 of
 both evaluator source files. The subsequent result/documentation commit records
-the measurement of that source revision.
+the measurement of that source revision. A later typing correction spells out
+the same pending-source constructor fields explicitly and preserves runtime
+behavior; this recorded run precedes that correction.
 Python was 3.11.16; SQLite was 3.53.1. Fixture SHA-256 was
 6bd668c68d946775991fdda3890a9c839a125c75a7139df3b92a7118ce810d6c.
 

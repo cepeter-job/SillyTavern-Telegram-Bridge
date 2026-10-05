@@ -308,7 +308,22 @@ def next_source_segment(
                     (chat_id, session_id, state[0], layer, row_id, offset, ARCHIVAL_PENDING),
                 ).fetchall()
                 for part in pending:
-                    captured = MemorySource(*part, role, text[part[7] : part[8]])
+                    captured = MemorySource(
+                        document_id=part[0],
+                        chat_id=part[1],
+                        session_id=part[2],
+                        session_created_at=part[3],
+                        layer=part[4],
+                        start_id=part[5],
+                        end_id=part[6],
+                        start_offset=part[7],
+                        end_offset=part[8],
+                        source_digest=part[9],
+                        rewrite_identity=part[10],
+                        purge_epoch=part[11],
+                        role=role,
+                        content=text[part[7] : part[8]],
+                    )
                     if source_is_valid(db, captured):
                         return captured
             identity = json.dumps(

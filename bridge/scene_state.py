@@ -13,9 +13,7 @@ import logging
 import re
 import sqlite3
 import time
-from functools import partial as _partial
 
-from bridge.background import submit_background
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.delivery_port import DeliveryPort
 from bridge.extension_context import PostRetainContext
@@ -25,6 +23,7 @@ from bridge.extension_registry import register_post_retain_hook as _register_pos
 from bridge.extension_registry import register_summary_clear_hook as _register_summary_clear_hook
 from bridge.extension_registry import register_summary_context_hook as _register_summary_context_hook
 from bridge.generation_settings import get_generation_settings
+from bridge.memory_store import enqueue_memory
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.narrative_repository import load_narrative_clock
 from bridge.provider_port import ProviderPort
@@ -264,27 +263,7 @@ def queue_scene_state_refresh(
     provider_port: ProviderPort,
     app_settings: AppSettings,
 ) -> bool:
-    session_id = str(session["session_id"])
-    row = db.execute(
-        "SELECT rowid FROM messages WHERE chat_id=? AND session_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1",
-        (str(chat_id), session_id),
-    ).fetchone()
-    if not row:
-        return False
-    target_rowid = int(row[0])
-    _state, covered = get_scene_state(db, chat_id, session_id)
-    if target_rowid <= covered:
-        return False
-    submit_background(
-        "scene_state_refresh",
-        _partial(_scene_state_refresh_worker, app_settings=app_settings),
-        str(chat_id),
-        session_id,
-        str(character_name),
-        target_rowid,
-        provider_port,
-    )
-    return True
+    return enqueue_memory(db, str(chat_id), str(session["session_id"]), "scene")
 
 
 def _scene_state_post_retain(context: PostRetainContext) -> None:

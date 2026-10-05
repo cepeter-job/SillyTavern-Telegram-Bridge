@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from bridge.episodic_memory import store_episodic_memory
@@ -95,7 +96,13 @@ def parse_episodic_candidates(source: str) -> list[EpisodicCandidate]:
     return result
 
 
-def extract_episodic_memories(
+@dataclass(frozen=True)
+class EpisodicExtractionResult:
+    status: str
+    inserted: int = 0
+
+
+def extract_episodic_memories_result(
     db: sqlite3.Connection,
     chat_id: str,
     session: dict[str, str],
@@ -106,18 +113,19 @@ def extract_episodic_memories(
     provider_port: ProviderPort,
     app_settings: AppSettings,
     expected_source: tuple[float, int, int] | None = None,
-) -> int:
+    source_valid: Callable[[], bool] | None = None,
+) -> EpisodicExtractionResult:
     if not str(source_text or "").strip():
-        return 0
+        return EpisodicExtractionResult("complete")
     if db.in_transaction:
         raise RuntimeError("Episodic extraction cannot call a provider inside a transaction")
     session_id = str(session["session_id"])
     source_clock = load_narrative_clock(db, chat_id, session_id)
-    if source_clock is None:
-        return 0
+    if source_clock is None or (source_valid is not None and not source_valid()):
+        return EpisodicExtractionResult("stale")
     identity_fields = ("session_created_at", "history_revision", "latest_rowid")
     if expected_source is not None and tuple(source_clock[key] for key in identity_fields) != expected_source:
-        return 0
+        return EpisodicExtractionResult("stale")
     messages = [
         {
             "role": "system",
@@ -155,8 +163,12 @@ def extract_episodic_memories(
     inserted = 0
     with write_transaction(db):
         current_clock = load_narrative_clock(db, chat_id, session_id)
-        if current_clock is None or any(current_clock[key] != source_clock[key] for key in identity_fields):
-            return 0
+        if current_clock is None or (
+            not source_valid()
+            if source_valid is not None
+            else any(current_clock[key] != source_clock[key] for key in identity_fields)
+        ):
+            return EpisodicExtractionResult("stale")
         for candidate in candidates:
             inserted += int(
                 store_episodic_memory(
@@ -172,4 +184,9 @@ def extract_episodic_memories(
                     known_by=candidate.known_by,
                 )
             )
-    return inserted
+    return EpisodicExtractionResult("complete", inserted)
+
+
+def extract_episodic_memories(*args, **kwargs) -> int:
+    """Compatibility integer view; durable workers consume the explicit result."""
+    return extract_episodic_memories_result(*args, **kwargs).inserted

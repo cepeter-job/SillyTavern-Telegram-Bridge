@@ -6,14 +6,13 @@ import json
 import logging
 import sqlite3
 import time
-from functools import partial as _partial
 
 import bridge.limits as _limits
-from bridge.background import submit_background
 from bridge.extension_context import PostRetainContext
 from bridge.extension_registry import extension_registry_snapshot as _extension_registry_snapshot
 from bridge.extension_registry import register_post_retain_hook as _register_post_retain_hook
 from bridge.generation_settings import get_generation_settings
+from bridge.memory_store import enqueue_memory
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.npc_repository import (
     get_npc_extraction_coverage,
@@ -340,21 +339,7 @@ def queue_npc_state_refresh(
     provider_port: ProviderPort,
     app_settings: AppSettings,
 ) -> bool:
-    session_id = str(session["session_id"])
-    target = _latest_target_rowid(db, chat_id, session_id, None)
-    coverage = get_npc_extraction_coverage(db, chat_id, session_id)
-    if not target or target <= coverage:
-        return False
-    return submit_background(
-        "npc_state_refresh",
-        _partial(_npc_refresh_worker, app_settings=app_settings),
-        str(chat_id),
-        session_id,
-        str(fields.get("name") or ""),
-        target,
-        coverage,
-        provider_port,
-    )
+    return enqueue_memory(db, str(chat_id), str(session["session_id"]), "npc")
 
 
 def _npc_post_retain(context: PostRetainContext) -> None:

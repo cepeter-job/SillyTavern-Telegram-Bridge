@@ -44,11 +44,8 @@ def test_target_tags_and_document_ids_are_distinct_and_deterministic(session_db,
     assert seed_alternate_ending_memory(db, "chat", target, app_settings=config) == "ready"
     assert seed_alternate_ending_memory(db, "chat", target, app_settings=config) == "ready"
     assert observed[0]["bank_id"] == memory_backend.hindsight_bank_id("chat")
-    assert (
-        observed[0]["document_id"]
-        == observed[1]["document_id"]
-        == memory_backend.hindsight_conversation_document_id(target["session_id"])
-    )
+    assert len(observed) == 1  # second call reuses completed source coverage
+    assert observed[0]["document_id"].startswith("session:" + target["session_id"] + ":source:")
     assert "session:" + target["session_id"] in observed[0]["tags"]
     assert "session:s1" not in observed[0]["tags"]
     assert "The governor surrendered" not in observed[0]["content"]

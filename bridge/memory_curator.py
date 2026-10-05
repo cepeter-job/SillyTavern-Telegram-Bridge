@@ -14,9 +14,7 @@ import logging
 import re
 import sqlite3
 import time
-from functools import partial as _partial
 
-from bridge.background import submit_background
 from bridge.curated_memory_panel import curated_memory_panel
 from bridge.delivery_port import DeliveryPort
 from bridge.extension_context import PostRetainContext
@@ -27,12 +25,13 @@ from bridge.generation_settings import get_generation_settings
 from bridge.memory_backend import (
     _memory_hindsight_epoch,
     _memory_hindsight_session_exists,
-    _retain_with_client,
     hindsight_session_lock,
     hindsight_session_prefix,
     memory_mode,
 )
+from bridge.memory_backend import _retain_with_client as _retain_with_client
 from bridge.memory_backend import clear_curated_memory_state as clear_curated_memory_state
+from bridge.memory_store import enqueue_memory, external_memory_boundary
 from bridge.meta_repository import load_meta_value as _repo_load_meta_value
 from bridge.meta_repository import store_meta_value as _repo_store_meta_value
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
@@ -165,6 +164,9 @@ def curate_memory_now(
         rows = recent_transcript_rows(
             db, chat_id, session_id, limit=_MEMORY_CURATOR_TRANSCRIPT_MESSAGES, through_rowid=through_rowid
         )
+        boundary = external_memory_boundary(db, chat_id, session_id, layer="curator")
+        floor = boundary["source_floor_id"] if boundary else 0
+        rows = [row for row in rows if int(row[0]) > floor]
         existing, covered = get_curated_memory_state(db, chat_id, session_id)
     if not rows:
         return None
@@ -238,9 +240,13 @@ def curate_memory_now(
                 or _repo_load_meta_value(db, revision_key, "0") != revision
                 or _memory_hindsight_epoch(db, chat_id, session_id) != epoch
                 or _repo_load_meta_value(db, memory_curator_key(chat_id, session_id), "") != initial_state
-                or recent_transcript_rows(
-                    db, chat_id, session_id, limit=_MEMORY_CURATOR_TRANSCRIPT_MESSAGES, through_rowid=through_rowid
-                )
+                or [
+                    row
+                    for row in recent_transcript_rows(
+                        db, chat_id, session_id, limit=_MEMORY_CURATOR_TRANSCRIPT_MESSAGES, through_rowid=through_rowid
+                    )
+                    if int(row[0]) > floor
+                ]
                 != rows
                 or current_covered > target_rowid
             ):
@@ -251,21 +257,8 @@ def curate_memory_now(
                 json.dumps(payload, ensure_ascii=False, sort_keys=True),
             )
 
-        if memory_mode(db, chat_id) == "on":
-            content = "Curated durable memories:\n" + (
-                "\n".join(f"- [{item['kind']}:{item['key']}] {item['text']}" for item in items) if items else "(none)"
-            )
-            _retain_with_client(
-                chat_id,
-                session_id,
-                curated_memory_document_id(session_id),
-                character_name,
-                content,
-                f"Curated durable memory for roleplay session with character {character_name}",
-                "curated",
-                "Hindsight curated-memory retain unavailable for chat %s",
-                app_settings=app_settings,
-            )
+        # The mixed fixed remote document is retired. Native facts remain
+        # useful; separately scoped semantic indexing owns external fact writes.
     return items
 
 
@@ -314,34 +307,7 @@ def queue_memory_curator(
 ) -> bool:
     if memory_mode(db, chat_id) != "on":
         return False
-    session_id = str(session["session_id"])
-    row = db.execute(
-        "SELECT rowid FROM messages WHERE chat_id=? AND session_id=? ORDER BY created_at DESC,rowid DESC LIMIT 1",
-        (str(chat_id), session_id),
-    ).fetchone()
-    if not row:
-        return False
-    target_rowid = int(row[0])
-    _existing, covered = get_curated_memory_state(db, chat_id, session_id)
-    if target_rowid <= covered:
-        return False
-    if covered:
-        new_count = db.execute(
-            "SELECT COUNT(*) FROM messages WHERE chat_id=? AND session_id=? AND rowid>?",
-            (str(chat_id), session_id, covered),
-        ).fetchone()[0]
-        if int(new_count or 0) < _MEMORY_CURATOR_MIN_NEW_MESSAGES:
-            return False
-    submit_background(
-        "memory_curator",
-        _partial(_memory_curator_worker, app_settings=app_settings),
-        str(chat_id),
-        session_id,
-        str(character_name),
-        target_rowid,
-        provider_port,
-    )
-    return True
+    return enqueue_memory(db, str(chat_id), str(session["session_id"]), "curator")
 
 
 def _memory_curator_post_retain(context: PostRetainContext) -> None:

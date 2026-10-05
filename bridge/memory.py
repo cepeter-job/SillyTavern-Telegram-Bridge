@@ -26,6 +26,7 @@ from bridge.memory_backend import (
     _memory_hindsight_conversation_snapshot,
     _memory_hindsight_epoch,
     _memory_hindsight_session_exists,
+    _prepare_hindsight_purge_state,
     _purge_hindsight_session_backend,
     _retain_session_memory_backend,
     _write_hindsight_successful_purge_state,
@@ -44,6 +45,7 @@ from bridge.memory_backend import hindsight_tags as hindsight_tags
 from bridge.memory_backend import memory_recall_filter as memory_recall_filter
 from bridge.memory_backend import recall_memory_context as recall_memory_context
 from bridge.memory_backend import remember_fact as remember_fact
+from bridge.memory_store import enqueue_memory
 from bridge.metadata import set_meta
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.narrative_repository import load_narrative_clock
@@ -80,6 +82,7 @@ def _make_hindsight_stale_guard(
         retain_backend=_partial(_retain_session_memory_backend, app_settings=app_settings),
         purge_backend=_partial(_purge_hindsight_session_backend, app_settings=app_settings),
         write_successful_purge_state=(_write_hindsight_successful_purge_state),
+        invalidate_before_purge=_prepare_hindsight_purge_state,
         run_post_retain_hooks=_partial(
             _run_post_retain_hooks,
             app_settings=app_settings,
@@ -100,14 +103,18 @@ def retain_session_memory(
     persona_service: PersonaService | None = None,
     delivery_port: DeliveryPort | None = None,
 ) -> None:
-    _make_hindsight_stale_guard(
-        app_settings=app_settings, persona_service=persona_service, delivery_port=delivery_port
-    ).retain(
+    # Transcript triggers already captured work in the accepted write transaction.
+    # Explicit requests also recover work when a caller retains existing rows.
+    enqueue_memory(db, chat_id, session["session_id"], "hindsight")
+    _run_post_retain_hooks(
         db,
         chat_id,
         session,
         fields,
-        provider_port=provider_port,
+        provider_port,
+        app_settings=app_settings,
+        persona_service=persona_service,
+        delivery_port=delivery_port,
     )
 
 
@@ -143,7 +150,11 @@ def handle_memory_command(
         return
     if argument in {"status", "on", "off"}:
         if argument in {"on", "off"}:
-            set_meta(db, f"memory_mode:{chat_id}", argument)
+            with hindsight_session_lock(chat_id, session["session_id"]):
+                set_meta(db, f"memory_mode:{chat_id}", argument)
+                if argument == "on":
+                    with write_transaction(db):
+                        db.execute("UPDATE memory_jobs SET next_attempt_at=0 WHERE chat_id=?", (chat_id,))
         status = memory_mode(db, chat_id)
         send_text_fn(
             token,
@@ -244,12 +255,16 @@ def generate_session_summary_result(
     *,
     provider_port: ProviderPort,
     app_settings: AppSettings,
+    durable: bool = False,
+    max_segments: int | None = None,
 ) -> SessionSummaryResult:
     source_snapshot = _summary_generation_snapshot(db, chat_id, session["session_id"])
     rows = db.execute(
         "SELECT rowid,role,content,created_at FROM messages WHERE chat_id=? AND session_id=? ORDER BY created_at,rowid",
         (chat_id, session["session_id"]),
     ).fetchall()
+    if durable:
+        rows.sort(key=lambda row: int(row[0]))
     if not rows:
         return SessionSummaryResult("", 0, True)
     existing, covered_until = get_session_summary(db, chat_id, session["session_id"])
@@ -261,8 +276,10 @@ def generate_session_summary_result(
     target_rowid = int(stable_rows[-1][0])
     if not force and existing and target_rowid <= covered_until:
         return SessionSummaryResult(existing, covered_until, True)
-    pending = stable_rows if force else [row for row in stable_rows if int(row[0]) > covered_until]
-    if not pending or (not force and existing and len(pending) < SUMMARY_UPDATE_INTERVAL):
+    pending = stable_rows if force and not durable else [row for row in stable_rows if int(row[0]) > covered_until]
+    if not pending:
+        return SessionSummaryResult(existing, covered_until, durable and target_rowid <= covered_until)
+    if not force and existing and len(pending) < SUMMARY_UPDATE_INTERVAL:
         return SessionSummaryResult(existing, covered_until, False)
     settings = get_generation_settings(db, chat_id, session["session_id"])
     settings.update(
@@ -274,8 +291,11 @@ def generate_session_summary_result(
     )
     summary = existing
     completed_covered = covered_until
-    previous = "" if force else existing
+    previous = "" if force and not durable else existing
+    processed_segments = 0
     while pending:
+        if max_segments is not None and processed_segments >= max_segments:
+            return SessionSummaryResult(summary, completed_covered, False)
         if (
             source_snapshot is None
             or _summary_generation_snapshot(db, chat_id, session["session_id"]) != source_snapshot
@@ -349,7 +369,7 @@ def generate_session_summary_result(
             source_snapshot = _summary_generation_snapshot(db, chat_id, session["session_id"])
         summary = previous = produced
         completed_covered = completed_rowid
-        if not force:
+        if not force and not durable:
             try:
                 extract_episodic_memories(
                     db,
@@ -367,6 +387,7 @@ def generate_session_summary_result(
                     "Episodic memory extraction failed for %s/%s", chat_id, session["session_id"], exc_info=True
                 )
         pending = pending[len(segment) :]
+        processed_segments += 1
     if _summary_generation_snapshot(db, chat_id, session["session_id"]) != source_snapshot:
         return _current_summary_result(db, chat_id, session["session_id"])
     return SessionSummaryResult(summary, completed_covered, True)

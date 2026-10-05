@@ -72,7 +72,7 @@ class MemoryCuratorTests(SettingsTestCase):
         self.assertEqual(len(parsed), 1)
         self.assertRegex(parsed[0]["key"], r"^fact-[0-9a-f]{12}$")
 
-    def test_curator_uses_utility_model_and_retains_deterministic_document(self):
+    def test_curator_uses_utility_model_and_preserves_native_facts(self):
         self._add_turn()
         seen_models = []
         retained = []
@@ -108,46 +108,36 @@ class MemoryCuratorTests(SettingsTestCase):
 
         self.assertEqual(seen_models, ["utility::model"])
         self.assertEqual(items[0]["key"], "family.sister")
-        self.assertEqual(retained[0][0][2], _m_memory_curator.curated_memory_document_id(self.session["session_id"]))
-        self.assertEqual(retained[0][0][6], "curated")
+        self.assertEqual(retained, [])
 
     def test_retain_hook_queues_curator_only_when_memory_enabled(self):
-        import bridge.scene_state as scene_state
-
         self._add_turn()
-        queued = []
-        old_submit = _m_memory_curator.submit_background
-        old_memory_submit = _m_memory.submit_background
-        _m_memory_curator.submit_background = lambda name, fn, *args, **kwargs: queued.append(name)
-        _m_memory.submit_background = lambda *_args, **_kwargs: True
+        initial = self.db.execute("SELECT dirty_version FROM memory_jobs WHERE layer='curator'").fetchone()[0]
         provider = make_test_provider_port()
-        try:
-            with patch.object(scene_state, "submit_background", return_value=False):
-                _m_session_naming.set_meta(self.db, "memory_mode:chat", "off")
-                _m_memory.retain_session_memory(
-                    self.db,
-                    "chat",
-                    self.session,
-                    {"name": "Mira"},
-                    provider_port=provider,
-                    app_settings=self.app_settings_builder.build(),
-                )
-                self.assertNotIn("memory_curator", queued)
-
-                _m_session_naming.set_meta(self.db, "memory_mode:chat", "on")
-                _m_memory.retain_session_memory(
-                    self.db,
-                    "chat",
-                    self.session,
-                    {"name": "Mira"},
-                    provider_port=provider,
-                    app_settings=self.app_settings_builder.build(),
-                )
-        finally:
-            _m_memory_curator.submit_background = old_submit
-            _m_memory.submit_background = old_memory_submit
-
-        self.assertIn("memory_curator", queued)
+        _m_session_naming.set_meta(self.db, "memory_mode:chat", "off")
+        _m_memory.retain_session_memory(
+            self.db,
+            "chat",
+            self.session,
+            {"name": "Mira"},
+            provider_port=provider,
+            app_settings=self.app_settings_builder.build(),
+        )
+        self.assertEqual(
+            self.db.execute("SELECT dirty_version FROM memory_jobs WHERE layer='curator'").fetchone()[0], initial
+        )
+        _m_session_naming.set_meta(self.db, "memory_mode:chat", "on")
+        _m_memory.retain_session_memory(
+            self.db,
+            "chat",
+            self.session,
+            {"name": "Mira"},
+            provider_port=provider,
+            app_settings=self.app_settings_builder.build(),
+        )
+        self.assertGreater(
+            self.db.execute("SELECT dirty_version FROM memory_jobs WHERE layer='curator'").fetchone()[0], initial
+        )
 
     def test_stale_race_rechecks_inside_transaction_and_skips_retain(self):
         self._add_turn()

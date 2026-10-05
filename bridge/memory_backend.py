@@ -24,6 +24,7 @@ from bridge.limits import (
     HINDSIGHT_RECALL_MAX_TOKENS,
     HINDSIGHT_RETAIN_MAX_MESSAGES,
 )
+from bridge.memory_store import next_source_segment, purge_external_memory, source_is_valid, store_segment
 from bridge.meta_repository import delete_meta_value, load_meta_value, store_meta_value
 from bridge.metadata import get_meta
 from bridge.settings import AppSettings
@@ -307,10 +308,82 @@ def recall_memory_results(
                 ),
                 tags_match="any_strict",
             )
-            return list(getattr(results, "results", []) or [])
+            return [
+                item
+                for item in list(getattr(results, "results", []) or [])
+                if memory_document_is_current(
+                    db, chat_id, session["session_id"], str(getattr(item, "document_id", "") or "")
+                )
+            ]
     except Exception:
         logging.warning("Hindsight recall unavailable for chat %s", chat_id, exc_info=True)
         return []
+
+
+def memory_document_is_current(db, chat_id, session_id, document_id):
+    """Local retirement is authoritative even when remote deletion failed."""
+    if (
+        not document_id
+        or db.execute(
+            "SELECT 1 FROM memory_retired_documents WHERE chat_id=? AND session_id=? AND document_id=?",
+            (chat_id, session_id, document_id),
+        ).fetchone()
+    ):
+        return False
+    if document_id in {
+        hindsight_conversation_document_id(session_id),
+        hindsight_session_prefix(session_id) + "-curated",
+        f"st-session-{session_id}",
+    }:
+        return False
+    row = db.execute(
+        "SELECT m.valid,s.created_at,m.session_created_at FROM memory_segments m LEFT JOIN sessions s "
+        "ON s.chat_id=m.chat_id AND s.session_id=m.session_id WHERE m.chat_id=? AND m.session_id=? "
+        "AND m.document_id=?",
+        (chat_id, session_id, document_id),
+    ).fetchone()
+    return bool(row and row[0] and row[1] == row[2]) or bool(
+        db.execute(
+            "SELECT 1 FROM hindsight_documents WHERE chat_id=? AND session_id=? AND document_id=? AND kind='explicit'",
+            (chat_id, session_id, document_id),
+        ).fetchone()
+    )
+
+
+async def _delete_retired_with_client(client, bank_id, documents):
+    for document_id in documents:
+        try:
+            await client.documents.delete_document(bank_id=bank_id, document_id=document_id)
+        except Exception as exc:
+            if not _hindsight_not_found(exc):
+                raise
+
+
+def cleanup_retired_memory_documents(db, chat_id, session_id, *, app_settings):
+    """Bounded, retryable cleanup; retirement remains authoritative locally."""
+    if db.in_transaction:
+        raise RuntimeError("Memory cleanup cannot run in a transaction")
+    rows = db.execute(
+        "SELECT document_id FROM memory_retired_documents WHERE chat_id=? AND session_id=? "
+        "AND deleted=0 ORDER BY document_id LIMIT 16",
+        (chat_id, session_id),
+    ).fetchall()
+    if not rows:
+        return True
+    try:
+        with hindsight_client_scope(app_settings=app_settings) as client:
+            asyncio.run(_delete_retired_with_client(client, hindsight_bank_id(chat_id), [r[0] for r in rows]))
+    except Exception:
+        logging.warning("Retired memory document cleanup unavailable", exc_info=True)
+        return False
+    with write_transaction(db):
+        db.executemany(
+            "UPDATE memory_retired_documents SET deleted=1 WHERE chat_id=? AND session_id=? AND document_id=?",
+            [(chat_id, session_id, r[0]) for r in rows],
+        )
+    return not db.execute(
+        "SELECT 1 FROM memory_retired_documents WHERE chat_id=? AND session_id=? AND deleted=0", (chat_id, session_id)
+    ).fetchone()
 
 
 def recall_memory_context(
@@ -465,42 +538,24 @@ def _memory_hindsight_conversation_snapshot(
     return conversation, fingerprint
 
 
-def _write_hindsight_successful_purge_state(
-    db: sqlite3.Connection,
-    chat_id: str,
-    session_id: str,
-) -> None:
-    def write_purge_state() -> None:
-        db.execute(
-            "DELETE FROM hindsight_documents WHERE chat_id=? AND session_id=?",
-            (str(chat_id), str(session_id)),
-        )
-        next_epoch = (
-            _memory_hindsight_epoch(
-                db,
-                chat_id,
-                session_id,
-            )
-            + 1
-        )
-        db.execute(
-            "INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)",
-            (
-                _memory_hindsight_epoch_key(
-                    chat_id,
-                    session_id,
-                ),
-                str(next_epoch),
-            ),
-        )
+def _prepare_hindsight_purge_state(db, chat_id, session_id):
+    with hindsight_session_lock(chat_id, session_id), write_transaction(db):
+        next_epoch = _memory_hindsight_epoch(db, chat_id, session_id) + 1
+        purge_external_memory(db, chat_id, session_id, purge_epoch=next_epoch)
+        store_meta_value(db, _memory_hindsight_epoch_key(chat_id, session_id), str(next_epoch))
 
+
+def _write_hindsight_successful_purge_state(db, chat_id, session_id):
     with write_transaction(db):
-        write_purge_state()
+        db.execute("DELETE FROM hindsight_documents WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+        db.execute(
+            "UPDATE memory_retired_documents SET deleted=1 WHERE chat_id=? AND session_id=?", (chat_id, session_id)
+        )
 
 
 def _retain_session_memory_backend(
     chat_id: str, session: dict[str, str], character_name: str, conversation: str, *, app_settings: AppSettings
-) -> None:
+) -> bool:
     session_id = str(session["session_id"])
     with hindsight_session_lock(chat_id, session_id):
         session_db = db_connect(app_settings=app_settings)
@@ -512,9 +567,9 @@ def _retain_session_memory_backend(
         finally:
             session_db.close()
         if not exists:
-            return
+            return False
         document_id = hindsight_conversation_document_id(session_id)
-        _retain_with_client(
+        return _retain_with_client(
             chat_id,
             session_id,
             document_id,
@@ -565,27 +620,38 @@ def seed_session_memory_now(
     *,
     app_settings: AppSettings,
 ) -> str:
-    """Retain only this session's copied transcript using its canonical document identity."""
+    """Seed all canonical target rows, in complete deterministic bounded parts.
+
+    Alternate ending startup retries this function; successful parts are retained
+    once and failed parts retain the same document identity on the next attempt.
+    """
     if db.in_transaction:
         raise ValueError("Memory seeding cannot run inside a write transaction")
-    if memory_mode(db, chat_id) != "on":
-        return "disabled"
-    session_id = session["session_id"]
+    session_id = str(session["session_id"])
     with hindsight_session_lock(chat_id, session_id):
+        if memory_mode(db, chat_id) != "on":
+            return "disabled"
         if not _memory_hindsight_session_exists(db, chat_id, session_id):
             return "degraded"
-        conversation, _fingerprint = _memory_hindsight_conversation_snapshot(db, chat_id, session_id)
-        if not conversation:
-            return "ready"
-        retained = _retain_with_client(
-            chat_id,
-            session_id,
-            hindsight_conversation_document_id(session_id),
-            session.get("title", "Story"),
-            conversation,
-            "Restored pre-finale conversation in an independent session",
-            "conversation",
-            "Hindsight branch seeding unavailable for chat %s",
-            app_settings=app_settings,
-        )
-        return "ready" if retained else "degraded"
+        for _ in range(8):
+            source = next_source_segment(db, chat_id, session_id, "hindsight")
+            if source is None:
+                return "ready"
+            if memory_mode(db, chat_id) != "on":
+                return "disabled"
+            if not source_is_valid(db, source):
+                return "degraded"
+            retained = _retain_with_client(
+                chat_id,
+                session_id,
+                source.document_id,
+                session.get("title", "Story"),
+                source.content,
+                f"Independent target transcript: {source.role}; offsets={source.start_offset}:{source.end_offset}",
+                "source_segment",
+                "Hindsight branch seeding unavailable for chat %s",
+                app_settings=app_settings,
+            )
+            if not retained or not store_segment(db, source):
+                return "degraded"
+        return "ready" if next_source_segment(db, chat_id, session_id, "hindsight") is None else "degraded"

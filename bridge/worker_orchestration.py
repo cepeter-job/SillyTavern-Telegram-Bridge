@@ -20,6 +20,7 @@ from bridge.job_service import DurableJob, JobSubmission
 from bridge.job_store import job_payload
 from bridge.light_novel_jobs import process_light_novel_choices_job
 from bridge.limits import IMAGE_MAX_BYTES
+from bridge.memory_workers import dispatch_memory_backlog
 from bridge.operations import operation_phase, operation_was_applied, record_operation
 from bridge.panel_singleflight import restore_busy_panel_if_unchanged
 from bridge.provider_errors import ProviderRequestError
@@ -542,6 +543,7 @@ def make_durable_backlog_dispatcher(
                 ),
                 recover_running=False,
             )
+            dispatch_memory_backlog(services, db)
         finally:
             db.close()
 

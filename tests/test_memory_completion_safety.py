@@ -120,7 +120,7 @@ def test_curator_reset_discards_inflight_completion(session_db, monkeypatch, cha
         assert items == [{"key": "manual", "text": "Reviewed fact"}]
 
 
-def test_curator_acceptance_and_retain_are_ordered_before_concurrent_purge(session_db, monkeypatch):
+def test_curator_acceptance_preserves_native_state_without_remote_rewrite_during_purge(session_db, monkeypatch):
     settings, db, session = session_db
     add_rows(db, 2)
     accepted = threading.Event()
@@ -182,8 +182,8 @@ def test_curator_acceptance_and_retain_are_ordered_before_concurrent_purge(sessi
         thread.join(5)
     assert not thread.is_alive()
     assert errors == []
-    assert lock_was_free == [False]
-    assert events == ["retain", "purge"]
+    assert events == ["purge"]
+    assert memory_curator.get_curated_memory_state(db, "chat", "s1")[0][0]["text"] == "Current fact"
 
 
 def test_session_deletion_removes_curated_state_before_session_id_reuse(session_db):

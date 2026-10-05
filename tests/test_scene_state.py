@@ -92,22 +92,21 @@ class SceneStateEngineTests(SettingsTestCase):
     def test_retain_hook_queues_scene_refresh_even_when_hindsight_is_off(self):
         self._add_turn()
         _m_session_naming.set_meta(self.db, "memory_mode:chat", "off")
-        queued = []
-        original_submit = _m_scene_state.submit_background
-        _m_scene_state.submit_background = lambda name, fn, *args, **kwargs: queued.append((name, fn, args))
-        try:
-            _m_memory.retain_session_memory(
-                self.db,
-                "chat",
-                self.session,
-                {"name": "Mira"},
-                provider_port=make_test_provider_port(),
-                app_settings=self.app_settings_builder.build(),
-            )
-        finally:
-            _m_scene_state.submit_background = original_submit
-
-        self.assertTrue(any(name == "scene_state_refresh" for name, _fn, _args in queued))
+        initial = self.db.execute("SELECT dirty_version FROM memory_jobs WHERE layer='scene'").fetchone()[0]
+        _m_memory.retain_session_memory(
+            self.db,
+            "chat",
+            self.session,
+            {"name": "Mira"},
+            provider_port=make_test_provider_port(),
+            app_settings=self.app_settings_builder.build(),
+        )
+        self.assertGreater(
+            self.db.execute("SELECT dirty_version FROM memory_jobs WHERE layer='scene'").fetchone()[0], initial
+        )
+        self.assertEqual(
+            self.db.execute("SELECT completed_version FROM memory_jobs WHERE layer='scene'").fetchone()[0], 0
+        )
 
     def test_clear_scene_state_joins_outer_transaction(self):
         self.db.execute(

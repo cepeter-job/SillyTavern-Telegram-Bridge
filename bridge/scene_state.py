@@ -171,9 +171,12 @@ def extract_scene_segment(
         force_non_stream=True,
     )
     payload = parse_classified_response(raw)
-    state = parse_scene_state(json.dumps(payload.get("state"), ensure_ascii=False))
+    raw_state = payload.get("state")
+    if not isinstance(raw_state, dict):
+        raise ValueError("Scene extraction requires an explicit state object")
+    state = {} if not raw_state else parse_scene_state(json.dumps(raw_state, ensure_ascii=False))
     blocks = parse_classified_blocks(payload)
-    if not state:
+    if state is None:
         raise ValueError("Scene extraction requires valid state")
     return {"state": state, "blocks": blocks}
 

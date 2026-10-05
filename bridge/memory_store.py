@@ -20,6 +20,8 @@ from bridge.sqlite_store import write_transaction
 MAX_CLAIMS = 1
 LEASE_SECONDS = 900
 SEGMENT_CHARS = 12000
+# Accepted readers require 1; 2 reserves retryable raw work without granting coverage.
+ARCHIVAL_PENDING = 2
 
 
 @dataclass(frozen=True)
@@ -297,6 +299,18 @@ def next_source_segment(
             end = min(len(text), offset + min(SEGMENT_CHARS, max(1, max_chars)))
             content = text[offset:end]
             digest = _digest(role, content)
+            if layer == "hindsight":
+                pending = db.execute(
+                    "SELECT document_id,chat_id,session_id,session_created_at,layer,start_id,end_id,"
+                    "start_offset,end_offset,source_digest,rewrite_identity,purge_epoch FROM memory_segments "
+                    "WHERE chat_id=? AND session_id=? AND session_created_at=? AND layer=? "
+                    "AND start_id=? AND start_offset=? AND valid=? ORDER BY created_at,document_id",
+                    (chat_id, session_id, state[0], layer, row_id, offset, ARCHIVAL_PENDING),
+                ).fetchall()
+                for part in pending:
+                    captured = MemorySource(*part, role, text[part[7] : part[8]])
+                    if source_is_valid(db, captured):
+                        return captured
             identity = json.dumps(
                 [chat_id, session_id, state[0], layer, row_id, offset, end, digest, state[1], state[2]]
             )
@@ -332,7 +346,9 @@ def source_is_valid(db: sqlite3.Connection, source: MemorySource) -> bool:
     if state is None or state[0] != source.session_created_at or state[2] != source.purge_epoch:
         return False
     stored = db.execute("SELECT valid FROM memory_segments WHERE document_id=?", (source.document_id,)).fetchone()
-    if (stored is not None and not stored[0]) or (stored is None and state[1] != source.rewrite_identity):
+    if (stored is not None and stored[0] not in (1, ARCHIVAL_PENDING)) or (
+        stored is None and state[1] != source.rewrite_identity
+    ):
         return False
     row = db.execute(
         "SELECT role,content FROM messages WHERE chat_id=? AND session_id=? AND id=?",
@@ -343,6 +359,46 @@ def source_is_valid(db: sqlite3.Connection, source: MemorySource) -> bool:
         and len(row[1]) >= source.end_offset
         and _digest(row[0], row[1][source.start_offset : source.end_offset]) == source.source_digest
     )
+
+
+def reserve_archival_source(db: sqlite3.Connection, source: MemorySource, *, claim: MemoryClaim | None = None) -> bool:
+    """Persist raw dispatch identity without accepted offsets, coverage or mapping."""
+    if source.layer != "hindsight":
+        raise ValueError("Only raw Hindsight sources use archival reservations")
+    with write_transaction(db):
+        if (claim is not None and not claim_is_current(db, claim)) or not source_is_valid(db, source):
+            return False
+        db.execute(
+            "INSERT OR IGNORE INTO memory_segments VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (
+                source.document_id,
+                source.chat_id,
+                source.session_id,
+                source.session_created_at,
+                source.layer,
+                source.start_id,
+                source.end_id,
+                source.start_offset,
+                source.end_offset,
+                source.source_digest,
+                source.rewrite_identity,
+                source.purge_epoch,
+                ARCHIVAL_PENDING,
+                time.time(),
+            ),
+        )
+        return True
+
+
+def retire_archival_source(db: sqlite3.Connection, source: MemorySource) -> None:
+    """A late/uncertain remote write reopens even an already-completed retirement."""
+    with write_transaction(db):
+        db.execute("UPDATE memory_segments SET valid=0 WHERE document_id=?", (source.document_id,))
+        db.execute(
+            "INSERT INTO memory_retired_documents(chat_id,session_id,document_id) VALUES(?,?,?) "
+            "ON CONFLICT(chat_id,session_id,document_id) DO UPDATE SET deleted=0,next_attempt_at=0",
+            (source.chat_id, source.session_id, source.document_id),
+        )
 
 
 def store_segment(db: sqlite3.Connection, source: MemorySource, *, advance_coverage: bool = True) -> bool:
@@ -424,12 +480,11 @@ def purge_external_memory(db: sqlite3.Connection, chat_id: str, session_id: str,
             "ON CONFLICT(chat_id,session_id,document_id) DO UPDATE SET deleted=0",
             (chat_id, session_id),
         )
-        for layer in ("hindsight", "curator"):
-            db.execute(
-                "INSERT OR IGNORE INTO memory_layer_state(chat_id,session_id,session_created_at,layer) "
-                "SELECT chat_id,session_id,created_at,? FROM sessions WHERE chat_id=? AND session_id=?",
-                (layer, chat_id, session_id),
-            )
+        db.execute(
+            "INSERT OR IGNORE INTO memory_layer_state(chat_id,session_id,session_created_at,layer) "
+            "SELECT chat_id,session_id,created_at,'hindsight' FROM sessions WHERE chat_id=? AND session_id=?",
+            (chat_id, session_id),
+        )
         floor = db.execute(
             "SELECT COALESCE(MAX(id),0) FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session_id)
         ).fetchone()[0]
@@ -439,12 +494,18 @@ def purge_external_memory(db: sqlite3.Connection, chat_id: str, session_id: str,
         )
         db.execute(
             "UPDATE memory_layer_state SET purge_epoch=?,rewrite_identity=rewrite_identity+1,"
-            "source_floor_id=?,covered_id=? WHERE chat_id=? AND session_id=? AND layer IN ('hindsight','curator')",
+            "source_floor_id=?,covered_id=? WHERE chat_id=? AND session_id=? AND layer='hindsight'",
             (purge_epoch, floor, floor, chat_id, session_id),
         )
         db.execute(
             "UPDATE memory_jobs SET completed_version=dirty_version,lease_token='',lease_deadline=0,"
-            "next_attempt_at=0,last_error='' WHERE chat_id=? AND session_id=? AND layer IN ('hindsight','curator')",
+            "next_attempt_at=0,last_error='' WHERE chat_id=? AND session_id=? AND layer='hindsight'",
+            (chat_id, session_id),
+        )
+        # Native curator proof survives external purge; only overlapping ownership is revoked.
+        db.execute(
+            "UPDATE memory_jobs SET lease_token='',lease_deadline=0,next_attempt_at=0 "
+            "WHERE chat_id=? AND session_id=? AND layer='curator' AND lease_token<>''",
             (chat_id, session_id),
         )
 

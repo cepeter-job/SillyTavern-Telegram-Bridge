@@ -18,7 +18,6 @@ from bridge.memory_store import (
     next_source_segment,
     recover_expired_jobs,
     source_is_valid,
-    store_segment,
 )
 from bridge.narrative_repository import load_narrative_clock
 from bridge.sqlite_store import write_transaction
@@ -148,20 +147,16 @@ def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_sett
                         if memory_backend.memory_mode(db, claim.chat_id) != "on":
                             result = "disabled"
                             break
-                        accepted = memory_backend._retain_with_client(
-                            claim.chat_id,
-                            claim.session_id,
-                            source.document_id,
+                        result = memory_backend.retain_archival_source(
+                            db,
+                            source,
                             fields.get("name", "Story"),
-                            source.content,
                             f"Archival transcript part: {source.role}; source={source.start_id}; "
                             f"offsets={source.start_offset}:{source.end_offset}",
-                            "source_segment",
-                            "Hindsight segment retain unavailable for chat %s",
                             app_settings=app_settings,
+                            claim=claim,
                         )
-                        if not accepted:
-                            result = "retain_failed"
+                        if result != "complete":
                             break
                     else:
                         extraction = extract_episodic_memories_result(
@@ -181,9 +176,6 @@ def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_sett
                         if extraction.status != "complete":
                             result = "stale_source"
                             break
-                    if claim.layer == "hindsight" and not store_segment(db, source):
-                        result = "stale_source"
-                        break
             else:
                 result = (
                     "complete"

@@ -1,4 +1,5 @@
 from application_test_setup import ensure_application_extensions, make_test_provider_port
+from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
 from settings_test_support import SettingsTestCase
 
 import bridge.memory as _owner_memory
@@ -78,7 +79,7 @@ class TaskModelRoutingTests(SettingsTestCase):
         )
 
         self.assertEqual(summary, "Blue key in drawer.")
-        self.assertEqual(seen_models, ["cheap::summary-model"])
+        self.assertEqual(seen_models, ["cheap::summary-model"] * 2)
 
     def test_main_clears_utility_override(self):
         _owner_model_selection.set_task_model(self.db, "chat", self.session["session_id"], "cheap::summary-model")

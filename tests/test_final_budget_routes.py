@@ -12,6 +12,7 @@ from application_test_setup import (
     make_test_provider_port,
     make_test_rag_service,
 )
+from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
 from settings_test_support import make_test_settings
 from test_story_memory_scope import append
 from test_story_memory_scope import db as db
@@ -77,6 +78,8 @@ def test_five_actual_paths_gate_after_novel_contract_before_generation(db, tmp_p
         calls.append((args, kwargs))
         if overflow:
             pytest.fail("Oversized final request reached the provider")
+        if route == "ordinary":
+            kwargs["stream_callback"]("VISIBLE FIRST")
         raise PromptDispatched
 
     kwargs = dict(
@@ -138,6 +141,8 @@ def test_five_actual_paths_gate_after_novel_contract_before_generation(db, tmp_p
     assert stats["over_budget"] is overflow and stats["requested_output_tokens"] == 1800
     if not overflow:
         assert len(calls) == 1
+        if route == "ordinary":
+            assert placeholders == [("", "sendMessage", {"chat_id": "c", "text": "VISIBLE FIRST"})]
         payload = calls[0][0][2]
         assert "Light Novel response contract" in payload[0]["content"]
         assert "OLD REMOVABLE" not in str(payload)

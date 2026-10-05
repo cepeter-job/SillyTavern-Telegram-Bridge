@@ -4,6 +4,7 @@ import json
 import time
 
 from bridge.memory_artifact_store import store_artifact_visibility
+from bridge.memory_store import pending_memory_invalidation
 from bridge.npc_repository import set_npc_extraction_coverage
 from bridge.npc_service import NpcService
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
@@ -74,7 +75,11 @@ def publish_derived(db, chat_id, session_id, layer, payload, through):
 
 def restore_derived(db, chat_id, session_id, layer, payload, through):
     if layer == "npc":
-        NpcService().rollback_from_row(db, chat_id, session_id, through + 1)
+        # Missing accumulator proof requires source replay, not retirement of
+        # accepted field history from an unchanged canonical prefix.
+        invalidated = pending_memory_invalidation(db, chat_id, session_id, "npc")
+        if invalidated is not None:
+            NpcService().rollback_from_row(db, chat_id, session_id, invalidated)
         set_npc_extraction_coverage(db, chat_id, session_id, through, time.time())
     elif payload:
         publish_derived(db, chat_id, session_id, layer, payload, through)

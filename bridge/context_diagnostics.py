@@ -130,5 +130,6 @@ def context_diagnostics_snapshot(
     )
     trimmed_components = [name for name in ("memory", "rag", "npc", "summary") if result.get(f"{name}_trimmed") is True]
     result["trimmed_components"] = trimmed_components
-    result["compacted"] = bool(int(result.get("dropped_history") or 0) or trimmed_components)
+    dropped_history = result.get("dropped_history")
+    result["compacted"] = bool((dropped_history if isinstance(dropped_history, int) else 0) or trimmed_components)
     return result

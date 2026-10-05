@@ -27,7 +27,13 @@ from bridge.limits import (
 from bridge.memory_contracts import MemoryBlock, MemoryReadScope
 from bridge.memory_fact_store import index_fact_is_current, remember_local_fact
 from bridge.memory_scope_store import eligible_fact, ranked_fact_block, resolve_memory_scope, scope_is_current
-from bridge.memory_store import next_source_segment, purge_external_memory, source_is_valid, store_segment
+from bridge.memory_store import (
+    next_source_segment,
+    purge_external_memory,
+    retire_derived_layer,
+    source_is_valid,
+    store_segment,
+)
 from bridge.meta_repository import delete_meta_value, load_meta_value, store_meta_value
 from bridge.metadata import get_meta
 from bridge.settings import AppSettings
@@ -531,22 +537,7 @@ def clear_curated_memory_state(db: sqlite3.Connection, chat_id: str, session_id:
         revision = int(load_meta_value(db, revision_key, "0") or 0)
         store_meta_value(db, revision_key, str(revision + 1))
         delete_meta_value(db, f"memory_curator:{chat_id}:{session_id}")
-        # Clear also retires persisted pre-Clear drafts/checkpoints. A later
-        # claim must replay canonical source instead of restoring cleared state.
-        db.execute(
-            "UPDATE memory_layer_state SET covered_id=source_floor_id,rewrite_identity=rewrite_identity+1,"
-            "invalidated_from_id=source_floor_id+1 WHERE chat_id=? AND session_id=? AND layer='curator'",
-            (chat_id, session_id),
-        )
-        db.execute(
-            "UPDATE memory_segments SET valid=0 WHERE chat_id=? AND session_id=? AND layer='curator'",
-            (chat_id, session_id),
-        )
-        db.execute(
-            "UPDATE memory_jobs SET dirty_version=dirty_version+1,next_attempt_at=0 "
-            "WHERE chat_id=? AND session_id=? AND layer='curator'",
-            (chat_id, session_id),
-        )
+        retire_derived_layer(db, chat_id, session_id, "curator")
 
 
 def _memory_hindsight_session_exists(

@@ -223,6 +223,27 @@ def fail_job(
         )
 
 
+def retire_derived_layer(db: sqlite3.Connection, chat_id: str, session_id: str, layer: str) -> None:
+    """Fence cleared artifacts and schedule complete replay on the existing job."""
+    if layer not in {"summary", "scene", "curator"}:
+        raise ValueError("Only clearable derived artifacts use this lifecycle")
+    with write_transaction(db):
+        db.execute(
+            "UPDATE memory_layer_state SET covered_id=source_floor_id,rewrite_identity=rewrite_identity+1,"
+            "invalidated_from_id=source_floor_id+1 WHERE chat_id=? AND session_id=? AND layer=?",
+            (chat_id, session_id, layer),
+        )
+        db.execute(
+            "UPDATE memory_segments SET valid=0 WHERE chat_id=? AND session_id=? AND layer=?",
+            (chat_id, session_id, layer),
+        )
+        db.execute(
+            "UPDATE memory_jobs SET dirty_version=dirty_version+1,next_attempt_at=0 "
+            "WHERE chat_id=? AND session_id=? AND layer=?",
+            (chat_id, session_id, layer),
+        )
+
+
 def _digest(role: str, content: str) -> str:
     return hashlib.sha256(json.dumps([role, content], ensure_ascii=False).encode()).hexdigest()
 

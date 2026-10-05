@@ -19,6 +19,7 @@ from bridge.npc_repository import (
     get_npc_extraction_coverage,
     list_npc_entities,
     load_npc_fields,
+    load_npc_fields_as_of,
 )
 from bridge.npc_service import normalize_npc_name, validate_npc_operation
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
@@ -112,10 +113,21 @@ def _parse_payload(raw: str, *, primary_name: str, user_name: str) -> tuple[list
     return groups, True
 
 
-def _existing_state_text(db: sqlite3.Connection, chat_id: str, session_id: str) -> str:
+def _existing_state_text(
+    db: sqlite3.Connection, chat_id: str, session_id: str, *, through_rowid: int | None = None
+) -> str:
     payload = []
-    for entity in list_npc_entities(db, chat_id, session_id)[:16]:
-        fields = load_npc_fields(db, entity.npc_id)
+    entities = [
+        entity
+        for entity in list_npc_entities(db, chat_id, session_id)
+        if through_rowid is None or entity.first_seen_rowid <= through_rowid
+    ]
+    for entity in entities[:16]:
+        fields = (
+            load_npc_fields(db, entity.npc_id)
+            if through_rowid is None
+            else load_npc_fields_as_of(db, entity.npc_id, through_rowid)
+        )
         payload.append(
             {
                 "name": entity.display_name,
@@ -200,7 +212,7 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
             "role": "user",
             "content": (
                 f"Primary character: {primary_name}\nUser: {user_name}\nExisting NPC state:\n"
-                + _existing_state_text(db, chat_id, session["session_id"])
+                + _existing_state_text(db, chat_id, session["session_id"], through_rowid=source.start_id - 1)
                 + "\nAccepted private draft operations:\n"
                 + json.dumps(previous, ensure_ascii=False)
                 + f"\nSource role: {source.role}; message {source.start_id};"

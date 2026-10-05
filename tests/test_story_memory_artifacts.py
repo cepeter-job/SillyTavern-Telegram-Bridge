@@ -5,6 +5,7 @@ import sqlite3
 
 import pytest
 from application_test_setup import make_test_persona_service, make_test_provider_port
+from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
 from settings_test_support import make_test_settings
 from test_story_memory_scope import append, scope
 from test_story_memory_scope import db as db
@@ -213,10 +214,10 @@ def test_scene_and_summary_model_paths_persist_strict_classification(db):
     assert read_summary_block(db, scope(db, "Bob", row)).text == "They reached the public tower."
 
 
-def test_populated_migration_twenty_replays_opaque_derived_coverage_from_canonical_source():
+def test_populated_migration_twenty_replays_opaque_derived_coverage_from_canonical_source(tmp_path):
     connection = sqlite3.connect(":memory:")
     try:
-        run_migrations(connection, SCHEMA_MIGRATIONS[:-1])
+        run_migrations(connection, tuple(m for m in SCHEMA_MIGRATIONS if m.version <= 20))
         connection.execute(
             "INSERT INTO sessions(chat_id,session_id,title,character_file,model_id,persona_id,"
             "world_file,created_at,updated_at) VALUES('c','s','Story','','m','','',1,1)"
@@ -247,7 +248,7 @@ def test_populated_migration_twenty_replays_opaque_derived_coverage_from_canonic
             durable=True,
             max_segments=1,
             provider_port=make_test_provider_port(generate_backend=generate),
-            app_settings=make_test_settings(),
+            app_settings=make_test_settings(home=tmp_path),
         )
         assert result.complete and calls
         assert "PUBLIC CANONICAL SOURCE" in calls[0] and "OPAQUE PREDECESSOR" not in calls[0]

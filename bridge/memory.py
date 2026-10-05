@@ -52,7 +52,7 @@ from bridge.memory_backend import remember_fact as remember_fact
 from bridge.memory_draft_publish import publish_derived, restore_derived
 from bridge.memory_draft_store import run_session_draft
 from bridge.memory_scope_store import resolve_memory_scope
-from bridge.memory_store import enqueue_memory
+from bridge.memory_store import enqueue_memory, retire_derived_layer
 from bridge.metadata import set_meta
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.narrative_repository import load_narrative_clock
@@ -206,6 +206,7 @@ def get_session_summary(db: sqlite3.Connection, chat_id: str, session_id: str) -
 def clear_session_summary(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
     with write_transaction(db):
         db.execute("DELETE FROM session_summaries WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+        retire_derived_layer(db, chat_id, session_id, "summary")
         _run_summary_clear_hooks(db, chat_id, session_id)
 
 

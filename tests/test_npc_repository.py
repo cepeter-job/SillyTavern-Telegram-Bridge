@@ -56,8 +56,10 @@ def test_migration_6_creates_npc_tables():
             (19, "greeting_media_cleanup"),
             (20, "durable_story_memory"),
             (21, "temporal_memory_knowledge"),
+            (22, "indexed_memory_evidence"),
+            (23, "complete_memory_parts"),
         ]
-        assert len(migrations) == 21
+        assert len(migrations) == 23
         names = {
             row[0]
             for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'npc_%'").fetchall()

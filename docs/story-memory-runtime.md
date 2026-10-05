@@ -49,9 +49,17 @@ work replays from the layer's source floor. A bounded call can therefore return
 incomplete progress while the durable backlog remains available for later claims.
 
 Manual refreshes use the same claims, parts, drafts, and publication path.
-Curator Clear increments its revision, retires that layer's private draft,
-checkpoints and accepted source segments, and schedules canonical replay. It
-does not allow a later claim to restore a draft captured before Clear.
+NPC replay preserves accepted field history before the actual invalidated row,
+even if no accumulator checkpoint remains. Each extraction part sees existing
+NPC state only through the preceding source row, so retained later state cannot
+be attributed to an earlier replay part.
+
+Summary, scene, and curator Clear retire the affected private draft, checkpoints,
+and accepted source segments, fence in-flight results, and schedule canonical
+replay. Summary Clear includes its scene hook in the same transaction. A later
+manual refresh can rebuild without an unrelated message append and cannot
+restore an accumulator captured before Clear. Curator also retains its existing
+explicit revision fence.
 
 Migration 23 adds this private progress state. Previously published legacy
 panel values may remain visible during rebuilding, but old summary/scene
@@ -64,8 +72,10 @@ Migrations 20 and 21 retain their original definitions.
 Ordinary story messages, edited turns, image input, regeneration, and continuation
 assemble their final prompt before the shared budget gate. This includes the
 Light Novel response contract and the actual generation settings. The gate runs
-before a generation placeholder or provider dispatch and saves redacted
-diagnostics for both successful admission and failure.
+before provider dispatch and saves redacted diagnostics for both successful
+admission and failure. Ordinary streaming creates its progress message only
+when visible output arrives, so a later attempt-budget rejection cannot leave
+an empty generation placeholder.
 
 Input allowance is the model window minus the actual requested output allowance
 and a safety margin. Explicit output settings are never silently reduced to make

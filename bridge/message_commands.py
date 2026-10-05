@@ -274,32 +274,34 @@ def generate_and_store_reply(
     fixed_language = normalize_response_language(language) != "auto"
     humanizer_on = humanizer_enabled(session.get("humanizer"))
     stream_message_id = None
-    if (
+    streaming_enabled = (
         not fixed_language
         and not humanizer_on
         and not (novel_turn and novel_turn.record.strategy == "a")
         and get_meta(db, f"stream_mode:{chat_id}", "on") == "on"
-    ):
-        try:
-            placeholder = telegram_request(token, "sendMessage", {"chat_id": chat_id, "text": "⌛ Generating…"})
-            stream_message_id = int(placeholder.get("message_id")) if placeholder.get("message_id") else None
-        except Exception:
-            logging.info("Could not create streaming placeholder", exc_info=True)
+    )
 
     def stream_update(partial: str) -> None:
-        if stream_message_id is None or not partial:
+        nonlocal stream_message_id
+        if not partial:
             return
         preview = telegram_safe_output(partial)
         if not preview:
             return
         try:
-            telegram_request(
-                token,
-                "editMessageText",
-                {"chat_id": chat_id, "message_id": stream_message_id, "text": preview[-3900:]},
-            )
+            # Only visible output creates a progress message. An assembly can
+            # fit while a later normalized/fallback/recovery attempt cannot.
+            if stream_message_id is None:
+                sent = telegram_request(token, "sendMessage", {"chat_id": chat_id, "text": preview[-3900:]})
+                stream_message_id = int(sent["message_id"]) if sent.get("message_id") else None
+            else:
+                telegram_request(
+                    token,
+                    "editMessageText",
+                    {"chat_id": chat_id, "message_id": stream_message_id, "text": preview[-3900:]},
+                )
         except Exception:
-            logging.debug("Streaming Telegram edit failed", exc_info=True)
+            logging.debug("Streaming Telegram update failed", exc_info=True)
 
     generation_session_id = f"telegram:{chat_id}:{session_id}"
     with record_context_attempts(db, chat_id, session_id) as observe_context:
@@ -311,7 +313,7 @@ def generate_and_store_reply(
             messages,
             session_id=generation_session_id,
             settings=generation_settings,
-            stream_callback=stream_update if stream_message_id else None,
+            stream_callback=stream_update if streaming_enabled else None,
             app_settings=app_settings,
         )
     if novel_turn:

@@ -4,6 +4,7 @@ import sqlite3
 
 import pytest
 from application_test_setup import make_test_provider_port
+from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
 from source_test_support import top_level_functions
 from test_light_novel_storage import novel_db as novel_db
 
@@ -68,27 +69,65 @@ def test_invalid_limit_is_rejected_before_sql(limit):
 
 
 @pytest.mark.parametrize(
-    "owner,retired,entry,limit",
+    "owner,retired,entry,layer",
     (
-        (memory_curator, "_curator_source_rows", "curate_memory_now", 20),
-        (scene_state, "_scene_state_source_rows", "refresh_scene_state_now", 16),
+        (memory_curator, "_curator_source_rows", "curate_memory_now", "curator"),
+        (scene_state, "_scene_state_source_rows", "refresh_scene_state_now", "scene"),
     ),
 )
-def test_domains_use_one_reader_with_independent_limits(novel_db, monkeypatch, owner, retired, entry, limit):
+def test_domains_use_one_reader_with_independent_limits(novel_db, owner, retired, entry, layer):
+    import json
+
     assert retired not in top_level_functions(owner.__name__.split(".")[-1] + ".py")
-    assert owner.recent_transcript_rows is transcript_repository.recent_transcript_rows
-    calls = []
-    monkeypatch.setattr(owner, "recent_transcript_rows", lambda *a, **kw: calls.append((a, kw)) or [])
     db, session, settings = novel_db
+    db.execute("INSERT OR REPLACE INTO meta VALUES('memory_mode:chat','on')")
+    sources = ["FIRST " + "x" * 15000, "SECOND " + "y" * 15000]
+    target = 0
+    for index, source in enumerate(sources):
+        db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+            ("other-chat" if index == 0 else "chat", "other-session", "user", "EXCLUDED OTHER OWNER", 1),
+        )
+        target = db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+            ("chat", session["session_id"], "user", source, 2),
+        ).lastrowid
+    db.execute(
+        "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+        ("chat", session["session_id"], "user", "EXCLUDED AFTER CUTOFF", 3),
+    )
+    db.commit()
+    supplied = []
+
+    def generate(_key, _model, messages, **kwargs):
+        assert not db.in_transaction
+        part = messages[-1]["content"].split("\n\nCanonical source part:\n", 1)[1]
+        supplied.append(part)
+        assert 0 < len(part) <= 12000 and "EXCLUDED" not in part
+        if layer == "curator":
+            return '{"memories":[]}'
+        return json.dumps(
+            {
+                "state": {"facts": ["Processed"]},
+                "blocks": [{"text": "Processed", "visibility": "shared", "known_by": []}],
+            }
+        )
+
     result = getattr(owner, entry)(
         db,
         "",
         "chat",
         session,
         "Alice",
-        17,
-        provider_port=make_test_provider_port(),
+        target,
+        provider_port=make_test_provider_port(generate_backend=generate),
         app_settings=settings,
     )
-    assert result is None
-    assert calls == [((db, "chat", session["session_id"]), {"limit": limit, "through_rowid": 17})]
+    assert result is None if layer == "curator" else result == {"facts": ["Processed"]}
+    assert len(supplied) == 4 and len(supplied) <= 8
+    assert "".join(supplied) == "".join(sources)
+    assert db.execute(
+        "SELECT covered_id FROM memory_layer_state WHERE chat_id='chat' AND session_id=? AND layer=?",
+        (session["session_id"], layer),
+    ).fetchone() == (target,)
+    assert not db.in_transaction

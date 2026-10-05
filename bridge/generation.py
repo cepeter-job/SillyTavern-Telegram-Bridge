@@ -345,11 +345,14 @@ def finalize_generation_messages(
     preserve_last_assistant: bool = False,
 ) -> list[dict]:
     """Budget after all mandatory story/NovelTurn additions, before dispatch."""
+    requested_output = settings.get("max_tokens") or GENERATION_DEFAULTS["max_tokens"]
+    if not isinstance(requested_output, (str, int, float)):
+        raise TypeError("max_tokens must be a numeric setting")
     try:
         result, stats = budget_chat_messages(
             messages,
             str(session.get("model_id") or app_settings.default_model),
-            int(settings.get("max_tokens") or GENERATION_DEFAULTS["max_tokens"]),
+            int(requested_output),
             app_settings=app_settings,
             preserve_last_assistant=preserve_last_assistant,
         )

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from application_test_setup import make_test_provider_port
+from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
 from test_memory_completion_safety import session_db as session_db
 
 from bridge import memory_backend
@@ -222,6 +223,8 @@ def test_durable_summary_runs_one_bounded_call_and_resumes_prefix(session_db):
     )
     assert len(calls) == 1 and not result.complete
     covered = result.covered_until_rowid
+    db.execute("UPDATE memory_jobs SET next_attempt_at=0 WHERE layer='summary'")
+    db.commit()
     result = generate_session_summary_result(
         db,
         "chat",
@@ -235,6 +238,8 @@ def test_durable_summary_runs_one_bounded_call_and_resumes_prefix(session_db):
     assert len(calls) == 2 and not result.complete
     assert result.covered_until_rowid == 2 and covered == 1
     for expected in range(3, 31):
+        db.execute("UPDATE memory_jobs SET next_attempt_at=0 WHERE layer='summary'")
+        db.commit()
         result = generate_session_summary_result(
             db,
             "chat",

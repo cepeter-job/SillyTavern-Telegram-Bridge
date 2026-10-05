@@ -1,4 +1,5 @@
 from application_test_setup import ensure_application_extensions, make_test_provider_port
+from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
 from settings_test_support import SettingsTestCase
 
 import bridge.memory as _m_memory
@@ -11,7 +12,6 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 import bridge.memory_curator as _m_memory_curator
 import bridge.message_commands as _m_message_commands
@@ -154,12 +154,32 @@ class SceneStateEngineTests(SettingsTestCase):
         self.assertEqual(covered, 2)
 
     def test_refresh_uses_atomic_repository_stale_guard_outside_model_call(self):
+        from bridge.memory_draft_publish import publish_derived
+        from bridge.sqlite_store import write_transaction
+
         self._add_turn()
         calls = []
 
         def fake_generate(_key, _model, _messages, **_kwargs):
             self.assertFalse(self.db.in_transaction)
             calls.append("generate")
+            with write_transaction(self.db):
+                self.db.execute(
+                    "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+                    ("chat", self.session["session_id"], "user", "We reach the newer station.", time.time()),
+                )
+                self.assertTrue(self.db.in_transaction)
+                publish_derived(
+                    self.db,
+                    "chat",
+                    self.session["session_id"],
+                    "scene",
+                    {
+                        "state": {"location": "Newer station"},
+                        "blocks": [{"text": "Newer station", "visibility": "shared", "known_by": []}],
+                    },
+                    3,
+                )
             return json.dumps(
                 {
                     "state": {"location": "Candidate station"},
@@ -167,50 +187,22 @@ class SceneStateEngineTests(SettingsTestCase):
                 }
             )
 
-        def reject_stale(
-            db,
-            chat_id,
-            session_id,
-            state_json,
-            through_rowid,
-            updated_at,
-        ):
-            self.assertTrue(db.in_transaction)
-            self.assertEqual((chat_id, session_id), ("chat", self.session["session_id"]))
-            self.assertIn("Candidate station", state_json)
-            self.assertEqual(through_rowid, 2)
-            self.assertGreater(updated_at, 0)
-            calls.append("upsert")
-            return False
-
-        provider = make_test_provider_port(generate_backend=fake_generate)
-        with (
-            patch.object(
-                _m_scene_state,
-                "_repo_load_scene_state_row",
-                side_effect=[
-                    None,
-                    ('{"location":"Newer station"}', 3),
-                ],
-            ),
-            patch.object(
-                _m_scene_state,
-                "_repo_upsert_scene_state_if_fresh",
-                side_effect=reject_stale,
-            ),
-        ):
-            state = _m_scene_state.refresh_scene_state_now(
-                self.db,
-                "",
-                "chat",
-                self.session,
-                "Mira",
-                provider_port=provider,
-                app_settings=self.app_settings_builder.build(),
-            )
-
-        self.assertEqual(calls, ["generate", "upsert"])
+        state = _m_scene_state.refresh_scene_state_now(
+            self.db,
+            "",
+            "chat",
+            self.session,
+            "Mira",
+            provider_port=make_test_provider_port(generate_backend=fake_generate),
+            app_settings=self.app_settings_builder.build(),
+        )
+        self.assertEqual(calls, ["generate"])
         self.assertEqual(state, {"location": "Newer station"})
+        self.assertEqual(_m_scene_state.get_scene_state(self.db, "chat", self.session["session_id"])[1], 3)
+        self.assertEqual(self.db.execute("SELECT count(*) FROM memory_segments WHERE layer='scene'").fetchone(), (0,))
+        scope = resolve_memory_scope(self.db, "chat", self.session, {"name": "Mira"})
+        self.assertEqual(read_scene_block(self.db, scope).text, "Newer station")
+        self.assertFalse(self.db.in_transaction)
 
     def test_clear_session_summary_also_clears_scene_state(self):
         self._add_turn()

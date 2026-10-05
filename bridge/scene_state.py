@@ -27,7 +27,7 @@ from bridge.memory_artifact_store import (
 )
 from bridge.memory_draft_publish import publish_derived, restore_derived
 from bridge.memory_draft_store import run_session_draft
-from bridge.memory_store import enqueue_memory
+from bridge.memory_store import enqueue_memory, retire_derived_layer
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.provider_port import ProviderPort
 from bridge.scene_panel import scene_panel
@@ -114,6 +114,7 @@ def scene_state_text(db: sqlite3.Connection, chat_id: str, session_id: str) -> s
 def clear_scene_state(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
     with write_transaction(db):
         _repo_delete_scene_state(db, chat_id, session_id)
+        retire_derived_layer(db, chat_id, session_id, "scene")
 
 
 def extract_scene_segment(

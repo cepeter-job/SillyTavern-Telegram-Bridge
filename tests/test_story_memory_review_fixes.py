@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from application_test_setup import make_test_provider_port
+from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
 from settings_test_support import make_test_settings
 from test_story_memory_artifacts import service, write_artifacts
 from test_story_memory_scope import accept, append, scope
@@ -97,15 +98,17 @@ def test_valid_index_remains_retryable_after_interrupted_retain(db, monkeypatch,
     assert db.execute("SELECT 1 FROM memory_retired_documents WHERE document_id=?", (document,)).fetchone() is None
 
 
-def test_slow_recall_excludes_reindexed_replacement_but_keeps_unchanged_prefix(db, monkeypatch):
+def test_slow_recall_excludes_reindexed_replacement_but_keeps_unchanged_prefix(db, tmp_path, monkeypatch):
     from functools import partial
+
+    settings = make_test_settings(home=tmp_path)
 
     append(db, "The earlier silver key opens the harbor.")
     _, earlier_id = accept(db, "The earlier silver key opens the harbor.", (), "shared")
     changed_row = append(db, "The later silver key opens the attic.")
     accept(db, "The later silver key opens the attic.", (), "shared")
     monkeypatch.setattr(memory_backend, "_retain_with_client", lambda *a, **k: True)
-    assert run_claim(db, claim_jobs(db, layers=("hindsight",))[0]) == "complete"
+    assert run_claim(db, claim_jobs(db, layers=("hindsight",))[0], app_settings=settings) == "complete"
     documents = [db.execute("SELECT document_id FROM memory_fact_index WHERE memory_id=?", (earlier_id,)).fetchone()[0]]
     calls = []
 
@@ -125,7 +128,7 @@ def test_slow_recall_excludes_reindexed_replacement_but_keeps_unchanged_prefix(d
                 )
                 db.commit()
                 _, replacement_id = accept(db, "The replacement silver key opens the vault.", (), "shared")
-                assert run_claim(db, claim_jobs(db, layers=("hindsight",))[0]) == "complete"
+                assert run_claim(db, claim_jobs(db, layers=("hindsight",))[0], app_settings=settings) == "complete"
                 documents.append(
                     db.execute(
                         "SELECT document_id FROM memory_fact_index WHERE memory_id=?", (replacement_id,)
@@ -139,9 +142,9 @@ def test_slow_recall_excludes_reindexed_replacement_but_keeps_unchanged_prefix(d
             pass
 
     monkeypatch.setattr(memory_backend, "hindsight_client", lambda **kwargs: Client())
-    memory = service(partial(memory_backend.recall_scoped_memory, app_settings=make_test_settings()))
+    memory = service(partial(memory_backend.recall_scoped_memory, app_settings=settings))
     old = memory.prompt_context(db, "c", {"session_id": "s"}, {"name": "Mira"}, "silver key")
-    assert "harbor" in old.recall and "harbor" in old.episodic
+    assert (old.recall + old.episodic).count("harbor") == 1
     assert "vault" not in old.recall + old.episodic and "attic" not in old.recall + old.episodic
     fresh = memory.prompt_context(db, "c", {"session_id": "s"}, {"name": "Mira"}, "silver key")
     assert "vault" in fresh.recall and "harbor" in fresh.recall
@@ -176,28 +179,28 @@ def test_npc_recovery_after_recall_respects_old_request_and_preserves_prefix(db,
     def recall(*_args):
         db.execute("UPDATE messages SET content='Maya feels replacement anxiety.' WHERE id=?", (second,))
         db.commit()
-        provider = make_test_provider_port(
-            generate_backend=lambda *a, **k: json.dumps(
-                {
-                    "npcs": [
-                        {
-                            "name": "Maya",
-                            "aliases": [],
-                            "operations": [
-                                {
-                                    "field": "mood",
-                                    "op": "set",
-                                    "value": "replacement anxiety",
-                                    "mode": "mutable",
-                                    "visibility": "shared",
-                                    "known_by": [],
-                                }
-                            ],
-                        }
-                    ]
-                }
+
+        def generate(_key, _model, messages, **kwargs):
+            part = messages[-1]["content"].split("\n\nCanonical source part:\n", 1)[1]
+            operations = (
+                [
+                    {
+                        "field": "mood",
+                        "op": "set",
+                        "value": "replacement anxiety",
+                        "mode": "mutable",
+                        "visibility": "shared",
+                        "known_by": [],
+                    }
+                ]
+                if "replacement anxiety" in part
+                else []
             )
-        )
+            return json.dumps(
+                {"npcs": [{"name": "Maya", "aliases": [], "operations": operations}] if operations else []}
+            )
+
+        provider = make_test_provider_port(generate_backend=generate)
         assert (
             run_claim(
                 db,

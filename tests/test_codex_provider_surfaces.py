@@ -148,6 +148,14 @@ class CodexProviderSurfaceTests(unittest.TestCase):
         settings = make_test_settings({}, home=self.home)
         self.assertEqual(settings.codex_oauth_file, settings.bridge_home / "codex_oauth.json")
 
+    def test_example_codex_catalog_includes_current_openai_models(self):
+        example_catalog = Path(__file__).resolve().parents[1] / "config" / "providers.example.yaml"
+        example = example_catalog.read_text(encoding="utf-8")
+
+        for model in ("gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-6-luna-900k"):
+            with self.subTest(model=model):
+                self.assertIn(f"#      - {model}", example)
+
 
 if __name__ == "__main__":
     unittest.main()

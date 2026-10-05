@@ -77,8 +77,12 @@ providers:
 #    api_endpoint: https://chatgpt.com/backend-api/codex
 #    transport: openai_codex
 #    adapter: openai_codex
-#    discover_models: false
+#    discover_models: false # Optional direct Codex OAuth catalog lookup; keep false for the pinned list.
 #    models:
+#      - gpt-6.1-sol
+#      - gpt-6-sol
+#      - gpt-6-luna
+#      - gpt-6-luna-900k
 #      - gpt-5.6-sol
 #      - gpt-5.6-sol-900k
 #      - gpt-5.6-terra

@@ -29,6 +29,14 @@ class CodexContextVariantTests(SettingsTestCase):
             self.assertEqual(profile.safety_margin_tokens, 8_192)
             self.assertEqual(codex_wire_model(model.rsplit("::", 1)[1]), f"gpt-5.6-{family}")
 
+    def test_gpt_6_luna_large_context_alias_uses_base_wire_model(self):
+        model = "openai-codex::gpt-6-luna-900k"
+        profile = context_profile(model=model, app_settings=self.settings)
+
+        self.assertEqual(profile.window_tokens, 900_000)
+        self.assertEqual(profile.input_budget_tokens, 887_712)
+        self.assertEqual(codex_wire_model("gpt-6-luna-900k"), "gpt-6-luna")
+
     def test_other_models_keep_configured_window(self):
         profile = context_profile(app_settings=self.settings)
         expected = profile.input_budget_tokens

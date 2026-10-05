@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 from collections.abc import Mapping
 
-from bridge.codex_auth import auth_status, validate_codex_endpoint
+from bridge.codex_auth import auth_status, codex_headers, resolve_access_token, validate_codex_endpoint
 from bridge.network_security import strict_urlopen, validate_provider_endpoint
 from bridge.provider_catalog import load_provider_catalog, load_routing_catalog, merge_model_catalog
 from bridge.provider_catalog_cache import (
@@ -138,6 +138,40 @@ def _context_windows_for_configured_models(
     return result
 
 
+def _codex_catalog_client_version(value: str) -> str:
+    parts = value.strip().split("-", 1)[0].split(".")
+    def is_version_part(part: str) -> bool:
+        return part.isascii() and part.isdigit()
+
+    if len(parts) == 2 and all(is_version_part(part) for part in parts):
+        parts.append("0")
+    if len(parts) != 3 or not all(is_version_part(part) for part in parts):
+        raise ValueError("invalid Codex catalog client version")
+    return ".".join(parts)
+
+
+def _codex_model_ids(payload: object) -> list[str]:
+    if not isinstance(payload, Mapping) or not isinstance(payload.get("models"), list):
+        raise ValueError("invalid Codex models response")
+    model_ids_from_response: list[str] = []
+    for item in payload["models"]:
+        if not isinstance(item, Mapping):
+            raise ValueError("invalid Codex model entry")
+        slug = item.get("slug")
+        supported = item.get("supported_in_api")
+        visibility = item.get("visibility")
+        if (
+            not isinstance(slug, str)
+            or not isinstance(supported, bool)
+            or not isinstance(visibility, str)
+            or visibility not in {"list", "hide", "none"}
+        ):
+            raise ValueError("invalid Codex model entry")
+        if supported and visibility == "list":
+            model_ids_from_response.append(slug)
+    return model_ids(model_ids_from_response)
+
+
 def refresh_model_catalog(
     force: bool = False,
     provider_id: str | None = None,
@@ -167,8 +201,52 @@ def refresh_model_catalog(
 
         cached = cache.get(current_id, {})
         if str(spec.get("transport") or "") == "openai_codex":
-            if discover_models and not model_ids(spec.get("models")) and not model_ids(cached.get("models")):
+            if not discover_models:
+                continue
+            now = time.time()
+            if not _is_due(
+                cached,
+                force=force,
+                now=now,
+                attempt_field="last_attempt_at",
+                refreshed_field="refreshed_at",
+                refresh_seconds=app_settings.model_refresh_seconds,
+            ):
+                continue
+            updated: dict[str, object] = {"last_attempt_at": now}
+            try:
+                base = validate_codex_endpoint(spec, environ=app_settings.environ)
+                token = resolve_access_token(
+                    app_settings.codex_oauth_file,
+                    environ=app_settings.environ,
+                )
+                headers = codex_headers(token, client_version=app_settings.codex_client_version)
+                headers["Accept"] = "application/json"
+                client_version = _codex_catalog_client_version(app_settings.codex_client_version)
+                endpoint = f"{base}/models?{urllib.parse.urlencode({'client_version': client_version})}"
+                request = urllib.request.Request(  # noqa: S310 -- exact validated Codex host; opened only through DNS-pinned strict_urlopen
+                    endpoint,
+                    headers=headers,
+                    method="GET",
+                )
+                with strict_urlopen(request, timeout=30, environ=app_settings.environ) as response:
+                    content = response.read(MAX_CACHE_BYTES + 1)
+                if len(content) > MAX_CACHE_BYTES:
+                    raise ValueError("Codex catalog response exceeds size limit")
+                models = _codex_model_ids(json.loads(content))
+                if not models:
+                    updated["last_error"] = "empty_catalog"
+                    failed += 1
+                else:
+                    updated.update(models=models, refreshed_at=now, last_error=None)
+                    refreshed += 1
+            except Exception as exc:
+                error = _failure_category(exc)
+                updated["last_error"] = error
                 failed += 1
+                logging.info("Provider catalog refresh failed for provider %s (%s)", current_id, error)
+            cache[current_id] = {**cached, **updated}
+            updates[current_id] = updated
             continue
 
         now = time.time()

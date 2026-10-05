@@ -4,7 +4,10 @@ from __future__ import annotations
 
 CODEX_LARGE_CONTEXT_WINDOW_TOKENS = 900_000
 
-_LARGE_CONTEXT_ALIASES = {f"gpt-5.6-{family}-900k": f"gpt-5.6-{family}" for family in ("sol", "terra", "luna")}
+_LARGE_CONTEXT_ALIASES = {
+    **{f"gpt-5.6-{family}-900k": f"gpt-5.6-{family}" for family in ("sol", "terra", "luna")},
+    "gpt-6-luna-900k": "gpt-6-luna",
+}
 
 
 def codex_wire_model(model: str) -> str:

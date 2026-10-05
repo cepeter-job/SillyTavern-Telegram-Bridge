@@ -41,6 +41,156 @@ def generate(settings, events, **kwargs):
     )
 
 
+def test_codex_catalog_discovery_uses_existing_oauth_directly(codex_settings, monkeypatch):
+    import yaml
+
+    from bridge import provider_discovery
+
+    token = _jwt(
+        exp=time.time() + 3600,
+        **{"https://api.openai.com/auth": {"chatgpt_account_id": "test-account"}},
+    )
+    auth.save_tokens(codex_settings.codex_oauth_file, {"access_token": token, "refresh_token": "private-refresh"})
+    codex_settings.provider_config_file.parent.mkdir(parents=True, exist_ok=True)
+    codex_settings.provider_config_file.write_text(
+        yaml.safe_dump(
+            {
+                "providers": {
+                    "codex": {
+                        "api_endpoint": "https://chatgpt.com/backend-api/codex",
+                        "transport": "openai_codex",
+                        "discover_models": True,
+                        "models": ["pinned-model"],
+                    }
+                }
+            }
+        )
+    )
+
+    class CatalogResponse:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self, limit=-1):
+            body = json.dumps(
+                {
+                    "models": [
+                        {"slug": "visible-model", "supported_in_api": True, "visibility": "list"},
+                        {"slug": "hidden-model", "supported_in_api": True, "visibility": "hide"},
+                        {"slug": "unsupported-model", "supported_in_api": False, "visibility": "list"},
+                    ]
+                }
+            ).encode()
+            return body if limit < 0 else body[:limit]
+
+    requests = []
+
+    def open_request(request, **kwargs):
+        requests.append((request, kwargs))
+        return CatalogResponse()
+
+    monkeypatch.setattr(provider_discovery, "strict_urlopen", open_request)
+    result, refreshed, failed = provider_discovery.refresh_model_catalog(
+        force=True, provider_id="codex", app_settings=codex_settings
+    )
+
+    assert (refreshed, failed) == (1, 0)
+    assert result["providers"]["codex"]["models"] == ["pinned-model", "visible-model"]
+    request, kwargs = requests[0]
+    assert request.full_url == "https://chatgpt.com/backend-api/codex/models?client_version=1.0.0"
+    assert request.get_header("Authorization") == f"Bearer {token}"
+    assert request.get_header("Chatgpt-account-id") == "test-account"
+    assert kwargs["timeout"] == 30
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"models": {}},
+        {"models": [None]},
+        {"models": [{"slug": "model", "supported_in_api": True, "visibility": []}]},
+    ],
+)
+def test_codex_catalog_parser_rejects_malformed_catalogs(payload):
+    from bridge.provider_discovery import _codex_model_ids
+
+    with pytest.raises(ValueError, match="invalid Codex"):
+        _codex_model_ids(payload)
+
+
+def test_codex_catalog_discovery_is_disabled_by_default(codex_settings, monkeypatch):
+    import yaml
+
+    from bridge import provider_discovery
+
+    codex_settings.provider_config_file.parent.mkdir(parents=True, exist_ok=True)
+    codex_settings.provider_config_file.write_text(
+        yaml.safe_dump(
+            {
+                "providers": {
+                    "codex": {
+                        "api_endpoint": "https://chatgpt.com/backend-api/codex",
+                        "transport": "openai_codex",
+                        "models": ["pinned-model"],
+                    }
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(
+        provider_discovery,
+        "strict_urlopen",
+        lambda *_args, **_kwargs: pytest.fail("Codex discovery must remain opt-in"),
+    )
+
+    result, refreshed, failed = provider_discovery.refresh_model_catalog(
+        force=True, provider_id="codex", app_settings=codex_settings
+    )
+
+    assert (refreshed, failed) == (0, 0)
+    assert result["providers"]["codex"]["models"] == ["pinned-model"]
+
+
+def test_codex_catalog_discovery_rejects_non_native_endpoint(codex_settings, monkeypatch):
+    import yaml
+
+    from bridge import provider_discovery
+
+    codex_settings.provider_config_file.parent.mkdir(parents=True, exist_ok=True)
+    codex_settings.provider_config_file.write_text(
+        yaml.safe_dump(
+            {
+                "providers": {
+                    "codex": {
+                        "api_endpoint": "https://other.example/v1",
+                        "transport": "openai_codex",
+                        "discover_models": True,
+                        "models": ["pinned-model"],
+                    }
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(
+        provider_discovery,
+        "strict_urlopen",
+        lambda *_args, **_kwargs: pytest.fail("Codex OAuth must not be sent to a custom endpoint"),
+    )
+
+    result, refreshed, failed = provider_discovery.refresh_model_catalog(
+        force=True, provider_id="codex", app_settings=codex_settings
+    )
+
+    assert (refreshed, failed) == (0, 1)
+    assert result["providers"]["codex"]["models"] == ["pinned-model"]
+
+
 def test_headless_login_uses_controlling_terminal_not_captured_output(codex_settings, tmp_path, monkeypatch, capsys):
     terminal = tmp_path / "terminal"
     real_open = os.open

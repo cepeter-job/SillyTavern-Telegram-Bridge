@@ -407,7 +407,13 @@ Telegram and try the configured Story model.
 This transport uses a separate bridge login instead of a provider API key. Keep
 an explicit list of models available to your account. The following names and
 aliases match the bridge's example catalog; their presence here does not grant
-account access to those models.
+account access to those models. Set `discover_models: true` to opt in to the
+Codex client's direct OAuth catalog request (`GET /models?client_version=...`)
+against the same ChatGPT backend; no Codex CLI is launched. This endpoint and
+its native `models: [{slug, supported_in_api, visibility, ...}]` response are
+undocumented and can change without notice. The bridge filters to API-supported,
+picker-visible entries, caches them, and keeps the pinned/cached list on failures.
+Keep discovery disabled to avoid depending on that internal contract.
 
 ```yaml
 providers:
@@ -418,6 +424,10 @@ providers:
     adapter: openai_codex
     discover_models: false
     models:
+      - gpt-6.1-sol
+      - gpt-6-sol
+      - gpt-6-luna
+      - gpt-6-luna-900k
       - gpt-5.6-sol
       - gpt-5.6-sol-900k
       - gpt-5.6-terra

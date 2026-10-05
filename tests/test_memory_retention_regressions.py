@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import gc
 import json
 import threading
+import tracemalloc
 import weakref
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
@@ -171,3 +173,47 @@ def test_shutdown_rejects_new_ordered_jobs(isolated_background):
     assert not background.submit_chat_background("generation", "chat", lambda: None)
     assert not background._CHAT_QUEUES
     assert not background._CHAT_ACTIVE
+
+
+def test_high_churn_shutdown_releases_payload_heap(isolated_background):
+    """Queued work must release both object reachability and traced heap on shutdown."""
+    slot = background._GENERATION_SLOTS
+    slot.acquire()
+    slot.acquire()
+    owns_tracing = not tracemalloc.is_tracing()
+    if owns_tracing:
+        tracemalloc.start(1)
+    try:
+        gc.collect()
+        baseline = tracemalloc.get_traced_memory()[0]
+        references = []
+        for index in range(128):
+            payload = Payload()
+            references.append(weakref.ref(payload))
+            assert background.submit_chat_background(
+                "generation",
+                f"memory-leak-churn:{index}",
+                lambda value: None,
+                payload,
+            )
+        del payload
+
+        queued = tracemalloc.get_traced_memory()[0] - baseline
+        assert queued >= 6 * 1024 * 1024
+
+        background.begin_background_shutdown()
+        gc.collect()
+        retained = tracemalloc.get_traced_memory()[0] - baseline
+
+        assert all(reference() is None for reference in references)
+        assert retained < 1024 * 1024
+        assert not background._CHAT_QUEUES
+        assert not background._CHAT_ACTIVE
+        assert not background._CHAT_IN_FLIGHT
+        assert not background._BACKGROUND_FUTURES
+        assert not background._BACKGROUND_FUTURE_LABELS
+    finally:
+        if owns_tracing:
+            tracemalloc.stop()
+        slot.release()
+        slot.release()

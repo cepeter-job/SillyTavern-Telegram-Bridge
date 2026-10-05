@@ -393,9 +393,15 @@ def _retirement_would_delete_current_source(db: sqlite3.Connection, document_id:
 
 
 def cleanup_retired_memory_documents(
-    db: sqlite3.Connection, chat_id: str, session_id: str, *, app_settings: AppSettings, lease_token: str = ""
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    *,
+    app_settings: AppSettings,
+    lease_token: str = "",
+    blocking_only: bool = False,
 ) -> bool:
-    """Process one due batch; an unfinished raw request retains a future watch."""
+    """Process one due batch, optionally excluding recurring raw watches."""
     if db.in_transaction:
         raise RuntimeError("Memory cleanup cannot run in a transaction")
     try:
@@ -403,10 +409,15 @@ def cleanup_retired_memory_documents(
     except Exception:
         logging.warning("Raw archival recovery deferred for chat %s", chat_id, exc_info=True)
         return False
+    # Recurring uncertainty is serviced by retirement turns, not the ingestion
+    # prerequisite. Filter the batch as well as its remaining-debt check so
+    # watched failures or earlier IDs cannot consume finite cleanup work.
     rows = db.execute(
-        "SELECT document_id FROM memory_retired_documents WHERE chat_id=? AND session_id=? AND deleted=0 "
-        "AND next_attempt_at<=? AND lease_token=? ORDER BY document_id LIMIT 16",
-        (chat_id, session_id, time.time(), lease_token),
+        "SELECT document_id FROM memory_retired_documents r WHERE chat_id=? AND session_id=? AND deleted=0 "
+        "AND next_attempt_at<=? AND lease_token=? AND (NOT ? OR NOT EXISTS("
+        "SELECT 1 FROM memory_archival_attempts a WHERE a.document_id=r.document_id AND a.finished=0)) "
+        "ORDER BY document_id LIMIT 16",
+        (chat_id, session_id, time.time(), lease_token, int(blocking_only)),
     ).fetchall()
     if not rows:
         return True
@@ -458,8 +469,10 @@ def cleanup_retired_memory_documents(
             if not succeeded:
                 return False
     return not db.execute(
-        "SELECT 1 FROM memory_retired_documents WHERE chat_id=? AND session_id=? AND deleted=0 AND next_attempt_at<=?",
-        (chat_id, session_id, time.time()),
+        "SELECT 1 FROM memory_retired_documents r WHERE chat_id=? AND session_id=? AND deleted=0 "
+        "AND next_attempt_at<=? AND (NOT ? OR NOT EXISTS("
+        "SELECT 1 FROM memory_archival_attempts a WHERE a.document_id=r.document_id AND a.finished=0))",
+        (chat_id, session_id, time.time(), int(blocking_only)),
     ).fetchone()
 
 

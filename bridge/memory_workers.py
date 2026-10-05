@@ -117,7 +117,7 @@ def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_sett
             if claim.layer == "hindsight":
                 with memory_backend.hindsight_session_lock(claim.chat_id, claim.session_id):
                     if not memory_backend.cleanup_retired_memory_documents(
-                        db, claim.chat_id, claim.session_id, app_settings=app_settings
+                        db, claim.chat_id, claim.session_id, app_settings=app_settings, blocking_only=True
                     ):
                         fail_job(db, claim, "work_failed")
                         return "work_failed"

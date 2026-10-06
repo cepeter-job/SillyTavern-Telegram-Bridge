@@ -17,6 +17,7 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 - Remove narrowly recognized legacy tracker-output instructions from effective prompt copies while preserving stored prompts, character cards and neighboring custom instructions.
 - Fence tracker publication and check delivery against replay, stale workers, rewritten/deleted sources and session changes. Reset, swipe, continuation and alternate-ending checkpoints now preserve the same state boundary as canonical story history.
 - Reconstruct historical NPC checkpoint fields from bounded field history so a later tracker projection cannot erase the older snapshot value.
+- Carry bounded native NPC field history through branch restoration so later rewinds retain tracker projection ownership, manual overrides and deliberate field clears.
 - Preserve reversible tracker revisions and accepted-source receipts together in alternate-ending checkpoints. Adopt delayed NPC aliases with source-attributed history; reject conflicting prior scores and malformed supplied JSON types atomically.
 - Require every character-scope reader to be authorized for private agendas, and compact Director/choice tracker context without truncating fixed planning JSON.
 

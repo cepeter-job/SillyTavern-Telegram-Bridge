@@ -287,6 +287,8 @@ Alternate-ending checkpoints retain up to 4,096 tracker revisions, including
 alias transitions, together with source receipts and locked checks. The complete
 checkpoint remains subject to the existing 1 MiB limit; capture fails instead of
 dropping earlier revisions that historical regeneration or rollback might need.
+Native NPC field history has a corresponding 4,096-change bound and shares that
+checkpoint byte budget, preserving field ownership and private audiences on rewind.
 Character-scoped private trackers require every group reader to be authorized.
 Director and separate choices compact tracker context against their selected
 model before dispatch while preserving their fixed planning and output data.

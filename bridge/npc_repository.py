@@ -9,6 +9,11 @@ from typing import Any
 
 from bridge.repository_contracts import NpcEntity, NpcFieldChange, NpcFieldState, require_active_transaction
 
+_SNAPSHOT_HISTORY_COLUMNS = (
+    "field_key,operation,before_json,after_json,before_mode,after_mode,"
+    "before_visibility,after_visibility,before_known_by_json,after_known_by_json,source_rowid,created_at"
+)
+
 
 def _normalize_name(value: str) -> str:
     return " ".join(str(value or "").split()).casefold()
@@ -387,6 +392,14 @@ def snapshot_npc_state(
     db: sqlite3.Connection, chat_id: str, session_id: str, through_rowid: int
 ) -> list[dict[str, Any]]:
     """Capture checkpoint-time local NPC state without reading future extraction results."""
+    count, size = db.execute(
+        f"SELECT COUNT(*),COALESCE(SUM(LENGTH(CAST(json_array({_SNAPSHOT_HISTORY_COLUMNS}) AS BLOB))+512),0) "  # noqa: S608 -- fixed columns
+        "FROM npc_field_history WHERE source_rowid<=? AND npc_id IN "
+        "(SELECT npc_id FROM npc_entities WHERE chat_id=? AND session_id=? AND first_seen_rowid<=?)",
+        (through_rowid, chat_id, session_id, through_rowid),
+    ).fetchone()
+    if count > 4096 or size > 1048576:
+        raise ValueError("NPC history exceeds the bounded pre-finale snapshot")
     cursor = db.execute(
         "SELECT * FROM npc_entities WHERE chat_id=? AND session_id=? AND first_seen_rowid<=? ORDER BY npc_id LIMIT 257",
         (chat_id, session_id, through_rowid),
@@ -403,16 +416,24 @@ def snapshot_npc_state(
         values = npc_snapshot_fields(db, entity["npc_id"], through_rowid)
         if len(values) > 128:
             raise ValueError("NPC fields exceed the bounded pre-finale snapshot")
-        budget += len(json.dumps(values, ensure_ascii=False))
+        entity["fields"] = values
+        entity["history"] = [
+            dict(zip(_SNAPSHOT_HISTORY_COLUMNS.split(","), row, strict=True))
+            for row in db.execute(
+                f"SELECT {_SNAPSHOT_HISTORY_COLUMNS} FROM npc_field_history "  # noqa: S608 -- fixed columns
+                "WHERE npc_id=? AND source_rowid<=? ORDER BY source_rowid,change_id LIMIT 4096",
+                (entity["npc_id"], through_rowid),
+            )
+        ]
+        budget += len(json.dumps(entity, ensure_ascii=False).encode())
         if budget > 1048576:
             raise ValueError("NPC state is too large for a pre-finale snapshot")
-        entity["fields"] = values
         entity["last_seen_rowid"] = min(entity["last_seen_rowid"], through_rowid)
     return entities
 
 
 def restore_npc_snapshot(db: sqlite3.Connection, chat_id: str, session_id: str, entities: list[dict]) -> None:
-    """Create independent NPC IDs and a checkpoint-valid baseline for future rewinds."""
+    """Create independent NPC IDs with reversible history, or a legacy checkpoint baseline."""
     require_active_transaction(db)
     for entity in entities:
         npc_id = insert_npc_entity(
@@ -426,6 +447,11 @@ def restore_npc_snapshot(db: sqlite3.Connection, chat_id: str, session_id: str, 
             entity["created_at"],
         )
         set_npc_entity_last_seen(db, npc_id, entity["last_seen_rowid"], entity["updated_at"])
+        history = entity.get("history", [])
+        db.executemany(
+            f"INSERT INTO npc_field_history(npc_id,{_SNAPSHOT_HISTORY_COLUMNS}) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [(npc_id, *(row[key] for key in _SNAPSHOT_HISTORY_COLUMNS.split(","))) for row in history],
+        )
         for item in entity["fields"]:
             field = NpcFieldState(
                 npc_id,
@@ -438,9 +464,10 @@ def restore_npc_snapshot(db: sqlite3.Connection, chat_id: str, session_id: str, 
                 item["updated_at"],
             )
             upsert_npc_field(db, field)
-            insert_npc_field_change(
-                db, npc_id, field.field_key, "set", None, field, field.updated_rowid, field.updated_at
-            )
+            if not any(row["field_key"] == field.field_key for row in history):
+                insert_npc_field_change(
+                    db, npc_id, field.field_key, "set", None, field, field.updated_rowid, field.updated_at
+                )
 
 
 def npc_snapshot_fields(db: sqlite3.Connection, npc_id: int, through_rowid: int) -> list[dict[str, Any]]:

@@ -46,6 +46,8 @@ The default aggregate limits are 64 records per domain, 64 actor entries per col
 
 Checkpoint format 1 retains the ordered tracker revisions, including identity-deletion markers, together with current records, locked checks and accepted-source receipts. Capture rejects more than 4,096 revisions or a payload beyond the shared 1 MiB checkpoint budget; it never truncates old revisions while retaining receipts. Restoration rebuilds records from those revisions and verifies the current-state summary before accepting receipts. Pre-feature checkpoints without simulation data remain valid; unreleased tracker snapshots without reversible history are rejected.
 
+NPC checkpoints also retain bounded native field history, including before/after values, audiences, modes and source timestamps. Capture checks the encoded journal size in SQL before fetching it. Restoring both domains preserves the exact earlier projection fingerprint through a subsequent rewind, while real native clears and manual field overrides remain authoritative. Legacy NPC checkpoints without field history retain their previous baseline restoration behavior.
+
 An NPC identity established later can adopt an existing unambiguous alias tracker at that accepted source. Earlier historical reads retain the alias, and rollback reverses the identity transition. Mechanically identical records can coalesce without counting their scores twice; conflicting records reject the complete publication until explicitly corrected. Native/manual field ownership remains authoritative. Future NPC identities cannot be projected into earlier backfill sources.
 
 ## Extraction and existing values

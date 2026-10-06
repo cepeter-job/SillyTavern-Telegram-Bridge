@@ -69,7 +69,7 @@
 
 **Files:** existing CI/static tooling; design, plan, changelog, user/configuration documentation as needed.
 
-- [ ] Run full pytest with resource warnings as errors and coverage, static analysis, dependency direction, module-size ratchet, reference audit, lint/format and security coverage gates.
+- [x] Run full pytest with resource warnings as errors and coverage, static analysis, dependency direction, module-size ratchet, reference audit, lint/format and security coverage gates.
 - [x] Prepare the whole-branch diff and obtain a fresh independent code review against the spec and Review Focus.
 - [ ] Reproduce important findings in failing tests, fix them and run the relevant tests plus a final full suite. Record any material decision and limitation.
 - [ ] Push exact commits, verify GitHub CI on that head, mark PR #380 ready and merge using the existing user authorization.

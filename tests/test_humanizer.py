@@ -94,7 +94,6 @@ class HumanizerRenderTests(unittest.TestCase):
         self.assertEqual(result, source)
 
 
-
 class HumanizerPersistenceTests(SettingsTestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

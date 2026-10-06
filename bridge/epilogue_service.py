@@ -37,7 +37,6 @@ from bridge.provider_port import ProviderPort
 from bridge.session_repository import load_session_row
 from bridge.settings import AppSettings
 from bridge.simulation_context import story_simulation_context
-from bridge.simulation_output import visible_story_history
 from bridge.sqlite_store import write_transaction
 from bridge.transcript_repository import append_epilogue_message, bounded_story_history, story_row_by_id
 
@@ -155,7 +154,7 @@ def _brief(
             {key: row[key] for key in ("arc_id", "title", "status", "phase", "summary", "open_questions")}
             for row in list_arc_rows(db, chat_id, sid, limit=16)
         ],
-        "recent_committed_story": visible_story_history(bounded_story_history(db, chat_id, sid, budget=12000)),
+        "recent_committed_story": bounded_story_history(db, chat_id, sid, budget=12000),
     }
     messages = [
         {"role": "system", "content": _BRIEF_SYSTEM},

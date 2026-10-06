@@ -56,14 +56,13 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
+    "bridge/npc_rollback.py",
     "bridge/simulation_checks.py",
     "bridge/simulation_commands.py",
     "bridge/simulation_context.py",
     "bridge/simulation_extraction.py",
-    "bridge/simulation_legacy.py",
     "bridge/simulation_mechanics.py",
     "bridge/simulation_narrative.py",
-    "bridge/simulation_output.py",
     "bridge/simulation_projection.py",
     "bridge/simulation_prompt.py",
     "bridge/simulation_repository.py",

@@ -9,7 +9,6 @@ from bridge.npc_repository import set_npc_extraction_coverage
 from bridge.npc_service import NpcService
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
 from bridge.simulation_projection import is_managed_field
-from bridge.simulation_repository import bootstrap_through
 from bridge.simulation_service import SimulationService
 
 
@@ -51,8 +50,7 @@ def publish_derived(db, chat_id, session_id, layer, payload, through):
         )
     elif layer == "npc":
         service = NpcService()
-        native_groups = [] if through <= bootstrap_through(db, chat_id, session_id) else payload.get("npcs", [])
-        for item in native_groups:
+        for item in payload.get("npcs", []):
             operations = tuple(
                 NpcOperation(op["field"], op["op"], op["value"], op["mode"], op["visibility"], tuple(op["known_by"]))
                 for op in item["operations"]

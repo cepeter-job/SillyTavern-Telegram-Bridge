@@ -1,4 +1,4 @@
-"""Reserved protocol cleanup preserves real story commits and renderer envelopes."""
+"""Story commits preserve renderer envelopes and the original choice contract."""
 
 import json
 
@@ -24,21 +24,18 @@ from bridge.sqlite_store import write_transaction
 
 @pytest.mark.parametrize("route", ["ordinary", "edit", "regen", "continue", "image"])
 @pytest.mark.parametrize("wrapped", [False, True])
-def test_story_routes_parse_reintroduced_envelopes_before_suppressing_private_blocks(
-    novel_db, monkeypatch, route, wrapped
-):
+def test_story_routes_parse_reintroduced_envelopes_and_preserve_original_choices(novel_db, monkeypatch, route, wrapped):
     db, session, settings = make_started(novel_db, "a")
     session.update(_actor_id="owner", response_language="en", humanizer="off")
     original_choices = ["Open the door", "Wait outside", "Look around"]
     calls = []
 
     def generate(_key, _model, messages, **kwargs):
-        assert "SECRET" not in str(messages)
         calls.append(kwargs.get("session_id"))
         if str(kwargs.get("session_id") or "").endswith(":language-render"):
-            response = json.dumps({"story": "Visible continuation.<internal_states>RENDER_SECRET", "choices": []})
+            response = json.dumps({"story": "Visible continuation.", "choices": []})
             return "<final>" + response + "</final>" if wrapped else response
-        return json.dumps({"story": "Initial story.<internal_states>RAW_SECRET", "choices": original_choices})
+        return json.dumps({"story": "Initial story.", "choices": original_choices})
 
     services = make_test_application_services(
         app_settings=settings, provider=make_test_provider_port(generate_backend=generate)
@@ -49,9 +46,9 @@ def test_story_routes_parse_reintroduced_envelopes_before_suppressing_private_bl
         ).lastrowid
         db.execute(
             "INSERT INTO messages(chat_id,session_id,role,content,created_at) "
-            "VALUES('chat','story','assistant','Old visible ending.<internal_states>OLD_SECRET',2)"
+            "VALUES('chat','story','assistant','Old visible ending.',2)"
         )
-        save_response_variant(db, "chat", "story", "Go", "Old visible ending.<internal_states>OLD_SECRET", user)
+        save_response_variant(db, "chat", "story", "Go", "Old visible ending.", user)
     for owner in (message_commands, light_novel_turn):
         monkeypatch.setattr(
             owner,
@@ -117,7 +114,7 @@ def test_story_routes_parse_reintroduced_envelopes_before_suppressing_private_bl
             **common,
         )
     saved = db.execute("SELECT content FROM messages WHERE role='assistant' ORDER BY id DESC LIMIT 1").fetchone()[0]
-    assert "Visible continuation." in saved and "SECRET" not in saved and '"story"' not in saved
+    assert "Visible continuation." in saved and '"story"' not in saved
     assert ("Old visible ending." in saved) is (route == "continue")
     assert len(calls) == 2
     record = db.execute("SELECT choices_json FROM light_novel_choice_sets ORDER BY id DESC LIMIT 1").fetchone()
@@ -126,35 +123,35 @@ def test_story_routes_parse_reintroduced_envelopes_before_suppressing_private_bl
     assert variant[0] == saved
 
 
-def test_shared_renderer_cleans_between_language_and_humanizer_calls():
+def test_shared_renderer_passes_translated_narrative_to_humanizer():
     seen = []
 
     def generate(_key, _model, messages, **kwargs):
         source = messages[-1]["content"]
         seen.append(source)
-        assert "SECRET" not in source
         if kwargs["session_id"].endswith(":language-render"):
-            return "Visible scene.<internal_states>LANGUAGE_SECRET"
-        return "Visible scene.<internal_states>HUMANIZER_SECRET"
+            return "Translated visible scene."
+        return "Polished visible scene."
 
     result = generation.render_session_response(
         "key",
         {"session_id": "s", "model_id": "m", "response_language": "en", "humanizer": "on"},
-        "Visible scene.<internal_states>RAW_SECRET",
+        "Original visible scene.",
         "c",
         {},
         provider_port=make_test_provider_port(generate_backend=generate),
     )
-    assert len(seen) == 2 and all("SECRET" not in source for source in seen)
-    assert "Visible scene." in result and "SECRET" not in result
+    assert len(seen) == 2
+    assert "Original visible scene." in seen[0] and "Translated visible scene." in seen[1]
+    assert result == "*Polished visible scene.*"
 
 
-def test_reserved_only_response_does_not_become_an_empty_story():
+def test_empty_response_is_rejected_before_rewriting():
     with pytest.raises(ValueError, match="no visible narrative"):
         generation.render_session_response(
             "key",
             {"session_id": "s", "model_id": "m", "response_language": "auto"},
-            "<internal_states>SECRET",
+            "   ",
             "c",
             {},
             provider_port=make_test_provider_port(generate_backend=lambda *a, **k: pytest.fail("Unexpected rewrite")),

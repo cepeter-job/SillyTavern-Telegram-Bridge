@@ -14,6 +14,7 @@ from bridge.context_compaction import (
     budget_chat_messages,
     compact_chat_messages,
     context_profile,
+    profile_stats,
 )
 from bridge.context_diagnostics import record_context_attempts, save_context_stats
 from bridge.delivery_port import DeliveryPort
@@ -36,7 +37,6 @@ from bridge.provider_port import ProviderPort
 from bridge.rag_service import RagService
 from bridge.roleplay_format import normalize_roleplay_transport
 from bridge.settings import AppSettings
-from bridge.simulation_output import effective_tracker_prompt, strip_internal_state_blocks, visible_story_history
 from bridge.simulation_prompt import SIMULATION_OUTPUT_POLICY
 from bridge.telegram_output import telegram_transport_output
 
@@ -92,13 +92,12 @@ def render_response_language(
 
 
 def visible_rendered_story(text: str, novel_turn: NovelTurn | None = None, *, source: str | None = None) -> str:
-    """Parse a renderer's envelope before discarding its reserved story blocks."""
+    """Validate rendered narrative after parsing the current turn's envelope."""
     if novel_turn and text != source:
         text = novel_turn.finalize(text)
-    visible = strip_internal_state_blocks(text)
-    if not visible.strip():
+    if not text.strip():
         raise ValueError("Story response has no visible narrative")
-    return visible
+    return text
 
 
 def render_session_response(
@@ -113,7 +112,6 @@ def render_session_response(
 ) -> str:
     session_id = str(session["session_id"])
     provider_port = provider_port.for_usage(chat_id, session_id, "render")
-    text = strip_internal_state_blocks(text)
     rendered = render_response_language(
         api_key,
         session["model_id"],
@@ -180,8 +178,6 @@ def build_chat_messages(
     context_stats: dict[str, object] | None = None,
     defer_compaction: bool = False,
 ) -> list[dict]:
-    session, fields = effective_tracker_prompt(session, fields)
-    history_rows = visible_story_history(history_rows)
     current_persona = session["persona_id"]
     user_name = persona_service.name(current_persona) if current_persona else app_settings.default_user_name
     persona = persona_service.get(current_persona) if current_persona else None
@@ -318,15 +314,7 @@ def build_chat_messages(
         chars_per_token=profile.chars_per_token,
         app_settings=app_settings,
     )
-    stats.update(
-        {
-            "window_tokens": profile.window_tokens,
-            "output_reserve_tokens": profile.output_reserve_tokens,
-            "safety_margin_tokens": profile.safety_margin_tokens,
-            "chars_per_token": profile.chars_per_token,
-            "source": profile.source,
-        }
-    )
+    stats.update(profile_stats(profile))
     if context_stats is not None:
         context_stats.clear()
         context_stats.update(stats)

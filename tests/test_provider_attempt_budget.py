@@ -342,3 +342,84 @@ def test_successful_fallback_persists_actual_attempt_stats_on_application_thread
     assert stats["dropped_history"] == 3 and stats["memory_trimmed"] is True
     assert stats["final_tokens"] == estimate_message_tokens(calls[-1]["messages"], chars_per_token=1.5)
     assert "CURRENT" not in json.dumps(stats)
+
+
+@pytest.mark.parametrize("transport", ["openai_compatible", "openai_codex"])
+def test_normalized_attempt_respects_input_cap_before_network(tmp_path, transport):
+    settings, router = setup_route(tmp_path, window=1_000_000, transport=transport)
+    with pytest.raises(ContextWindowBudgetError) as exc:
+        provider_transport.generate_provider_text(
+            router,
+            "",
+            "p::synthetic",
+            [{"role": "user", "content": "CURRENT " + "x" * 210_000}],
+            settings={"max_tokens": 4000},
+            app_settings=settings,
+        )
+    assert exc.value.stats["window_tokens"] == 1_000_000
+    assert exc.value.stats["budget_tokens"] == 49_152
+    assert exc.value.stats["input_budget_limiter"] == "input-cap"
+
+
+def test_fallback_rechecks_input_cap_with_its_own_token_ratio(tmp_path, monkeypatch):
+    extra = {
+        "fallback": {
+            "models": ["synthetic"],
+            "transport": "openai_compatible",
+            "context_window_tokens": 900000,
+            "token_estimate_chars_per_token": 1.5,
+            "api_endpoint": "https://example.com/v1",
+            "api_key_env": "SYNTHETIC_KEY",
+        }
+    }
+    settings, router = setup_route(tmp_path, window=1_000_000, extra=extra)
+    calls = []
+
+    def request(req, **kwargs):
+        calls.append(req)
+        if len(calls) > 1:
+            pytest.fail("Over-cap fallback reached the network")
+        raise urllib.error.URLError("synthetic unavailable")
+
+    monkeypatch.setattr(provider_transport, "strict_urlopen", request)
+    policy = SimpleNamespace(
+        candidates=lambda *a: ("p::synthetic", "fallback::synthetic"),
+        begin=lambda selection: SimpleNamespace(selection=selection),
+        cancel=lambda *a: None,
+        fail=lambda *a: None,
+        succeed=lambda *a: None,
+    )
+    port = ProviderPort(
+        generate_backend=partial(provider_transport.generate_provider_text, router, app_settings=settings),
+        policy=policy,
+    )
+    with pytest.raises(ContextWindowBudgetError) as exc:
+        port.generate("", "p::synthetic", [{"role": "user", "content": "x" * 120_000}], settings={"max_tokens": 4000})
+    assert len(calls) == 1
+    assert exc.value.stats["window_tokens"] == 900_000
+    assert exc.value.stats["chars_per_token"] == 1.5
+    assert exc.value.stats["budget_tokens"] == 49_152
+
+
+def test_continuation_above_input_cap_keeps_visible_prefix(tmp_path, monkeypatch):
+    settings, router = setup_route(tmp_path, window=1_000_000)
+    prefix = "Visible prefix " + "v" * 50_000
+    calls = []
+
+    def request(req, **kwargs):
+        calls.append(req)
+        if len(calls) > 1:
+            pytest.fail("Over-cap continuation reached the network")
+        return Response(prefix, "length")
+
+    monkeypatch.setattr(provider_transport, "strict_urlopen", request)
+    result = provider_transport.generate_provider_text(
+        router,
+        "",
+        "p::synthetic",
+        [{"role": "user", "content": "x" * 160_000}],
+        settings={"max_tokens": 4000},
+        app_settings=settings,
+    )
+    assert result == prefix
+    assert len(calls) == 1

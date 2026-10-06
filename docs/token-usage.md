@@ -36,6 +36,16 @@ within it. Separate Light Novel retry operations appear separately. The model
 breakdown shows the top twelve models in the selected scope, and the task
 breakdown separates story generation from choices and other utility work.
 
+`SILLYTAVERN_CONTEXT_INPUT_CAP_TOKENS` defaults to 49,152 estimated input
+tokens **per provider request**; set it to 32,768 for a lower-cost cap. It
+compacts optional history and evidence before sending a request, but fixed
+instructions and the current turn are preserved and can cause an over-cap error.
+The cap is an admission estimate, not an exact bound on provider-reported tokens
+or the sum displayed for a turn with retries or other model tasks. The generation
+`max_tokens` setting reserves output space; it does not cap input. Check
+`/prompt` → Budget for the last request estimate and this Usage view for
+provider-reported totals.
+
 Charts use UTC with a rolling time window, so the first calendar day may be
 partial. Totals are not provider invoices, prices, subscription limits or remaining
 quota. No money amounts or billing estimates are generated.

@@ -14,6 +14,8 @@ from types import MappingProxyType
 
 from bridge.config_values import ConfigurationError, read_float, read_int
 
+DEFAULT_CONTEXT_INPUT_CAP_TOKENS = 49152
+
 
 @dataclass(frozen=True, kw_only=True)
 class AppSettings:
@@ -50,6 +52,7 @@ class AppSettings:
     rag_pdf_parse_timeout_seconds: int
     rag_semantic_candidates: int
     context_window_tokens: int
+    context_input_cap_tokens: int
     context_output_reserve_tokens: int
     context_history_candidates: int
     live_sync_api_url: str
@@ -157,6 +160,13 @@ def load_app_settings(environ: Mapping[str, str], *, home: Path) -> AppSettings:
         rag_semantic_candidates=read_int(values, "SILLYTAVERN_RAG_SEMANTIC_CANDIDATES", 384, minimum=64, maximum=2048),
         context_window_tokens=read_int(
             values, "SILLYTAVERN_CONTEXT_WINDOW_TOKENS", 32768, minimum=4096, maximum=1000000
+        ),
+        context_input_cap_tokens=read_int(
+            values,
+            "SILLYTAVERN_CONTEXT_INPUT_CAP_TOKENS",
+            DEFAULT_CONTEXT_INPUT_CAP_TOKENS,
+            minimum=1024,
+            maximum=1000000,
         ),
         context_output_reserve_tokens=read_int(
             values, "SILLYTAVERN_CONTEXT_OUTPUT_RESERVE_TOKENS", 4096, minimum=512, maximum=131072

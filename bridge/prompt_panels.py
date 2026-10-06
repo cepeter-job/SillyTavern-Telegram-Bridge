@@ -32,12 +32,16 @@ def prompt_panel_text(
             if context["final_tokens"] is None
             else f"{context['final_tokens']} / {context['budget_tokens']} estimated tokens"
         )
+        budget_label = "Last request input budget" if context["final_tokens"] is not None else "Effective input budget"
         return (
             "Prompt budget\n"
             f"Context window: {context['window_tokens']} tokens ({context['source']})\n"
             f"Output reserve: {context['output_reserve_tokens']} tokens\n"
             f"Safety margin: {context['safety_margin_tokens']} tokens\n"
-            f"Context input budget: ~{context['budget_tokens']} tokens\n"
+            f"Configured input cap: {context['configured_input_cap_tokens']} tokens\n"
+            f"Request input cap: {context['input_cap_tokens']} tokens\n"
+            f"{budget_label}: ~{context['budget_tokens']} tokens "
+            f"({'input cap' if context['input_budget_limiter'] == 'input-cap' else 'model window'})\n"
             f"Last assembled prompt: {last_prompt}\n"
             f"History dropped last time: {context['dropped_history']}\n"
             f"Trimmed: memory={context['memory_trimmed']}, rag={context['rag_trimmed']}, "

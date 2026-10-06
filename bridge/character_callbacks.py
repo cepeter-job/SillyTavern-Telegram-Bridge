@@ -66,7 +66,6 @@ def _handle_protected(token, callback, answer_callback, chat_id, message, sessio
 
 
 def _handle_menu(db, token, callback, answer_callback, chat_id, message, session, *, request_context) -> bool:
-    """Handle menu callbacks."""
     set_meta(db, f"character_upload:{chat_id}:{request_context.actor_id}", "")
     answer_callback(token, str(callback.get("id", "")), "Refreshed")
     send_character_menu(

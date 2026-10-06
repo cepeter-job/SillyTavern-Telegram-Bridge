@@ -185,10 +185,10 @@ example
 def test_inline_parser_recovers_single_envelope_wrapped_in_top_level_array():
     from bridge.light_novel_format import parse_story_response_diagnostic
 
-    source = json.dumps([{"story": "Canonical narrative.", "choices": ["Open the door", "Wait outside", "Look around"]}])
+    source = json.dumps([{"story": "Canonical narrative.", "choices": ["Open the door", "Wait outside", "Look"]}])
     assert parse_story_response_diagnostic(source, 3)[:2] == (
         "Canonical narrative.",
-        ["Open the door", "Wait outside", "Look around"],
+        ["Open the door", "Wait outside", "Look"],
     )
 
 
@@ -207,16 +207,16 @@ def test_inline_parser_recovers_single_full_response_fence_with_wrong_language_l
 def test_inline_parser_never_leaks_envelope():
     from bridge.light_novel_format import parse_story_response_diagnostic
 
-    assert parse_story_response_diagnostic('```json\n{"story":"Hello","choices":["Go", "Stay", "Wait"]}\n```', 3)[:2] == (
+    assert parse_story_response_diagnostic('```json\n{"story":"Hello","choices":["Go", "Stay", "No"]}\n```', 3)[:2] == (
         "Hello",
-        ["Go", "Stay", "Wait"],
+        ["Go", "Stay", "No"],
     )
     with pytest.raises(ValueError):
         parse_story_response_diagnostic('{"choices":["Go","Stay","Wait"]}', 3)[:2]
 
 
 @pytest.mark.parametrize(
-    "values", [["/reset", "Stay", "Wait"], ["@bot /reset", "Stay", "Wait"], ["Go", " go ", "Wait"], ["Go"], ["x" * 161, "Stay", "Wait"], [True, "Stay", "Wait"]]
+    "values", [["/reset", "S", "X"], ["@x", "S", "X"], ["A", " a ", "X"], ["X"], ["x" * 161, "S", "X"], [True, "S", "X"]]
 )
 def test_unsafe_or_invalid_choices_are_rejected(values):
     from bridge.light_novel_format import validate_choices

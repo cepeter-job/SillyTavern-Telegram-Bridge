@@ -23,7 +23,7 @@ def story_row(db, text="The door opens."):
         ).lastrowid
 
 
-@pytest.mark.parametrize("count", [2, 3, 4])
+@pytest.mark.parametrize("count", [3, 4])
 def test_requested_count_sampled_once_and_preserved(novel_db, count):
     from bridge.light_novel_service import prepare_turn
 
@@ -33,7 +33,7 @@ def test_requested_count_sampled_once_and_preserved(novel_db, count):
     record = prepare_turn(db, "chat", session, "message:4", "owner", rng=lambda choices: seen.append(choices) or count)
     second = prepare_turn(db, "chat", session, "message:4", "owner", rng=lambda _: pytest.fail("resampled"))
     assert second.requested_count == record.requested_count == count
-    assert seen == [(2, 3, 4)]
+    assert seen == [(3, 4)]
 
 
 def test_retry_strategy_override_is_scoped_to_one_choice_reservation(novel_db):
@@ -46,7 +46,7 @@ def test_retry_strategy_override_is_scoped_to_one_choice_reservation(novel_db):
     retry_session = dict(session)
     retry_session["_light_novel_strategy_override"] = "b"
 
-    record = prepare_turn(db, "chat", retry_session, "message:-265", "owner", rng=lambda _: 2)
+    record = prepare_turn(db, "chat", retry_session, "message:-265", "owner", rng=lambda _: 3)
 
     assert record.strategy == "b"
     assert conversation_state(db, "chat", "story").strategy == "a"
@@ -103,11 +103,11 @@ def test_inline_parser_recovers_trailing_fenced_envelope_after_prose():
     source = """Draft narrative that must not leak.
 
 ```json
-{"story":"Canonical narrative.","choices":["Open the door","Wait outside"]}
+{"story":"Canonical narrative.","choices":["Open the door","Wait outside","Look around"]}
 ```"""
-    assert parse_story_response_diagnostic(source, 2)[:2] == (
+    assert parse_story_response_diagnostic(source, 3)[:2] == (
         "Canonical narrative.",
-        ["Open the door", "Wait outside"],
+        ["Open the door", "Wait outside", "Look around"],
     )
 
 
@@ -119,7 +119,7 @@ def test_inline_parser_recovers_trailing_story_when_its_choices_are_invalid():
 ```json
 {"story":"Canonical narrative.","choices":["Only one"]}
 ```"""
-    assert parse_story_response_diagnostic(source, 2)[:2] == ("Canonical narrative.", None)
+    assert parse_story_response_diagnostic(source, 3)[:2] == ("Canonical narrative.", None)
 
 
 def test_inline_parser_recovers_unfenced_duplicate_envelope_and_preserves_header():
@@ -127,17 +127,17 @@ def test_inline_parser_recovers_unfenced_duplicate_envelope_and_preserves_header
 
     header = "[ 🕰️ Time 8:05 PM | 📍 Living Room ]"
     story = "Patricia lowers her glass and waits."
-    choices = ["Ask Patricia a question", "Open the case"]
+    choices = ["Ask Patricia a question", "Open the case", "Wait and observe"]
     source = f"{header}\n\n{story}\n\n" + json.dumps({"story": story, "choices": choices})
 
-    assert parse_story_response_diagnostic(source, 2)[:2] == (f"{header}\n\n{story}", choices)
+    assert parse_story_response_diagnostic(source, 3)[:2] == (f"{header}\n\n{story}", choices)
 
 
 def test_inline_parser_preserves_unrelated_unfenced_json_as_prose():
     from bridge.light_novel_format import parse_story_response_diagnostic
 
     source = 'Narrative keeps this visible data.\n\n{"metadata":"part of the story"}'
-    assert parse_story_response_diagnostic(source, 2)[:2] == (source, None)
+    assert parse_story_response_diagnostic(source, 3)[:2] == (source, None)
 
 
 def test_inline_parser_accepts_unambiguous_trailing_choices_only_envelope():
@@ -146,11 +146,11 @@ def test_inline_parser_accepts_unambiguous_trailing_choices_only_envelope():
     source = """Narrative that remains usable.
 
 ```json
-{"choices":["Open the door","Wait outside"]}
+{"choices":["Open the door","Wait outside","Look around"]}
 ```"""
-    assert parse_story_response_diagnostic(source, 2)[:2] == (
+    assert parse_story_response_diagnostic(source, 3)[:2] == (
         "Narrative that remains usable.",
-        ["Open the door", "Wait outside"],
+        ["Open the door", "Wait outside", "Look around"],
     )
 
 
@@ -160,9 +160,9 @@ def test_inline_parser_removes_a_trailing_non_object_json_value():
     source = """Narrative that remains usable.
 
 ```json
-["Open the door","Wait outside"]
+["Open the door","Wait outside","Look around"]
 ```"""
-    assert parse_story_response_diagnostic(source, 2)[:2] == ("Narrative that remains usable.", None)
+    assert parse_story_response_diagnostic(source, 3)[:2] == ("Narrative that remains usable.", None)
 
 
 def test_inline_parser_does_not_recover_an_ambiguous_multi_fence_response():
@@ -173,22 +173,22 @@ def test_inline_parser_does_not_recover_an_ambiguous_multi_fence_response():
 example
 ```
 ```json
-{"story":"Other narrative.","choices":["Open the door","Wait outside"]}
+{"story":"Other narrative.","choices":["Open the door","Wait outside","Look around"]}
 ```"""
     expected = """Narrative with an earlier code block.
 ```
 example
 ```"""
-    assert parse_story_response_diagnostic(source, 2)[:2] == (expected, None)
+    assert parse_story_response_diagnostic(source, 3)[:2] == (expected, None)
 
 
 def test_inline_parser_recovers_single_envelope_wrapped_in_top_level_array():
     from bridge.light_novel_format import parse_story_response_diagnostic
 
-    source = json.dumps([{"story": "Canonical narrative.", "choices": ["Open the door", "Wait outside"]}])
-    assert parse_story_response_diagnostic(source, 2)[:2] == (
+    source = json.dumps([{"story": "Canonical narrative.", "choices": ["Open the door", "Wait outside", "Look"]}])
+    assert parse_story_response_diagnostic(source, 3)[:2] == (
         "Canonical narrative.",
-        ["Open the door", "Wait outside"],
+        ["Open the door", "Wait outside", "Look"],
     )
 
 
@@ -196,33 +196,33 @@ def test_inline_parser_recovers_single_full_response_fence_with_wrong_language_l
     from bridge.light_novel_format import parse_story_response_diagnostic
 
     source = """```javascript
-{"story":"Canonical narrative.","choices":["Open the door","Wait outside"]}
+{"story":"Canonical narrative.","choices":["Open the door","Wait outside","Look around"]}
 ```"""
-    assert parse_story_response_diagnostic(source, 2)[:2] == (
+    assert parse_story_response_diagnostic(source, 3)[:2] == (
         "Canonical narrative.",
-        ["Open the door", "Wait outside"],
+        ["Open the door", "Wait outside", "Look around"],
     )
 
 
 def test_inline_parser_never_leaks_envelope():
     from bridge.light_novel_format import parse_story_response_diagnostic
 
-    assert parse_story_response_diagnostic('```json\n{"story":"Hello","choices":["Go", "Stay"]}\n```', 2)[:2] == (
+    assert parse_story_response_diagnostic('```json\n{"story":"Hello","choices":["Go", "Stay", "No"]}\n```', 3)[:2] == (
         "Hello",
-        ["Go", "Stay"],
+        ["Go", "Stay", "No"],
     )
     with pytest.raises(ValueError):
-        parse_story_response_diagnostic('{"choices":["Go","Stay"]}', 2)[:2]
+        parse_story_response_diagnostic('{"choices":["Go","Stay","Wait"]}', 3)[:2]
 
 
 @pytest.mark.parametrize(
-    "values", [["/reset", "Stay"], ["@bot /reset", "Stay"], ["Go", " go "], ["Go"], ["x" * 161, "Stay"], [True, "Stay"]]
+    "values", [["/reset", "S", "X"], ["@x", "S", "X"], ["A", " a ", "X"], [], ["x" * 161, "S", "X"], [True, "S", "X"]]
 )
 def test_unsafe_or_invalid_choices_are_rejected(values):
     from bridge.light_novel_format import validate_choices
 
     with pytest.raises(ValueError):
-        validate_choices(values, 2)
+        validate_choices(values, 3)
 
 
 def test_mode_a_inline_rejection_logs_reason_and_counts_without_content(novel_db, caplog):
@@ -322,7 +322,7 @@ def test_choice_only_strategy_routes_correct_model_outside_transaction(novel_db,
     configure_conversation(db, "chat", "story", "lightnovel", strategy)
     mark_started(db, "chat", "story", conversation_state(db, "chat", "story").epoch)
     set_task_model(db, "chat", "story", "utility::test")
-    record = prepare_turn(db, "chat", session, "opening:1", "owner", rng=lambda _: 2)
+    record = prepare_turn(db, "chat", session, "opening:1", "owner", rng=lambda _: 3)
     rowid = story_row(db)
     attach_turn(db, record, rowid, "The door opens.")
     calls = []
@@ -330,12 +330,12 @@ def test_choice_only_strategy_routes_correct_model_outside_transaction(novel_db,
     def generate(key, model, messages, **kwargs):
         assert not db.in_transaction
         calls.append((model, messages, kwargs))
-        return json.dumps({"choices": ["Go inside", "Wait outside"]})
+        return json.dumps({"choices": ["Go inside", "Wait outside", "Look around"]})
 
     result = ensure_choices(
         db, record.nonce, session, {"name": "Alice"}, provider_port=ProviderPort(generate), app_settings=settings
     )
-    assert result.choices == ("Go inside", "Wait outside")
+    assert result.choices == ("Go inside", "Wait outside", "Look around")
     assert calls[0][0] == expected
     prompt = calls[0][1][0]["content"]
     assert "Make the choices differ in motive and approach, not just wording." in prompt
@@ -362,14 +362,14 @@ def test_choice_generation_lease_covers_bounded_retry_window(novel_db):
 
     db, session, settings = novel_db
     started(db)
-    record = prepare_turn(db, "chat", session, "turn-lease", "owner", rng=lambda _: 2)
+    record = prepare_turn(db, "chat", session, "turn-lease", "owner", rng=lambda _: 3)
     attach_turn(db, record, story_row(db), "The door opens.")
     remaining = []
 
     def generate(*args, **kwargs):
         current = load_choice_set(db, record.nonce)
         remaining.append(current.lease_until - time.time())
-        return '{"choices":["Go inside","Wait outside"]}'
+        return '{"choices":["Go inside","Wait outside","Look around"]}'
 
     result = ensure_choices(db, record.nonce, session, {}, provider_port=ProviderPort(generate), app_settings=settings)
 
@@ -382,7 +382,7 @@ def test_choice_generation_retries_transient_timeout_once(novel_db, caplog):
 
     db, session, settings = novel_db
     started(db)
-    record = prepare_turn(db, "chat", session, "turn-timeout", "owner", rng=lambda _: 2)
+    record = prepare_turn(db, "chat", session, "turn-timeout", "owner", rng=lambda _: 3)
     attach_turn(db, record, story_row(db), "The door opens.")
     calls = []
 
@@ -390,7 +390,7 @@ def test_choice_generation_retries_transient_timeout_once(novel_db, caplog):
         calls.append(kwargs["request_timeout"])
         if len(calls) == 1:
             raise TimeoutError("provider exceeded deadline")
-        return '{"choices":["Go inside","Wait outside"]}'
+        return '{"choices":["Go inside","Wait outside","Look around"]}'
 
     with caplog.at_level("WARNING"):
         result = ensure_choices(
@@ -398,7 +398,7 @@ def test_choice_generation_retries_transient_timeout_once(novel_db, caplog):
         )
 
     assert result.generation_status == "ready"
-    assert result.choices == ("Go inside", "Wait outside")
+    assert result.choices == ("Go inside", "Wait outside", "Look around")
     assert calls == [60, 60]
     assert "stage=provider" in caplog.text
     assert "error_type=ProviderRequestError" in caplog.text
@@ -411,9 +411,9 @@ def test_choice_generation_retries_empty_response_once(novel_db):
 
     db, session, settings = novel_db
     started(db)
-    record = prepare_turn(db, "chat", session, "turn-empty", "owner", rng=lambda _: 2)
+    record = prepare_turn(db, "chat", session, "turn-empty", "owner", rng=lambda _: 3)
     attach_turn(db, record, story_row(db), "The door opens.")
-    responses = iter(["   ", '{"choices":["Go inside","Wait outside"]}'])
+    responses = iter(["   ", '{"choices":["Go inside","Wait outside","Look around"]}'])
     calls = []
 
     def generate(*args, **kwargs):
@@ -433,7 +433,7 @@ def test_choice_generation_retries_transient_http_status_and_hides_url(novel_db,
 
     db, session, settings = novel_db
     started(db)
-    record = prepare_turn(db, "chat", session, "turn-http", "owner", rng=lambda _: 2)
+    record = prepare_turn(db, "chat", session, "turn-http", "owner", rng=lambda _: 3)
     attach_turn(db, record, story_row(db), "The door opens.")
     calls = []
 
@@ -447,7 +447,7 @@ def test_choice_generation_retries_transient_http_status_and_hides_url(novel_db,
                 {},
                 None,
             )
-        return '{"choices":["Go inside","Wait outside"]}'
+        return '{"choices":["Go inside","Wait outside","Look around"]}'
 
     with caplog.at_level("WARNING"):
         result = ensure_choices(
@@ -467,7 +467,7 @@ def test_choice_generation_does_not_retry_parse_failure_and_logs_safely(novel_db
     db, session, settings = novel_db
     settings = replace(settings, api_key="SECRET_API_KEY")
     started(db)
-    record = prepare_turn(db, "chat", session, "turn-parse", "owner", rng=lambda _: 2)
+    record = prepare_turn(db, "chat", session, "turn-parse", "owner", rng=lambda _: 3)
     attach_turn(db, record, story_row(db, "SECRET_STORY_TEXT"), "SECRET_STORY_TEXT")
     calls = []
     raw = "SECRET_RAW_OUTPUT not-json"
@@ -485,7 +485,7 @@ def test_choice_generation_does_not_retry_parse_failure_and_logs_safely(novel_db
     assert calls == [60]
     assert "stage=parse" in caplog.text
     assert "reason=invalid_json" in caplog.text
-    assert "requested_count=2" in caplog.text
+    assert "requested_count=3" in caplog.text
     assert "model=story::test" in caplog.text
     assert "SECRET_STORY_TEXT" not in caplog.text
     assert "SECRET_RAW_OUTPUT" not in caplog.text
@@ -497,7 +497,7 @@ def test_choice_generation_does_not_retry_non_transient_provider_error(novel_db,
 
     db, session, settings = novel_db
     started(db)
-    record = prepare_turn(db, "chat", session, "turn-provider-error", "owner", rng=lambda _: 2)
+    record = prepare_turn(db, "chat", session, "turn-provider-error", "owner", rng=lambda _: 3)
     attach_turn(db, record, story_row(db), "The door opens.")
     calls = []
 
@@ -540,8 +540,8 @@ def test_inline_ready_choices_do_not_call_another_model(novel_db):
 
     db, session, settings = novel_db
     started(db)
-    record = prepare_turn(db, "chat", session, "turn", "owner", rng=lambda _: 2)
-    attach_turn(db, record, story_row(db), "The door opens.", ["Go", "Stay"])
+    record = prepare_turn(db, "chat", session, "turn", "owner", rng=lambda _: 3)
+    attach_turn(db, record, story_row(db), "The door opens.", ["Go", "Stay", "Wait"])
     result = ensure_choices(
         db,
         record.nonce,
@@ -559,12 +559,12 @@ def test_reset_during_provider_call_cannot_publish_old_choices(novel_db):
 
     db, session, settings = novel_db
     started(db)
-    record = prepare_turn(db, "chat", session, "turn", "owner", rng=lambda _: 2)
+    record = prepare_turn(db, "chat", session, "turn", "owner", rng=lambda _: 3)
     attach_turn(db, record, story_row(db), "The door opens.")
 
     def generate(*a, **k):
         reset_conversation(db, "chat", "story")
-        return '{"choices":["Go", "Stay"]}'
+        return '{"choices":["Go", "Stay", "Wait"]}'
 
     result = ensure_choices(db, record.nonce, session, {}, provider_port=ProviderPort(generate), app_settings=settings)
     assert result.state == "invalidated"
@@ -581,14 +581,14 @@ def test_grounded_user_choice_generation_avoids_assumed_success(novel_db):
     mark_started(db, "chat", "story", conversation_state(db, "chat", "story").epoch)
     set_task_model(db, "chat", "story", "utility::test")
     session["grounded_user"] = "on"
-    record = prepare_turn(db, "chat", session, "grounded-turn", "owner", rng=lambda _: 2)
+    record = prepare_turn(db, "chat", session, "grounded-turn", "owner", rng=lambda _: 3)
     story = "The guard blocks the gate."
     attach_turn(db, record, story_row(db, story), story)
     calls = []
 
     def generate(*args, **kwargs):
         calls.append(args[2])
-        return '{"choices":["Ask the guard to reconsider","Look for another entrance"]}'
+        return '{"choices":["Ask the guard to reconsider","Look for another entrance","Wait and observe"]}'
 
     result = ensure_choices(
         db,

@@ -109,7 +109,7 @@ def send_light_novel_menu(token: str, chat_id: str, session: dict, *, request_co
     else:
         text += (
             "\n\nA: Story + choices in one request.\nB: Story then Utility choices.\nC: Story then Story-model choices."
-            "\nChoice count is random, 2–4 each turn. Configure Character, Persona, World an"
+            "\nChoice count is random, 3–4 each turn. Configure Character, Persona, World an"
             "d System Prompt with /character, then use /start."
         )
         for strategy, label in [

@@ -159,7 +159,7 @@ def prepare_turn(
             state.epoch,
             turn_key,
             strategy,
-            int(rng((2, 3, 4))),
+            int(rng((3, 4))),
             actor_id,
             str(session.get("_story_model_override") or session.get("model_id") or ""),
             time.time(),

@@ -36,8 +36,8 @@ CHOICE_MOTIVE_POLICY = (
 
 
 def validate_choices(value: object, requested_count: int) -> list[str]:
-    if requested_count not in {2, 3, 4} or not isinstance(value, list) or len(value) != requested_count:
-        raise ValueError("Expected exactly the requested 2–4 choices")
+    if requested_count not in {3, 4} or not isinstance(value, list) or len(value) != requested_count:
+        raise ValueError("Expected exactly the requested 3–4 choices")
     choices = []
     for item in value:
         if not isinstance(item, str):

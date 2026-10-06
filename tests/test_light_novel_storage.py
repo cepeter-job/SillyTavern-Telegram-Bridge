@@ -130,6 +130,19 @@ def test_session_deletion_removes_choices_and_lifecycle(novel_db):
     assert db.execute("SELECT value FROM meta WHERE key='conversation_started:chat:story'").fetchone() is None
 
 
+def test_choice_repo_rejects_two_choice_reservations(novel_db):
+    db, _, _ = novel_db
+    with write_transaction(db), pytest.raises(ValueError):
+        reserve(db, key="two-choice-contract", count=2)
+
+
+def test_choice_validation_rejects_two_choice_contract():
+    from bridge.light_novel_format import validate_choices
+
+    with pytest.raises(ValueError, match="3–4"):
+        validate_choices(["Go", "Stay"], 2)
+
+
 def test_choice_repo_requires_caller_transaction(novel_db):
     from bridge.light_novel_repository import reserve_choice_set
 

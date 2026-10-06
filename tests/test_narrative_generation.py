@@ -184,7 +184,7 @@ def test_choice_only_generation_and_inline_repair_follow_offscreen_policy(novel_
         _fields(),
         provider_port=make_test_provider_port(
             generate_backend=lambda _a, _m, messages, **k: (
-                calls.append(messages) or '{"choices":["Follow Mara at the gate","Cut to the distant camp"]}'
+                calls.append(messages) or '{"choices":["Follow Mara","Cut to camp","Shift focus"]}'
             )
         ),
         app_settings=settings,
@@ -224,7 +224,7 @@ def test_offscreen_choice_handoff_is_steering_not_user_dialogue(novel_db, action
 
     db, _session_value, settings = novel_db
     save_session_narrative_settings(db, "chat", "story", preset_narrative_settings("observer"))
-    record = attached_choice(novel_db, choices=["Follow Mara", "Follow the distant council"])
+    record = attached_choice(novel_db, choices=["Follow Mara", "Follow the distant council", "Shift focus"])
     with write_transaction(db):
         bind_choice_panel(db, record.nonce, 81)
     callback = {
@@ -328,7 +328,7 @@ def test_offscreen_choice_panel_uses_reader_steering_heading(novel_db, monkeypat
 
     db, _session_value, settings = novel_db
     save_session_narrative_settings(db, "chat", "story", preset_narrative_settings("observer"))
-    record = attached_choice(novel_db, choices=["Follow Mara", "Cut to the council"])
+    record = attached_choice(novel_db, choices=["Follow Mara", "Cut to the council", "Shift focus"])
     sent = []
     monkeypatch.setattr(
         light_novel_panels, "send_panel_request", lambda _t, _m, p, **k: sent.append(p) or {"message_id": 81}

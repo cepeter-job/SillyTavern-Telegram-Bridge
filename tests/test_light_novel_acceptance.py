@@ -143,7 +143,7 @@ def test_choice_only_request_uses_bounded_roleplay_context_across_strategies(nov
 
     def generate(*args, **kwargs):
         calls.append(args[2])
-        return '{"choices":["Go inside","Stay outside"]}'
+        return '{"choices":["Go inside","Stay outside","Look around"]}'
 
     persona = replace(
         services.persona,
@@ -198,7 +198,7 @@ def test_choice_recovery_executes_the_normal_conversation_pipeline_exactly_once(
 
     def generate(*args, **kwargs):
         calls.append(args[2])
-        return '{"story":"You enter the hallway.","choices":["Call for help","Look upstairs"]}'
+        return '{"story":"You enter the hallway.","choices":["Call for help","Look upstairs","Wait"]}'
 
     port = ProviderPort(generate)
     app = make_test_application_services(app_settings=settings, provider=port)
@@ -221,7 +221,7 @@ def test_choice_recovery_executes_the_normal_conversation_pipeline_exactly_once(
     monkeypatch.setattr(
         message_commands,
         "prepare_turn",
-        lambda db, chat, session, key, actor: prepare_turn(db, chat, session, key, actor, rng=lambda _: 2),
+        lambda db, chat, session, key, actor: prepare_turn(db, chat, session, key, actor, rng=lambda _: 3),
     )
     with write_transaction(db):
         bind_choice_panel(db, record.nonce, 81)
@@ -242,7 +242,7 @@ def test_choice_recovery_executes_the_normal_conversation_pipeline_exactly_once(
     ]
     current = latest_choice_set(db, "chat", "story")
     assert current.nonce != record.nonce and current.actor_id == "owner"
-    assert current.choices == ("Call for help", "Look upstairs")
+    assert current.choices == ("Call for help", "Look upstairs", "Wait")
     assert db.execute("SELECT state FROM jobs WHERE job_id=?", (row[0],)).fetchone()[0] == "done"
 
 
@@ -251,6 +251,6 @@ def test_dedicated_lightnovel_help_and_strict_start_documentation_are_discoverab
 
     commands = {command for entries in HELP_CATEGORIES.values() for command, _summary in entries}
     assert "/lightnovel" in commands
-    assert "2–4" in command_detail("/lightnovel", "")
+    assert "3–4" in command_detail("/lightnovel", "")
     assert "/start" in command_detail("/reset", "")
     assert "already started" in command_detail("/start", "").lower()

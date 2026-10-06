@@ -16,7 +16,7 @@ def migrate_conversation_modes(db: sqlite3.Connection) -> None:
         story_hash TEXT NOT NULL DEFAULT '',
         nonce TEXT NOT NULL UNIQUE,
         strategy TEXT NOT NULL CHECK(strategy IN ('a','b','c')),
-        requested_count INTEGER NOT NULL CHECK(requested_count BETWEEN 2 AND 4),
+        requested_count INTEGER NOT NULL CHECK(requested_count BETWEEN 3 AND 4),
         choices_json TEXT NOT NULL DEFAULT '[]',
         generation_status TEXT NOT NULL DEFAULT 'pending'
             CHECK(generation_status IN ('pending','ready','failed')),

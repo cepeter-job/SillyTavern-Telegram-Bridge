@@ -101,7 +101,7 @@ def send_setup_panel(
     if stage == "strategy":
         text += (
             "\nA: story + choices in one request.\nB: choices from the Utility model."
-            "\nC: a second Story-model pass.\nEach turn offers 2–4 choices."
+            "\nC: a second Story-model pass.\nEach turn offers 3–4 choices."
         )
     elif stage == "session":
         text += "\nChoose an unstarted standard session or create a new session. Existing stories require /reset first."

@@ -76,6 +76,24 @@ class HumanizerRenderTests(unittest.TestCase):
         )
         self.assertEqual(result, "original text")
 
+    def test_telegram_html_change_falls_back_to_original(self):
+        prose = (
+            "This is a sufficiently long paragraph whose wording remains identical "
+            "while only the Telegram presentation tags are removed."
+        )
+        source = f"<tg-spoiler><b>{prose}</b></tg-spoiler>"
+
+        result = humanize.render_humanized_response(
+            "key",
+            "model",
+            source,
+            "s",
+            provider_port=self._port(lambda *a, **k: prose),
+        )
+
+        self.assertEqual(result, source)
+
+
 
 class HumanizerPersistenceTests(SettingsTestCase):
     def setUp(self):

@@ -78,7 +78,7 @@ def reserve_choice_set(
     now: float,
 ) -> ChoiceSet:
     require_active_transaction(db)
-    if strategy not in {"a", "b", "c"} or count not in {2, 3, 4}:
+    if strategy not in {"a", "b", "c"} or count not in {3, 4}:
         raise ValueError("Invalid choice strategy or count")
     db.execute(
         "INSERT OR IGNORE INTO light_novel_choice_sets(chat_id,session_id,epoch,turn_key,nonce,strategy,"

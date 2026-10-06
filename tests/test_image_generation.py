@@ -1005,10 +1005,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         self.assertIn("Current Scene", text)
         self.assertIn("model-a", text)
         self.assertIn("1024x1024", text)
-        self.assertEqual(
-            callbacks,
-            {f"imagine:{action}" for action in ("scene", "custom", "options", "close", "style:realism", "style:anime")},
-        )
+        self.assertEqual(callbacks, {f"imagine:{action}" for action in ("scene", "custom", "options", "close")})
 
     def test_auto_model_panel_shows_auto_selected(self):
         self._configure_auto_catalog()

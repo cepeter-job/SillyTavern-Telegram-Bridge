@@ -61,6 +61,10 @@ def _panel(state, *, chat_id="chat", session_id="scene"):
     return image_panels.imagine_panel(state.db, chat_id, session_id, app_settings=state.settings)
 
 
+def _options_panel(state, *, chat_id="chat", session_id="scene"):
+    return image_panels.imagine_options_panel(state.db, chat_id, session_id, app_settings=state.settings)
+
+
 def _callback(state, action, monkeypatch):
     panels, answers = [], []
     monkeypatch.setattr(image_panels, "_send", lambda *args, **kwargs: panels.append((args[2], args[3])))
@@ -85,18 +89,23 @@ def _callback(state, action, monkeypatch):
     return panels, answers
 
 
-def test_imagine_menu_exposes_both_styles_and_marks_default(image_session):
-    text, markup = _panel(image_session)
+def test_imagine_style_controls_live_only_in_options(image_session):
+    menu_text, menu_markup = _panel(image_session)
+    menu_callbacks = {button["callback_data"] for row in menu_markup["inline_keyboard"] for button in row}
+    assert not any(callback.startswith("imagine:style:") for callback in menu_callbacks)
+    assert "Choose a style" not in menu_text
+
+    options_text, options_markup = _options_panel(image_session)
     styles = {
         button["callback_data"]: button["text"]
-        for row in markup["inline_keyboard"]
+        for row in options_markup["inline_keyboard"]
         for button in row
         if button["callback_data"].startswith("imagine:style:")
     }
     assert set(styles) == {"imagine:style:realism", "imagine:style:anime"}
     assert "✅" in styles["imagine:style:realism"]
     assert "✅" not in styles["imagine:style:anime"]
-    assert "Style: Realism" in text
+    assert "Style: Realism" in options_text
 
 
 def test_style_callbacks_persist_selection_without_changing_model_or_size(image_session, monkeypatch):
@@ -114,8 +123,11 @@ def test_style_callbacks_persist_selection_without_changing_model_or_size(image_
             button["text"] for row in panels[0][1]["inline_keyboard"] for button in row if "✅" in button["text"]
         ]
         assert len(checked) == 1 and label in checked[0]
-        assert "Style: Realism" in _panel(state, session_id="other")[0]
-        assert "Style: Realism" in _panel(state, chat_id="other")[0]
+        panel_callbacks = {button["callback_data"] for row in panels[0][1]["inline_keyboard"] for button in row}
+        assert "imagine:model" in panel_callbacks
+        assert "imagine:scene" not in panel_callbacks
+        assert "Style: Realism" in _options_panel(state, session_id="other")[0]
+        assert "Style: Realism" in _options_panel(state, chat_id="other")[0]
     assert image_routing.session_image_settings(state.db, "chat", "scene", app_settings=state.settings) == (
         "images::z-image-turbo",
         "1024x1536",
@@ -147,7 +159,7 @@ def test_image_reset_restores_default_style(image_session, monkeypatch):
 
 def test_unknown_persisted_style_falls_back_to_realism(image_session):
     set_meta(image_session.db, "image_style:chat:scene", "removed-style")
-    assert "Style: Realism" in _panel(image_session)[0]
+    assert "Style: Realism" in _options_panel(image_session)[0]
 
 
 def _capture_generation(state, monkeypatch, *, transport, visual_prompt="Mira stands beside an oak."):

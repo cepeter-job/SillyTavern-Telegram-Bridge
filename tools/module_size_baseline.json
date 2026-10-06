@@ -29,7 +29,7 @@
     "tests/test_durable_memory_workers.py": 550,
     "tests/test_generation_continuation.py": 755,
     "tests/test_help_drilldown.py": 508,
-    "tests/test_image_generation.py": 1528,
+    "tests/test_image_generation.py": 1525,
     "tests/test_job_service_workers.py": 691,
     "tests/test_light_novel_flow.py": 743,
     "tests/test_light_novel_generation.py": 609,

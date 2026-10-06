@@ -423,3 +423,12 @@ def _send_preview(
         acknowledged(preview_id)
     for chunk in chunks[1:]:
         _send_reply_chunk(token, chat_id, chunk, acknowledged)
+
+
+def delete_tracked_panel_messages(token: str, chat_id: str, message_ids: list, *, request: Callable) -> None:
+    """Best-effort removal of already recorded panels after an atomic reset."""
+    for message_id in message_ids:
+        try:
+            request(token, "deleteMessage", {"chat_id": chat_id, "message_id": message_id})
+        except Exception:
+            logging.info("Could not delete reset choice panel")

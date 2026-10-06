@@ -20,6 +20,7 @@ from bridge.migrations import run_migrations as _run_migrations
 from bridge.narrative_arc_schema import migrate_narrative_arc_evidence
 from bridge.narrative_runtime_schema import migrate_narrative_history_revisions
 from bridge.narrative_schema import migrate_narrative_engine_foundation
+from bridge.simulation_schema import migrate_simulation_trackers
 from bridge.token_usage_schema import migrate_token_usage
 from bridge.transcript_schema import migrate_message_identity
 
@@ -59,10 +60,8 @@ def _create_core_tables(db: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS messages_session_created_idx ON messages(chat_id, session_id, created_at DESC)"
     )
     db.execute(
-        (
-            "CREATE INDEX IF NOT EXISTS messages_chat_telegram_session_idx ON "
-            "messages(chat_id, telegram_message_id, session_id)"
-        )
+        "CREATE INDEX IF NOT EXISTS messages_chat_telegram_session_idx ON "
+        "messages(chat_id, telegram_message_id, session_id)"
     )
     db.execute("""CREATE TABLE IF NOT EXISTS response_variants (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,10 +75,8 @@ def _create_core_tables(db: sqlite3.Connection) -> None:
         created_at REAL NOT NULL
     )""")
     db.execute(
-        (
-            "CREATE INDEX IF NOT EXISTS variants_session_idx ON "
-            "response_variants(chat_id, session_id, user_rowid, created_at)"
-        )
+        "CREATE INDEX IF NOT EXISTS variants_session_idx ON "
+        "response_variants(chat_id, session_id, user_rowid, created_at)"
     )
 
 
@@ -516,6 +513,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(22, "indexed_memory_evidence", migrate_memory_search),
     _Migration(23, "complete_memory_parts", migrate_complete_memory_parts),
     _Migration(24, "raw_archival_attempts", migrate_archival_attempts),
+    _Migration(25, "canonical_simulation_trackers", migrate_simulation_trackers),
 )
 
 

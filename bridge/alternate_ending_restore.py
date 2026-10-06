@@ -26,6 +26,7 @@ from bridge.narrative_repository import load_narrative_clock, restore_narrative_
 from bridge.narrative_settings import normalize_narrative_settings, save_session_narrative_settings
 from bridge.npc_repository import restore_npc_snapshot
 from bridge.scene_repository import upsert_scene_state_if_fresh
+from bridge.simulation_snapshot import restore_simulation_snapshot
 
 
 def restore_checkpoint_state(
@@ -58,6 +59,7 @@ def restore_checkpoint_state(
     if config["group"] is not None:
         store_group_state_row(db, chat_id, target, **config["group"], updated_at=now)
     restore_npc_snapshot(db, chat_id, target, data["memory"].get("npcs", []))
+    restore_simulation_snapshot(db, chat_id, target, data["memory"].get("simulation", {}))
     physical = data.get("physical_scene")
     if physical:
         upsert_scene_state_if_fresh(db, chat_id, target, physical["state_json"], physical["updated_through_rowid"], now)

@@ -52,7 +52,7 @@ def test_help_and_help_details_do_not_import_each_other():
     assert "bridge.help" not in imported_modules("help_details.py")
 
 
-def test_help_details_is_canonical_catalog_and_menu_owner():
+def test_help_details_uses_the_canonical_catalog_and_owns_the_menu():
     details = top_level_names("help_details.py")
     help_names = set().union(
         top_level_names("bot_commands.py"),
@@ -65,7 +65,8 @@ def test_help_details_is_canonical_catalog_and_menu_owner():
         top_level_names("system_prompt_panels.py"),
         top_level_names("voice_panels.py"),
     )
-    assert "HELP_CATEGORIES" in details
+    assert "HELP_CATEGORIES" in top_level_names("help_command_catalog.py")
+    assert "bridge.help_command_catalog" in imported_modules("help_details.py")
     assert "send_help_menu" in details
     assert "HELP_CATEGORIES" not in help_names
     assert "send_help_menu" not in help_names

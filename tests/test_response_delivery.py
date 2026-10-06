@@ -46,6 +46,245 @@ class ResponseDeliveryTests(SettingsTestCase):
 
         self.assertEqual(sent, ["Recovered\nreply"])
 
+    def test_send_reply_renders_native_formatting_entities(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 81}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                "<b>Bold</b> <i>Italic</i> <u>Under</u> <s>Strike</s> <tg-spoiler>Secret</tg-spoiler>",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], "Bold Italic Under Strike Secret")
+        self.assertEqual(
+            requests[0][1]["entities"],
+            [
+                {"type": "bold", "offset": 0, "length": 4},
+                {"type": "italic", "offset": 5, "length": 6},
+                {"type": "underline", "offset": 12, "length": 5},
+                {"type": "strikethrough", "offset": 18, "length": 6},
+                {"type": "spoiler", "offset": 25, "length": 6},
+            ],
+        )
+
+    def test_send_reply_supports_nested_entities_with_utf16_offsets(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 82}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                "🙂 <tg-spoiler><b>Secret</b></tg-spoiler>",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], "🙂 Secret")
+        self.assertCountEqual(
+            requests[0][1]["entities"],
+            [
+                {"type": "spoiler", "offset": 3, "length": 6},
+                {"type": "bold", "offset": 3, "length": 6},
+            ],
+        )
+
+    def test_send_reply_keeps_style_entities_inside_blockquote(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 87}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                "<blockquote><b>Bold</b> <tg-spoiler>Secret</tg-spoiler></blockquote>",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], "Bold Secret")
+        self.assertCountEqual(
+            requests[0][1]["entities"],
+            [
+                {"type": "blockquote", "offset": 0, "length": 11},
+                {"type": "bold", "offset": 0, "length": 4},
+                {"type": "spoiler", "offset": 5, "length": 6},
+            ],
+        )
+
+    def test_send_reply_combines_generated_narration_italic_with_html_entities(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 88}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                "<tg-spoiler><b>*Secret*</b></tg-spoiler>",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], "Secret")
+        self.assertCountEqual(
+            requests[0][1]["entities"],
+            [
+                {"type": "spoiler", "offset": 0, "length": 6},
+                {"type": "bold", "offset": 0, "length": 6},
+                {"type": "italic", "offset": 0, "length": 6},
+            ],
+        )
+
+    def test_send_reply_renders_text_link_entity(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 85}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                '<a href="https://example.com/reference">Docs</a>',
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], "Docs")
+        self.assertEqual(
+            requests[0][1]["entities"],
+            [
+                {
+                    "type": "text_link",
+                    "offset": 0,
+                    "length": 4,
+                    "url": "https://example.com/reference",
+                }
+            ],
+        )
+
+    def test_send_reply_rejects_unsafe_text_link_scheme(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 86}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                '<a href="javascript:alert(1)">Bad</a>',
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], "Bad")
+        self.assertNotIn("entities", requests[0][1])
+
+    def test_send_reply_renders_code_pre_and_blockquotes(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 83}
+
+        source = (
+            "<code>code</code>\n<pre>block</pre>\n<blockquote>Quote</blockquote>\n"
+            "<blockquote expandable>Hidden quote</blockquote>"
+        )
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                source,
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], "code\nblock\nQuote\nHidden quote")
+        self.assertEqual(
+            requests[0][1]["entities"],
+            [
+                {"type": "code", "offset": 0, "length": 4},
+                {"type": "pre", "offset": 5, "length": 5},
+                {"type": "blockquote", "offset": 11, "length": 5},
+                {"type": "expandable_blockquote", "offset": 17, "length": 12},
+            ],
+        )
+
+    def test_send_reply_preserves_spoiler_across_chunk_boundary(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 90 + len(requests)}
+
+        source = "<tg-spoiler>" + ("A" * 4100) + "</tg-spoiler>"
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                source,
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(requests[0][1]["text"], "A" * 4000)
+        self.assertEqual(requests[0][1]["entities"], [{"type": "spoiler", "offset": 0, "length": 4000}])
+        self.assertEqual(requests[1][1]["text"], "A" * 100)
+        self.assertEqual(requests[1][1]["entities"], [{"type": "spoiler", "offset": 0, "length": 100}])
+
+    def test_send_reply_trims_trailing_whitespace_from_entity_length(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 89}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                "<tg-spoiler>Secret\n</tg-spoiler>",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], "Secret\n")
+        self.assertEqual(
+            requests[0][1]["entities"],
+            [{"type": "spoiler", "offset": 0, "length": 6}],
+        )
+
+    def test_send_reply_keeps_general_markdown_literal(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 84}
+
+        source = "**Bold** ||Secret|| __Under__ ~~Strike~~ [Docs](https://example.com/reference)"
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                source,
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], source)
+        self.assertNotIn("entities", requests[0][1])
+
     def test_send_reply_renders_single_star_narration_as_telegram_italic(self):
         requests = []
 
@@ -177,10 +416,10 @@ class ResponseDeliveryTests(SettingsTestCase):
             )
 
         self.assertEqual(len(requests), 2)
-        self.assertEqual(requests[0][1]["text"], "A" * 3999)
-        self.assertEqual(requests[0][1]["entities"], [{"type": "italic", "offset": 0, "length": 3999}])
-        self.assertEqual(requests[1][1]["text"], ("A" * 101) + ' "Done."')
-        self.assertEqual(requests[1][1]["entities"], [{"type": "italic", "offset": 0, "length": 101}])
+        self.assertEqual(requests[0][1]["text"], "A" * 4000)
+        self.assertEqual(requests[0][1]["entities"], [{"type": "italic", "offset": 0, "length": 4000}])
+        self.assertEqual(requests[1][1]["text"], ("A" * 100) + ' "Done."')
+        self.assertEqual(requests[1][1]["entities"], [{"type": "italic", "offset": 0, "length": 100}])
 
     def test_send_reply_applies_italic_entities_to_streaming_preview(self):
         requests = []

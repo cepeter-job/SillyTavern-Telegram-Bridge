@@ -30,7 +30,7 @@ from bridge.session_core import load_session
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
 from bridge.telegram import send_text, send_typing, telegram_request
-from bridge.telegram_output import telegram_safe_output
+from bridge.telegram_output import telegram_transport_output
 from bridge.transcript_repository import native_edit_target
 from bridge.variant_repository import prune_variants_from
 
@@ -232,7 +232,7 @@ def regenerate_edited_turn(
         provider_port=provider_port,
     )
     if novel_turn:
-        reply = telegram_safe_output(novel_turn.finalize(reply))
+        reply = telegram_transport_output(novel_turn.finalize(reply))
     old_message_ids = _COMMAND_OPERATION_RECOVERY.outgoing_ids_after(
         db,
         chat_id,

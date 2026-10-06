@@ -20,7 +20,12 @@ from bridge.settings import AppSettings
 from bridge.speech import send_tts
 from bridge.sqlite_store import write_transaction
 from bridge.telegram import send_text, split_telegram_text, telegram_request
-from bridge.telegram_output import telegram_safe_output
+from bridge.telegram_output import (
+    TelegramFormatSpan,
+    telegram_format_spans,
+    telegram_safe_output,
+    telegram_transport_output,
+)
 
 _ROLEPLAY_ITALIC = re.compile(r"(?<!\*)\*(?![\s*])(?P<body>.*?)(?<![\s*])\*(?!\*)", re.DOTALL)
 
@@ -76,33 +81,66 @@ def _unquoted_segments(start: int, end: int, quoted: list[tuple[int, int]]) -> l
     return segments
 
 
-def _roleplay_reply_chunks(text: str) -> list[tuple[str, list[dict[str, int | str]]]]:
-    """Render narration markers as italics while quoted speech stays normal."""
-    source = str(text or "")
-    source_chunks = split_telegram_text(source)
-    matches = list(_ROLEPLAY_ITALIC.finditer(source))
-    if not matches:
-        return [(chunk, []) for chunk in source_chunks]
+def _format_ranges(
+    spans: list[TelegramFormatSpan],
+    entity_types: set[str],
+) -> list[tuple[int, int]]:
+    return [(span.start, span.end) for span in spans if span.type in entity_types]
 
+
+def _range_overlaps(start: int, end: int, ranges: list[tuple[int, int]]) -> bool:
+    return any(start < range_end and range_start < end for range_start, range_end in ranges)
+
+
+def _roleplay_reply_chunks(text: str) -> list[tuple[str, list[dict[str, int | str]]]]:
+    """Render safe Telegram entities plus narration italics on visible text."""
+    source, format_spans = telegram_format_spans(text)
+    literal_star_ranges = _format_ranges(format_spans, {"code", "pre"})
+    matches = [
+        match
+        for match in _ROLEPLAY_ITALIC.finditer(source)
+        if not _range_overlaps(match.start(), match.end(), literal_star_ranges)
+    ]
     marker_positions = {position for match in matches for position in (match.start(), match.end() - 1)}
-    source_to_visible_char = [0] * (len(source) + 1)
     source_to_visible_utf16 = [0] * (len(source) + 1)
     visible_chars: list[str] = []
     visible_utf16 = 0
 
     for index, char in enumerate(source):
-        source_to_visible_char[index] = len(visible_chars)
         source_to_visible_utf16[index] = visible_utf16
         if index not in marker_positions:
             visible_chars.append(char)
             visible_utf16 += _utf16_length(char)
-        source_to_visible_char[index + 1] = len(visible_chars)
         source_to_visible_utf16[index + 1] = visible_utf16
 
-    quoted = _quoted_speech_ranges(source)
     entities: list[dict[str, int | str]] = []
+    for span in format_spans:
+        entity_start = source_to_visible_utf16[span.start]
+        entity_end = source_to_visible_utf16[span.end]
+        if entity_end <= entity_start:
+            continue
+        entity: dict[str, int | str] = {
+            "type": span.type,
+            "offset": entity_start,
+            "length": entity_end - entity_start,
+        }
+        if span.url:
+            entity["url"] = span.url
+        entities.append(entity)
+
+    quoted = _quoted_speech_ranges(source)
+    italic_exclusions = sorted(
+        [
+            *quoted,
+            *_format_ranges(format_spans, {"code", "pre", "blockquote", "expandable_blockquote"}),
+        ]
+    )
     for match in matches:
-        for segment_start, segment_end in _unquoted_segments(match.start("body"), match.end("body"), quoted):
+        for segment_start, segment_end in _unquoted_segments(
+            match.start("body"),
+            match.end("body"),
+            italic_exclusions,
+        ):
             entity_start = source_to_visible_utf16[segment_start]
             entity_end = source_to_visible_utf16[segment_end]
             if entity_end > entity_start:
@@ -114,33 +152,49 @@ def _roleplay_reply_chunks(text: str) -> list[tuple[str, list[dict[str, int | st
                     }
                 )
 
+    deduped: dict[tuple[str, int, int, str], dict[str, int | str]] = {}
+    for entity in entities:
+        key = (
+            str(entity["type"]),
+            int(entity["offset"]),
+            int(entity["length"]),
+            str(entity.get("url") or ""),
+        )
+        deduped[key] = entity
+    entities = sorted(
+        deduped.values(),
+        key=lambda entity: (
+            int(entity["offset"]),
+            -int(entity["length"]),
+            str(entity["type"]),
+            str(entity.get("url") or ""),
+        ),
+    )
+
     visible = "".join(visible_chars)
     rendered: list[tuple[str, list[dict[str, int | str]]]] = []
-    source_start = 0
-    for source_chunk in source_chunks:
-        source_end = source_start + len(source_chunk)
-        visible_start = source_to_visible_char[source_start]
-        visible_end = source_to_visible_char[source_end]
-        utf16_start = source_to_visible_utf16[source_start]
-        utf16_end = source_to_visible_utf16[source_end]
+    utf16_start = 0
+    for chunk_text in split_telegram_text(visible):
+        utf16_end = utf16_start + _utf16_length(chunk_text)
         chunk_entities: list[dict[str, int | str]] = []
         for entity in entities:
             entity_start = int(entity["offset"])
             entity_end = entity_start + int(entity["length"])
             overlap_start = max(entity_start, utf16_start)
             overlap_end = min(entity_end, utf16_end)
-            if overlap_start < overlap_end:
-                chunk_entities.append(
-                    {
-                        "type": "italic",
-                        "offset": overlap_start - utf16_start,
-                        "length": overlap_end - overlap_start,
-                    }
-                )
-        chunk_text = visible[visible_start:visible_end]
+            if overlap_start >= overlap_end:
+                continue
+            chunk_entity: dict[str, int | str] = {
+                "type": str(entity["type"]),
+                "offset": overlap_start - utf16_start,
+                "length": overlap_end - overlap_start,
+            }
+            if entity.get("url"):
+                chunk_entity["url"] = str(entity["url"])
+            chunk_entities.append(chunk_entity)
         if chunk_text:
             rendered.append((chunk_text, chunk_entities))
-        source_start = source_end
+        utf16_start = utf16_end
     return rendered
 
 
@@ -271,14 +325,18 @@ def send_reply(
     if db is not None and session_id and story_mutation_message(db, chat_id, session_id):
         # Recovery may deliver committed text, but never generate fresh media for a closed original.
         session_id = None
-    text = telegram_safe_output(text)
+    transport_text = telegram_transport_output(text)
+    progress_payload = telegram_safe_output(transport_text)
     message_ids: list[int] = []
     complete = False
     expected_source = None
     if db is not None and assistant_rowid is not None:
         try:
-            text, message_ids, complete, expected_source = prepare_progress(
-                db, assistant_rowid, text, expected_job_id=expected_job_id
+            progress_payload, message_ids, complete, expected_source = prepare_progress(
+                db,
+                assistant_rowid,
+                progress_payload,
+                expected_job_id=expected_job_id,
             )
         except DeliveryTargetExpired:
             raise
@@ -286,7 +344,8 @@ def send_reply(
             raise DeliveryFailure("Reply committed; delivery checkpoint could not be prepared") from exc
         if complete:
             return
-    chunks = _roleplay_reply_chunks(text)
+    chunks = _roleplay_reply_chunks(transport_text)
+    visible_text = "".join(chunk_text for chunk_text, _ in chunks)
 
     def acknowledged(message_id: int) -> None:
         message_ids.append(message_id)
@@ -297,12 +356,12 @@ def send_reply(
                 message_ids,
                 expected_job_id=expected_job_id,
                 expected_source=expected_source,
-                expected_payload=text,
+                expected_payload=progress_payload,
             )
 
     try:
         if db is not None and session_id and not message_ids:
-            deliver_expression(token, chat_id, text, db, session_id, app_settings=app_settings)
+            deliver_expression(token, chat_id, visible_text, db, session_id, app_settings=app_settings)
         if db is None or assistant_rowid is None:
             # Preserve the public adapter's ordinary untracked send behavior.
             if replace_message_id is None:
@@ -325,7 +384,7 @@ def send_reply(
                 complete=True,
                 expected_job_id=expected_job_id,
                 expected_source=expected_source,
-                expected_payload=text,
+                expected_payload=progress_payload,
             )
     except DeliveryFailure:
         raise
@@ -334,7 +393,7 @@ def send_reply(
             raise
         raise DeliveryFailure("Reply committed; Telegram delivery is incomplete") from exc
     if db is not None and session_id and get_meta(db, f"voice_mode:{chat_id}", "off") == "tts":
-        speech = quoted_speech_from_reply(text)
+        speech = quoted_speech_from_reply(visible_text)
         if speech:
             operation_id = None
             if assistant_rowid is not None:

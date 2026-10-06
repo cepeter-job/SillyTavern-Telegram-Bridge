@@ -398,18 +398,20 @@ instead of saving a partial history.
 
 ### Existing prompts and older sessions
 
-The bridge filters recognized legacy tracker-output sections from the prompt
-copy sent to models. Your stored System Prompt, Author's Note and character
-card remain editable as before. Reserved `<internal_states>` blocks are removed
-from previews, new story output and assistant-history prompt copies; ordinary
-Telegram spoilers remain visible through their normal spoiler formatting.
+Use your System Prompt for the story's voice, style and roleplay instructions.
+Native trackers are maintained by the bridge. If you keep a custom prompt that
+asks for a tracker ledger after every reply, remove those obsolete instructions
+or select another prompt. The bridge no longer rewrites prompt sections or strips
+special `<internal_states>` blocks from replies and history. Ordinary Telegram
+formatting and spoilers work as before.
 
-After migration 25, existing NPC work replays available committed sources to
-backfill trackers. Exact historical records such as
-`Maya: BOND=8 Sparks=3 Grudge=2` inside an assistant Internal States block can seed
-a missing numeric baseline. Unproven numbers and unsupported legacy layouts are
-left unset. Historical transcript rows remain intact; the bridge does not save
-a second hidden assistant response for future turns.
+Existing native NPC and tracker values are retained. New updates come from
+accepted, committed story evidence; numbers in an old assistant ledger are not
+imported as a baseline. Migration 26 stops a pending bootstrap from an earlier
+tracker installation without replaying the unchanged native history. Edits to
+older messages still trigger the normal rollback and reprocessing for that suffix.
+You do not need to reset a session or delete its history. Saved prompts, cards and
+transcripts remain available for you to edit.
 
 ## Narrative Style
 

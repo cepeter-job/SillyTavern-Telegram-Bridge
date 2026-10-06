@@ -1,6 +1,7 @@
 """Explicit dependency allowlists for low-level bridge owners."""
 
 LOW_LEVEL_IMPORTS = {
+    "bridge.npc_rollback": frozenset({"bridge.npc_repository", "bridge.repository_contracts"}),
     "bridge.token_usage_schema": frozenset(),
     "bridge.token_usage": frozenset(
         {"bridge.sqlite_store", "bridge.token_usage_repository", "bridge.token_usage_values"}
@@ -118,7 +119,6 @@ LOW_LEVEL_IMPORTS = {
             "bridge.closed_session_guard",
             "bridge.narrative_context",
             "bridge.simulation_context",
-            "bridge.simulation_output",
             "bridge.card_content",
             "bridge.persona_service",
             "bridge.conversation_lifecycle",
@@ -191,8 +191,7 @@ LOW_LEVEL_IMPORTS = {
             "bridge.telegram",
         ]
     ),
-    "bridge.telegram_output": frozenset(["bridge.simulation_output"]),
-    "bridge.simulation_output": frozenset(),
+    "bridge.telegram_output": frozenset(),
     "bridge.rag_indexing": frozenset(
         (
             "bridge.rag_repository",

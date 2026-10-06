@@ -38,7 +38,6 @@ from bridge.provider_errors import ProviderRequestError
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.simulation_context import simulation_json_prompt, story_simulation_context
-from bridge.simulation_output import effective_tracker_prompt, strip_internal_state_blocks, visible_story_history
 from bridge.sqlite_store import write_transaction
 
 _CHOICE_REQUEST_TIMEOUT_SECONDS = 60
@@ -236,16 +235,15 @@ def build_choice_context_snapshot(
     summary_state: Callable[[sqlite3.Connection, str, str], tuple[str, int]] | None = None,
     npc_context_for_prompt: Callable[..., str] | None = None,
 ) -> dict[str, object]:
-    session, fields = effective_tracker_prompt(session, fields)
     history = db.execute(
         "SELECT role,content FROM messages WHERE chat_id=? AND session_id=? AND id<=? ORDER BY rowid DESC LIMIT 6",
         (record.chat_id, record.session_id, record.assistant_rowid),
     ).fetchall()
-    history_rows = visible_story_history([(str(role), str(text)) for role, text in reversed(history)])
+    history_rows = [(str(role), str(text)) for role, text in reversed(history)]
     persona_id = str(session.get("persona_id") or "")
     persona = persona_service.get(persona_id) if persona_service is not None and persona_id else None
     user_name = str((persona or {}).get("name") or app_settings.default_user_name)
-    story_context = strip_internal_state_blocks(story)[-10000:]
+    story_context = story[-10000:]
     world_context = "\n".join(
         [story_context, *(text for _role, text in history_rows), user_name, str(fields.get("name") or "")]
     )[-24000:]

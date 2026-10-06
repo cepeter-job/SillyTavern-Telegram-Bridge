@@ -293,17 +293,18 @@ Character-scoped private trackers require every group reader to be authorized.
 Director and separate choices compact tracker context against their selected
 model before dispatch while preserving their fixed planning and output data.
 
-Migration 25 schedules the existing NPC work for tracker backfill from retained
-sources. This can add Utility calls while older sessions catch up. Immutable
-checkpoint source floors remain in force; unavailable earlier history is not
-recreated. Native NPC fields in an unchanged previously covered prefix are
-preserved, while rewrites retire that backfill protection for the invalidated
-suffix. Quoted legacy numeric baselines are imported only when their original
-assistant source proves the name and values.
+Migration 25 creates native tracker storage without replaying previously processed
+NPC history. Migration 26 retires any pending tracker bootstrap from an earlier
+installation, retains accepted native state and resumes new work from the last
+complete source. Genuine edits still roll back their invalidated suffix, and a
+partially processed new message is read again from its beginning.
 
-Stored prompt files, character cards and old assistant messages are not rewritten
-by migration. Legacy template suppression operates on effective prompt copies;
-new model output is cleaned before rewriting, transport and story commit. See
+Tracker values come from accepted native state and new committed story evidence.
+The bridge does not import numeric ledgers from an old system prompt. Choose a
+normal story prompt for voice and style; remove obsolete tracker-output
+instructions from any custom prompt you continue to use. Stored prompts, character
+cards and transcripts are not automatically edited. Prompt assembly and Telegram
+formatting no longer contain a special Internal States parser or filter. See
 [Story trackers and checks](user-guide.md#story-trackers-and-checks) for mechanics,
 visibility, commands and lifecycle behavior.
 

@@ -82,7 +82,6 @@ from bridge.session_repository import delete_reset_turn_rows
 from bridge.settings import AppSettings
 from bridge.simulation_commands import retry_failed_check
 from bridge.simulation_context import story_simulation_context
-from bridge.simulation_output import strip_internal_state_blocks
 from bridge.simulation_service import SimulationService
 from bridge.sqlite_store import optimize_database, write_transaction
 from bridge.telegram import send_panel_request, send_text, send_typing, telegram_request
@@ -309,7 +308,6 @@ def generate_and_store_reply(
         )
     if novel_turn:
         reply = novel_turn.extract(reply)
-    reply = strip_internal_state_blocks(reply)
     reply += rag_service.citation_footer(db, chat_id, text, rag_bundle)
     rendered = render_response_language(
         api_key, current_model, reply, language, generation_session_id, generation_settings, provider_port=provider_port

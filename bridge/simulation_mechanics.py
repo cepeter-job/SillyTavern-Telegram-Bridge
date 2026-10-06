@@ -5,7 +5,6 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from bridge.simulation_legacy import proven_relationship_baseline
 from bridge.simulation_repository import list_states, load_state, store_state
 from bridge.simulation_values import integer as _int
 from bridge.simulation_values import key as _key
@@ -62,7 +61,6 @@ class SimulationMechanics:
         updates: dict[str, dict[str, Any]] = {}
         display: dict[str, str] = {}
         positive: set[str] = set()
-        imported: set[str] = set()
         raw_updates = payload.get("relationships")
         if raw_updates is None:
             raw_updates = []
@@ -88,11 +86,6 @@ class SimulationMechanics:
                     "grudge": 0,
                 }
             )
-            if current_row is None and item.get("baseline"):
-                baseline = proven_relationship_baseline(db, chat_id, session_id, source_rowid, item)
-                if baseline is not None:
-                    current.update(baseline)
-                imported.add(key)
             bond_delta = _int(item.get("bond_delta"), -2, 20)
             if bond_delta > 0:
                 raise ValueError("positive BOND changes must come from Sparks conversion")
@@ -120,13 +113,13 @@ class SimulationMechanics:
             bond = _int(current.get("bond"), -5, 20)
             sparks = _int(current.get("sparks"), 0, 99)
             grudge = _int(current.get("grudge"), 0, 99)
-            if key not in imported and turn and turn % 3 == 0:
+            if turn and turn % 3 == 0:
                 if grudge >= 5:
                     bond = max(-5, bond - 1)
                     grudge = 0
                 elif grudge > 0:
                     grudge -= 1
-            if key not in imported and turn and turn % 5 == 0:
+            if turn and turn % 5 == 0:
                 threshold = 14 if grudge >= 3 else 7
                 if sparks >= threshold:
                     bond = min(20, bond + 1)

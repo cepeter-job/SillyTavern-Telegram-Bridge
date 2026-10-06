@@ -60,15 +60,6 @@ def _relationship(item: dict) -> dict:
         "grudge_delta": integer(item.get("grudge_delta"), -1, 1),
         "apology": boolean(item.get("apology")),
     }
-    if "baseline" in item:
-        baseline = item["baseline"]
-        if not isinstance(baseline, dict):
-            raise ValueError("Legacy relationship baseline must be an object")
-        for name, low, high in (("bond", -5, 20), ("sparks", 0, 99), ("grudge", 0, 99)):
-            if type(baseline.get(name)) is not int or not low <= baseline[name] <= high:
-                raise ValueError("Legacy relationship baseline must contain exact bounded integers")
-        quote = _name(baseline.get("quote"), 500)
-        result["baseline"] = {name: baseline[name] for name in ("bond", "sparks", "grudge")} | {"quote": quote}
     return result
 
 

@@ -6,6 +6,7 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Added
 
+- Bound estimated input independently of the model context window with `SILLYTAVERN_CONTEXT_INPUT_CAP_TOKENS` (default 49,152). The existing compactor uses the smaller of this cap and the model's available input budget; `/prompt` shows both values. `max_tokens` remains an output limit.
 - Assimilate story trackers into typed, source-scoped canonical state: supporting-NPC BOND/Sparks/Grudge and agendas, user inventory/skills/conditions, factions, quest metadata and foreshadowing links.
 - Reuse the existing bounded NPC Utility extraction job, including atomic multipart publication, without a second per-source tracker request. Project eligible relationship/agenda fields into NPC Bank and reference existing Narrative arcs/threads; native Scene, Narrative, Director and Ending owners retain authority.
 - Add `/check <domain> <DC> <action>` with one bridge-owned d20 result per durable action. Established user modifiers apply at the action's source boundary; delivery recovery preserves the original roll and does not create an assistant turn or advance agenda timers.
@@ -13,8 +14,7 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Fixed
 
-- Discard reserved Internal States blocks before prose rewrites, streaming previews and new story commits, including nested, escaped and incomplete blocks. Preserve ordinary spoilers and parse Light Novel envelopes before cleaning their story field.
-- Remove narrowly recognized legacy tracker-output instructions from effective prompt copies while preserving stored prompts, character cards and neighboring custom instructions.
+- Retire the abandoned Internal States prompt protocol, including numeric baseline import, automatic historical bootstrap, special prompt rewriting and output suppression. Native tracker extraction, ordinary Telegram formatting and Light Novel renderer-envelope validation remain in place.
 - Fence tracker publication and check delivery against replay, stale workers, rewritten/deleted sources and session changes. Reset, swipe, continuation and alternate-ending checkpoints now preserve the same state boundary as canonical story history.
 - Reconstruct historical NPC checkpoint fields from bounded field history so a later tracker projection cannot erase the older snapshot value.
 - Carry bounded native NPC field history through branch restoration so later rewinds retain tracker projection ownership, manual overrides and deliberate field clears.
@@ -23,8 +23,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Database migration
 
-- **Migration 25** adds canonical tracker records, source receipts, revisions, history and check results. Existing NPC work is replayed within its available source range for tracker backfill while preserving native fields from the unchanged prefix.
-- Legacy BOND/Sparks/Grudge baselines require an exact numeric source quote inside a historical assistant Internal States block. Unsupported formats remain unset. Backfill may consume Utility tokens; saved prompts and transcripts are not rewritten during migration.
+- **Migration 25** adds canonical tracker records, source receipts, revisions, history and check results without replaying previously processed NPC history.
+- **Migration 26** stops pending tracker bootstrap work from an earlier installation and removes its temporary marker. It fences stale workers, preserves completed native state, restarts any discarded partial new row and rolls back genuinely rewritten suffixes before resuming extraction. Saved prompts and transcripts are not rewritten.
 - No new runtime dependencies or endpoint settings. Rollback across this schema change requires the matching pre-upgrade database snapshot.
 
 ## [0.3.006] - 2026-10-06

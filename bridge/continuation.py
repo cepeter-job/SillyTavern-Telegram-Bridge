@@ -19,7 +19,6 @@ from bridge.provider_port import ProviderPort
 from bridge.rag_service import RagService
 from bridge.settings import AppSettings
 from bridge.simulation_context import story_simulation_context
-from bridge.simulation_output import strip_internal_state_blocks
 from bridge.simulation_service import SimulationService
 from bridge.sqlite_store import write_transaction
 
@@ -157,7 +156,7 @@ def continue_last(
         novel_turn=novel_turn,
         preserve_last_assistant=True,
     )
-    combined = strip_internal_state_blocks(assistant_row[2]).rstrip() + " " + reply.lstrip()
+    combined = assistant_row[2].rstrip() + " " + reply.lstrip()
     old_message_ids = recovery.message_ids_from_rows(
         db.execute(
             "SELECT telegram_message_id,telegram_message_ids FROM messages WHERE rowid=?",

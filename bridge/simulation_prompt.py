@@ -8,7 +8,7 @@ from bridge.simulation_context import simulation_context_for_prompt
 
 SIMULATION_OUTPUT_POLICY = (
     "## Canonical story state\n"
-    "Write story prose and dialogue only. Never emit Internal States, private trackers, GM notebooks, "
+    "Write story prose and dialogue only. Never emit private trackers, GM notebooks, "
     "hidden-state blocks, or a mechanics ledger. The bridge owns those records and d20 rolls. "
     "Apply recorded check results without rerolling or altering them. A check records an attempted action "
     "and its mechanical result; narrate consequences only when the story establishes them. "
@@ -36,10 +36,6 @@ SIMULATION_EXTRACTION_POLICY = (
     "Do not automatically tick, decay, convert Sparks into BOND, or roll dice: these are bridge-owned. "
     "For every part list supporting NPCs visibly present, even when their fields did not change. "
     "Avoid ordinary NPC relationship/agenda operations when structured mechanics own them. "
-    "For existing legacy numeric state ONLY, a relationship may include baseline:{bond:-5..20,sparks:0..99,"
-    'grudge:0..99,quote:exact source substring}, where quote is an explicit "Name: BOND=N Sparks=N Grudge=N" '
-    "record inside an assistant internal_states block. Never guess or replace an existing canonical value. "
-    "New numeric deltas describe events after a baseline, not values copied from a legacy ledger."
 )
 
 

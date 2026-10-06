@@ -48,13 +48,13 @@ Checkpoint format 1 retains the ordered tracker revisions, including identity-de
 
 NPC checkpoints also retain bounded native field history, including before/after values, audiences, modes and source timestamps. Capture checks the encoded journal size in SQL before fetching it. Restoring both domains preserves the exact earlier projection fingerprint through a subsequent rewind, while real native clears and manual field overrides remain authoritative. Legacy NPC checkpoints without field history retain their previous baseline restoration behavior.
 
-An NPC identity established later can adopt an existing unambiguous alias tracker at that accepted source. Earlier historical reads retain the alias, and rollback reverses the identity transition. Mechanically identical records can coalesce without counting their scores twice; conflicting records reject the complete publication until explicitly corrected. Native/manual field ownership remains authoritative. Future NPC identities cannot be projected into earlier backfill sources.
+An NPC identity established later can adopt an existing unambiguous alias tracker at that accepted source. Earlier historical reads retain the alias, and rollback reverses the identity transition. Mechanically identical records can coalesce without counting their scores twice; conflicting records reject the complete publication until explicitly corrected. Native/manual field ownership remains authoritative. Future NPC identities cannot be projected into earlier historical sources.
 
 ## Extraction and existing values
 
 Reuse the NPC Utility call and durable `npc` job; do not add a new call or worker for every turn. Its JSON result contains ordinary NPC operations plus a validated `simulation` object. Only a complete, accepted source row may publish. A malformed simulation object rejects that source part rather than silently advancing coverage without its tracker changes.
 
-The extractor receives the bounded canonical tracker state at the source boundary. It extracts established events, not possible actions, instructions embedded in source text, Director plans, invented inventory, or inferred private beliefs. Previous tracker values may be imported only when an exact source quote proves the value. Ambiguous legacy values stay unset; existing explicit canonical values take precedence. Migration does not invent state or silently reinterpret arbitrary old HTML as canonical facts.
+The extractor receives the bounded canonical tracker state at the source boundary. It extracts established events, not possible actions, instructions embedded in source text, Director plans, invented inventory, or inferred private beliefs. Values come from accepted canonical state and committed prose updates. Existing canonical values are preserved; numeric ledgers from the retired prompt protocol are not imported. Previously covered native sources are not replayed solely to populate trackers. Migration 26 cancels any pending legacy bootstrap while preserving completed native coverage and normal rollback of genuinely rewritten sources.
 
 ## Prompt and output integration
 
@@ -62,7 +62,7 @@ All story generation paths, historical edit/regeneration calls, image-backed tur
 
 Character-scoped private trackers require every resolved prompt reader to be the owning NPC; mixed or unresolved group readers receive no such private state. Explicit narrator viewpoints retain their broader context. Director and separate-choice prompts keep their fixed JSON intact and append a separately registered optional tracker body in the same user message. Both routes compact against their selected model and actual output reservation before dispatch; Director repair checks preserve the original fixed context.
 
-The final bridge-owned output policy says to write story/dialogue only and never emit Internal States, GM notebooks, private tracker blocks or mechanics unless the user explicitly requests a check result. Recognizable legacy Internal States output templates are excluded from the effective session prompt without editing the user's stored prompt file. Normal transport drops an accidentally emitted `<internal_states>` block, including incomplete streaming blocks; those discarded blocks are not a substitute for canonical state and are not retained as hidden assistant history.
+The fixed bridge-owned output policy keeps replies focused on story and dialogue, with private tracker records and mechanics excluded unless an explicit check result is requested. Native prompt assembly uses canonical context and the normal Telegram formatter. It does not depend on an old tracker system prompt, rewrite that prompt's sections, parse a special output ledger or maintain a hidden assistant ledger.
 
 The bridge does not remove unrelated custom prompt instructions, narrative prose, ordinary spoilers or other Telegram formatting.
 
@@ -74,6 +74,6 @@ Natural 1/20 are critical failure/success. Otherwise a delta of at least 8 or at
 
 ## Acceptance and rollout
 
-Verification must cover replay and stale-source races; user versus assistant ticks; multi-part operations; aliases and canonical projections; reset/delete/edit/regen/continuation/swipes; invalidated context before worker repair; checkpoint isolation; check retry and source ownership; shared extraction and prompt boundaries; incomplete streaming blocks; context pressure and record bounds. Run the full repository test suite and all applicable existing static/security gates before merge.
+Verification must cover replay and stale-source races; user versus assistant ticks; multi-part operations; aliases and canonical projections; reset/delete/edit/regen/continuation/swipes; invalidated context before worker repair; checkpoint isolation; check retry and source ownership; shared extraction and prompt boundaries; ordinary formatting and renderer envelopes; retirement of old bootstrap work; context pressure and record bounds. Run the full repository test suite and all applicable existing static/security gates before merge.
 
-Publish the completed implementation through the recovered branch and PR #380. Keep release publication and live deployment separate from this implementation task. The VPS is used only to preserve unfinished source work; subsequent development and tests use the GitHub-backed workspace.
+PR #380 established the native tracker implementation. Follow-up retirement removes the abandoned prompt protocol while retaining these native owners and lifecycle rules. Release publication and live deployment remain separate from this implementation task.

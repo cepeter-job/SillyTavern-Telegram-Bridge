@@ -19,6 +19,7 @@ _ROW_KEYS = frozenset(
         "source_start_rowid",
         "source_end_rowid",
         "accepted_through_rowid",
+        "accepted_after_rowid",
         "ready_through_rowid",
         "through_rowid",
         "source_revision",

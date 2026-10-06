@@ -79,7 +79,7 @@ class ExplicitExtensionCompositionTests(SettingsTestCase):
             "expected = {\n"
             "  'command_routes': ('scene_state', 'director_goals', 'memory_curator'),\n"
             "  'post_retain': ('scene_state', 'npc_state', 'memory_curator', 'narrative'),\n"
-            "  'summary_context': ('scene_state',),\n"
+            "  'summary_context': (),\n"
             "  'summary_clear': ('scene_state',),\n"
             "}\n"
             "assert first == expected, first\n"

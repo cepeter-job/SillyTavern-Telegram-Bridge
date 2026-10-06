@@ -103,7 +103,10 @@ class HindsightSessionCleanupTests(SettingsTestCase):
         self.assertTrue(first.endswith("-conversation"))
         self.assertTrue(explicit.startswith(first.removesuffix("-conversation") + "-explicit-"))
 
-    def test_explicit_and_conversation_retain_are_mapped_synchronously(self):
+    def test_local_remember_is_mapped_after_synchronous_worker_and_conversation_retain(self):
+        from bridge.memory_store import claim_jobs
+        from bridge.memory_workers import run_memory_claim
+
         session = _m_session_naming.create_session(
             self.db,
             "chat",
@@ -124,6 +127,22 @@ class HindsightSessionCleanupTests(SettingsTestCase):
                 app_settings=self.app_settings_builder.build(),
             )
         )
+        self.assertEqual(fake.retained, [])
+        self.assertEqual(
+            self.db.execute("SELECT state FROM memory_fact_index").fetchall(),
+            [("pending",)],
+        )
+        claim = claim_jobs(self.db, layers=("hindsight",))[0]
+        self.assertEqual(
+            run_memory_claim(
+                self.db, claim, session, {"name": "Alisha"}, app_settings=self.app_settings_builder.build()
+            ),
+            "complete",
+        )
+        self.assertEqual(
+            self.db.execute("SELECT state FROM memory_fact_index").fetchall(),
+            [("retained",)],
+        )
         _m_memory._retain_session_memory_backend(
             "chat", session, "Alisha", "conversation", app_settings=self.app_settings_builder.build()
         )
@@ -137,13 +156,9 @@ class HindsightSessionCleanupTests(SettingsTestCase):
                 "AND session_id='memory-session' ORDER BY kind"
             )
         ).fetchall()
-        self.assertEqual([kind for _document_id, kind in rows], ["conversation", "explicit"])
-        self.assertTrue(
-            all(
-                document_id.startswith(_m_memory_curator.hindsight_session_prefix("memory-session"))
-                for document_id, _kind in rows
-            )
-        )
+        self.assertEqual([kind for _document_id, kind in rows], ["conversation", "native_fact"])
+        self.assertTrue(rows[0][0].startswith(_m_memory_curator.hindsight_session_prefix("memory-session")))
+        self.assertTrue(rows[1][0].startswith("session:memory-session:fact:"))
 
     def test_delete_removes_mapped_tagged_prefixed_and_legacy_documents_only(self):
         active = _owner_session_core.ensure_session(

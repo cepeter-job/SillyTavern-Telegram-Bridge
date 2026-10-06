@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from application_test_setup import make_test_input_flow_service, make_test_rag_service
+from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
 
 from bridge import humanize
 from bridge.callbacks import is_session_scoped_panel_callback
@@ -16,7 +17,7 @@ from bridge.sqlite_store import db_connect, write_transaction
 
 
 @pytest.fixture
-def context(tmp_path):
+def context(tmp_path, isolated_memory_runtime):
     settings = load_app_settings({}, home=tmp_path)
     db = db_connect(app_settings=settings)
     session = ensure_session(db, "chat", "fixture::model", app_settings=settings)
@@ -351,23 +352,23 @@ def test_streaming_preview_hides_presentation_html_tags(context, monkeypatch):
     from bridge import message_commands
 
     db, session, ctx = context
+    initial = 'Intro<div style="color:red"><div>Scene Title</div></div>'
     raw = 'Intro<div style="color:red"><div>Scene Title</div><div>Line A<br>Line B</div></div>Outro'
-    edits = []
-    methods = []
+    requests = []
     deliveries = []
 
     def generate(*_args, **kwargs):
         stream_callback = kwargs.get("stream_callback")
         assert stream_callback is not None
+        assert requests == []
+        stream_callback(initial)
         stream_callback(raw)
         return raw
 
     def telegram_request(_token, method, payload):
-        methods.append(method)
+        requests.append((method, dict(payload)))
         if method == "sendMessage":
             return {"message_id": 71}
-        if method == "editMessageText":
-            edits.append(payload["text"])
         return {}
 
     port = ProviderPort(generate)
@@ -401,8 +402,19 @@ def test_streaming_preview_hides_presentation_html_tags(context, monkeypatch):
         rag_service=services.rag,
     )
 
-    assert edits
-    assert all("<div" not in text and "</div>" not in text for text in edits)
-    assert "Scene Title" in edits[-1]
+    methods = [method for method, _payload in requests]
+    assert methods == ["sendMessage", "editMessageText"]
+    assert requests[1][1]["message_id"] == 71
+    previews = [payload["text"] for _method, payload in requests]
+    assert previews == ["Intro\nScene Title", "Intro\nScene Title\nLine A\nLine B\nOutro"]
+    assert all("<div" not in text and "</div>" not in text and "<br" not in text for text in previews)
+    assert "Scene Title" in previews[-1]
+    assert all("Generating" not in text for text in previews)
     assert deliveries[-1][1]["replace_message_id"] == 71
     assert "deleteMessage" not in methods
+
+    delivered = deliveries[-1][0][2]
+    stored = db.execute("SELECT content FROM messages WHERE role='assistant' ORDER BY rowid DESC LIMIT 1").fetchone()[0]
+    assert stored == delivered
+    assert all(text in delivered for text in ("Intro", "Scene Title", "Line A", "Line B", "Outro"))
+    assert "<div" not in delivered and "</div>" not in delivered and "<br" not in delivered

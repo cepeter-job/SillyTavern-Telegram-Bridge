@@ -2,9 +2,10 @@ import sqlite3
 
 from application_test_setup import make_test_persona_service
 from settings_test_support import SettingsBuilder
+from test_story_memory_scope import db as db
 
 from bridge.context_compaction import compact_chat_messages
-from bridge.episodic_memory import episodic_context_for_prompt, store_episodic_memory
+from bridge.episodic_memory import episodic_context_for_prompt
 from bridge.generation import build_chat_messages
 from bridge.memory_service import MemoryService
 from bridge.schema import initialize_database_schema
@@ -41,48 +42,29 @@ def _fields():
     }
 
 
-def test_episodic_retrieval_is_query_relevant_and_session_scoped():
-    db = _db()
-    try:
-        store_episodic_memory(
-            db,
-            "chat",
-            "s1",
-            kind="fact",
-            importance=0.91,
-            summary="Mira hid the red key in the attic.",
-            source_start_rowid=1,
-            source_end_rowid=8,
-        )
-        store_episodic_memory(
-            db,
-            "chat",
-            "s1",
-            kind="world_change",
-            importance=0.99,
-            summary="The station gates were permanently sealed.",
-            source_start_rowid=9,
-            source_end_rowid=16,
-        )
-        store_episodic_memory(
-            db,
-            "chat",
-            "s2",
-            kind="fact",
-            importance=1.0,
-            summary="The red key belongs to another session.",
-            source_start_rowid=1,
-            source_end_rowid=8,
-        )
-        db.commit()
+def test_episodic_retrieval_is_query_relevant_and_session_scoped(db):
+    from test_story_memory_scope import accept, append
 
-        context = episodic_context_for_prompt(db, "chat", _session(), _fields(), "Where is the red key?")
+    from bridge.memory_contracts import MemoryFact
+    from bridge.memory_fact_store import accept_source_facts
+    from bridge.memory_store import next_source_segment
 
-        assert "Mira hid the red key in the attic." in context
-        assert "station gates" not in context
-        assert "another session" not in context
-    finally:
-        db.close()
+    append(db, "Mira hid the red key in the attic.")
+    accept(db, "Mira hid the red key in the attic.", audience=(), visibility="shared")
+    append(db, "The station gates were permanently sealed.")
+    accept(db, "The station gates were permanently sealed.", audience=(), visibility="shared")
+    append(db, "The red key belongs to another session.", sid="other")
+    accept_source_facts(
+        db,
+        next_source_segment(db, "c", "other", "episodes"),
+        [
+            MemoryFact("fact", 1.0, "The red key belongs to another session.", "shared"),
+        ],
+    )
+    context = episodic_context_for_prompt(db, "c", _session("s"), _fields(), "Where is the red key?")
+    assert "Mira hid the red key in the attic." in context
+    assert "station gates" not in context
+    assert "another session" not in context
 
 
 def test_generation_injects_episodic_context_in_separate_untrusted_tag():
@@ -129,13 +111,18 @@ def test_compaction_can_trim_episodic_context_before_summary():
 
 
 def test_memory_service_keeps_episodic_context_separate():
+    from bridge.memory_contracts import MemoryBlock, MemoryReadScope
+
     service = MemoryService(
-        recall_context=lambda *_args, **_kwargs: "hindsight",
-        summary_for_prompt=lambda *_args, **_kwargs: "continuity",
-        summary_state=lambda *_args, **_kwargs: ("continuity", 8),
-        retain_session=lambda *_args, **_kwargs: None,
-        purge_session_memory=lambda *_args, **_kwargs: 0,
-        episodic_context=lambda *_args, **_kwargs: "episode",
+        resolve_scope=lambda *a, **k: MemoryReadScope("chat", "s1", 1.0, 8, 0, ("mira",)),
+        scoped_recall=lambda *a: MemoryBlock("hindsight"),
+        scoped_episodes=lambda *a: MemoryBlock("episode"),
+        scoped_summary=lambda *a: MemoryBlock("continuity"),
+        scoped_scene=lambda *a: MemoryBlock("scene"),
+        validate_blocks=lambda _db, _scope, blocks: blocks,
+        summary_state=lambda *_args: ("continuity", 8),
+        retain_session=lambda *_args: None,
+        purge_session_memory=lambda *_args: 0,
     )
     db = _db()
     try:

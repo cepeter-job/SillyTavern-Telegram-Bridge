@@ -20,6 +20,7 @@ def snapshot_local_memory(db: sqlite3.Connection, chat_id: str, session_id: str,
         "e.source_end_rowid,e.created_at,COALESCE(v.visibility,'shared') AS visibility,"
         "COALESCE(v.known_by_json,'[]') AS known_by_json FROM episodic_memories e "
         "LEFT JOIN episodic_memory_visibility v ON v.memory_id=e.memory_id "
+        "JOIN memory_fact_provenance p ON p.memory_id=e.memory_id AND p.valid=1 "
         "WHERE e.chat_id=? AND e.session_id=? AND e.source_end_rowid<=? ORDER BY e.memory_id LIMIT 513",
         (chat_id, session_id, through_rowid),
     )

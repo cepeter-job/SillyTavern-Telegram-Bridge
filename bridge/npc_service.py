@@ -9,6 +9,8 @@ from dataclasses import replace
 from typing import Any
 
 import bridge.limits as _limits
+from bridge.memory_contracts import MemoryReadScope
+from bridge.memory_store import pending_memory_invalidation, request_source_cutoff
 from bridge.npc_repository import (
     delete_npc_entity,
     delete_npc_field,
@@ -431,8 +433,49 @@ class NpcService:
         history_rows: list[tuple[str, str]],
         *,
         through_rowid: int | None = None,
+        memory_scope: MemoryReadScope | None = None,
+    ) -> str:
+        # The journal bound and every NPC history read share one short local snapshot.
+        # No model or network work runs while this transaction is held.
+        with write_transaction(db):
+            return self._context_for_prompt_snapshot(
+                db,
+                chat_id,
+                session,
+                fields,
+                query,
+                history_rows,
+                through_rowid=through_rowid,
+                memory_scope=memory_scope,
+            )
+
+    def _context_for_prompt_snapshot(
+        self,
+        db: Any,
+        chat_id: str,
+        session: dict[str, str],
+        fields: dict[str, str],
+        query: str,
+        history_rows: list[tuple[str, str]],
+        *,
+        through_rowid: int | None = None,
+        memory_scope: MemoryReadScope | None = None,
     ) -> str:
         session_id = str(session["session_id"])
+        if memory_scope is not None:
+            if (memory_scope.chat_id, memory_scope.session_id) != (chat_id, session_id):
+                return ""
+            incarnation = db.execute(
+                "SELECT created_at FROM sessions WHERE chat_id=? AND session_id=?",
+                (chat_id, session_id),
+            ).fetchone()
+            if incarnation is None or incarnation[0] != memory_scope.session_created_at:
+                return ""
+            through_rowid = request_source_cutoff(db, memory_scope)
+        pending = pending_memory_invalidation(db, chat_id, session_id, "npc")
+        if pending is not None:
+            through_rowid = min(through_rowid, pending - 1) if through_rowid is not None else pending - 1
+        readers = memory_scope.principals if memory_scope else (normalize_npc_name(fields.get("name") or ""),)
         entities = [
             entity
             for entity in list_npc_entities(db, chat_id, session_id)
@@ -476,7 +519,6 @@ class NpcService:
                 scene_ids.update(npc_ids)
 
         explicitly_resolved = unique_query | unique_history | scene_ids
-        active_character = normalize_npc_name(fields.get("name") or "")
         ranked = []
         for entity in entities:
             if entity.npc_id in ambiguous_query and entity.npc_id not in explicitly_resolved:
@@ -488,9 +530,9 @@ class NpcService:
             )
             visible = {}
             for key, state in current_fields.items():
-                if state.visibility == "restricted":
+                if state.visibility == "restricted" and not (memory_scope and memory_scope.consumer == "narrator"):
                     allowed = {normalize_npc_name(name) for name in state.known_by}
-                    if not active_character or active_character not in allowed:
+                    if not readers or not all(reader and reader in allowed for reader in readers):
                         continue
                 rendered = _render_npc_field_value(state.value)
                 if rendered:

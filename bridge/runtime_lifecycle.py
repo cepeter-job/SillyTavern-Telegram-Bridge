@@ -15,6 +15,7 @@ from bridge.alternate_ending_runtime import queue_alternate_ending_recovery
 from bridge.background import shutdown_background_executors
 from bridge.composition import BridgeServices
 from bridge.ending_runtime import queue_startup_ending_recovery
+from bridge.memory_workers import dispatch_memory_backlog
 from bridge.metadata import get_meta
 from bridge.provider_discovery import refresh_model_catalog
 from bridge.runtime_health import capture_deployment
@@ -148,6 +149,7 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
         _SHUTDOWN_EVENT.clear()
         install_bridge_signal_handlers(services.background.begin_shutdown)
         db = services.db_factory()
+        dispatch_memory_backlog(services, db, startup=True)
         start_live_sync_worker(sync_service=services.sync, app_settings=services.config)
         services.background.register_backlog_dispatcher(make_durable_backlog_dispatcher(services, fields))
         services.background.submit(
@@ -170,6 +172,7 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
             ),
             recover_running=True,
         )
+        dispatch_memory_backlog(services, db)
         _queue_ending_recovery(services, db)
         ending_scan_at = time.monotonic() + 60
         offset = int(get_meta(db, "telegram_offset", "0"))
@@ -194,6 +197,7 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
                 first_poll = False
                 if health is not None:
                     health.poll_succeeded()
+                dispatch_memory_backlog(services, db)
                 now = time.monotonic()
                 if now >= ending_scan_at:
                     _queue_ending_recovery(services, db)

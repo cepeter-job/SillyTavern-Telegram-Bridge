@@ -12,7 +12,7 @@ from bridge.director_repository import director_decision_history, load_director_
 from bridge.ending_service import ending_goal_history, load_ending_state
 from bridge.generation_settings import get_generation_settings
 from bridge.group_repository import load_group_state_row
-from bridge.memory_snapshot_repository import snapshot_local_memory
+from bridge.memory_snapshot_store import snapshot_local_memory
 from bridge.meta_repository import load_meta_value, session_task_models
 from bridge.model_selection import director_reasoning_for_session, utility_reasoning_for_session
 from bridge.narrative_context import load_narrative_state

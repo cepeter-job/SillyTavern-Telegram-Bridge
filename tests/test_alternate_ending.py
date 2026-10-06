@@ -198,6 +198,10 @@ def test_branch_completion_does_not_steal_a_different_active_story(session_db):
 
 def test_checkpoint_configuration_and_memories_do_not_leak_finale_future(session_db):
     from bridge.conversation_lifecycle import conversation_state
+    from bridge.memory_artifact_store import store_artifact_visibility
+    from bridge.memory_contracts import MemoryFact
+    from bridge.memory_fact_store import accept_source_facts
+    from bridge.memory_store import next_source_segment
     from bridge.model_selection import task_model_for_session
     from bridge.narrative_settings import load_session_narrative_settings
 
@@ -207,10 +211,22 @@ def test_checkpoint_configuration_and_memories_do_not_leak_finale_future(session
         with write_transaction(db):
             db.execute("INSERT INTO session_summaries VALUES('chat','s1','Before finale summary',?,1)", (through,))
             db.execute("INSERT INTO scene_states VALUES('chat','s1','{\"location\":\"Gate\"}',?,1)", (through,))
-            db.execute(
-                "INSERT INTO episodic_memories(chat_id,session_id,kind,importance,summary,source_start_rowid,"
-                "source_end_rowid,created_at) VALUES('chat','s1','event',1,'Before the coup',?,?,1)",
-                (through, through),
+            source = next_source_segment(db, "chat", "s1", "episodes", through_id=through)
+            assert source is not None and source.end_id <= through
+            assert accept_source_facts(db, source, [MemoryFact("event", 1, "Before the coup", "shared", ())])
+            store_artifact_visibility(
+                db,
+                "chat",
+                "s1",
+                "summary",
+                [{"text": "Before finale summary", "visibility": "shared", "known_by": []}],
+            )
+            store_artifact_visibility(
+                db,
+                "chat",
+                "s1",
+                "scene",
+                [{"text": "Location: Gate", "visibility": "shared", "known_by": []}],
             )
             npc = db.execute(
                 "INSERT INTO npc_entities(chat_id,session_id,canonical_name,display_name,aliases_json,first_seen_rowid,"

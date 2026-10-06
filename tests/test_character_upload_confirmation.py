@@ -1,13 +1,11 @@
 from application_test_setup import ensure_application_extensions
+from character_test_support import card_png as _card_png
 
 ensure_application_extensions()
 
-import base64
 import json
-import struct
 import tempfile
 import unittest
-import zlib
 from pathlib import Path
 from unittest import mock
 
@@ -16,26 +14,6 @@ from settings_test_support import SettingsTestCase
 import bridge.native_imports as native_imports
 from bridge.memory_curator import db_connect
 from bridge.request_types import RequestContext
-
-
-def _card_png(name: str, description: str = "") -> bytes:
-    card = {
-        "name": name,
-        "description": description,
-        "personality": "",
-        "scenario": "",
-        "first_mes": "",
-        "mes_example": "",
-    }
-    encoded = base64.b64encode(json.dumps(card).encode("utf-8"))
-    chunk_data = b"chara\x00" + encoded
-    chunk = (
-        struct.pack(">I", len(chunk_data))
-        + b"tEXt"
-        + chunk_data
-        + struct.pack(">I", zlib.crc32(b"tEXt" + chunk_data) & 0xFFFFFFFF)
-    )
-    return b"\x89PNG\r\n\x1a\n" + chunk
 
 
 class CharacterUploadConfirmationTests(SettingsTestCase):

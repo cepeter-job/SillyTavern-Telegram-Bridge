@@ -1,8 +1,8 @@
 import hashlib
 
 import pytest
-from test_character_mutation_safety import _card_png
-from test_character_mutation_safety import card_context as card_context
+from character_test_support import card_context as card_context
+from character_test_support import card_png as _card_png
 
 import bridge.cards as cards
 import bridge.character_callbacks as character_callbacks

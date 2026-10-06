@@ -1,10 +1,10 @@
 from application_test_setup import ensure_application_extensions
+from codex_test_support import StreamingResponse as _StreamingResponse
+from codex_test_support import jwt_token as _jwt
 from settings_test_support import SettingsTestCase, make_test_settings
 
 ensure_application_extensions()
 
-import base64
-import io
 import json
 import threading
 import time
@@ -16,35 +16,6 @@ import bridge.codex_auth as codex_auth
 import bridge.codex_transport as codex_transport
 import bridge.provider_transport as provider_transport
 from bridge.model_router import ModelRouter
-
-
-class _StreamingResponse:
-    status = 200
-
-    def __init__(self, events):
-        self.events = events
-        self.buffer = io.BytesIO(b"".join(f"data: {json.dumps(event)}\n".encode() for event in events))
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_args):
-        return False
-
-    def readline(self, limit=-1):
-        return self.buffer.readline(limit)
-
-    def __iter__(self):
-        for event in self.events:
-            yield f"data: {json.dumps(event)}\n".encode()
-
-
-def _jwt(**claims):
-    def segment(payload):
-        raw = json.dumps(payload, separators=(",", ":")).encode()
-        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
-
-    return f"{segment({'alg': 'none'})}.{segment(claims)}.signature"
 
 
 class CodexTransportTests(SettingsTestCase):

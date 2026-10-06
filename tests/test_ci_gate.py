@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import subprocess
@@ -79,3 +80,42 @@ def test_unexpected_or_incomplete_job_report_fails_closed(tmp_path):
     completed, summary = _run_gate(tmp_path, json.dumps(needs))
     assert completed.returncode == 1
     assert "| python-tests | missing |" in summary
+
+
+def test_reviewed_test_consolidation_does_not_fragment_again():
+    retired = {
+        "test_final_budget_routes.py",
+        "test_late_budget_delivery.py",
+        "test_memory_failure_backoff.py",
+        "test_native_message_edit.py",
+        "test_optional_numeric_acceleration.py",
+        "test_pdf_worker.py",
+        "test_pr169_followup.py",
+        "test_codex_review_regressions.py",
+        "test_session_command_routing.py",
+        "test_simulation_review_aliases.py",
+        "test_simulation_review_budget.py",
+        "test_simulation_review_history.py",
+        "test_simulation_review_types.py",
+        "test_swipe_panels.py",
+        "test_telegram_preview.py",
+        "test_voice_conversation_boundary.py",
+    }
+    assert not {path.name for path in (ROOT / "tests").glob("test_*.py")} & retired
+
+    forbidden = {
+        ("test_character_mutation_safety", "_card_png"),
+        ("test_character_upload_confirmation", "_card_png"),
+        ("test_codex_auth", "_jwt"),
+        ("test_codex_transport", "_StreamingResponse"),
+        ("test_npc_branch_safety", "_fields"),
+        ("test_npc_branch_safety", "_session"),
+        ("test_provider_attempt_budget", "setup_route"),
+    }
+    observed = set()
+    for path in (ROOT / "tests").glob("test_*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                observed.update((node.module, alias.name) for alias in node.names)
+    assert not observed & forbidden

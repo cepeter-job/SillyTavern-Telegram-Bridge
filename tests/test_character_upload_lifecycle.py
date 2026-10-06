@@ -135,7 +135,7 @@ class CharacterUploadLifecycleTests(SettingsTestCase):
         self.assertFalse(has_pending_character_upload(self.db, "chat", session["session_id"], "user-1"))
 
     def test_duplicate_upload_confirmation_handoff_stops_on_later_navigation(self):
-        from test_character_upload_confirmation import _card_png
+        from character_test_support import card_png as _card_png
 
         from bridge import native_imports
         from bridge.conversation_lifecycle import has_pending_character_upload

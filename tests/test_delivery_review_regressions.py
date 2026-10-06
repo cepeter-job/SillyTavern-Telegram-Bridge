@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 
+import npc_test_support as ns
 import pytest
 from application_test_setup import (
     make_test_delivery_port,
@@ -13,7 +14,6 @@ from application_test_setup import (
     make_test_session_service,
 )
 from settings_test_support import make_test_settings
-from test_npc_branch_safety import _fields, _session
 
 from bridge import (
     document_jobs,
@@ -88,7 +88,7 @@ def case(tmp_path, monkeypatch):
             fields,
             chat,
             text,
-            _session(),
+            ns.session(),
             "s1",
             model,
             None,
@@ -123,8 +123,8 @@ def case(tmp_path, monkeypatch):
         conversation=SimpleNamespace(process_message=conversation),
         telegram=SimpleNamespace(send_text=lambda *a: notices.append(a[-1]), request=request, download_file=download),
     )
-    monkeypatch.setattr(worker_orchestration, "card_fields_from_file", lambda *a, **k: _fields())
-    monkeypatch.setattr(native_imports, "card_fields_from_file", lambda *a, **k: _fields())
+    monkeypatch.setattr(worker_orchestration, "card_fields_from_file", lambda *a, **k: ns.fields())
+    monkeypatch.setattr(native_imports, "card_fields_from_file", lambda *a, **k: ns.fields())
     monkeypatch.setattr(native_imports, "download_telegram_file", download)
     monkeypatch.setattr(voice_jobs, "download_telegram_file", download)
     monkeypatch.setattr(voice_jobs, "transcribe_audio_bytes", lambda *a, **k: effects.append("transcribe") or "spoken")
@@ -134,11 +134,11 @@ def case(tmp_path, monkeypatch):
 
 def invoke(c, kind, jid):
     if kind == "generation":
-        worker_orchestration.process_message_job(c.services, _fields(), "chat", "prompt", 77, [], "s1", None, jid)
+        worker_orchestration.process_message_job(c.services, ns.fields(), "chat", "prompt", 77, [], "s1", None, jid)
     elif kind == "image":
         worker_orchestration.process_image_job(c.services, "chat", "file", "caption", 10, 77, "s1", None, jid)
     elif kind == "voice":
-        voice_jobs.process_voice_job(c.services, _fields(), "chat", {"file_id": "file"}, 77, "s1", None, jid)
+        voice_jobs.process_voice_job(c.services, ns.fields(), "chat", {"file_id": "file"}, 77, "s1", None, jid)
     else:
         document_jobs.process_document_job(
             c.services,
@@ -283,7 +283,7 @@ def test_manual_exhausted_greeting_retains_no_expression_or_tts_contract(
     for _ in range(3):
         assert job_store.mark_job_running(c.db, jid)
         try:
-            fields = dict(_fields(), first_mes='"opening"' + "A" * 8100)
+            fields = dict(ns.fields(), first_mes='"opening"' + "A" * 8100)
             if callback_route:
                 from bridge.request_types import RequestContext
 
@@ -299,7 +299,7 @@ def test_manual_exhausted_greeting_retains_no_expression_or_tts_contract(
                     "greeting:use:0:0",
                     "chat",
                     {"message_id": 88},
-                    _session(),
+                    ns.session(),
                     "s1",
                     jid,
                     persona_service=c.services.persona,
@@ -364,11 +364,11 @@ def test_manual_committed_tombstone_cannot_fall_through_to_failed_turn_generatio
         "t",
         "key",
         "model",
-        _fields(),
+        ns.fields(),
         "chat",
         "/retry",
         "/retry",
-        _session(),
+        ns.session(),
         "s1",
         "model",
         "",
@@ -607,7 +607,7 @@ def test_nullable_generation_input_binds_exact_committed_user_identity(case, que
             "t",
             "key",
             "model",
-            _fields(),
+            ns.fields(),
             "chat",
             "synthetic prompt",
             None,
@@ -731,7 +731,7 @@ def test_manual_operation_target_is_validated_atomically_at_preparation(case, mo
         "VALUES('chat','s1','assistant','original answer',2)"
     )
     c.db.commit()
-    monkeypatch.setattr(edit_messages, "card_fields_from_file", lambda *a, **k: _fields())
+    monkeypatch.setattr(edit_messages, "card_fields_from_file", lambda *a, **k: ns.fields())
     monkeypatch.setattr(edit_messages, "send_typing", lambda *a: None)
     jid = job_store.enqueue_job(c.db, 1, "chat", "s1", 77, "edit", {"actor_id": "100"})
     for _ in range(3):
@@ -810,7 +810,7 @@ def _actual_callback_opening(c, monkeypatch, *, partial=False, lightnovel=False,
     set_meta(c.db, "voice_mode:chat", "tts")
     if lightnovel:
         configure_conversation(c.db, "chat", "s1", "lightnovel", "b")
-    fields = dict(_fields(), first_mes='"opening"' + "A" * 8100)
+    fields = dict(ns.fields(), first_mes='"opening"' + "A" * 8100)
     monkeypatch.setattr(conversation_callbacks, "card_fields_from_file", lambda *a, **k: fields)
     monkeypatch.setattr(callback_dispatch, "send_text", lambda *a: c.notices.append(a[-1]))
     c.services.delivery = make_test_delivery_port(
@@ -938,7 +938,7 @@ def test_choice_worker_leaves_pending_delivery_to_original_owner(case, monkeypat
     before_job = c.db.execute("SELECT state,attempts FROM jobs WHERE job_id=?", (jid,)).fetchone()
     before_sends = list(sends)
     before_progress = c.db.execute("SELECT * FROM assistant_delivery_progress").fetchall()
-    monkeypatch.setattr(light_novel_jobs, "card_fields_from_file", lambda *a, **k: _fields())
+    monkeypatch.setattr(light_novel_jobs, "card_fields_from_file", lambda *a, **k: ns.fields())
     monkeypatch.setattr(
         light_novel_jobs, "ensure_choices", lambda db, nonce, *a, **k: light_novel_jobs.load_choice_set(db, nonce)
     )
@@ -1004,7 +1004,7 @@ def test_choice_worker_does_not_bypass_original_narrative_intent(case, monkeypat
     from functools import partial as bind
 
     c.services.delivery = make_test_delivery_port(send_reply=bind(response_delivery.send_reply, app_settings=c.config))
-    monkeypatch.setattr(light_novel_jobs, "card_fields_from_file", lambda *a, **k: _fields())
+    monkeypatch.setattr(light_novel_jobs, "card_fields_from_file", lambda *a, **k: ns.fields())
     monkeypatch.setattr(
         light_novel_jobs, "ensure_choices", lambda db, nonce, *a, **k: light_novel_jobs.load_choice_set(db, nonce)
     )

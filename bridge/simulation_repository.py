@@ -39,18 +39,17 @@ def bump_revision(db: sqlite3.Connection, chat_id: str, session_id: str) -> None
     )
 
 
-def validate_publication(db: sqlite3.Connection, chat_id: str, session_id: str, source_rowid: int) -> tuple[bool, str]:
+def validate_publication(
+    db: sqlite3.Connection, chat_id: str, session_id: str, source_rowid: int, *, invalidated_from: int | None
+) -> tuple[bool, str]:
     """Fence ordered complete-row acceptance, including empty rows and source rewrites."""
-    from bridge.memory_store import pending_memory_invalidation
-
     require_active_transaction(db)
     role, digest = source_identity(db, chat_id, session_id, source_rowid)
     latest = db.execute(
         "SELECT COALESCE(MAX(source_rowid),0) FROM simulation_sources WHERE chat_id=? AND session_id=?",
         (chat_id, session_id),
     ).fetchone()[0]
-    pending = pending_memory_invalidation(db, chat_id, session_id, "npc")
-    if pending is not None and pending <= latest:
+    if invalidated_from is not None and invalidated_from <= latest:
         raise ValueError("Simulation invalidated source suffix requires rollback")
     receipt = db.execute(
         "SELECT source_digest FROM simulation_sources WHERE chat_id=? AND session_id=? AND source_rowid=?",

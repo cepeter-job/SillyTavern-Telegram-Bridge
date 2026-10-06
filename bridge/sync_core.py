@@ -27,6 +27,7 @@ from bridge.port_contracts import RetainSessionMemory
 from bridge.response_variants import save_response_variant
 from bridge.session_core import load_session, update_session
 from bridge.settings import AppSettings
+from bridge.simulation_service import SimulationService
 from bridge.sync_integrity import SyncSnapshotIntegrityAdapter as _SyncSnapshotIntegrityAdapter
 from bridge.sync_state import ensure_sync_binding, sync_transcript_hash
 
@@ -200,6 +201,7 @@ def _apply_sync_snapshot_backend(
         if normalized:
             update_generation_settings(db, chat_id, session["session_id"], **normalized)
     db.execute("DELETE FROM response_variants WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
+    SimulationService().purge_session(db, chat_id, session["session_id"])
     db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
     user_rowids = {}
     for index, (role, content) in enumerate(messages):

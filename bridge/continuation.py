@@ -18,6 +18,7 @@ from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
 from bridge.rag_service import RagService
 from bridge.settings import AppSettings
+from bridge.simulation_service import SimulationService
 from bridge.sqlite_store import write_transaction
 
 
@@ -170,6 +171,8 @@ def continue_last(
     )
 
     def persist_continuation():
+        npc_service.rollback_from_row(db, chat_id, session_id, int(assistant_row[0]))
+        SimulationService().rollback_from_row(db, chat_id, session_id, int(assistant_row[0]))
         clear_progress(db, int(assistant_row[0]))
         if novel_turn:
             novel_turn.commit(db, int(assistant_row[0]), combined)

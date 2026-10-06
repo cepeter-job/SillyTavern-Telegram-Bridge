@@ -7,6 +7,7 @@ from typing import Any
 
 from bridge.memory_contracts import MemoryReadScope
 from bridge.memory_store import pending_memory_invalidation, request_source_cutoff
+from bridge.simulation_narrative import canonical_plot_context
 from bridge.simulation_repository import list_checks, load_states_as_of
 from bridge.simulation_values import integer, key, relationship_tier, text
 from bridge.sqlite_store import write_transaction
@@ -86,6 +87,10 @@ def simulation_context_for_prompt(
         if cutoff < 0:
             return ""
         states = load_states_as_of(db, chat_id, session_id, through_rowid=cutoff)
+        states = [
+            (kind, name, canonical_plot_context(db, chat_id, session_id, value, cutoff), source)
+            for kind, name, value, source in states
+        ]
         checks = list_checks(db, chat_id, session_id, through_rowid=cutoff, limit=3)
     readers = {key(value) for value in memory_scope.principals} if memory_scope is not None else set()
     lines = []

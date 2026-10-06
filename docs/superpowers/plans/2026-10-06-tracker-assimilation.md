@@ -47,10 +47,10 @@
 
 **Interfaces:** `snapshot_simulation_state(db, chat_id, session_id, through_rowid) -> dict` and `restore_simulation_snapshot(db, chat_id, session_id, payload) -> None` use explicit remappable source metadata. `project_simulation_state(...)` links canonical NPC identities and narrative arc/thread projections within the accepted publication transaction.
 
-- [ ] Add and observe failing real-SQLite tests for reset, deletion, edit/regen/continuation invalidation, snapshot cutoff/remapping/branch isolation and alias projections.
-- [ ] Wire the existing canonical mutation boundaries; preserve caller-owned transactions and the checkpoint's 1 MiB limit.
-- [ ] Extend NPC relationship/agenda projections and narrative quest/foreshadow links without introducing a second plot authority.
-- [ ] Run the new lifecycle/projection suites plus existing alternate-ending, NPC and transcript mutation tests; commit after passing.
+- [x] Add and observe failing real-SQLite tests for reset, deletion, edit/regen/continuation invalidation, snapshot cutoff/remapping/branch isolation and alias projections.
+- [x] Wire the existing canonical mutation boundaries; preserve caller-owned transactions and the checkpoint's 1 MiB limit.
+- [x] Extend NPC relationship/agenda projections and narrative quest/foreshadow links without introducing a second plot authority.
+- [x] Run the new lifecycle/projection suites plus existing alternate-ending, NPC and transcript mutation tests; commit after passing.
 
 ### Task 3: Complete extraction, context and usable checks
 

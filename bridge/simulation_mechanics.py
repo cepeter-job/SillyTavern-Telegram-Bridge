@@ -132,6 +132,8 @@ class SimulationMechanics:
                 "sparks": sparks,
                 "grudge": grudge,
             }
+            if "_projection" in current:
+                final["_projection"] = current["_projection"]
             self._store(db, chat_id, session_id, _RELATIONSHIP_KIND, key, final, source_rowid, now)
 
     def _agenda_updates(
@@ -181,6 +183,8 @@ class SimulationMechanics:
                 "location": _text(item.get("location") or current.get("location") or "", 300),
                 "status": status,
             }
+            if "_projection" in current:
+                state["_projection"] = current["_projection"]
             explicit.add(key)
             self._store(db, chat_id, session_id, _AGENDA_KIND, key, state, source_rowid, now)
 

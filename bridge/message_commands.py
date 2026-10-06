@@ -5,7 +5,6 @@ import logging
 import sqlite3
 import time
 from functools import partial as _partial
-from typing import TYPE_CHECKING
 
 from bridge.card_content import card_fields_from_file
 from bridge.cards import send_session_menu
@@ -73,12 +72,10 @@ from bridge.roleplay_format import normalize_roleplay_transport
 from bridge.scene_repository import delete_scene_state as _repo_delete_scene_state
 from bridge.session_core import ensure_session, list_sessions, load_session
 from bridge.settings import AppSettings
+from bridge.simulation_service import SimulationService
 from bridge.sqlite_store import optimize_database, write_transaction
 from bridge.telegram import send_panel_request, send_text, send_typing, telegram_request
 from bridge.telegram_output import telegram_safe_output, telegram_transport_output
-
-if TYPE_CHECKING:
-    pass
 
 
 def reset_session(
@@ -113,6 +110,7 @@ def reset_session(
         delete_incoming_messages(db, token, chat_id, session["session_id"])
         with write_transaction(db):
             npc_service.purge_session(db, chat_id, session["session_id"])
+            SimulationService().purge_session(db, chat_id, session["session_id"])
             db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
             db.execute(
                 "DELETE FROM response_variants WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"])

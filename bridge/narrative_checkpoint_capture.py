@@ -21,6 +21,7 @@ from bridge.narrative_settings import load_session_narrative_settings
 from bridge.npc_repository import snapshot_npc_state
 from bridge.scene_repository import load_scene_state_row
 from bridge.session_repository import load_session_row
+from bridge.simulation_snapshot import snapshot_simulation_state
 from bridge.transcript_repository import transcript_prefix_fingerprint
 
 _CONFIG_PREFIXES = ("humanizer", "grounded_user", "expression_mode", "image_model", "image_size")
@@ -39,6 +40,7 @@ def capture_pre_finale_state(
         physical = None
     memory = snapshot_local_memory(db, chat_id, session_id, through_rowid)
     memory["npcs"] = snapshot_npc_state(db, chat_id, session_id, through_rowid)
+    memory["simulation"] = snapshot_simulation_state(db, chat_id, session_id, through_rowid)
     group = load_group_state_row(db, chat_id, session_id)
     captured = {
         "format_version": 1,

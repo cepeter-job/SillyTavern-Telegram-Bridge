@@ -28,6 +28,7 @@ from bridge.response_delivery import delete_outgoing_message_row, send_reply
 from bridge.response_variants import save_response_variant
 from bridge.session_core import load_session
 from bridge.settings import AppSettings
+from bridge.simulation_service import SimulationService
 from bridge.sqlite_store import write_transaction
 from bridge.telegram import send_text, send_typing, telegram_request
 from bridge.telegram_output import telegram_transport_output
@@ -276,6 +277,7 @@ def regenerate_edited_turn(
         prune_variants_from(db, chat_id, session_id, int(user_rowid))
         invalidate_episodic_memories_from_row(db, chat_id, session_id, int(user_rowid))
         npc_service.rollback_from_row(db, chat_id, session_id, int(user_rowid))
+        SimulationService().rollback_from_row(db, chat_id, session_id, int(user_rowid))
         db.execute(
             "DELETE FROM session_summaries WHERE chat_id=? AND session_id=?",
             (chat_id, session_id),

@@ -400,17 +400,7 @@ def snapshot_npc_state(
         raise ValueError("NPC state exceeds the bounded pre-finale snapshot")
     budget = 0
     for entity in entities:
-        cursor = db.execute(
-            "SELECT npc_id,field_key,substr(value_json,1,1048577) AS value_json,field_mode,visibility,"
-            "known_by_json,updated_rowid,updated_at FROM npc_fields WHERE npc_id=? AND updated_rowid<=? "
-            "ORDER BY field_key LIMIT 129",
-            (entity["npc_id"], through_rowid),
-        )
-        try:
-            columns = [item[0] for item in cursor.description]
-            values = [dict(zip(columns, row, strict=True)) for row in cursor]
-        finally:
-            cursor.close()
+        values = npc_snapshot_fields(db, entity["npc_id"], through_rowid)
         if len(values) > 128:
             raise ValueError("NPC fields exceed the bounded pre-finale snapshot")
         budget += len(json.dumps(values, ensure_ascii=False))
@@ -451,3 +441,24 @@ def restore_npc_snapshot(db: sqlite3.Connection, chat_id: str, session_id: str, 
             insert_npc_field_change(
                 db, npc_id, field.field_key, "set", None, field, field.updated_rowid, field.updated_at
             )
+
+
+def npc_snapshot_fields(db, npc_id, through_rowid):
+    cursor = db.execute(
+        "WITH history AS (SELECT *,ROW_NUMBER() OVER (PARTITION BY field_key "
+        "ORDER BY source_rowid DESC,change_id DESC) AS rank FROM npc_field_history "
+        "WHERE npc_id=? AND source_rowid<=?) "
+        "SELECT npc_id,field_key,substr(after_json,1,1048577) AS value_json,after_mode AS field_mode,"
+        "after_visibility AS visibility,after_known_by_json AS known_by_json,source_rowid AS updated_rowid,"
+        "created_at AS updated_at FROM history WHERE rank=1 AND after_json IS NOT NULL "
+        "UNION ALL SELECT npc_id,field_key,substr(value_json,1,1048577),field_mode,visibility,known_by_json,"
+        "updated_rowid,updated_at FROM npc_fields f WHERE npc_id=? AND updated_rowid<=? "
+        "AND NOT EXISTS(SELECT 1 FROM npc_field_history h WHERE h.npc_id=f.npc_id AND h.field_key=f.field_key) "
+        "ORDER BY field_key LIMIT 129",
+        (npc_id, through_rowid, npc_id, through_rowid),
+    )
+    try:
+        columns = [item[0] for item in cursor.description]
+        return [dict(zip(columns, row, strict=True)) for row in cursor]
+    finally:
+        cursor.close()

@@ -143,7 +143,7 @@ def test_choice_only_request_uses_bounded_roleplay_context_across_strategies(nov
 
     def generate(*args, **kwargs):
         calls.append(args[2])
-        return '{"choices":["Go inside","Stay outside"]}'
+        return '{"choices":["Go inside","Stay outside","Look around"]}'
 
     persona = replace(
         services.persona,
@@ -198,7 +198,7 @@ def test_choice_recovery_executes_the_normal_conversation_pipeline_exactly_once(
 
     def generate(*args, **kwargs):
         calls.append(args[2])
-        return '{"story":"You enter the hallway.","choices":["Call for help","Look upstairs"]}'
+        return '{"story":"You enter the hallway.","choices":["Call for help","Look upstairs","Wait"]}'
 
     port = ProviderPort(generate)
     app = make_test_application_services(app_settings=settings, provider=port)
@@ -221,7 +221,7 @@ def test_choice_recovery_executes_the_normal_conversation_pipeline_exactly_once(
     monkeypatch.setattr(
         message_commands,
         "prepare_turn",
-        lambda db, chat, session, key, actor: prepare_turn(db, chat, session, key, actor, rng=lambda _: 2),
+        lambda db, chat, session, key, actor: prepare_turn(db, chat, session, key, actor, rng=lambda _: 3),
     )
     with write_transaction(db):
         bind_choice_panel(db, record.nonce, 81)

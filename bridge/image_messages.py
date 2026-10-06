@@ -15,6 +15,7 @@ from bridge.generation import build_chat_messages, finalize_generation_messages,
 from bridge.generation_settings import get_generation_settings
 from bridge.group_director_service import GroupDirectorService
 from bridge.group_service import GroupService
+from bridge.internal_state_output import map_visible_reply
 from bridge.light_novel_turn import begin_novel_turn
 from bridge.limits import MAX_HISTORY_MESSAGES
 from bridge.memory_service import MemoryService
@@ -150,7 +151,8 @@ def process_image_message(
         provider_port=provider_port,
     )
     if novel_turn:
-        reply = telegram_transport_output(novel_turn.finalize(reply))
+        reply = map_visible_reply(reply, novel_turn.finalize)
+        reply = map_visible_reply(reply, telegram_transport_output)
     stored_reply = (
         reply
         if group_turn and group_turn[1].get("mode") == "autonomous"

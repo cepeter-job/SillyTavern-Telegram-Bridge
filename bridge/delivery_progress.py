@@ -11,6 +11,7 @@ from bridge.delivery_repository import (
     is_complete,
     matching_progress,
 )
+from bridge.internal_state_output import delivery_visible_reply
 from bridge.operation_repository import delivery_operation_valid
 from bridge.sqlite_store import write_transaction
 from bridge.telegram_output import telegram_safe_output
@@ -89,6 +90,6 @@ def _validate_expected_turn(db: sqlite3.Connection, job_id: int | str | None, ro
 
 def bind_committed_turn(db: sqlite3.Connection, job_id: int | None, user_rowid: int, rowid: int, payload: str) -> None:
     if job_id is not None:
-        payload = telegram_safe_output(payload)
+        payload = telegram_safe_output(delivery_visible_reply(payload))
         if bind_turn_delivery(db, job_id, user_rowid, rowid, payload):
             prepare_progress(db, rowid, payload)

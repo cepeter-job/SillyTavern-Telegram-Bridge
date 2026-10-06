@@ -18,6 +18,7 @@ from bridge.conversation_lifecycle import (
 )
 from bridge.delivery_progress import delivery_complete
 from bridge.greeting_media import first_image_url
+from bridge.internal_state_output import map_visible_reply
 from bridge.light_novel_service import attach_turn, prepare_turn
 from bridge.limits import CARD_FIELD_MAX_CHARS
 from bridge.metadata import get_meta, set_meta
@@ -308,9 +309,12 @@ def send_character_greeting(
                 return False
             selected_index = random.randrange(len(options)) if index is None else int(index)  # noqa: S311 -- greeting selection
             rendered = render_greeting(fields, user_name, selected_index, app_settings=app_settings)
-            greeting = normalize_roleplay_transport(
-                telegram_transport_output(rendered),
-                preserve_authored_unquoted_dialogue=True,
+            greeting = map_visible_reply(
+                rendered,
+                lambda visible: normalize_roleplay_transport(
+                    telegram_transport_output(visible),
+                    preserve_authored_unquoted_dialogue=True,
+                ),
             )
             if not greeting:
                 return False

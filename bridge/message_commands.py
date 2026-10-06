@@ -36,6 +36,7 @@ from bridge.generation_settings import get_generation_settings
 from bridge.group_service import GroupService
 from bridge.humanize import render_humanized_response
 from bridge.humanizer_settings import humanizer_enabled
+from bridge.internal_state_output import delivery_visible_reply, map_visible_reply
 from bridge.job_store import job_actor_id
 from bridge.language import normalize_response_language
 from bridge.light_novel_service import prepare_turn
@@ -285,7 +286,7 @@ def generate_and_store_reply(
         nonlocal stream_message_id
         if not partial:
             return
-        preview = telegram_safe_output(partial)
+        preview = telegram_safe_output(delivery_visible_reply(partial))
         if not preview:
             return
         try:
@@ -319,22 +320,35 @@ def generate_and_store_reply(
     if novel_turn:
         reply = novel_turn.extract(reply)
     reply += rag_service.citation_footer(db, chat_id, text, rag_bundle)
-    reply = render_response_language(
-        api_key, current_model, reply, language, generation_session_id, generation_settings, provider_port=provider_port
-    )
-    if humanizer_on:
-        reply = render_humanized_response(
+    reply = map_visible_reply(
+        reply,
+        lambda visible: render_response_language(
             api_key,
             current_model,
-            reply,
+            visible,
+            language,
             generation_session_id,
             generation_settings,
             provider_port=provider_port,
+        ),
+    )
+    if humanizer_on:
+        reply = map_visible_reply(
+            reply,
+            lambda visible: render_humanized_response(
+                api_key,
+                current_model,
+                visible,
+                generation_session_id,
+                generation_settings,
+                provider_port=provider_port,
+            ),
         )
-    reply = telegram_transport_output(reply)
+    reply = map_visible_reply(reply, telegram_transport_output)
     if novel_turn:
-        reply = telegram_transport_output(novel_turn.finalize(reply))
-    reply = normalize_roleplay_transport(reply)
+        reply = map_visible_reply(reply, novel_turn.finalize)
+        reply = map_visible_reply(reply, telegram_transport_output)
+    reply = map_visible_reply(reply, normalize_roleplay_transport)
     stored_reply = (
         reply
         if group_turn and group_turn[1].get("mode") == "autonomous"

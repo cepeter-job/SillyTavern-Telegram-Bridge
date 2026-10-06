@@ -21,6 +21,7 @@ from bridge.generation_settings import get_generation_settings
 from bridge.grounded_user_settings import grounded_user_policy
 from bridge.humanize import render_humanized_response
 from bridge.humanizer_settings import humanizer_enabled
+from bridge.internal_state_output import map_visible_reply
 from bridge.language import normalize_response_language, response_language_instruction, response_language_label
 from bridge.light_novel_turn import NovelTurn
 from bridge.limits import (
@@ -100,25 +101,32 @@ def render_session_response(
 ) -> str:
     session_id = str(session["session_id"])
     provider_port = provider_port.for_usage(chat_id, session_id, "render")
-    rendered = render_response_language(
-        api_key,
-        session["model_id"],
+    rendered = map_visible_reply(
         text,
-        session.get("response_language") or "auto",
-        f"telegram:{chat_id}:{session_id}",
-        settings,
-        provider_port=provider_port,
-    )
-    if humanizer_enabled(session.get("humanizer")):
-        rendered = render_humanized_response(
+        lambda visible: render_response_language(
             api_key,
             session["model_id"],
-            rendered,
+            visible,
+            session.get("response_language") or "auto",
             f"telegram:{chat_id}:{session_id}",
             settings,
             provider_port=provider_port,
+        ),
+    )
+    if humanizer_enabled(session.get("humanizer")):
+        rendered = map_visible_reply(
+            rendered,
+            lambda visible: render_humanized_response(
+                api_key,
+                session["model_id"],
+                visible,
+                f"telegram:{chat_id}:{session_id}",
+                settings,
+                provider_port=provider_port,
+            ),
         )
-    return normalize_roleplay_transport(telegram_transport_output(rendered))
+    rendered = map_visible_reply(rendered, telegram_transport_output)
+    return map_visible_reply(rendered, normalize_roleplay_transport)
 
 
 def format_user_dialogue_action(text: str) -> str:
@@ -420,6 +428,7 @@ def _generation_generate_rendered_reply(
         provider_port=provider_port,
     )
     if novel_turn:
-        reply = telegram_transport_output(novel_turn.finalize(reply))
-        reply = normalize_roleplay_transport(reply)
+        reply = map_visible_reply(reply, novel_turn.finalize)
+        reply = map_visible_reply(reply, telegram_transport_output)
+        reply = map_visible_reply(reply, normalize_roleplay_transport)
     return reply

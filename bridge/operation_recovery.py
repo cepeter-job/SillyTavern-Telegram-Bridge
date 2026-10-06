@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from bridge.delivery_progress import DeliveryTargetExpired, prepare_progress
 from bridge.delivery_repository import matching_progress
+from bridge.internal_state_output import delivery_visible_reply
 from bridge.operation_repository import delivery_user_source
 from bridge.telegram_output import telegram_safe_output
 from bridge.transcript_repository import assistant_by_row
@@ -102,7 +103,7 @@ class OperationRecovery:
         payload: str,
     ) -> None:
         with self.write_transaction(db):
-            payload = telegram_safe_output(payload)
+            payload = telegram_safe_output(delivery_visible_reply(payload))
             original = self.get_payload(db, operation_id)
             user_source = (
                 delivery_user_source(db, assistant_rowid, int(original["user_rowid"]))

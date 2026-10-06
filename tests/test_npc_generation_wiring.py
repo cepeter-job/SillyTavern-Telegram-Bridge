@@ -164,3 +164,90 @@ def test_ordinary_generation_resolves_and_passes_npc_context():
         assert npc.calls and npc.calls[0][3] == "hello"
     finally:
         db.close()
+
+
+def test_ordinary_generation_keeps_internal_states_in_history_but_not_stream_preview():
+    db = _db()
+    npc = FakeNpc()
+    session = _session() | {"response_language": "auto"}
+    preview_requests = []
+
+    def generate_backend(_api_key, _model, _messages, **kwargs):
+        callback = kwargs.get("stream_callback")
+        assert callback is not None
+        callback("Visible narration.")
+        callback("Visible narration.\n<internal_states>Secret state value")
+        return "Visible narration.\n<internal_states>Secret state value</internal_states>"
+
+    def telegram_request(_token, method, payload):
+        preview_requests.append((method, payload))
+        return {"message_id": 501}
+
+    try:
+        with (
+            patch.object(message_commands, "require_started", return_value=True),
+            patch.object(
+                message_commands,
+                "build_chat_messages",
+                return_value=[{"role": "user", "content": "hello"}],
+            ),
+            patch.object(message_commands, "prepare_turn", return_value=None),
+            patch.object(message_commands, "send_typing"),
+            patch.object(message_commands, "humanizer_enabled", return_value=False),
+            patch.object(message_commands, "get_generation_settings", return_value={}),
+            patch.object(message_commands, "finalize_generation_messages", side_effect=lambda *_a, **_kw: _a[3]),
+            patch.object(
+                message_commands,
+                "render_response_language",
+                side_effect=lambda _k, _m, text, *_a, **_kw: text,
+            ),
+            patch.object(message_commands, "save_response_variant", return_value=1),
+            patch.object(message_commands, "queue_user_quote_tts"),
+            patch.object(message_commands, "send_reply"),
+            patch.object(message_commands, "telegram_request", side_effect=telegram_request),
+        ):
+            message_commands.generate_and_store_reply(
+                db,
+                "token",
+                "key",
+                _fields(),
+                "chat",
+                "hello",
+                session,
+                "s1",
+                "p::m",
+                None,
+                "",
+                None,
+                None,
+                group_service=make_test_group_service(app_settings=SettingsBuilder().build()),
+                provider_port=make_test_provider_port(generate_backend=generate_backend),
+                memory_service=make_test_memory_service(),
+                npc_service=npc,
+                persona_service=make_test_persona_service(),
+                app_settings=SettingsBuilder().build(),
+                rag_service=make_test_rag_service(),
+            )
+
+        stored = db.execute(
+            "SELECT content FROM messages WHERE chat_id='chat' AND session_id='s1' AND role='assistant' "
+            "ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()[0]
+        assert "<internal_states>" in stored
+        assert "Secret state value" in stored
+        next_messages = build_chat_messages(
+            session,
+            _fields(),
+            "next turn",
+            [("assistant", stored)],
+            persona_service=make_test_persona_service(),
+            app_settings=SettingsBuilder().build(),
+        )
+        assert any(
+            message.get("role") == "assistant" and "Secret state value" in str(message.get("content", ""))
+            for message in next_messages
+        )
+        assert preview_requests
+        assert all("Secret state value" not in str(payload.get("text", "")) for _, payload in preview_requests)
+    finally:
+        db.close()

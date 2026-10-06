@@ -15,6 +15,7 @@ from bridge.closed_session_guard import story_mutation_message
 from bridge.delivery_progress import DeliveryFailure, DeliveryTargetExpired, checkpoint, prepare_progress
 from bridge.delivery_repository import clear_progress
 from bridge.expressions import deliver_expression
+from bridge.internal_state_output import delivery_visible_reply
 from bridge.metadata import get_meta
 from bridge.settings import AppSettings
 from bridge.speech import send_tts
@@ -313,7 +314,7 @@ def send_reply(
     if db is not None and session_id and story_mutation_message(db, chat_id, session_id):
         # Recovery may deliver committed text, but never generate fresh media for a closed original.
         session_id = None
-    transport_text = telegram_transport_output(text)
+    transport_text = telegram_transport_output(delivery_visible_reply(text))
     progress_payload = telegram_safe_output(transport_text)
     message_ids: list[int] = []
     complete = False

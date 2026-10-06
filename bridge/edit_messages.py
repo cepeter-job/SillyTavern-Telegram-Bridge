@@ -13,6 +13,7 @@ from bridge.delivery_progress import DeliveryTargetExpired
 from bridge.episodic_memory import invalidate_episodic_memories_from_row
 from bridge.generation import build_chat_messages, finalize_generation_messages, render_session_response
 from bridge.generation_settings import get_generation_settings
+from bridge.internal_state_output import map_visible_reply
 from bridge.light_novel_repository import regeneration_choice_panel_message_ids
 from bridge.light_novel_turn import begin_novel_turn
 from bridge.memory_service import MemoryService
@@ -232,7 +233,8 @@ def regenerate_edited_turn(
         provider_port=provider_port,
     )
     if novel_turn:
-        reply = telegram_transport_output(novel_turn.finalize(reply))
+        reply = map_visible_reply(reply, novel_turn.finalize)
+        reply = map_visible_reply(reply, telegram_transport_output)
     old_message_ids = _COMMAND_OPERATION_RECOVERY.outgoing_ids_after(
         db,
         chat_id,

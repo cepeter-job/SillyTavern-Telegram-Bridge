@@ -194,7 +194,7 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
         self.db.close()
 
     def test_initial_schema_preserved_with_conversation_migration(self):
-        self.assertEqual(len(schema.SCHEMA_MIGRATIONS), 25)
+        self.assertEqual(len(schema.SCHEMA_MIGRATIONS), 26)
         migration = schema.SCHEMA_MIGRATIONS[0]
         self.assertEqual((migration.version, migration.name), (1, "initial_schema"))
 
@@ -229,6 +229,7 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
                 (23, "complete_memory_parts"),
                 (24, "raw_archival_attempts"),
                 (25, "canonical_simulation_trackers"),
+                (26, "retire_prompt_tracker_bootstrap"),
             ],
         )
 
@@ -352,7 +353,7 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
         self.assertIsNone(self.db.execute("SELECT 1 FROM callback_tokens WHERE token='expired'").fetchone())
         self.assertEqual(
             self.db.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0],
-            25,
+            26,
         )
 
 

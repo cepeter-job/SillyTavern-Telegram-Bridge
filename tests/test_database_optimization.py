@@ -217,7 +217,7 @@ class DatabaseOptimizationTests(SettingsTestCase):
         try:
             self.assertEqual(
                 second.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0],
-                25,
+                26,
             )
         finally:
             second.set_trace_callback(None)

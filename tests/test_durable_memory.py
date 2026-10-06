@@ -199,7 +199,7 @@ def test_migration_backfills_existing_rows_once_and_retires_legacy_documents():
     assert db.execute("SELECT count(*) FROM memory_jobs").fetchone()[0] == 6
     assert db.execute("SELECT deleted FROM memory_retired_documents WHERE document_id='old-fixed'").fetchone() == (0,)
     versions = dict(db.execute("SELECT layer,dirty_version FROM memory_jobs"))
-    assert versions == {"hindsight": 1, "episodes": 2, "summary": 3, "scene": 3, "npc": 3, "curator": 2}
+    assert versions == {"hindsight": 1, "episodes": 2, "summary": 3, "scene": 3, "npc": 2, "curator": 2}
     initialize_database_schema(db)
     assert dict(db.execute("SELECT layer,dirty_version FROM memory_jobs")) == versions
     db.close()

@@ -6,16 +6,21 @@ import ast
 import importlib
 import inspect
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import pytest
 from application_test_setup import make_test_rag_service, make_test_request_context
+from settings_test_support import SettingsTestCase
 
 import bridge.enum_callbacks as _owner_enum_callbacks
+import bridge.swipe_panels as swipe_panels
+import bridge.telegram as telegram
 from bridge.metadata import get_meta
 from bridge.response_variants import save_response_variant
 from bridge.session_core import ensure_session
 from bridge.settings import load_app_settings
 from bridge.sqlite_store import db_connect, write_transaction
+from bridge.telegram_output import telegram_safe_output
 
 ROOT = Path(__file__).parents[1]
 OWNERS = {
@@ -126,3 +131,77 @@ def test_old_ui_aggregates_are_not_retained_as_facades():
         assert not (ROOT / "bridge" / filename).exists(), filename
     tree = ast.parse((ROOT / "bridge/input_flows.py").read_text())
     assert {node.name for node in tree.body if isinstance(node, ast.FunctionDef)} == {"handle_pending_input"}
+
+
+class SwipePanelOutputTests(SettingsTestCase):
+    def test_swipe_panels_sanitize_stored_html_variants(self):
+        delivery = Mock()
+        delivery.send_panel_request.return_value = {"message_id": 91}
+        variants = [(1, "<div>Recovered<br>variant</div>", 1)]
+
+        with (
+            patch.object(swipe_panels, "last_user_variants", return_value=((1, "prompt"), variants)),
+            patch.object(swipe_panels, "set_meta"),
+        ):
+            swipe_panels.send_swipe_menu(
+                "token",
+                Mock(),
+                "chat",
+                "session",
+                delivery_port=delivery,
+                request_context=object(),
+            )
+            swipe_panels.edit_swipe_menu(
+                "token",
+                Mock(),
+                {"message": {"chat": {"id": "chat"}, "message_id": 91}},
+                "session",
+                1,
+                variants,
+                delivery_port=delivery,
+                request_context=object(),
+            )
+
+        payloads = [call.args[2] for call in delivery.send_panel_request.call_args_list]
+        self.assertEqual(len(payloads), 2)
+        for payload in payloads:
+            self.assertNotIn("<div", payload["text"])
+            self.assertNotIn("<br>", payload["text"])
+            self.assertIn("Recovered\nvariant", payload["text"])
+
+
+class TelegramPreviewTests(SettingsTestCase):
+    def test_send_text_disables_link_previews(self):
+        calls = []
+        original_request = telegram.telegram_request
+        telegram.telegram_request = lambda _token, method, payload: calls.append((method, payload)) or {"message_id": 1}
+        try:
+            self.assertEqual(
+                telegram.send_text(
+                    "token",
+                    "chat",
+                    "https://example.com/image.jpg",
+                ),
+                [1],
+            )
+        finally:
+            telegram.telegram_request = original_request
+
+        self.assertEqual(len(calls), 1)
+        method, payload = calls[0]
+        self.assertEqual(method, "sendMessage")
+        self.assertTrue(payload["disable_web_page_preview"])
+
+
+def test_telegram_safe_output_keeps_html_link_destination_and_markdown_autolinks():
+    source = (
+        'Read <a href="https://example.test/source">the source</a>. '
+        "Keep <https://example.test/path> and <user@example.test>. "
+        "<div>Then continue.</div>"
+    )
+    result = telegram_safe_output(source)
+    assert "the source (https://example.test/source)" in result
+    assert "<https://example.test/path>" in result
+    assert "<user@example.test>" in result
+    assert "<div>" not in result
+    assert "Then continue." in result

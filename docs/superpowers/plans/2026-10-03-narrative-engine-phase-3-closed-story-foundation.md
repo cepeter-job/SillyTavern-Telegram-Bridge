@@ -186,7 +186,7 @@ git commit -m "feat: let director plan arcs and endings"
 - Modify: `bridge/edit_messages.py`
 - Modify: `bridge/regeneration.py`
 - Test: `tests/test_finale_readiness.py`
-- Test: `tests/test_native_message_edit.py`
+- Test: `tests/test_edit_user_cleanup.py`
 - Test: `tests/test_npc_branch_safety.py`
 
 **Interfaces:**
@@ -207,7 +207,7 @@ Assert:
 
 - [x] **Step 2: Run tests**
 
-Run: `python -m pytest -q tests/test_finale_readiness.py tests/test_native_message_edit.py`  
+Run: `python -m pytest -q tests/test_finale_readiness.py tests/test_edit_user_cleanup.py`
 Expected: FAIL.
 
 - [x] **Step 3: Implement readiness owner/invalidation hooks**
@@ -216,13 +216,13 @@ Do not enter FINALE yet except through Task 5 atomic checkpoint service.
 
 - [x] **Step 4: Run tests**
 
-Run: `python -m pytest -q tests/test_finale_readiness.py tests/test_native_message_edit.py tests/test_npc_branch_safety.py`  
+Run: `python -m pytest -q tests/test_finale_readiness.py tests/test_edit_user_cleanup.py tests/test_npc_branch_safety.py`
 Expected: PASS.
 
 - [x] **Step 5: Commit**
 
 ```bash
-git add bridge/finale_service.py bridge/narrative_reconciliation.py bridge/edit_messages.py bridge/regeneration.py tests/test_finale_readiness.py tests/test_native_message_edit.py tests/test_npc_branch_safety.py
+git add bridge/finale_service.py bridge/narrative_reconciliation.py bridge/edit_messages.py bridge/regeneration.py tests/test_finale_readiness.py tests/test_edit_user_cleanup.py tests/test_npc_branch_safety.py
 git commit -m "feat: evaluate finale readiness safely"
 ```
 

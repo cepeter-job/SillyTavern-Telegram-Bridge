@@ -1,4 +1,3 @@
-import sqlite3
 import time
 
 from application_test_setup import (
@@ -9,6 +8,10 @@ from application_test_setup import (
     make_test_rag_service,
     make_test_request_context,
 )
+from npc_test_support import db as _db
+from npc_test_support import fields as _fields
+from npc_test_support import session as _session
+from npc_test_support import turn as _turn
 from persisted_state_test_support import find_test_npc
 from settings_test_support import SettingsBuilder
 
@@ -21,54 +24,7 @@ from bridge.npc_repository import load_npc_fields, set_npc_extraction_coverage
 from bridge.npc_service import NpcService
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
 from bridge.response_variants import keep_swipe_variant, save_response_variant, swipe_state_key
-from bridge.schema import initialize_database_schema
 from bridge.sqlite_store import write_transaction
-
-
-def _db():
-    db = sqlite3.connect(":memory:")
-    db.execute("PRAGMA foreign_keys=ON")
-    initialize_database_schema(db)
-    now = time.time()
-    db.execute(
-        """
-        INSERT INTO sessions(
-            chat_id,session_id,title,character_file,model_id,persona_id,world_file,
-            author_note,system_prompt,response_language,created_at,updated_at
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
-        """,
-        ("chat", "s1", "Session", "mira.png", "story::main", "", "", "", "", "auto", now, now),
-    )
-    db.commit()
-    return db
-
-
-def _session():
-    return {
-        "chat_id": "chat",
-        "session_id": "s1",
-        "character_file": "mira.png",
-        "model_id": "story::main",
-        "persona_id": "",
-        "world_file": "",
-        "author_note": "",
-        "system_prompt": "",
-        "response_language": "auto",
-    }
-
-
-def _fields():
-    return {
-        "name": "Mira",
-        "system_prompt": "",
-        "description": "",
-        "personality": "",
-        "scenario": "",
-        "mes_example": "",
-        "first_mes": "",
-        "post_history_instructions": "",
-        "alternate_greetings": "[]",
-    }
 
 
 def _set_relationship(service, db, rowid, value):
@@ -104,15 +60,6 @@ def _relationship(db):
         return None
     state = load_npc_fields(db, entity.npc_id).get("relationship")
     return None if state is None else state.value
-
-
-def _turn(db, role, content, at):
-    return int(
-        db.execute(
-            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
-            ("chat", "s1", role, content, at),
-        ).lastrowid
-    )
 
 
 def test_edit_uses_pre_edit_npc_state_and_rolls_back_future_changes(monkeypatch):

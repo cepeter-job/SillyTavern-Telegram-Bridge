@@ -4,9 +4,10 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
+from character_test_support import card_context as card_context
+from character_test_support import card_png as _card_png
+from character_test_support import upload
 from persisted_state_test_support import seed_character_rank
-from test_character_mutation_safety import _card_png, upload
-from test_character_mutation_safety import card_context as card_context
 
 from bridge import character_quality as quality
 from bridge.metadata import get_meta, set_meta

@@ -184,7 +184,7 @@ def test_choice_only_generation_and_inline_repair_follow_offscreen_policy(novel_
         _fields(),
         provider_port=make_test_provider_port(
             generate_backend=lambda _a, _m, messages, **k: (
-                calls.append(messages) or '{"choices":["Follow Mara at the gate","Cut to the distant camp","Shift focus"]}'
+                calls.append(messages) or '{"choices":["Follow Mara","Cut to camp","Shift focus"]}'
             )
         ),
         app_settings=settings,

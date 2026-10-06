@@ -71,7 +71,7 @@ HELP_CATEGORIES = {
         ),
         (
             "/lightnovel",
-            "Open dedicated Light Novel mode controls or restore the current 2–4 full-text action choices with "
+            "Open dedicated Light Novel mode controls or restore the current 3–4 full-text action choices with "
             "numbered selectors plus Next Scene. Mode changes require an unstarted standard session.",
         ),
         (

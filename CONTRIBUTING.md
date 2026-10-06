@@ -409,3 +409,31 @@ Director Room arc guidance is user-authored planning metadata, not permission to
 manually fabricate a resolved arc. Ending Goal controls lock at finale entry.
 At this foundation increment, the epilogue and hard-close workflow still requires
 its owning implementation before Closed Story execution is exposed.
+
+
+### File-size and reference audit guardrails
+
+The 500-line target is a ceiling for new maintained Python files, not a reason to
+merge small cohesive modules or split a composition root mechanically. The
+versioned `tools/module_size_baseline.json` covers existing oversized files at the
+repository root and under `bridge`, `tests` and `tools`. Exceptions may only shrink:
+update a cap to the actual smaller count, and remove it once a file is at or below
+500 lines. CI compares exceptions with the reviewed base commit so increasing the
+baseline cannot silently authorize growth. Keep new files within the limit.
+
+```bash
+python tools/check_module_sizes.py --base-ref "$(git merge-base HEAD origin/main)"
+python -m tools.audit_module_references --output /tmp/bridge-module-references.json
+```
+
+The reference audit reports evidence, not deletion permission. The architecture
+scanner already recognizes aliased imports and imports inside functions. Installer
+`python -m` commands and path-invoked workers also count. Literal references are
+weaker evidence; inspect production versus test callers, callback data, registries,
+`getattr` and other dynamic dispatch, then run runtime and behavior tests before
+removing code. Same-named functions in different modules are not namespace
+collisions, and different repository/application contracts must not be deduplicated
+solely by name.
+
+See the [2026-10-06 consolidation](docs/audits/2026-10-06-consolidation.md) for the
+verified findings, false positives and intentionally preserved architectural layers.

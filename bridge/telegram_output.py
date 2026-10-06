@@ -115,6 +115,12 @@ def _restore_literals(value: str, protected: list[str], prefix: str) -> str:
     return value
 
 
+def _append_newline(parts: list[str]) -> None:
+    if not parts or parts[-1].endswith(("\n", " ", "\t")):
+        return
+    parts.append("\n")
+
+
 class _PlainTelegramHTML(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -123,9 +129,7 @@ class _PlainTelegramHTML(HTMLParser):
         self.links: list[tuple[str, int]] = []
 
     def _newline(self) -> None:
-        if not self.parts or self.parts[-1].endswith(("\n", " ", "\t")):
-            return
-        self.parts.append("\n")
+        _append_newline(self.parts)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         name = tag.casefold()
@@ -179,9 +183,7 @@ class _TransportTelegramHTML(HTMLParser):
         self.open_tags: list[str] = []
 
     def _newline(self) -> None:
-        if not self.parts or self.parts[-1].endswith(("\n", " ", "\t")):
-            return
-        self.parts.append("\n")
+        _append_newline(self.parts)
 
     def _open(self, canonical: str, rendered: str | None = None) -> None:
         if canonical in {"pre", "blockquote"}:

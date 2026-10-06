@@ -9,6 +9,7 @@ from dataclasses import dataclass
 
 from bridge.episodic_memory import store_episodic_memory
 from bridge.generation_settings import get_generation_settings
+from bridge.json_fences import unfence_json
 from bridge.memory_contracts import MemoryFact
 from bridge.memory_fact_store import accept_source_facts, classified_audience
 from bridge.memory_store import MemorySource
@@ -34,20 +35,9 @@ class EpisodicCandidate:
     known_by: tuple[str, ...] = ()
 
 
-def _unfence(value: str) -> str:
-    text = str(value or "").strip()
-    fence = chr(96) * 3
-    if not (text.startswith(fence) and text.endswith(fence)):
-        return text
-    inner = text[len(fence) : -len(fence)].strip()
-    if inner.casefold().startswith("json"):
-        inner = inner[4:].lstrip()
-    return inner
-
-
 def parse_episodic_candidates(source: str) -> list[EpisodicCandidate]:
     try:
-        payload = json.loads(_unfence(source))
+        payload = json.loads(unfence_json(source))
     except (TypeError, ValueError) as exc:
         raise ValueError("episodic memory response is not valid JSON") from exc
     if isinstance(payload, dict):

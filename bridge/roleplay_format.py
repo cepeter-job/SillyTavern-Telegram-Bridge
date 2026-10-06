@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from bridge.text_units import is_escaped_at
+
 _CODE = re.compile(r"```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`")
 _HTML_CODE = re.compile(
     r"<(?P<tag>code|pre)\b[^>]*>[\s\S]*?</(?P=tag)\s*>",
@@ -20,26 +22,17 @@ _ESCAPED_LINE = re.compile(r"(?<=[.!?*\"'])\\n")
 _ESCAPED_QUOTE = re.compile(r'(?<!\\)\\"')
 
 
-def _is_escaped(text: str, index: int) -> bool:
-    backslashes = 0
-    cursor = index - 1
-    while cursor >= 0 and text[cursor] == "\\":
-        backslashes += 1
-        cursor -= 1
-    return bool(backslashes % 2)
-
-
 def _quoted_speech_ranges(text: str) -> list[tuple[int, int]]:
     ranges: list[tuple[int, int]] = []
     opened_at: int | None = None
     closing = ""
     for index, char in enumerate(text):
         if opened_at is None:
-            if char in _QUOTE_PAIRS and (char != '"' or not _is_escaped(text, index)):
+            if char in _QUOTE_PAIRS and (char != '"' or not is_escaped_at(text, index)):
                 opened_at = index
                 closing = _QUOTE_PAIRS[char]
             continue
-        if char == closing and (char != '"' or not _is_escaped(text, index)):
+        if char == closing and (char != '"' or not is_escaped_at(text, index)):
             ranges.append((opened_at, index + 1))
             opened_at = None
             closing = ""

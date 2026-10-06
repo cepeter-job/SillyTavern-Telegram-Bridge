@@ -129,6 +129,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Python 3.11
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
@@ -148,6 +150,14 @@ jobs:
 
       - name: Check runtime lock and manifests
         run: python tools/check_dependency_lock.py
+
+      - name: Ratchet Python module sizes against the reviewed base
+        env:
+          SIZE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python tools/check_module_sizes.py --base-ref "$SIZE_BASE_REF"
+
+      - name: Audit Python, installer and worker reference evidence
+        run: python -m tools.audit_module_references --output module-references.json
 
       - name: Check dependency direction
         run: python tools/static_analysis.py

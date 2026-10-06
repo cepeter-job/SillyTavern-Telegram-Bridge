@@ -327,8 +327,13 @@ across schema changes needs the matching pre-upgrade database snapshot.
 
 Signed self-update snapshots the database after verifying/compiling the release
 and before changing source or live code. Snapshots use SQLite's online backup API,
-are integrity-checked, stored with mode `0600`, and retain the newest ten matching
-files under `$SILLYTAVERN_BRIDGE_HOME/backups/database`.
+are integrity-checked, created with mode `0600`, and retain the newest ten matching
+files under `$SILLYTAVERN_BRIDGE_HOME/backups/database`. Each new snapshot is
+finalized as a standalone file with all owned connections closed; the live source
+stays in WAL mode. Historical snapshots that still have WAL/SHM sidecars are kept
+in addition to the normal retention window until an operator verifies they are
+closed and recoverable. Do not manually discard a nonempty WAL or separate it
+from its matching database.
 
 To make an additional snapshot while the bot runs:
 
@@ -426,3 +431,27 @@ source Telegram delivery state, jobs, response variants or callbacks. Once the
 local copy is complete, deleting the source does not delete the new session.
 Copying reads rows incrementally and retains only the checkpoint references it
 needs in memory.
+
+
+## Latest-only release housekeeping
+
+This repository intentionally exposes only the latest GitHub release and tag.
+The cumulative changelog and source commit history remain. This is a retention
+policy, not permission to rewrite `main`, move a signed tag, disable protection,
+or discard private rollback data.
+
+For an explicitly authorized release, first preserve a verified Git bundle,
+remote-ref inventory, release metadata and downloaded assets outside the checkout.
+Backfill missing changelog entries from the published notes before retiring them.
+Merge only after the exact reviewed head passes every required check, then require
+CI and CodeQL on the resulting `main` commit. Create an SSH-signed annotated tag
+with an already trusted key, archive that exact commit, inspect the archive for
+private state, and publish with a real multiline notes file. Download the new
+assets and verify their hashes and contents before deleting any older release
+or tag. Verify the release list and remote tag refs independently after deletion;
+a local deletion or a ruleset-blocked request does not establish remote absence.
+
+Merged branch cleanup is separate: preserve refs, confirm merge ancestry and the
+absence of open PRs, and keep dirty or unmerged worktrees. Never remove the active
+branch or live runtime. Publishing a release does not deploy it or authorize a
+service restart. Storage cleanup does not establish a reduction in process RAM.

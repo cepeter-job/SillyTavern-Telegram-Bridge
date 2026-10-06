@@ -2,6 +2,9 @@
 
 Date: 2026-10-03. Baseline: `fc0990e` (main, including PR #344).
 
+Later focused review: [2026-10-06 audit consolidation](docs/audits/2026-10-06-consolidation.md).
+The measurements below remain the dated October 3 snapshot.
+
 ## Scope and evidence
 
 Repository-wide tracked-file, Python AST/reference, architecture, dependency-lock,

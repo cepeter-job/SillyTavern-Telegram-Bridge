@@ -11,6 +11,7 @@ import json
 import sqlite3
 import time
 
+from bridge.actor_visibility import normalize_known_by
 from bridge.limits import EPISODIC_CONTEXT_MAX_CHARS
 
 
@@ -18,34 +19,19 @@ def _normalized_summary(value: str) -> str:
     return " ".join(str(value or "").split()).casefold()
 
 
-def _normalize_known_by(values) -> tuple[str, ...]:
-    if not isinstance(values, (list, tuple)):
-        return ()
-    result = []
-    seen = set()
-    for value in values:
-        name = " ".join(str(value or "").split()).strip()
-        folded = name.casefold()
-        if not name or folded in seen:
-            continue
-        seen.add(folded)
-        result.append(name)
-    return tuple(result)
-
-
 def _decode_known_by(value: str) -> tuple[str, ...]:
     try:
         decoded = json.loads(str(value or "[]"))
     except (TypeError, ValueError):
         return ()
-    return _normalize_known_by(decoded)
+    return normalize_known_by(decoded)
 
 
 def _visibility_values(visibility: str, known_by) -> tuple[str, tuple[str, ...]]:
     mode = str(visibility or "shared").strip().casefold()
     if mode not in {"shared", "restricted"}:
         raise ValueError("episodic visibility must be shared or restricted")
-    names = _normalize_known_by(known_by)
+    names = normalize_known_by(known_by)
     if mode == "restricted" and not names:
         raise ValueError("restricted episodic memory requires known_by")
     return mode, names

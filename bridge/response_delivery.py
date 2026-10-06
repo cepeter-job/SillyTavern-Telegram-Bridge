@@ -26,21 +26,9 @@ from bridge.telegram_output import (
     telegram_safe_output,
     telegram_transport_output,
 )
+from bridge.text_units import is_escaped_at, utf16_length
 
 _ROLEPLAY_ITALIC = re.compile(r"(?<!\*)\*(?![\s*])(?P<body>.*?)(?<![\s*])\*(?!\*)", re.DOTALL)
-
-
-def _utf16_length(text: str) -> int:
-    return len(str(text).encode("utf-16-le")) // 2
-
-
-def _is_escaped(text: str, index: int) -> bool:
-    backslashes = 0
-    cursor = index - 1
-    while cursor >= 0 and text[cursor] == "\\":
-        backslashes += 1
-        cursor -= 1
-    return bool(backslashes % 2)
 
 
 def _quoted_speech_ranges(text: str) -> list[tuple[int, int]]:
@@ -50,11 +38,11 @@ def _quoted_speech_ranges(text: str) -> list[tuple[int, int]]:
     pairs = {'"': '"', "“": "”"}
     for index, char in enumerate(text):
         if opened_at is None:
-            if char in pairs and (char != '"' or not _is_escaped(text, index)):
+            if char in pairs and (char != '"' or not is_escaped_at(text, index)):
                 opened_at = index
                 closing = pairs[char]
             continue
-        if char == closing and (char != '"' or not _is_escaped(text, index)):
+        if char == closing and (char != '"' or not is_escaped_at(text, index)):
             ranges.append((opened_at, index + 1))
             opened_at = None
             closing = ""
@@ -110,7 +98,7 @@ def _roleplay_reply_chunks(text: str) -> list[tuple[str, list[dict[str, int | st
         source_to_visible_utf16[index] = visible_utf16
         if index not in marker_positions:
             visible_chars.append(char)
-            visible_utf16 += _utf16_length(char)
+            visible_utf16 += utf16_length(char)
         source_to_visible_utf16[index + 1] = visible_utf16
 
     entities: list[dict[str, int | str]] = []
@@ -175,7 +163,7 @@ def _roleplay_reply_chunks(text: str) -> list[tuple[str, list[dict[str, int | st
     rendered: list[tuple[str, list[dict[str, int | str]]]] = []
     utf16_start = 0
     for chunk_text in split_telegram_text(visible):
-        utf16_end = utf16_start + _utf16_length(chunk_text)
+        utf16_end = utf16_start + utf16_length(chunk_text)
         chunk_entities: list[dict[str, int | str]] = []
         for entity in entities:
             entity_start = int(entity["offset"])

@@ -1,5 +1,18 @@
 # CI checks and regression maintenance
 
+## Entry files
+
+GitHub Actions only loads entry files from `.github/workflows/*.yml`. One concern
+per file, with runnable tooling in `tools/` so it is covered by the repository
+tests and the size ratchet.
+
+| File | Trigger | Jobs | Protected |
+| --- | --- | --- | --- |
+| `ci.yml` | `pull_request`; `push` to `main` | `python-tests`, `miniapp-smoke`, `secret-scan`, `dependency-audit`, `static-analysis`, `test` | Yes: the `test` aggregate is the branch-protected check |
+| `pr-title.yml` | `pull_request` lifecycle | `pr-title` | No, advisory |
+| `pr-size-labeler.yml` | `pull_request_target` lifecycle | `size-label` | No, advisory |
+| `scheduled-audit.yml` | weekly schedule; manual dispatch | `advisory-audit` | No, advisory |
+
 ## Required result and independent jobs
 
 The existing branch-protected `test` check is the aggregate result. It waits for
@@ -31,9 +44,13 @@ retain credentials. Actions remain pinned to complete commit SHAs; Python and DO
 tooling continue to use the checked-in locks.
 
 All jobs run on pull requests and pushes to `main`. A newer run cancels the older
-run for the same ref. The module-size ratchet uses the PR base or push-before
-commit as appropriate. There are no changed path exclusions from regression
-coverage.
+run for the same ref. The module-size ratchet compares with the pull-request base
+or the pre-push commit, but only when that revision carries
+`tools/module_size_baseline.json`. A revision that is unavailable, is the
+all-zero new-branch value, or predates that file is skipped in favour of the head
+commit's parent, so the tool cannot measure an older tree as today's caps. The
+absolute 500-line limit and per-file exceptions still apply when no usable
+revision exists. There are no changed path exclusions from regression coverage.
 
 ## Why this shape
 
@@ -57,9 +74,23 @@ checks independently produces both results and removes their serial runtime from
 the critical path. Reusing the protected `test` name for the aggregate ensures
 that splitting the jobs does not make browser checks optional for merging.
 
+Advisory workflows report without gating: `pr-title.yml` and
+`pr-size-labeler.yml` stay outside the protected `test` aggregate, and
+`scheduled-audit.yml` fails only its own scheduled run when a finding cannot be
+recorded. `pr-size-labeler.yml` is the only `pull_request_target` workflow,
+because labelling a fork pull request needs a write-scoped token; it never checks
+out pull-request code and fetches its classifier from the trusted base revision.
+
 | Bespoke gate | Protected invariant | Origin | Retirement condition |
 | --- | --- | --- | --- |
 | Required `test` aggregate | Every independent CI quality job succeeds before the protected check is green | 2026-10-06 CI/test audit of baseline `7d3a5e4`; former combined browser/Python job | Retire only when an equivalent protected check enforces the complete job set and rejects missing or unexpected skips |
+| Module-size ratchet base | The ratchet compares with a revision the change was reviewed against that also carries `tools/module_size_baseline.json`, so a cap can only shrink relative to a comparable tree | 2026-10-07 workflow audit; reproduced from a push whose pre-push revision predated the baseline file | Retire only when every comparison revision is guaranteed to carry the baseline file, or the tool resolves the reviewed base itself |
+| Advisory `pr-title` | Pull-request titles keep the `type(scope): subject` convention that squash subjects and release grouping rely on | 2026-10-07 workflow audit; `tools/check_pr_title.py` | Promote to a required check by removing `continue-on-error`, or retire if the project adopts a different title policy |
+| Advisory `size-label` | Every pull request carries exactly one canonical `size:*` label for review planning | 2026-10-07 workflow audit; `tools/pr_size_label.py` | Retire if review planning stops using size labels |
+| Advisory `advisory-audit` | New advisories, leak-shaped changes and cap violations in unchanged `main` surface in one labelled issue between dependency updates | 2026-10-07 workflow audit; weekly re-audit | Retire only when an equivalent periodic re-audit exists, or dependency updates and scans become continuous |
+
+The 2026-10-07 audit is
+[`docs/audits/2026-10-07-ci-workflow-audit.md`](../../docs/audits/2026-10-07-ci-workflow-audit.md).
 
 ## Audit baseline
 

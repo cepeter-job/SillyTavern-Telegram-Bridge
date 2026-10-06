@@ -1,0 +1,148 @@
+name: Scheduled advisory audit
+
+# Advisory, non-blocking re-audit of `main` between dependency updates. It is
+# outside the protected `test` aggregate and never gates a pull request: it
+# re-runs the `dependency-audit` and `static-analysis` commands against unchanged
+# code, then records any finding in a single labelled issue so a new advisory
+# cannot pass unnoticed between dependency updates.
+# Registry entry and retirement condition: .github/workflows/README.md.
+
+on:
+  schedule:
+    - cron: '17 4 * * 1' # Weekly, Monday 04:17 UTC.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scheduled-advisory-audit
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  ADVISORY_LABEL: ci-advisory
+
+jobs:
+  advisory-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write # the reporter opens or refreshes the single advisory issue
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+          enable-cache: true
+          cache-dependency-glob: |
+            requirements.lock
+            requirements-dev.lock
+
+      - name: Install hash-locked audit tooling
+        run: uv pip install --system --python python --require-hashes -r requirements-dev.lock
+
+      - name: Advisory dependency audit
+        id: dependencies
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          {
+            echo "\$ python -m pip_audit --require-hashes --disable-pip -r requirements.lock"
+            python -m pip_audit --require-hashes --disable-pip -r requirements.lock
+            echo "\$ python -m pip_audit --require-hashes --disable-pip -r requirements-dev.lock"
+            python -m pip_audit --require-hashes --disable-pip -r requirements-dev.lock
+          } 2>&1 | tee "$RUNNER_TEMP/dependencies.txt"
+
+      - name: Advisory leak scan
+        id: leaks
+        continue-on-error: true
+        run: python tools/leakscan.py bridge/ --fail-on high --format markdown -o "$RUNNER_TEMP/leakscan.md"
+
+      - name: Advisory module-size caps
+        id: sizes
+        continue-on-error: true
+        run: python tools/check_module_sizes.py | tee "$RUNNER_TEMP/module-sizes.txt"
+
+      - name: Record findings in the advisory issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPENDENCY_OUTCOME: ${{ steps.dependencies.outcome }}
+          LEAK_OUTCOME: ${{ steps.leaks.outcome }}
+          SIZE_OUTCOME: ${{ steps.sizes.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          body="$RUNNER_TEMP/advisory-report.md"
+          {
+            printf '### Scheduled advisory audit — `%s` (%s)\n\n' "${GITHUB_SHA:0:7}" "$(date -u +%Y-%m-%d)"
+            printf 'Run: %s\n\n' "$RUN_URL"
+            printf '| Check | Outcome |\n|---|---|\n'
+            printf '| Dependency advisories | %s |\n' "$DEPENDENCY_OUTCOME"
+            printf '| Leak scan | %s |\n' "$LEAK_OUTCOME"
+            printf '| Module-size caps | %s |\n' "$SIZE_OUTCOME"
+          } > "$body"
+
+          failing=0
+          for outcome in "$DEPENDENCY_OUTCOME" "$LEAK_OUTCOME" "$SIZE_OUTCOME"; do
+            if [ "$outcome" != "success" ]; then failing=1; fi
+          done
+
+          if [ "$failing" -eq 0 ]; then
+            echo "No advisory findings." >> "$body"
+          else
+            for evidence in dependencies.txt leakscan.md module-sizes.txt; do
+              if [ -s "$RUNNER_TEMP/$evidence" ]; then
+                printf '\n<details><summary>%s</summary>\n\n```\n' "$evidence" >> "$body"
+                head -c 4000 "$RUNNER_TEMP/$evidence" >> "$body"
+                printf '\n```\n\n</details>\n' >> "$body"
+              fi
+            done
+          fi
+
+          if [ "$failing" -ne 0 ]; then
+            echo "::warning::The scheduled advisory audit found findings; they are recorded in the ${ADVISORY_LABEL} issue."
+          fi
+
+          # A repository with issues disabled cannot record the finding anywhere
+          # but this log, so surface it as a failed run instead of staying green.
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY" --jq '.has_issues')" != "true" ]; then
+            echo "::notice::Repository issues are disabled; advisory findings stay in this run log."
+            [ "$failing" -eq 0 ] || exit 1
+            exit 0
+          fi
+
+          issue="$(gh issue list --repo "$GITHUB_REPOSITORY" --label "$ADVISORY_LABEL" --state open --json number --jq '.[0].number // empty')"
+          if [ "$failing" -eq 0 ]; then
+            if [ -n "$issue" ]; then
+              gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" --body-file "$body"
+              gh issue close "$issue" --repo "$GITHUB_REPOSITORY"
+            else
+              echo "Advisory audit is clean; no open issue to close."
+            fi
+            exit 0
+          fi
+
+          gh label create "$ADVISORY_LABEL" --repo "$GITHUB_REPOSITORY" --force \
+            --color BFD4F2 --description "Findings from the scheduled advisory audit workflow"
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" --body-file "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" \
+              --title "Scheduled advisory audit findings" \
+              --label "$ADVISORY_LABEL" --body-file "$body"
+          fi

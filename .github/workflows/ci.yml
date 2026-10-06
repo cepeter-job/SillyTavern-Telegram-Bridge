@@ -199,9 +199,34 @@ jobs:
         run: python tools/check_dependency_lock.py
 
       - name: Ratchet Python module sizes against the reviewed base
+        # Compare with the revision the change was reviewed against: the
+        # pull-request base, or the pre-push tip of the branch. A revision that
+        # is unavailable, is the all-zero new-branch value, or predates
+        # tools/module_size_baseline.json would make the tool measure that older
+        # tree as today's caps, so such a candidate is skipped in favour of the
+        # head commit's parent and, failing that, the absolute caps alone.
+        # Rationale and evidence: .github/workflows/README.md.
         env:
-          SIZE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: python tools/check_module_sizes.py --base-ref "$SIZE_BASE_REF"
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          base_ref=""
+          for candidate in "$PR_BASE_SHA" "$PUSH_BEFORE_SHA" \
+            "$(git rev-parse --verify --quiet "${GITHUB_SHA}^" || true)"; do
+            [ -n "$candidate" ] || continue
+            git cat-file -e "${candidate}^{commit}" 2>/dev/null || continue
+            if git cat-file -e "${candidate}:tools/module_size_baseline.json" 2>/dev/null; then
+              base_ref="$candidate"
+              break
+            fi
+          done
+          if [ -z "$base_ref" ]; then
+            echo "No reviewed base revision is available; enforcing the absolute caps only."
+            python tools/check_module_sizes.py
+          else
+            echo "Size ratchet base revision: ${base_ref}"
+            python tools/check_module_sizes.py --base-ref "$base_ref"
+          fi
 
       - name: Audit Python, installer and worker reference evidence
         run: python -m tools.audit_module_references --output module-references.json

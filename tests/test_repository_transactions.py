@@ -18,6 +18,7 @@ import bridge.operation_repository as _owner_operation_repository
 import bridge.reference_repository as _owner_reference_repository
 import bridge.scene_repository as _owner_scene_repository
 from bridge.rag_service import RagService
+from bridge.sqlite_store import write_transaction
 
 ensure_application_extensions()
 
@@ -52,7 +53,7 @@ class WriteTransactionTests(SettingsTestCase):
         self.tmp.cleanup()
 
     def test_owned_transaction_commits(self):
-        with _m_memory_curator.write_transaction(self.db):
+        with write_transaction(self.db):
             self.db.execute("INSERT INTO values_table VALUES('committed')")
 
         observer = sqlite3.connect(self.path)
@@ -66,7 +67,7 @@ class WriteTransactionTests(SettingsTestCase):
 
     def test_owned_transaction_rolls_back_on_exception(self):
         with self.assertRaisesRegex(RuntimeError, "boom"):
-            with _m_memory_curator.write_transaction(self.db):
+            with write_transaction(self.db):
                 self.db.execute("INSERT INTO values_table VALUES('rolled-back')")
                 raise RuntimeError("boom")
 
@@ -77,7 +78,7 @@ class WriteTransactionTests(SettingsTestCase):
 
     def test_nested_scope_does_not_commit_outer_transaction(self):
         self.db.execute("BEGIN")
-        with _m_memory_curator.write_transaction(self.db):
+        with write_transaction(self.db):
             self.db.execute("INSERT INTO values_table VALUES('pending')")
 
         self.assertTrue(self.db.in_transaction)
@@ -101,7 +102,7 @@ class WriteTransactionTests(SettingsTestCase):
         self.db.execute("INSERT INTO values_table VALUES('outer')")
 
         with self.assertRaisesRegex(RuntimeError, "nested"):
-            with _m_memory_curator.write_transaction(self.db):
+            with write_transaction(self.db):
                 self.db.execute("INSERT INTO values_table VALUES('inner')")
                 raise RuntimeError("nested")
 

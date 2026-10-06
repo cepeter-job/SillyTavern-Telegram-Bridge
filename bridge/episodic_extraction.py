@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from bridge.episodic_memory import store_episodic_memory
 from bridge.generation_settings import get_generation_settings
+from bridge.memory_contracts import MemoryFact
+from bridge.memory_fact_store import accept_source_facts, classified_audience
+from bridge.memory_store import MemorySource
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.narrative_repository import load_narrative_clock
 from bridge.provider_port import ProviderPort
@@ -56,18 +60,7 @@ def parse_episodic_candidates(source: str) -> list[EpisodicCandidate]:
             continue
         kind = str(item.get("kind") or "").strip().casefold()
         summary = str(item.get("summary") or "").strip()
-        raw_visibility = item.get("visibility")
-        visibility = (
-            "restricted"
-            if raw_visibility is None and kind == "secret"
-            else str(raw_visibility or "shared").strip().casefold()
-        )
-        known_by_raw = item.get("known_by") or []
-        known_by = (
-            tuple(name for name in (" ".join(str(value or "").split()).strip() for value in known_by_raw) if name)
-            if isinstance(known_by_raw, list)
-            else ()
-        )
+        visibility, known_by = classified_audience(item.get("visibility"), item.get("known_by"))
         try:
             importance = float(item.get("importance"))
         except (TypeError, ValueError):
@@ -95,7 +88,14 @@ def parse_episodic_candidates(source: str) -> list[EpisodicCandidate]:
     return result
 
 
-def extract_episodic_memories(
+@dataclass(frozen=True)
+class EpisodicExtractionResult:
+    status: str
+    inserted: int = 0
+    memory_ids: tuple[int, ...] = ()
+
+
+def extract_episodic_memories_result(
     db: sqlite3.Connection,
     chat_id: str,
     session: dict[str, str],
@@ -106,18 +106,30 @@ def extract_episodic_memories(
     provider_port: ProviderPort,
     app_settings: AppSettings,
     expected_source: tuple[float, int, int] | None = None,
-) -> int:
+    source_valid: Callable[[], bool] | None = None,
+    source_ref: MemorySource | None = None,
+) -> EpisodicExtractionResult:
+    if len(source_text) > 50000:
+        raise ValueError("Episodic input is too large; supply bounded canonical source parts")
+    if source_ref is not None and (
+        source_text != source_ref.content
+        or source_start_rowid != source_ref.start_id
+        or source_end_rowid != source_ref.end_id
+    ):
+        raise ValueError("Extraction text must be the exact canonical source part")
     if not str(source_text or "").strip():
-        return 0
+        if source_ref is not None and accept_source_facts(db, source_ref, [], source_valid=source_valid) is None:
+            return EpisodicExtractionResult("stale")
+        return EpisodicExtractionResult("complete")
     if db.in_transaction:
         raise RuntimeError("Episodic extraction cannot call a provider inside a transaction")
     session_id = str(session["session_id"])
     source_clock = load_narrative_clock(db, chat_id, session_id)
-    if source_clock is None:
-        return 0
+    if source_clock is None or (source_valid is not None and not source_valid()):
+        return EpisodicExtractionResult("stale")
     identity_fields = ("session_created_at", "history_revision", "latest_rowid")
     if expected_source is not None and tuple(source_clock[key] for key in identity_fields) != expected_source:
-        return 0
+        return EpisodicExtractionResult("stale")
     messages = [
         {
             "role": "system",
@@ -133,7 +145,7 @@ def extract_episodic_memories(
                 "fact, goal, world_change, secret."
             ),
         },
-        {"role": "user", "content": str(source_text)[:50000]},
+        {"role": "user", "content": str(source_text)},
     ]
     settings = get_generation_settings(db, chat_id, session_id)
     settings.update(
@@ -152,11 +164,30 @@ def extract_episodic_memories(
         settings=settings,
     )
     candidates = parse_episodic_candidates(response)
+    if source_ref is not None:
+        with write_transaction(db):
+            previous_id = int(db.execute("SELECT COALESCE(MAX(memory_id),0) FROM episodic_memories").fetchone()[0])
+            ids = accept_source_facts(
+                db,
+                source_ref,
+                [
+                    MemoryFact(item.kind, item.importance, item.summary, item.visibility, item.known_by)
+                    for item in candidates
+                ],
+                source_valid=source_valid,
+            )
+            if ids is None:
+                return EpisodicExtractionResult("stale")
+            return EpisodicExtractionResult("complete", sum(memory_id > previous_id for memory_id in ids), ids)
     inserted = 0
     with write_transaction(db):
         current_clock = load_narrative_clock(db, chat_id, session_id)
-        if current_clock is None or any(current_clock[key] != source_clock[key] for key in identity_fields):
-            return 0
+        if current_clock is None or (
+            not source_valid()
+            if source_valid is not None
+            else any(current_clock[key] != source_clock[key] for key in identity_fields)
+        ):
+            return EpisodicExtractionResult("stale")
         for candidate in candidates:
             inserted += int(
                 store_episodic_memory(
@@ -172,4 +203,9 @@ def extract_episodic_memories(
                     known_by=candidate.known_by,
                 )
             )
-    return inserted
+    return EpisodicExtractionResult("complete", inserted)
+
+
+def extract_episodic_memories(*args, **kwargs) -> int:
+    """Compatibility integer view; durable workers consume the explicit result."""
+    return extract_episodic_memories_result(*args, **kwargs).inserted

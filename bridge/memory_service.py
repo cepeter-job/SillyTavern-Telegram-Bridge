@@ -4,29 +4,34 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from typing import Literal
 
-from bridge.port_contracts import PurgeSessionMemory, ReadSummary, ReadSummaryState, RecallMemory, RetainSessionMemory
-
-
-@dataclass(frozen=True)
-class MemoryPromptContext:
-    """Memory material supplied to prompt assembly."""
-
-    recall: str
-    summary: str
-    episodic: str = ""
+from bridge.memory_contracts import MemoryPromptContext as MemoryPromptContext
+from bridge.memory_contracts import expand_memory_query
+from bridge.port_contracts import (
+    PurgeSessionMemory,
+    ReadSummaryState,
+    ResolveMemoryScope,
+    RetainSessionMemory,
+    ScopedRead,
+    ScopedRecall,
+    ValidateMemoryBlocks,
+)
 
 
 @dataclass(frozen=True)
 class MemoryService:
-    """Coordinate prompt memory, retention, and session-memory purge."""
+    """Coordinate memory through injected pure contracts and one captured reader scope."""
 
-    recall_context: RecallMemory
-    summary_for_prompt: ReadSummary
+    resolve_scope: ResolveMemoryScope
+    scoped_recall: ScopedRecall
+    scoped_episodes: ScopedRecall
+    scoped_summary: ScopedRead
+    scoped_scene: ScopedRead
+    validate_blocks: ValidateMemoryBlocks
     summary_state: ReadSummaryState
     retain_session: RetainSessionMemory
     purge_session_memory: PurgeSessionMemory
-    episodic_context: RecallMemory | None = None
 
     def prompt_context(
         self,
@@ -36,36 +41,41 @@ class MemoryService:
         fields: dict[str, str],
         query: str,
         *,
+        through_rowid: int | None = None,
         edited_user_rowid: int | None = None,
+        principals: tuple[str, ...] | None = None,
+        consumer: Literal["character", "narrator"] = "character",
+        historical: bool | None = None,
     ) -> MemoryPromptContext:
-        recall = self.recall_context(
+        if edited_user_rowid is not None:
+            through_rowid = max(0, edited_user_rowid - 1)
+            historical = True
+        scope = self.resolve_scope(
             db,
             chat_id,
             session,
             fields,
-            query,
+            through_rowid=through_rowid,
+            principals=principals,
+            consumer=consumer,
+            historical=historical,
         )
-        if edited_user_rowid is None:
-            summary = self.summary_for_prompt(db, chat_id, session)
-        else:
-            _stored_summary, covered_until = self.summary_state(
-                db,
-                chat_id,
-                session["session_id"],
-            )
-            if int(covered_until) >= int(edited_user_rowid):
-                summary = ""
-            else:
-                summary = self.summary_for_prompt(db, chat_id, session)
-        episodic = (
-            self.episodic_context(db, chat_id, session, fields, query)
-            if edited_user_rowid is None and self.episodic_context is not None
-            else ""
-        )
+        if scope is None:
+            return MemoryPromptContext()
+        # Capture local evidence before slow recall, then revalidate every returned pointer.
+        summary = self.scoped_summary(db, scope)
+        scene = self.scoped_scene(db, scope)
+        expanded_query = expand_memory_query(query, scope.principals, scene.text)
+        episodes = self.scoped_episodes(db, scope, expanded_query)
+        recall = self.scoped_recall(db, scope, expanded_query)
+        recall, episodes, summary, scene = self.validate_blocks(db, scope, (recall, episodes, summary, scene))
         return MemoryPromptContext(
-            recall=str(recall or ""),
-            summary=str(summary or ""),
-            episodic=str(episodic or ""),
+            recall.text,
+            summary.text,
+            episodes.text,
+            scene.text,
+            scope,
+            tuple(pointer for block in (recall, episodes, summary, scene) for pointer in block.evidence),
         )
 
     def summary_status(

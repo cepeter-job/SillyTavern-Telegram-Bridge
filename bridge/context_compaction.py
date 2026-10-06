@@ -38,6 +38,8 @@ class ContextProfile:
     input_budget_tokens: int
     chars_per_token: float
     source: str
+    requested_output_tokens: int = 0
+    output_reservation_only: bool = False
 
 
 class ContextWindowBudgetError(ProviderRequestError):
@@ -59,26 +61,77 @@ class ContextWindowBudgetError(ProviderRequestError):
         )
 
 
-def context_profile(model: str = "", *, app_settings: AppSettings) -> ContextProfile:
+def normalize_token_ratio(value: object) -> float:
+    try:
+        ratio = float(cast(float, value))
+    except (TypeError, ValueError):
+        return DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN
+    return ratio if math.isfinite(ratio) and 1.0 <= ratio <= 8.0 else DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN
+
+
+def context_profile(
+    model: str = "",
+    *,
+    app_settings: AppSettings,
+    requested_output_tokens: int | None = None,
+    transport: str = "",
+) -> ContextProfile:
     codex_window = codex_context_window_tokens(model)
-    metadata = {} if codex_window is not None else context_metadata_for_model(model, app_settings=app_settings)
+    metadata = context_metadata_for_model(model, app_settings=app_settings)
     if codex_window is not None:
         window = codex_window
         source = "codex-alias"
     else:
         window = int(cast(int, metadata.get("window_tokens") or app_settings.context_window_tokens))
         source = str(metadata.get("source") or "global-fallback")
-    chars_per_token = float(cast(float, metadata.get("chars_per_token") or DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN))
+    ratio = normalize_token_ratio(metadata.get("chars_per_token"))
+    actual_transport = transport or str(metadata.get("transport") or "")
     safety = min(
         MAX_CONTEXT_SAFETY_MARGIN_TOKENS,
         max(MIN_CONTEXT_SAFETY_MARGIN_TOKENS, math.ceil(window * CONTEXT_SAFETY_MARGIN_RATIO)),
     )
-    reserve = min(
-        int(app_settings.context_output_reserve_tokens),
-        max(512, window - safety - MIN_CONTEXT_INPUT_BUDGET_TOKENS),
+    if requested_output_tokens is None:
+        # Compatibility for UI/default profiles. Actual requests always supply
+        # their output setting and must never silently reduce that reservation.
+        reserve = min(
+            int(app_settings.context_output_reserve_tokens),
+            max(512, window - safety - MIN_CONTEXT_INPUT_BUDGET_TOKENS),
+        )
+        budget = max(MIN_CONTEXT_INPUT_BUDGET_TOKENS, window - reserve - safety)
+        requested = reserve
+    else:
+        requested = int(requested_output_tokens)
+        reserve = max(3000, requested) if actual_transport == "opencode_muse" else requested
+        budget = window - reserve - safety
+    profile = ContextProfile(
+        window,
+        reserve,
+        safety,
+        budget,
+        ratio,
+        source,
+        requested,
+        actual_transport == "openai_codex" or codex_window is not None,
     )
-    budget = max(MIN_CONTEXT_INPUT_BUDGET_TOKENS, window - reserve - safety)
-    return ContextProfile(window, reserve, safety, budget, chars_per_token, source)
+    if requested <= 0 or budget <= 0:
+        stats = profile_stats(profile)
+        stats.update({"original_tokens": 0, "final_tokens": 0, "over_budget": True, "allocation_invalid": True})
+        raise ContextWindowBudgetError(model, stats)
+    return profile
+
+
+def profile_stats(profile: ContextProfile) -> dict[str, object]:
+    return {
+        "window_tokens": profile.window_tokens,
+        "output_reserve_tokens": profile.output_reserve_tokens,
+        "requested_output_tokens": profile.requested_output_tokens,
+        "safety_margin_tokens": profile.safety_margin_tokens,
+        "budget_tokens": max(0, profile.input_budget_tokens),
+        "chars_per_token": profile.chars_per_token,
+        "source": profile.source,
+        "output_reservation_only": profile.output_reservation_only,
+        "estimated": True,
+    }
 
 
 def context_window_tokens(model: str = "", *, app_settings: AppSettings) -> int:
@@ -98,7 +151,7 @@ def context_history_candidate_limit(*, app_settings: AppSettings) -> int:
 
 
 def _content_tokens(content: object, chars_per_token: float) -> int:
-    ratio = min(8.0, max(1.0, float(chars_per_token or DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN)))
+    ratio = normalize_token_ratio(chars_per_token)
     if isinstance(content, str):
         return max(1, math.ceil(len(content) / ratio))
     if isinstance(content, list):
@@ -107,7 +160,7 @@ def _content_tokens(content: object, chars_per_token: float) -> int:
             if not isinstance(item, dict):
                 total += _content_tokens(str(item), ratio)
                 continue
-            if item.get("type") == "image_url":
+            if item.get("type") in {"image_url", "image", "input_image"}:
                 # Do not count a base64 data URI as text. Reserve a conservative
                 # fixed amount; providers account for image tokens differently.
                 total += 1024
@@ -159,35 +212,59 @@ def _trim_middle(value: str, maximum: int) -> str:
     return value[:head].rstrip() + "\n…[compacted]…\n" + value[-max(0, tail) :].lstrip()
 
 
-def _shrink_tagged_section(text: str, tag: str, target_chars: int) -> tuple[str, bool]:
-    pattern = re.compile(
-        rf"(<{re.escape(tag)}>\n?)(.*?)(\n?</{re.escape(tag)}>)",
-        flags=re.DOTALL,
-    )
-    match = pattern.search(text)
-    if not match:
-        return text, False
-    body = match.group(2)
-    trimmed = _trim_middle(body, max(0, int(target_chars)))
-    if trimmed == body:
-        return text, False
-    replacement = match.group(1) + trimmed + match.group(3)
-    return text[: match.start()] + replacement + text[match.end() :], True
+_OPTIONAL_TAGS = {
+    "rag": "untrusted_data_bank_references",
+    "memory": "untrusted_memory",
+    "episodic": "untrusted_episodic_memory",
+    "npc": "untrusted_npc_state",
+}
 
 
-def _shrink_summary_section(text: str, target_chars: int) -> tuple[str, bool]:
-    marker = "## Session continuity summary\n"
-    start = text.find(marker)
-    if start < 0:
-        return text, False
-    body_start = start + len(marker)
-    next_section = text.find("\n\n## ", body_start)
-    body_end = len(text) if next_section < 0 else next_section
-    body = text[body_start:body_end]
-    trimmed = _trim_middle(body, max(0, int(target_chars)))
-    if trimmed == body:
-        return text, False
-    return text[:body_start] + trimmed + text[body_end:], True
+def _optional_span(message: dict, kind: str) -> tuple[int, int] | None:
+    text = _text_content(message)
+    if "_context_optional" in message:
+        # Assembly records exact body spans, including an empty list on fixed
+        # messages. User-supplied lookalike tags/headings cannot become optional.
+        for span in message["_context_optional"]:
+            if span["kind"] == kind and 0 <= span["start"] <= span["end"] <= len(text):
+                return int(span["start"]), int(span["end"])
+        return None
+    if kind == "summary":
+        marker = "## Session continuity summary\n"
+        start = text.find(marker)
+        if start < 0:
+            return None
+        start += len(marker)
+        end = text.find("\n\n## ", start)
+        return start, len(text) if end < 0 else end
+    tag = _OPTIONAL_TAGS[kind]
+    match = re.search(rf"<{tag}>\n?(.*?)\n?</{tag}>", text, flags=re.DOTALL)
+    return match.span(1) if match else None
+
+
+def _shrink_optional(message: dict, kind: str, maximum: int) -> bool:
+    span = _optional_span(message, kind)
+    if span is None:
+        return False
+    start, end = span
+    text = _text_content(message)
+    trimmed = _trim_middle(text[start:end], maximum)
+    if trimmed == text[start:end]:
+        return False
+    _replace_text_content(message, text[:start] + trimmed + text[end:])
+    change = len(trimmed) - (end - start)
+    for other in message.get("_context_optional", []):
+        if other["kind"] == kind:
+            other["end"] += change
+        elif other["start"] >= end:
+            other["start"] += change
+            other["end"] += change
+    return True
+
+
+def _strip_context_metadata(messages: list[dict]) -> None:
+    for message in messages:
+        message.pop("_context_optional", None)
 
 
 def compact_chat_messages(
@@ -197,12 +274,13 @@ def compact_chat_messages(
     min_recent_messages: int = 6,
     chars_per_token: float = DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN,
     app_settings: AppSettings,
+    preserve_last_assistant: bool = False,
 ) -> tuple[list[dict], dict[str, object]]:
     """Compact a built prompt while preserving fixed instructions/current turn."""
     budget = max(
-        MIN_CONTEXT_INPUT_BUDGET_TOKENS,
-        int(budget_tokens or context_input_budget_tokens(app_settings=app_settings)),
+        0, int(context_input_budget_tokens(app_settings=app_settings) if budget_tokens is None else budget_tokens)
     )
+    chars_per_token = normalize_token_ratio(chars_per_token)
     compacted = copy.deepcopy(messages)
     original_tokens = estimate_message_tokens(compacted, chars_per_token=chars_per_token)
     dropped_history = 0
@@ -221,7 +299,13 @@ def compact_chat_messages(
             index for index, message in enumerate(compacted) if message.get("role") in {"user", "assistant"}
         ]
         protected_latest = conversation_indices[-1] if conversation_indices else -1
-        removable = [index for index in conversation_indices if index != protected_latest]
+        protected = {protected_latest}
+        if preserve_last_assistant:
+            last_assistant = next(
+                (index for index in reversed(conversation_indices) if compacted[index].get("role") == "assistant"), -1
+            )
+            protected.add(last_assistant)
+        removable = [index for index in conversation_indices if index not in protected]
         while current_tokens() > budget and len(removable) > floor:
             index = removable.pop(0)
             compacted[index]["_drop_for_context"] = True
@@ -229,7 +313,6 @@ def compact_chat_messages(
         compacted = [message for message in compacted if not message.pop("_drop_for_context", False)]
 
     def shrink_user_tagged_sections(compute_target: bool, fallback_to_last: bool) -> None:
-        """Shrink <untrusted_*> sections in the latest user message."""
         nonlocal rag_trimmed, memory_trimmed, npc_trimmed
         latest = next(
             (message for message in reversed(compacted) if message.get("role") == "user"),
@@ -237,66 +320,37 @@ def compact_chat_messages(
         )
         if latest is None:
             return
-        text = _text_content(latest)
-        for tag in (
-            "untrusted_data_bank_references",
-            "untrusted_memory",
-            "untrusted_episodic_memory",
-            "untrusted_npc_state",
-        ):
+        for kind in ("rag", "memory", "episodic", "npc"):
             if current_tokens() <= budget:
                 break
-            if compute_target:
-                pattern = re.search(
-                    rf"<{tag}>\n?(.*?)\n?</{tag}>",
-                    text,
-                    flags=re.DOTALL,
-                )
-                if not pattern:
-                    continue
-                body_len = len(pattern.group(1))
-                deficit_chars = max(0, (current_tokens() - budget) * 4)
-                target = max(512, body_len - deficit_chars - 256)
-            else:
-                target = 0
-            text, changed = _shrink_tagged_section(text, tag, target)
-            if changed:
-                _replace_text_content(latest, text)
-                if tag == "untrusted_data_bank_references":
+            span = _optional_span(latest, kind)
+            if span is None:
+                continue
+            deficit_chars = math.ceil(max(0, current_tokens() - budget) * chars_per_token)
+            target = max(512, span[1] - span[0] - deficit_chars - 64) if compute_target else 0
+            if _shrink_optional(latest, kind, target):
+                if kind == "rag":
                     rag_trimmed = True
-                elif tag == "untrusted_npc_state":
+                elif kind == "npc":
                     npc_trimmed = True
                 else:
                     memory_trimmed = True
 
     def shrink_summary(compute_target: bool) -> None:
-        """Shrink the continuity summary section of the system message."""
         nonlocal summary_trimmed
-        system_message = next(
-            (message for message in compacted if message.get("role") == "system"),
-            None,
-        )
+        system_message = next((message for message in compacted if message.get("role") == "system"), None)
         if system_message is None:
             return
-        text = _text_content(system_message)
-        if compute_target:
-            marker = "## Session continuity summary\n"
-            start = text.find(marker)
-            if start < 0:
-                return
-            body_start = start + len(marker)
-            next_section = text.find("\n\n## ", body_start)
-            body_end = len(text) if next_section < 0 else next_section
-            deficit_chars = max(0, (current_tokens() - budget) * 4)
-            target = max(1000, (body_end - body_start) - deficit_chars - 256)
-        else:
-            target = 0
-        text, changed = _shrink_summary_section(text, target)
-        if changed:
-            _replace_text_content(system_message, text)
+        span = _optional_span(system_message, "summary")
+        if span is None:
+            return
+        deficit_chars = math.ceil(max(0, current_tokens() - budget) * chars_per_token)
+        target = max(1000, span[1] - span[0] - deficit_chars - 64) if compute_target else 0
+        if _shrink_optional(system_message, "summary", target):
             summary_trimmed = True
 
     if original_tokens <= budget:
+        _strip_context_metadata(compacted)
         return compacted, {
             "budget_tokens": budget,
             "original_tokens": original_tokens,
@@ -333,7 +387,13 @@ def compact_chat_messages(
     if current_tokens() > budget:
         shrink_summary(compute_target=False)
 
+    # A recent-pair preference must not make otherwise optional old history
+    # mandatory. Continuations explicitly protect their target assistant above.
+    if current_tokens() > budget:
+        drop_old_turns(0)
+
     final_tokens = current_tokens()
+    _strip_context_metadata(compacted)
     return compacted, {
         "budget_tokens": budget,
         "original_tokens": original_tokens,
@@ -345,3 +405,52 @@ def compact_chat_messages(
         "summary_trimmed": summary_trimmed,
         "over_budget": final_tokens > budget,
     }
+
+
+def budget_chat_messages(
+    messages: list[dict],
+    model: str,
+    requested_output_tokens: int,
+    *,
+    app_settings: AppSettings,
+    compact: bool = True,
+    preserve_last_assistant: bool = False,
+    transport: str = "",
+) -> tuple[list[dict], dict[str, object]]:
+    """Bound the final request; wire attempts recheck without silently editing.
+
+    This is a configured character-ratio estimate with per-message overhead and
+    a fixed 1,024-token image allowance, not a model tokenizer or an image-size
+    guarantee. Codex output is locally reserved; its wire API exposes no cap.
+    """
+    try:
+        profile = context_profile(
+            model,
+            requested_output_tokens=requested_output_tokens,
+            transport=transport,
+            app_settings=app_settings,
+        )
+    except ContextWindowBudgetError as exc:
+        estimated = estimate_message_tokens(messages, chars_per_token=float(cast(float, exc.stats["chars_per_token"])))
+        exc.stats.update({"original_tokens": estimated, "final_tokens": estimated})
+        raise
+    if compact:
+        result, stats = compact_chat_messages(
+            messages,
+            budget_tokens=profile.input_budget_tokens,
+            chars_per_token=profile.chars_per_token,
+            app_settings=app_settings,
+            preserve_last_assistant=preserve_last_assistant,
+        )
+    else:
+        result = messages
+        estimated = estimate_message_tokens(messages, chars_per_token=profile.chars_per_token)
+        stats = {
+            "original_tokens": estimated,
+            "final_tokens": estimated,
+            "over_budget": estimated > profile.input_budget_tokens,
+        }
+    stats.update(profile_stats(profile))
+    if stats["over_budget"]:
+        raise ContextWindowBudgetError(model, stats)
+    return result, stats

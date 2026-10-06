@@ -94,6 +94,11 @@ class ProviderPort:
     usage_recorder: UsageRecorder | None = None
     usage_scope: UsageScope | None = None
     policy: ProviderPolicy | None = None
+    context_observer: Callable[[dict[str, object]], None] | None = None
+
+    def with_context_observer(self, observer: Callable[[dict[str, object]], None]) -> ProviderPort:
+        """Bind a pure observer for this one call, including fallback attempts."""
+        return replace(self, context_observer=observer)
 
     def for_usage(self, chat_id: str, session_id: str, purpose: str) -> ProviderPort:
         """Bind trusted use-case identity; never infer ownership from provider session strings."""
@@ -181,6 +186,8 @@ class ProviderPort:
     ) -> str:
         readings: list[TokenUsage] = []
         backend = self.generate_backend
+        if self.context_observer is not None:
+            backend = partial(backend, context_observer=self.context_observer)
         tracking = self.usage_recorder is not None and self.usage_scope is not None
         if tracking:
             backend = partial(backend, usage_callback=readings.append)

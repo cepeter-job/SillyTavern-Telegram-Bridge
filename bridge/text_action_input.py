@@ -137,8 +137,8 @@ def _handle_text_action_input(
             if len(value) > 4000 or not remember_fact(
                 db, chat_id, session, fields, value, app_settings=request_context.app_settings
             ):
-                raise ValueError("Hindsight memory is unavailable or exceeds 4,000 characters")
-            send_text(token, chat_id, "Memory queued for Hindsight.")
+                raise ValueError("Memory could not be saved locally or exceeds 4,000 characters")
+            send_text(token, chat_id, "Memory saved for this character. External indexing is queued.")
         elif action == "macro":
             handle_macro_command(
                 db, token, chat_id, session, fields, "/macro " + value, request_context=request_context

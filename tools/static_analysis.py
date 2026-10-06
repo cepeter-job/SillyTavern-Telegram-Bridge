@@ -51,6 +51,13 @@ REPOSITORY_TARGETS: tuple[str, ...] = (
 
 # Type coverage grows independently of the deliberately isolated service layer.
 TYPE_TARGETS: tuple[str, ...] = (
+    "bridge/memory_contracts.py",
+    "bridge/memory_fact_store.py",
+    "bridge/memory_scope_store.py",
+    "bridge/memory_artifact_store.py",
+    "bridge/memory_scope_schema.py",
+    "bridge/memory_scope_runtime.py",
+    "bridge/memory_snapshot_store.py",
     "bridge/alternate_ending_runtime.py",
     "bridge/alternate_ending.py",
     "bridge/alternate_ending_restore.py",
@@ -178,8 +185,15 @@ PURE_CONTRACT_IMPORTS = {
     "bridge.director_contracts": frozenset(),
     "bridge.token_usage_values": frozenset(),
     "bridge.rag_contracts": frozenset(),
+    "bridge.memory_contracts": frozenset(),
     "bridge.port_contracts": frozenset(
-        {"bridge.request_types", "bridge.token_usage_values", "bridge.provider_errors", "bridge.provider_health_values"}
+        {
+            "bridge.request_types",
+            "bridge.token_usage_values",
+            "bridge.provider_errors",
+            "bridge.provider_health_values",
+            "bridge.memory_contracts",
+        }
     ),
     "bridge.provider_health_values": frozenset(),
     "bridge.provider_errors": frozenset(),
@@ -193,6 +207,7 @@ SERVICE_CONTRACT_IMPORTS = frozenset(
         "bridge.provider_errors",
         "bridge.request_types",
         "bridge.rag_contracts",
+        "bridge.memory_contracts",
         "bridge.token_usage_values",
     }
 )

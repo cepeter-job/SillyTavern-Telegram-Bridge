@@ -185,7 +185,9 @@ def _exercise_runtime_memory_diagnostics(
 
     events = [] if events is None else events
     database = sqlite3.connect(":memory:")
-    database.execute("CREATE TABLE light_novel_choice_sets(generation_status TEXT, lease_token TEXT, lease_until REAL)")
+    from bridge.schema import initialize_database_schema
+
+    initialize_database_schema(database)
 
     def request(_token, method, _payload=None):
         if method == "getUpdates":

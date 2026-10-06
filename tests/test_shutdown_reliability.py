@@ -21,7 +21,9 @@ def _exercise_shutdown(monkeypatch, tmp_path, *, drained: bool):
     import bridge.runtime_lifecycle as lifecycle
 
     database = sqlite3.connect(":memory:")
-    database.execute("CREATE TABLE light_novel_choice_sets(generation_status TEXT, lease_token TEXT, lease_until REAL)")
+    from bridge.schema import initialize_database_schema
+
+    initialize_database_schema(database)
     events = []
 
     def request(_token, method, _payload=None):

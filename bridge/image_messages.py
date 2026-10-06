@@ -8,9 +8,10 @@ import time
 
 from bridge.card_content import card_fields_from_file
 from bridge.closed_session_guard import guard_story_mutation
+from bridge.context_diagnostics import record_context_attempts
 from bridge.conversation_lifecycle import START_REQUIRED, require_started
 from bridge.delivery_progress import bind_committed_turn
-from bridge.generation import build_chat_messages, render_session_response
+from bridge.generation import build_chat_messages, finalize_generation_messages, render_session_response
 from bridge.generation_settings import get_generation_settings
 from bridge.group_director_service import GroupDirectorService
 from bridge.group_service import GroupService
@@ -91,6 +92,8 @@ def process_image_message(
         fields,
         caption,
         history_rows,
+        through_rowid=memory_prompt.scope.through_rowid if memory_prompt.scope else None,
+        memory_scope=memory_prompt.scope,
     )
     messages = build_chat_messages(
         session,
@@ -102,6 +105,8 @@ def process_image_message(
         episodic_context=episodic_context,
         npc_context=npc_context,
         session_summary=session_summary,
+        scene_context=memory_prompt.scene,
+        defer_compaction=True,
         rag_context=rag_service.context_for_prompt(db, chat_id, caption, rag_bundle),
         group_context=group_context,
         persona_service=persona_service,
@@ -111,14 +116,28 @@ def process_image_message(
     novel_turn = begin_novel_turn(db, chat_id, session, "image", telegram_message_id)
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
-    send_typing(token, chat_id)
-    reply = provider_port.for_usage(chat_id, session["session_id"], "image").generate(
-        api_key,
-        session["model_id"],
+    generation_settings = get_generation_settings(db, chat_id, session["session_id"])
+    messages = finalize_generation_messages(
+        db,
+        chat_id,
+        session,
         messages,
-        session_id=f"telegram:{chat_id}:{session['session_id']}",
-        settings=get_generation_settings(db, chat_id, session["session_id"]),
+        generation_settings,
+        app_settings=app_settings,
     )
+    send_typing(token, chat_id)
+    with record_context_attempts(db, chat_id, session["session_id"]) as observe_context:
+        reply = (
+            provider_port.for_usage(chat_id, session["session_id"], "image")
+            .with_context_observer(observe_context)
+            .generate(
+                api_key,
+                session["model_id"],
+                messages,
+                session_id=f"telegram:{chat_id}:{session['session_id']}",
+                settings=generation_settings,
+            )
+        )
     if novel_turn:
         reply = novel_turn.extract(reply)
     reply += rag_service.citation_footer(db, chat_id, caption, rag_bundle)
@@ -127,7 +146,7 @@ def process_image_message(
         session,
         reply,
         chat_id,
-        get_generation_settings(db, chat_id, session["session_id"]),
+        generation_settings,
         provider_port=provider_port,
     )
     if novel_turn:

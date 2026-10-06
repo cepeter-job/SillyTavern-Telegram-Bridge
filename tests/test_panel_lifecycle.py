@@ -296,6 +296,35 @@ class PanelLifecycleTests(SettingsTestCase):
         self.assertEqual(pending["actor_id"], "user-1")
         self.assertGreater(pending["expires_at"], time.time())
 
+    def test_character_upload_back_clears_pending_state(self):
+        session = _owner_session_core.ensure_session(
+            self.db, "chat", self.app_settings_builder.default_model, app_settings=self.app_settings_builder.build()
+        )
+        _m_telegram.bind_panel_session(self.db, "chat", 105, session["session_id"])
+        original_answer = _m_callback_dispatch.answer_callback
+        original_request = _owner_character_callbacks.send_panel_request
+        original_menu = _owner_character_callbacks.send_character_menu
+        _m_callback_dispatch.answer_callback = lambda *_args, **_kwargs: None
+        _owner_character_callbacks.send_panel_request = lambda *_args, **_kwargs: {}
+        _owner_character_callbacks.send_character_menu = lambda *_args, **_kwargs: None
+        callback = {
+            "id": "callback-105",
+            "from": {"id": "user-1"},
+            "data": "character:upload",
+            "message": {"message_id": 105, "chat": {"id": "chat"}},
+        }
+        try:
+            services = make_test_application_services(app_settings=self.app_settings_builder.build())
+            _m_callback_dispatch.process_callback(self.db, "token", callback, services=services)
+            self.assertTrue(_m_session_naming.get_meta(self.db, "character_upload:chat:user-1", ""))
+            callback["data"] = "character:menu"
+            _m_callback_dispatch.process_callback(self.db, "token", callback, services=services)
+        finally:
+            _m_callback_dispatch.answer_callback = original_answer
+            _owner_character_callbacks.send_panel_request = original_request
+            _owner_character_callbacks.send_character_menu = original_menu
+        self.assertEqual(_m_session_naming.get_meta(self.db, "character_upload:chat:user-1", ""), "")
+
     def test_character_cancel_deletes_panel_message(self):
         session = _owner_session_core.ensure_session(
             self.db, "chat", self.app_settings_builder.default_model, app_settings=self.app_settings_builder.build()

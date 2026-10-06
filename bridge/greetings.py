@@ -37,7 +37,7 @@ from bridge.session_repository import load_session_row
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
 from bridge.telegram import send_panel_photo, send_panel_request, send_text, telegram_request
-from bridge.telegram_output import telegram_safe_output
+from bridge.telegram_output import telegram_transport_output
 
 _GREETING_PREVIEW_MAX_CHARS = 3200
 _GREETING_RECOVERY = OperationRecovery(
@@ -309,7 +309,7 @@ def send_character_greeting(
             selected_index = random.randrange(len(options)) if index is None else int(index)  # noqa: S311 -- greeting selection
             rendered = render_greeting(fields, user_name, selected_index, app_settings=app_settings)
             greeting = normalize_roleplay_transport(
-                telegram_safe_output(rendered),
+                telegram_transport_output(rendered),
                 preserve_authored_unquoted_dialogue=True,
             )
             if not greeting:

@@ -26,9 +26,9 @@ from bridge.rag_service import RagService
 from bridge.response_delivery import send_reply
 from bridge.response_variants import save_response_variant
 from bridge.settings import AppSettings
+from bridge.simulation_context import story_simulation_context
 from bridge.sqlite_store import write_transaction
 from bridge.telegram import send_text, send_typing
-from bridge.telegram_output import telegram_transport_output
 
 
 def process_image_message(
@@ -104,6 +104,7 @@ def process_image_message(
         memory_context=memory_context,
         episodic_context=episodic_context,
         npc_context=npc_context,
+        simulation_context=story_simulation_context(db, chat_id, session["session_id"], memory_prompt.scope),
         session_summary=session_summary,
         scene_context=memory_prompt.scene,
         defer_compaction=True,
@@ -148,9 +149,8 @@ def process_image_message(
         chat_id,
         generation_settings,
         provider_port=provider_port,
+        novel_turn=novel_turn,
     )
-    if novel_turn:
-        reply = telegram_transport_output(novel_turn.finalize(reply))
     stored_reply = (
         reply
         if group_turn and group_turn[1].get("mode") == "autonomous"

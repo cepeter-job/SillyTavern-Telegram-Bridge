@@ -2,18 +2,29 @@
 
 from __future__ import annotations
 
+import sqlite3
 import time
 from dataclasses import asdict
+from typing import Any
 
 from bridge.npc_repository import find_npc_by_name_or_alias, list_npc_entities, load_npc_fields
 from bridge.npc_service import NpcService
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
+from bridge.repository_contracts import NpcFieldState
 from bridge.simulation_extraction import normalize_simulation_payload
 from bridge.simulation_repository import list_states, load_state, store_state
 from bridge.simulation_values import key, relationship_tier
 
 
-def canonicalize_tracker_npcs(db, chat_id, session_id, payload, *, primary_name="", user_name=""):
+def canonicalize_tracker_npcs(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    payload: dict[str, Any],
+    *,
+    primary_name: str = "",
+    user_name: str = "",
+) -> dict[str, Any]:
     blocked = {key(primary_name), key(user_name)} - {""}
     names = {}
     ambiguous = set()
@@ -36,7 +47,7 @@ def canonicalize_tracker_npcs(db, chat_id, session_id, payload, *, primary_name=
     return normalize_simulation_payload(result)
 
 
-def _fingerprint(field):
+def _fingerprint(field: NpcFieldState | None) -> dict[str, Any] | None:
     if field is None:
         return None
     value = asdict(field)
@@ -45,7 +56,7 @@ def _fingerprint(field):
     return value
 
 
-def is_managed_field(db, chat_id, session_id, name, field_key):
+def is_managed_field(db: sqlite3.Connection, chat_id: str, session_id: str, name: str, field_key: str) -> bool:
     if field_key not in {"relationship", "agenda"}:
         return False
     entity = find_npc_by_name_or_alias(db, chat_id, session_id, name)
@@ -56,7 +67,15 @@ def is_managed_field(db, chat_id, session_id, name, field_key):
     return bool(state and current and state[0].get("_projection") == _fingerprint(current))
 
 
-def project_simulation_state(db, chat_id, session_id, source_rowid, *, primary_name="", user_name=""):
+def project_simulation_state(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    source_rowid: int,
+    *,
+    primary_name: str = "",
+    user_name: str = "",
+) -> None:
     for kind in ("relationship", "agenda"):
         for _, name, value, _, _ in list_states(db, chat_id, session_id, kind=kind):
             entity = find_npc_by_name_or_alias(db, chat_id, session_id, name)
@@ -77,7 +96,7 @@ def project_simulation_state(db, chat_id, session_id, source_rowid, *, primary_n
                     f"{value.get('objective', '')} "
                     f"({value.get('step', 0)}/{value.get('max_steps', 1)}; {value.get('status', 'active')})."
                 )
-            visibility = current.visibility if current else "restricted"
+            visibility = current.visibility if current else ("shared" if kind == "relationship" else "restricted")
             known_by = current.known_by if current else (entity.display_name,)
             NpcService().apply_group(
                 db,

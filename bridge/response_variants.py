@@ -6,6 +6,7 @@ import sqlite3
 import time
 
 from bridge.npc_service import NpcService
+from bridge.simulation_output import strip_internal_state_blocks
 from bridge.simulation_service import SimulationService
 from bridge.sqlite_store import write_transaction
 from bridge.variant_repository import find_variant_user, last_user_variant_rows, select_variant, store_variant
@@ -53,5 +54,6 @@ def keep_swipe_variant(
         user_rowid = int(user_row[0])
         npc_service.rollback_from_row(db, chat_id, session_id, user_rowid + 1)
         SimulationService().rollback_from_row(db, chat_id, session_id, user_rowid + 1)
+        selected = strip_internal_state_blocks(selected)
         select_variant(db, chat_id, session_id, user_rowid, index, selected, time.time())
     return selected

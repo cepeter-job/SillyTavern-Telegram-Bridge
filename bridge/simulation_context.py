@@ -15,7 +15,13 @@ from bridge.sqlite_store import write_transaction
 MAX_CONTEXT = 6000
 
 
-def context_cutoff(db, chat_id, session_id, through_rowid=None, memory_scope=None) -> int:
+def context_cutoff(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    through_rowid: int | None = None,
+    memory_scope: MemoryReadScope | None = None,
+) -> int:
     if memory_scope is not None:
         row = db.execute(
             "SELECT created_at FROM sessions WHERE chat_id=? AND session_id=?", (chat_id, session_id)
@@ -127,3 +133,20 @@ def simulation_context_for_prompt(
         if len(result) + len(line) + 1 <= MAX_CONTEXT:
             result += "\n" + line
     return result
+
+
+def story_simulation_context(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    memory_scope: MemoryReadScope | None = None,
+    *,
+    through_rowid: int | None = None,
+) -> str:
+    from bridge.narrative_settings import load_session_narrative_settings
+
+    policy = load_session_narrative_settings(db, chat_id, session_id)
+    narrator = policy.pov_mode in {"third_person_rotating", "omniscient", "cinematic"}
+    return simulation_context_for_prompt(
+        db, chat_id, session_id, memory_scope=memory_scope, through_rowid=through_rowid, narrator=narrator
+    )

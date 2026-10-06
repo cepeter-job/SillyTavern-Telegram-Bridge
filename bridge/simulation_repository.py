@@ -233,6 +233,10 @@ def rollback_from_row(
         (chat_id, session_id, int(rowid)),
     )
     bump_revision(db, chat_id, session_id)
+    db.execute(
+        "UPDATE simulation_revisions SET backfill_through=MIN(backfill_through,?) WHERE chat_id=? AND session_id=?",
+        (max(0, int(rowid) - 1), chat_id, session_id),
+    )
     return int(count)
 
 
@@ -246,6 +250,9 @@ def purge_session(db: sqlite3.Connection, chat_id: str, session_id: str) -> None
     db.execute("DELETE FROM simulation_checks WHERE chat_id=? AND session_id=?", (chat_id, session_id))
     db.execute("DELETE FROM simulation_sources WHERE chat_id=? AND session_id=?", (chat_id, session_id))
     bump_revision(db, chat_id, session_id)
+    db.execute(
+        "UPDATE simulation_revisions SET backfill_through=0 WHERE chat_id=? AND session_id=?", (chat_id, session_id)
+    )
 
 
 def load_check(
@@ -322,3 +329,10 @@ def list_checks(
         (chat_id, session_id, through_rowid, through_rowid, max(1, min(8, int(limit)))),
     ).fetchall()
     return [item for (key,) in rows if (item := load_check(db, chat_id, session_id, str(key))) is not None]
+
+
+def bootstrap_through(db: sqlite3.Connection, chat_id: str, session_id: str) -> int:
+    row = db.execute(
+        "SELECT backfill_through FROM simulation_revisions WHERE chat_id=? AND session_id=?", (chat_id, session_id)
+    ).fetchone()
+    return int(row[0]) if row else 0

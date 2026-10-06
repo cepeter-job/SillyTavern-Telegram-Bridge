@@ -29,13 +29,25 @@ def _bounded(value: Any, limit: int = MAX_RECORD_BYTES) -> None:
 def _relationship(item: dict) -> dict:
     if integer(item.get("bond_delta"), -2, 20) > 0:
         raise ValueError("positive BOND changes must come from Sparks conversion")
-    return {
+    result = {
         "npc": text(item.get("npc"), MAX_NAME),
         "bond_delta": integer(item.get("bond_delta"), -2, 0),
         "sparks_delta": integer(item.get("sparks_delta"), -2, 2),
         "grudge_delta": integer(item.get("grudge_delta"), -1, 1),
         "apology": boolean(item.get("apology")),
     }
+    if "baseline" in item:
+        baseline = item["baseline"]
+        if not isinstance(baseline, dict):
+            raise ValueError("Legacy relationship baseline must be an object")
+        for name, low, high in (("bond", -5, 20), ("sparks", 0, 99), ("grudge", 0, 99)):
+            if type(baseline.get(name)) is not int or not low <= baseline[name] <= high:
+                raise ValueError("Legacy relationship baseline must contain exact bounded integers")
+        quote = text(baseline.get("quote"), 500)
+        if not quote:
+            raise ValueError("Legacy relationship baseline requires a source quote")
+        result["baseline"] = {name: baseline[name] for name in ("bond", "sparks", "grudge")} | {"quote": quote}
+    return result
 
 
 def _record(group: str, item: dict) -> dict:

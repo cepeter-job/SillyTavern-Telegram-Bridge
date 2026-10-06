@@ -13,7 +13,9 @@ from bridge.simulation_values import integer, key, text
 from bridge.sqlite_store import write_transaction
 
 
-def actor_modifier(db, chat_id, session_id, domain, *, through_rowid=None) -> int:
+def actor_modifier(
+    db: sqlite3.Connection, chat_id: str, session_id: str, domain: str, *, through_rowid: int | None = None
+) -> int:
     cutoff = context_cutoff(db, chat_id, session_id, through_rowid)
     total = 0
     for kind, name, value, _ in load_states_as_of(db, chat_id, session_id, through_rowid=cutoff):

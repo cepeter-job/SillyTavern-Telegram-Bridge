@@ -58,12 +58,12 @@
 
 **Interfaces:** NPC extraction returns its existing payload with a bounded `simulation` object. `build_chat_messages(..., simulation_context="")` treats it as untrusted optional context. The new command route uses the existing durable operation identity; explicit `/check` syntax is validated before admitting one user action.
 
-- [ ] Add and observe failing tests showing the real NPC worker publishes parsed simulation state only after full-row acceptance, rejects malformed payloads and preserves quoted legacy numeric evidence without guessing.
-- [ ] Add the shared Utility instructions/parser accumulator and bounded prior-state input. Reuse the existing job and provider call.
-- [ ] Add and observe failing tests for ordinary/historical/choice/Director context, compaction and legacy prompt-template suppression.
-- [ ] Wire the shared context and fixed story-output policy; discard complete/incomplete Internal States transport blocks while preserving ordinary spoilers and formatting.
-- [ ] Add and observe failing command tests for explicit DC validation, one roll per durable request, session-owned source, historical modifiers, reset and later prompt availability; implement `/check` and register it through existing composition.
-- [ ] Run focused integration and delivery suites; update user documentation, changelog and plan progress; commit after passing.
+- [x] Add and observe failing tests showing the real NPC worker publishes parsed simulation state only after full-row acceptance, rejects malformed payloads and preserves quoted legacy numeric evidence without guessing.
+- [x] Add the shared Utility instructions/parser accumulator and bounded prior-state input. Reuse the existing job and provider call.
+- [x] Add and observe failing tests for ordinary/historical/choice/Director context, compaction and legacy prompt-template suppression.
+- [x] Wire the shared context and fixed story-output policy; discard complete/incomplete Internal States transport blocks while preserving ordinary spoilers and formatting.
+- [x] Add and observe failing command tests for explicit DC validation, one roll per durable request, session-owned source, historical modifiers, reset and later prompt availability; implement `/check` and register it through existing composition.
+- [x] Run focused integration and delivery suites; update user documentation, changelog and plan progress; commit after passing.
 
 ### Task 4: Verify, review and integrate
 

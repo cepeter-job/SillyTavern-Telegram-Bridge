@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from html import escape
 from html.parser import HTMLParser
 
+from bridge.simulation_output import strip_internal_state_blocks
+
 _CODE = re.compile(r"```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`")
 _AUTOLINK = re.compile(r"<(?:https?://[^>\s]+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})>")
 _BLOCK_TAGS = {
@@ -383,7 +385,7 @@ def _sanitize_spans(spans: list[TelegramFormatSpan], text: str) -> list[Telegram
 
 def telegram_safe_output(text: str) -> str:
     """Strip presentation HTML outside code while preserving readable structure."""
-    source = str(text or "")
+    source = strip_internal_state_blocks(text, streaming=True)
     if "<" not in source and "&" not in source:
         return source
     masked, protected = _mask_literals(source, "TGCODE")
@@ -402,7 +404,7 @@ def telegram_safe_output(text: str) -> str:
 
 def telegram_transport_output(text: str) -> str:
     """Retain only Telegram-safe HTML tags while flattening all other presentation HTML."""
-    source = str(text or "")
+    source = strip_internal_state_blocks(text)
     if "<" not in source and "&" not in source:
         return source
     masked, protected = _mask_literals(source, "TGTRANSPORT")

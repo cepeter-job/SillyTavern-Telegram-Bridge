@@ -16,6 +16,8 @@ from bridge.narrative_repository import list_narrative_threads
 from bridge.narrative_values import NarrativeSettings, NarrativeState
 from bridge.persona_service import PersonaService
 from bridge.settings import AppSettings
+from bridge.simulation_context import simulation_context_for_prompt
+from bridge.simulation_output import effective_tracker_prompt, strip_internal_state_blocks
 
 DIRECTOR_INSTRUCTION = (
     "You are the hidden narrative Director, not the prose writer. Propose one bounded next direction from "
@@ -83,11 +85,15 @@ def build_director_input(
             fields = card | {"name": str(card.get("name") or "")}
         if card.get("name"):
             cast.add(card["name"])
+    session, fields = effective_tracker_prompt(session, fields)
     if state.viewpoint_character:
         cast.add(state.viewpoint_character)
     cast = {name[:200] for name in cast if name.casefold() not in {user.casefold() for user in users}}
     threads = list_narrative_threads(db, chat_id, session_id, limit=64)
     history = director_recent_story(db, chat_id, session_id, state.updated_through_rowid)
+    history = [
+        (row[0], row[1], strip_internal_state_blocks(row[2]) if row[1] == "assistant" else row[2]) for row in history
+    ]
     context = "\n".join(str(row[2]) for row in history)[-16000:]
     world = build_world_info(session.get("world_file") or "", context, fields, user_name, app_settings=app_settings)
     ending = load_ending_state(db, chat_id, session_id)
@@ -118,6 +124,9 @@ def build_director_input(
         "expected_revision": state.state_revision,
         "narrative_policy": settings.to_dict(),
         "committed_state": asdict(state),
+        "simulation_state": simulation_context_for_prompt(
+            db, chat_id, session_id, through_rowid=state.updated_through_rowid
+        ),
         "allowed_ai_characters": sorted(cast)[:80],
         "reserved_user_characters": sorted(users),
         "threads": [

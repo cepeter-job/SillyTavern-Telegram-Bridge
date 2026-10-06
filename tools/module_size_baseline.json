@@ -6,14 +6,13 @@
     "bridge/command_routes.py": 580,
     "bridge/enum_callbacks.py": 567,
     "bridge/feature_callbacks.py": 624,
-    "bridge/help_details.py": 573,
     "bridge/image_generation.py": 599,
     "bridge/install_support.py": 753,
     "bridge/main.py": 554,
     "bridge/memory_backend.py": 810,
     "bridge/memory_diagnostics.py": 699,
     "bridge/memory_store.py": 624,
-    "bridge/message_commands.py": 622,
+    "bridge/message_commands.py": 621,
     "bridge/narrative_reconciliation.py": 528,
     "bridge/native_imports.py": 546,
     "bridge/npc_service.py": 616,
@@ -51,6 +50,6 @@
     "tests/test_transcript_delivery_recovery.py": 856,
     "tools/evaluate_story_memory.py": 595,
     "tools/leakscan.py": 1265,
-    "tools/static_analysis.py": 740
+    "tools/static_analysis.py": 534
   }
 }

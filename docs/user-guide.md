@@ -15,6 +15,7 @@ and operations guides run on the Linux host instead.
 - [Everyday controls](#everyday-controls)
 - [Sessions and recovery](#sessions-and-recovery)
 - [Models, context and memory](#models-context-and-memory)
+- [Story trackers and checks](#story-trackers-and-checks)
 - [Narrative Style](#narrative-style)
 - [Director Room](#director-room)
 - [Closed stories and alternate endings](#closed-story-and-the-epilogue)
@@ -106,6 +107,7 @@ confirmation apply to the new story.
 | Change the reply language or save generation settings | `/language` or `/preset` |
 | Change the Persona, lorebooks, prompt or Author's Note | `/persona`, `/world`, `/systemprompt`, `/note` |
 | Inspect the assembled prompt and context budget | `/prompt` |
+| Record a d20 result for an explicit action | `/check stealth 12 cross the courtyard` |
 | Find every command and its accepted arguments | `/help` |
 
 `/help` is the canonical command reference. Try `/help databank search` or
@@ -194,7 +196,7 @@ System Prompt and Narrative Style, then waits for a new opening greeting. Send
 try the matching recovery action first.
 
 Reset clears variants, failed turns, summaries, curated/episodic memory, NPC state
-and old choices. It also clears narrative scenes, threads and derived planning
+and old choices, including tracker values and recorded checks. It also clears narrative scenes, threads and derived planning
 state, without changing your saved personal defaults. It attempts to remove
 tracked Telegram conversation messages;
 Telegram may refuse old messages or deletions without sufficient permissions.
@@ -276,6 +278,8 @@ rolls NPC state back to the applicable revision before regeneration.
 | Light Novel B / C | A separate choice request after the story, using Utility / Story respectively. |
 | Humanizer | An additional prose rewrite using the reply's model. |
 | Summaries, memory/NPC/scene refresh, optimizer and ranking | Utility-model work. |
+| Story tracker extraction | Shares the existing NPC Utility call; upgrading older sessions can replay available history. |
+| `/check` | A local d20 roll and saved receipt, with no model request. |
 | Narrative continuity | A bounded Utility reconciliation after committed replies; older or edited history can need more than one batch. |
 | Current Scene image | Utility preparation of the visual prompt, then an image-provider request. |
 | AI Director | One planning call on an event or cadence threshold, with at most one repair for malformed version-1 output. Groups reuse the accepted plan without another planning call. |
@@ -305,6 +309,97 @@ If the rewrite fails or changes protected fragments such as code, numbers,
 dialogue or links, the original rendered reply is kept. These checks cannot prove
 that meaning is unchanged. There is no automatic weekly reference refresh or
 prompt promotion. Attribution remains in [Third-party notices](../THIRD_PARTY_NOTICES.md).
+
+## Story trackers and checks
+
+The bridge keeps established story mechanics alongside canonical NPC and plot
+state. NPC Utility extraction reads committed prose and updates bounded tracker
+records; it does not need the Story model to append an Internal States ledger.
+Background extraction can finish after the visible reply, so newly established
+facts become available once that work is accepted.
+
+| State | How it is used |
+|---|---|
+| NPC relationships | BOND, Sparks and Grudge for supporting NPCs, matched to canonical names and unambiguous aliases. Eligible NPC Bank relationship fields show the current attitude tier. |
+| NPC agendas | Bounded objectives, steps and status. An active offscreen agenda advances once per accepted assistant turn unless that source supplies explicit progress. |
+| User inventory, skills and conditions | Established possessions, abilities and conditions, including domain-specific check modifiers. Proposed actions do not grant an item, skill or reward. |
+| Factions | Established goals, relationships, morale, conflict and private intelligence. |
+| Quests and foreshadowing | Progress and descriptive metadata linked to existing Narrative arcs or threads when available. Native Narrative state determines linked plot status. |
+
+NPC Bank retains identity, editable fields and field history. Automatic tracker
+projections preserve fixed fields, private fields and manual overrides. Scene
+state continues to own location, weather and physical participants; Narrative,
+Director and Ending continue to own plot progression and closure. A completed
+agenda counter alone does not establish an unseen consequential scene.
+
+Private agendas, faction intelligence and future payoffs are narrator data.
+Character-scoped prompts do not receive other characters' private trackers.
+Wider narrator viewpoints can use these facts without granting characters new
+knowledge. Tracker context shares the normal optional-context budget and can be
+trimmed when the request needs space.
+
+### Relationship mechanics
+
+BOND ranges from **−5 to 20**: hostile through −3, neutral through 2, warmth through
+7, trust through 15, then love. Established events can change Sparks by at most
+2 and Grudge by at most 1 per source; direct BOND changes can only lower it, by
+at most 2. An established apology clears Grudge.
+
+Every third assistant turn, Grudge of at least 5 lowers BOND by 1 and resets
+Grudge; smaller positive Grudge decays by 1. Every fifth assistant turn, at least
+7 Sparks increases BOND by 1 and resets Sparks; the threshold is 14 while Grudge
+is at least 3. Otherwise Sparks decays by 1 unless that source added Sparks.
+Replaying the same source or processing a user message never advances these
+timers again.
+
+### Make a check
+
+Use an explicit domain, difficulty and attempted action:
+
+```text
+/check stealth 12 cross the courtyard unseen
+/check social 15 ask Maya about the Silver Key
+```
+
+DC must be a whole number from **1 to 20**. The domain is one word, up to 40 UTF-8
+bytes; the action can contain spaces, up to 500 UTF-8 bytes. The bridge records
+the user action and rolls d20 once. Established inventory, skills and conditions
+for that domain, or `any`, each contribute from −2 to +2; the combined modifier
+is bounded to −6 through +6.
+
+| Result | Rule |
+|---|---|
+| Critical failure | Natural 1, or total minus DC at most −8. |
+| Critical success | Natural 20, or total minus DC at least +8. |
+| Success | Total meets or exceeds DC. |
+| Near miss | Total is 1–3 below DC. |
+| Failure | Total is 4–7 below DC. |
+
+Natural 1 and 20 take precedence. The receipt shows the roll, modifier, total,
+DC and outcome. Send your next story turn to narrate the consequences using
+that recorded result. A check does not itself generate prose or advance NPC
+agenda timers. In a manual-turn group, only the current actor may admit a new
+check.
+
+Delivery retries and `/retry` reuse the saved result. A new `/check` message is
+a new action and roll. Editing or replacing its source invalidates the old
+result; reset removes session checks. Alternate endings restore independent
+copies of eligible checks and tracker state from their checkpoint.
+
+### Existing prompts and older sessions
+
+The bridge filters recognized legacy tracker-output sections from the prompt
+copy sent to models. Your stored System Prompt, Author's Note and character
+card remain editable as before. Reserved `<internal_states>` blocks are removed
+from previews, new story output and assistant-history prompt copies; ordinary
+Telegram spoilers remain visible through their normal spoiler formatting.
+
+After migration 25, existing NPC work replays available committed sources to
+backfill trackers. Exact historical records such as
+`Maya: BOND=8 Sparks=3 Grudge=2` inside an assistant Internal States block can seed
+a missing numeric baseline. Unproven numbers and unsupported legacy layouts are
+left unset. Historical transcript rows remain intact; the bridge does not save
+a second hidden assistant response for future turns.
 
 ## Narrative Style
 

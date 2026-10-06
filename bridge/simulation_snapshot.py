@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import time
+from typing import Any
 
 from bridge.repository_contracts import require_active_transaction
 from bridge.simulation_context import context_cutoff
@@ -19,7 +21,9 @@ from bridge.simulation_repository import (
 from bridge.sqlite_store import write_transaction
 
 
-def snapshot_simulation_state(db, chat_id, session_id, through_rowid):
+def snapshot_simulation_state(
+    db: sqlite3.Connection, chat_id: str, session_id: str, through_rowid: int
+) -> dict[str, Any]:
     with write_transaction(db):
         cutoff = context_cutoff(db, chat_id, session_id, through_rowid)
         records = [
@@ -48,7 +52,7 @@ def snapshot_simulation_state(db, chat_id, session_id, through_rowid):
         return result
 
 
-def restore_simulation_snapshot(db, chat_id, session_id, payload):
+def restore_simulation_snapshot(db: sqlite3.Connection, chat_id: str, session_id: str, payload: dict[str, Any]) -> None:
     require_active_transaction(db)
     purge_session(db, chat_id, session_id)
     now = time.time()

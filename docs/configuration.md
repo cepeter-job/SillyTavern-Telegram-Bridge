@@ -267,6 +267,36 @@ session-scoped, revision-aware and optional prompt context. Curated memory is
 published through Hindsight and therefore still depends on Hindsight memory being
 enabled.
 
+#### Canonical story trackers
+
+Tracker extraction shares the existing NPC Utility job and its provider routing,
+leases, multipart source coverage and rewrite checks. It adds no endpoint,
+runtime dependency or separate per-source model request. Use the existing NPC
+refresh/recovery workflow if background extraction is delayed. `/check` rolls
+locally and consumes no model tokens.
+
+Records are limited to 64 entities per tracker kind and 16 KiB of encoded JSON
+per record. Each user inventory/skill/condition collection is bounded to 64
+entries. Extraction accepts at most 32 updates per group per source part and 64
+across the complete source, rejecting oversized accumulators instead of silently
+dropping changes. Prompt context is at most 6,000 characters, includes up to
+three recent eligible checks, and remains optional under the request budget.
+The Utility input includes bounded prior state and existing Narrative IDs.
+
+Migration 25 schedules the existing NPC work for tracker backfill from retained
+sources. This can add Utility calls while older sessions catch up. Immutable
+checkpoint source floors remain in force; unavailable earlier history is not
+recreated. Native NPC fields in an unchanged previously covered prefix are
+preserved, while rewrites retire that backfill protection for the invalidated
+suffix. Quoted legacy numeric baselines are imported only when their original
+assistant source proves the name and values.
+
+Stored prompt files, character cards and old assistant messages are not rewritten
+by migration. Legacy template suppression operates on effective prompt copies;
+new model output is cleaned before rewriting, transport and story commit. See
+[Story trackers and checks](user-guide.md#story-trackers-and-checks) for mechanics,
+visibility, commands and lifecycle behavior.
+
 #### Data Bank semantic embeddings
 
 | Variable | Default | Valid range / purpose |

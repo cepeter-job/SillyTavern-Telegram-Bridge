@@ -217,6 +217,7 @@ _OPTIONAL_TAGS = {
     "memory": "untrusted_memory",
     "episodic": "untrusted_episodic_memory",
     "npc": "untrusted_npc_state",
+    "simulation": "untrusted_simulation_state",
 }
 
 
@@ -320,7 +321,7 @@ def compact_chat_messages(
         )
         if latest is None:
             return
-        for kind in ("rag", "memory", "episodic", "npc"):
+        for kind in ("rag", "memory", "episodic", "npc", "simulation"):
             if current_tokens() <= budget:
                 break
             span = _optional_span(latest, kind)

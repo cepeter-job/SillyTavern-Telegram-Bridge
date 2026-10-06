@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from bridge.simulation_legacy import proven_relationship_baseline
 from bridge.simulation_repository import list_states, load_state, store_state
 from bridge.simulation_values import integer as _int
 from bridge.simulation_values import key as _key
@@ -61,6 +62,7 @@ class SimulationMechanics:
         updates: dict[str, dict[str, Any]] = {}
         display: dict[str, str] = {}
         positive: set[str] = set()
+        imported: set[str] = set()
         raw_updates = payload.get("relationships")
         if raw_updates is None:
             raw_updates = []
@@ -74,7 +76,7 @@ class SimulationMechanics:
             if not key:
                 continue
             current_row = load_state(db, chat_id, session_id, _RELATIONSHIP_KIND, key)
-            current = (
+            current: dict[str, Any] = (
                 dict(updates[key])
                 if key in updates
                 else dict(current_row[0])
@@ -86,6 +88,11 @@ class SimulationMechanics:
                     "grudge": 0,
                 }
             )
+            if current_row is None and item.get("baseline"):
+                baseline = proven_relationship_baseline(db, chat_id, session_id, source_rowid, item)
+                if baseline is not None:
+                    current.update(baseline)
+                imported.add(key)
             bond_delta = _int(item.get("bond_delta"), -2, 20)
             if bond_delta > 0:
                 raise ValueError("positive BOND changes must come from Sparks conversion")
@@ -113,20 +120,20 @@ class SimulationMechanics:
             bond = _int(current.get("bond"), -5, 20)
             sparks = _int(current.get("sparks"), 0, 99)
             grudge = _int(current.get("grudge"), 0, 99)
-            if turn and turn % 3 == 0:
+            if key not in imported and turn and turn % 3 == 0:
                 if grudge >= 5:
                     bond = max(-5, bond - 1)
                     grudge = 0
                 elif grudge > 0:
                     grudge -= 1
-            if turn and turn % 5 == 0:
+            if key not in imported and turn and turn % 5 == 0:
                 threshold = 14 if grudge >= 3 else 7
                 if sparks >= threshold:
                     bond = min(20, bond + 1)
                     sparks = 0
                 elif key not in positive and sparks > 0:
                     sparks -= 1
-            final = {
+            final: dict[str, Any] = {
                 "display_name": _text(current.get("display_name") or display.get(key) or key, 160),
                 "bond": bond,
                 "sparks": sparks,
@@ -199,7 +206,15 @@ class SimulationMechanics:
                 updated["status"] = "completed"
             self._store(db, chat_id, session_id, _AGENDA_KIND, key, updated, source_rowid, now)
 
-    def _actor_update(self, db, chat_id, session_id, payload, source_rowid, now) -> None:
+    def _actor_update(
+        self,
+        db: sqlite3.Connection,
+        chat_id: str,
+        session_id: str,
+        payload: dict[str, Any],
+        source_rowid: int,
+        now: float,
+    ) -> None:
         raw = payload.get("actor")
         if not raw:
             return

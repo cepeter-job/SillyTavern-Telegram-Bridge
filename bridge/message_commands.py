@@ -24,13 +24,19 @@ from bridge.conversation_lifecycle import (
     is_command_text,
     require_started,
     reset_conversation,
+    split_command_text,
 )
 from bridge.delivery_progress import bind_committed_turn
 from bridge.edit_messages import edit_last_user
 from bridge.ending_runtime import recover_ending_workflow
 from bridge.episodic_memory import purge_episodic_memories
 from bridge.failed_turns import clear_failed_turn
-from bridge.generation import build_chat_messages, finalize_generation_messages, render_response_language
+from bridge.generation import (
+    build_chat_messages,
+    finalize_generation_messages,
+    render_response_language,
+    visible_rendered_story,
+)
 from bridge.generation_settings import get_generation_settings
 from bridge.group_service import GroupService
 from bridge.humanize import render_humanized_response
@@ -64,14 +70,19 @@ from bridge.reset_panel import reset_confirmation_request
 from bridge.response_delivery import (
     delete_incoming_messages,
     delete_outgoing_messages,
+    delete_tracked_panel_messages,
     queue_user_quote_tts,
     send_reply,
 )
-from bridge.response_variants import save_response_variant, swipe_state_key
+from bridge.response_variants import save_response_variant
 from bridge.roleplay_format import normalize_roleplay_transport
 from bridge.scene_repository import delete_scene_state as _repo_delete_scene_state
 from bridge.session_core import ensure_session, list_sessions, load_session
+from bridge.session_repository import delete_reset_turn_rows
 from bridge.settings import AppSettings
+from bridge.simulation_commands import retry_failed_check
+from bridge.simulation_context import story_simulation_context
+from bridge.simulation_output import strip_internal_state_blocks
 from bridge.simulation_service import SimulationService
 from bridge.sqlite_store import optimize_database, write_transaction
 from bridge.telegram import send_panel_request, send_text, send_typing, telegram_request
@@ -111,35 +122,16 @@ def reset_session(
         with write_transaction(db):
             npc_service.purge_session(db, chat_id, session["session_id"])
             SimulationService().purge_session(db, chat_id, session["session_id"])
-            db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
-            db.execute(
-                "DELETE FROM response_variants WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"])
-            )
-            db.execute("DELETE FROM failed_turns WHERE chat_id=? AND session_id=?", (chat_id, session["session_id"]))
+            delete_reset_turn_rows(db, chat_id, session["session_id"])
             clear_session_summary(db, chat_id, session["session_id"])
             purge_episodic_memories(db, chat_id, session["session_id"])
             clear_curated_memory_state(db, chat_id, session["session_id"])
-            db.execute(
-                "DELETE FROM meta WHERE key IN (?, ?)",
-                (
-                    swipe_state_key(chat_id, session["session_id"]),
-                    f"swipe_message:{chat_id}:{session['session_id']}",
-                ),
-            )
             _repo_delete_scene_state(db, chat_id, session["session_id"])
             clear_narrative_story_state(db, chat_id, session["session_id"])
             old_choice_panels = reset_conversation(db, chat_id, session["session_id"])
             if operation_id is not None:
                 set_operation_phase(db, operation_id, "reset", "local_committed")
-        for panel_id in old_choice_panels:
-            try:
-                telegram_request(
-                    token,
-                    "deleteMessage",
-                    {"chat_id": chat_id, "message_id": panel_id},
-                )
-            except Exception:
-                logging.info("Could not delete reset choice panel")
+        delete_tracked_panel_messages(token, chat_id, old_choice_panels, request=telegram_request)
         if operation_id is not None:
             record_operation(db, operation_id, "reset")
             db.commit()
@@ -235,6 +227,7 @@ def generate_and_store_reply(
         memory_context=memory_context,
         episodic_context=episodic_context,
         npc_context=npc_context,
+        simulation_context=story_simulation_context(db, chat_id, session_id, memory_prompt.scope, through_rowid=None),
         session_summary=session_summary,
         scene_context=memory_prompt.scene,
         rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
@@ -316,12 +309,14 @@ def generate_and_store_reply(
         )
     if novel_turn:
         reply = novel_turn.extract(reply)
+    reply = strip_internal_state_blocks(reply)
     reply += rag_service.citation_footer(db, chat_id, text, rag_bundle)
-    reply = render_response_language(
+    rendered = render_response_language(
         api_key, current_model, reply, language, generation_session_id, generation_settings, provider_port=provider_port
     )
+    reply = visible_rendered_story(rendered, novel_turn, source=reply)
     if humanizer_on:
-        reply = render_humanized_response(
+        rendered = render_humanized_response(
             api_key,
             current_model,
             reply,
@@ -329,9 +324,8 @@ def generate_and_store_reply(
             generation_settings,
             provider_port=provider_port,
         )
+        reply = visible_rendered_story(rendered, novel_turn, source=reply)
     reply = telegram_transport_output(reply)
-    if novel_turn:
-        reply = telegram_transport_output(novel_turn.finalize(reply))
     reply = normalize_roleplay_transport(reply)
     stored_reply = (
         reply
@@ -393,18 +387,6 @@ def generate_and_store_reply(
     )
 
 
-def _operation_command(text):
-    parts = str(text or "").strip().split(None, 1)
-    if not parts:
-        return ""
-    command = parts[0].casefold()
-    if command.startswith("@") and len(parts) > 1:
-        command = parts[1].split(None, 1)[0].casefold()
-    if command.startswith("/") and "@" in command:
-        command = command.split("@", 1)[0]
-    return command
-
-
 def prepare_message(
     db: sqlite3.Connection,
     token: str,
@@ -451,6 +433,17 @@ def prepare_message(
     )
     session_id = session["session_id"]
     request_context = RequestContext(db, session_id, actor_id, app_settings=app_settings)
+    recovery_command = split_command_text(text)[0]
+    committed_check = recovery_command == "/check" and operation_phase(db, operation_id) == "local_committed"
+    if command == "/retry" and retry_failed_check(db, token, chat_id, session_id, actor_id, delivery_port):
+        return None
+    if (
+        recovery_command == "/check"
+        and not committed_check
+        and not group_service.user_turn_allowed(db, chat_id, session_id, actor_id)
+    ):
+        delivery_port.send_text(token, chat_id, "Wait for your turn before making a check.")
+        return None
     closing_notice = story_mutation_message(db, chat_id, session_id)
     if closing_notice and command == "/retry":
         result = recover_ending_workflow(
@@ -467,11 +460,19 @@ def prepare_message(
         )
         delivery_port.send_text(token, chat_id, result.message)
         return None
-    if closing_notice and not closed_session_allows_input(db, chat_id, session_id, actor_id, command):
+    if (
+        closing_notice
+        and not committed_check
+        and not closed_session_allows_input(db, chat_id, session_id, actor_id, command)
+    ):
         delivery_port.send_text(token, chat_id, closing_notice)
         return None
-    if not closing_notice and operation_id is not None and operation_phase(db, operation_id) == "local_committed":
-        recovery_command = _operation_command(text)
+    if (
+        not closing_notice
+        and operation_id is not None
+        and recovery_command != "/check"
+        and operation_phase(db, operation_id) == "local_committed"
+    ):
         recovery_fields = card_fields_from_file(session["character_file"], app_settings=app_settings)
         if recovery_command == "/regen":
             regenerate_last(
@@ -533,10 +534,8 @@ def prepare_message(
         # Generic committed-response recovery remains the fallback for
         # non-special operations.
         committed = db.execute(
-            (
-                "SELECT rowid,content FROM messages WHERE chat_id=? AND session_id=? AND "
-                "role='assistant' ORDER BY rowid DESC LIMIT 1"
-            ),
+            "SELECT rowid,content FROM messages WHERE chat_id=? AND session_id=? AND "
+            "role='assistant' ORDER BY rowid DESC LIMIT 1",
             (chat_id, session_id),
         ).fetchone()
         if committed:

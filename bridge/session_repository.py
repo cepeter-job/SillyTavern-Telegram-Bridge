@@ -91,3 +91,15 @@ def delete_session_rows(db: sqlite3.Connection, chat_id: str, session_id: str, m
     for table in _SESSION_OWNED_TABLES:
         db.execute(f"DELETE FROM {table} WHERE chat_id=? AND session_id=?", (chat_id, session_id))  # noqa: S608 -- fixed internal table names, bound values
     db.executemany("DELETE FROM meta WHERE key=?", [(key,) for key in meta_keys])
+
+
+def delete_reset_turn_rows(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
+    """Clear the transcript, alternatives and turn UI metadata inside a reset transaction."""
+    require_active_transaction(db)
+    db.execute("DELETE FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+    db.execute("DELETE FROM response_variants WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+    db.execute("DELETE FROM failed_turns WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+    db.execute(
+        "DELETE FROM meta WHERE key IN (?, ?)",
+        (f"swipe_index:{chat_id}:{session_id}", f"swipe_message:{chat_id}:{session_id}"),
+    )

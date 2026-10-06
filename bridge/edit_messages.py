@@ -28,10 +28,10 @@ from bridge.response_delivery import delete_outgoing_message_row, send_reply
 from bridge.response_variants import save_response_variant
 from bridge.session_core import load_session
 from bridge.settings import AppSettings
+from bridge.simulation_context import story_simulation_context
 from bridge.simulation_service import SimulationService
 from bridge.sqlite_store import write_transaction
 from bridge.telegram import send_text, send_typing, telegram_request
-from bridge.telegram_output import telegram_transport_output
 from bridge.transcript_repository import native_edit_target
 from bridge.variant_repository import prune_variants_from
 
@@ -183,6 +183,9 @@ def regenerate_edited_turn(
         memory_context=memory_prompt.recall,
         episodic_context=memory_prompt.episodic,
         npc_context=npc_context,
+        simulation_context=story_simulation_context(
+            db, chat_id, session_id, memory_prompt.scope, through_rowid=int(user_rowid) - 1
+        ),
         session_summary=memory_prompt.summary,
         scene_context=memory_prompt.scene,
         defer_compaction=True,
@@ -232,9 +235,8 @@ def regenerate_edited_turn(
         chat_id,
         generation_settings,
         provider_port=provider_port,
+        novel_turn=novel_turn,
     )
-    if novel_turn:
-        reply = telegram_transport_output(novel_turn.finalize(reply))
     old_message_ids = _COMMAND_OPERATION_RECOVERY.outgoing_ids_after(
         db,
         chat_id,

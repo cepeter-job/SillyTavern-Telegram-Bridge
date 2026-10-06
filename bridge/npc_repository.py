@@ -443,7 +443,7 @@ def restore_npc_snapshot(db: sqlite3.Connection, chat_id: str, session_id: str, 
             )
 
 
-def npc_snapshot_fields(db, npc_id, through_rowid):
+def npc_snapshot_fields(db: sqlite3.Connection, npc_id: int, through_rowid: int) -> list[dict[str, Any]]:
     cursor = db.execute(
         "WITH history AS (SELECT *,ROW_NUMBER() OVER (PARTITION BY field_key "
         "ORDER BY source_rowid DESC,change_id DESC) AS rank FROM npc_field_history "

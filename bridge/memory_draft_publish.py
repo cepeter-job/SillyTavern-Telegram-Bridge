@@ -8,6 +8,7 @@ from bridge.memory_store import pending_memory_invalidation
 from bridge.npc_repository import set_npc_extraction_coverage
 from bridge.npc_service import NpcService
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
+from bridge.simulation_service import SimulationService
 
 
 def publish_derived(db, chat_id, session_id, layer, payload, through):
@@ -63,6 +64,13 @@ def publish_derived(db, chat_id, session_id, layer, payload, through):
                 primary_name=payload["primary_name"],
                 user_name=payload["user_name"],
             )
+        SimulationService().apply_payload(
+            db,
+            chat_id,
+            session_id,
+            payload.get("simulation") or {},
+            source_rowid=through,
+        )
         set_npc_extraction_coverage(db, chat_id, session_id, through, time.time())
         db.execute(
             "UPDATE memory_layer_state SET invalidated_from_id=MAX(invalidated_from_id,?) "
@@ -80,6 +88,7 @@ def restore_derived(db, chat_id, session_id, layer, payload, through):
         invalidated = pending_memory_invalidation(db, chat_id, session_id, "npc")
         if invalidated is not None:
             NpcService().rollback_from_row(db, chat_id, session_id, invalidated)
+            SimulationService().rollback_from_row(db, chat_id, session_id, invalidated)
         set_npc_extraction_coverage(db, chat_id, session_id, through, time.time())
     elif payload:
         publish_derived(db, chat_id, session_id, layer, payload, through)

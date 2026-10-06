@@ -99,6 +99,7 @@ def test_choice_panels_show_full_text_in_body_with_numbered_selector_buttons(nov
         "Stay hidden behind the wall & watch the strangers before deciding.",
         "Wait.",
     ]
+    assert len(choices) == 3
     record = attached_choice(novel_db, choices=choices)
     db, _, settings = novel_db
     sent = []

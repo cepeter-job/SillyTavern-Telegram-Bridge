@@ -241,12 +241,12 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
                 state.epoch,
                 "selected-turn",
                 "a",
-                2,
+                3,
                 "owner",
                 self.session["model_id"],
                 now,
             )
-            attach_choice_set(self.db, selected.nonce, int(story.lastrowid), story_digest("story"), ["Go", "Stay"])
+            attach_choice_set(self.db, selected.nonce, int(story.lastrowid), story_digest("story"), ["Go", "Stay", "Wait"])
             bind_choice_panel(self.db, selected.nonce, 81)
             consume_choice_set(
                 self.db,
@@ -276,7 +276,7 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
                 state.epoch,
                 "replaced-turn",
                 "a",
-                2,
+                3,
                 "owner",
                 self.session["model_id"],
                 now + 2,
@@ -286,7 +286,7 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
                 old_panel.nonce,
                 int(replaced.lastrowid),
                 story_digest("old response"),
-                ["Left", "Right"],
+                ["Left", "Right", "Wait"],
             )
             bind_choice_panel(self.db, old_panel.nonce, 82)
 
@@ -497,7 +497,7 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
                 state.epoch,
                 "manual-reply-source",
                 "a",
-                2,
+                3,
                 "owner",
                 self.session["model_id"],
                 now,
@@ -507,7 +507,7 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
                 previous.nonce,
                 int(story.lastrowid),
                 story_digest("story before manual reply"),
-                ["Left", "Right"],
+                ["Left", "Right", "Wait"],
             )
             bind_choice_panel(self.db, previous.nonce, 81)
             invalidate_choice_sets(self.db, "chat", self.session["session_id"])
@@ -585,7 +585,7 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
                 state.epoch,
                 "edited-turn",
                 "a",
-                2,
+                3,
                 "owner",
                 self.session["model_id"],
                 now,
@@ -595,7 +595,7 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
                 old_panel.nonce,
                 assistant_rowid,
                 story_digest("old response"),
-                ["Left", "Right"],
+                ["Left", "Right", "Wait"],
             )
             bind_choice_panel(self.db, old_panel.nonce, 82)
 

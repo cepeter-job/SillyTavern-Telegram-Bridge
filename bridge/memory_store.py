@@ -22,7 +22,6 @@ LEASE_SECONDS = 900
 SEGMENT_CHARS = 12000
 # Accepted readers require 1; 2 reserves retryable raw work without granting coverage.
 ARCHIVAL_PENDING = 2
-CONFIGURATION_RETRY_SECONDS = 3600
 
 
 @dataclass(frozen=True)
@@ -208,19 +207,10 @@ def fail_job(
     deferred: bool = False,
 ) -> bool:
     # Only internal safe codes are persisted, never provider text or transcript.
-    safe_error = (
-        error
-        if error in {
-            "work_failed",
-            "retain_failed",
-            "stale_source",
-            "executor_rejected",
-            "disabled",
-            "deferred",
-            "configuration",
-        }
-        else "work_failed"
-    )
+    valid_errors = {
+        "work_failed", "retain_failed", "stale_source", "executor_rejected", "disabled", "deferred", "configuration"
+    }
+    safe_error = error if error in valid_errors else "work_failed"
     now = time.time() if now is None else now
     with write_transaction(db):
         return bool(
@@ -230,13 +220,7 @@ def fail_job(
                 "ELSE MIN(300,5 * (1 << MIN(attempts,6))) END "
                 "WHERE chat_id=? AND session_id=? AND session_created_at=? AND layer=? "
                 "AND lease_token=? AND claimed_version=?",
-                (
-                    safe_error,
-                    now if not deferred else now - 9,
-                    safe_error,
-                    CONFIGURATION_RETRY_SECONDS,
-                    *_scope(claim),
-                ),
+                (safe_error, now if not deferred else now - 9, safe_error, 3600, *_scope(claim)),
             ).rowcount
         )
 

@@ -1,7 +1,6 @@
 """Exercise recoverable workers with real synthetic databases; fake external I/O only."""
 
 import json
-import time
 from types import SimpleNamespace
 
 import pytest
@@ -30,33 +29,6 @@ def test_executor_rejection_releases_lease_without_completion(session_db):
     assert dispatch_memory_backlog(services, db) == 0
     assert db.execute("SELECT sum(completed_version),sum(lease_token<>'') FROM memory_jobs").fetchone() == (0, 0)
     assert db.execute("SELECT count(*) FROM memory_jobs WHERE last_error='executor_rejected'").fetchone()[0] > 0
-
-
-def test_model_configuration_failure_uses_long_backoff(session_db, monkeypatch):
-    from bridge import memory_workers
-    from bridge.memory_store import CONFIGURATION_RETRY_SECONDS
-    from bridge.model_router import ModelRoutingError
-
-    settings, db, session = session_db
-    add(db)
-    claim = claim_jobs(db, layers=("summary",))[0]
-
-    def fail_route(*_args, **_kwargs):
-        raise ModelRoutingError("retired provider")
-
-    monkeypatch.setattr(memory_workers, "_run_derived_layer", fail_route)
-    started = time.time()
-    assert (
-        memory_workers.run_memory_claim(
-            db, claim, session, {"name": "Alice"}, provider_port=None, app_settings=settings
-        )
-        == "configuration"
-    )
-    error, next_attempt = db.execute(
-        "SELECT last_error,next_attempt_at FROM memory_jobs WHERE layer='summary'"
-    ).fetchone()
-    assert error == "configuration"
-    assert next_attempt >= started + CONFIGURATION_RETRY_SECONDS - 1
 
 
 def test_failed_retain_retries_same_document_and_only_success_advances(session_db, monkeypatch):

@@ -4,12 +4,6 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
-### Fixed
-
-- Make story-memory extraction prompts state the exact audience invariant enforced by validation: shared blocks require an empty known_by, while restricted blocks require explicit character names.
-- Ignore stale persisted utility/task model selections when the current provider catalog offers a routable fallback, and back off unresolved model-configuration failures for one hour instead of retrying every few minutes.
-
-
 ## [0.3.006] - 2026-10-06
 
 ### Fixed

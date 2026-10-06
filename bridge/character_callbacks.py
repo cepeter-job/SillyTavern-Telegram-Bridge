@@ -65,8 +65,8 @@ def _handle_protected(token, callback, answer_callback, chat_id, message, sessio
     return True
 
 
-def _handle_menu(token, callback, answer_callback, chat_id, message, session, *, request_context) -> bool:
-    """Handle menu callbacks."""
+def _handle_menu(db, token, callback, answer_callback, chat_id, message, session, *, request_context) -> bool:
+    set_meta(db, f"character_upload:{chat_id}:{request_context.actor_id}", "")
     answer_callback(token, str(callback.get("id", "")), "Refreshed")
     send_character_menu(
         token, chat_id, session["character_file"], message.get("message_id"), request_context=request_context
@@ -451,7 +451,7 @@ def _bind_routes(
                 token, callback, answer_callback, chat_id, message, session, request_context=request_context
             ),
             "character:menu": lambda: _handle_menu(
-                token, callback, answer_callback, chat_id, message, session, request_context=request_context
+                db, token, callback, answer_callback, chat_id, message, session, request_context=request_context
             ),
             "character:info": lambda: _handle_info_menu(
                 token, callback, answer_callback, chat_id, message, session, request_context=request_context

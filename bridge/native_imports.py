@@ -327,8 +327,8 @@ def import_character_card(
     return target
 
 
-def _consume_character_upload(db: sqlite3.Connection, chat_id: str, request_context: RequestContext) -> bool:
-    """Consume a live Character → Upload prompt owned by this actor/session."""
+def _retain_character_upload(db: sqlite3.Connection, chat_id: str, request_context: RequestContext) -> bool:
+    """Keep a live Character → Upload mode active for its owning actor/session."""
     with write_transaction(db):
         key = f"character_upload:{chat_id}:{request_context.actor_id}"
         raw_state = get_meta(db, key)
@@ -349,7 +349,6 @@ def _consume_character_upload(db: sqlite3.Connection, chat_id: str, request_cont
             return False
         if state["actor_id"] != request_context.actor_id or state["session_id"] != request_context.session_id:
             return False
-        set_meta(db, key, "")
         return True
 
 
@@ -428,7 +427,7 @@ def import_telegram_document(
         import_world_info_document(db, token, chat_id, filename, raw, app_settings=app_settings)
         return
     if character_upload:
-        _consume_character_upload(db, chat_id, request_context)
+        _retain_character_upload(db, chat_id, request_context)
         if suffix != ".png":
             send_text(token, chat_id, "Character upload expects a PNG document. Open /character and try again.")
             return

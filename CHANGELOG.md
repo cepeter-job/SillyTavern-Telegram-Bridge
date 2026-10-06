@@ -4,8 +4,15 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+### Maintenance
+
+- Audit regression-test size and source-inspection patterns; share identical boundary-test helpers while retaining their assertions, and use short parameter IDs for oversized provider-health fixtures.
+- Run Python regression/coverage and Mini App smoke as independent CI jobs. Preserve the protected `test` check as a strict final gate over both jobs and the existing security/static checks; publish JUnit, timings and diagnostic artifacts.
+
 ### Added
 
+- Add `/trackers` and Mini App **Manage → Story trackers** for saved, visibility-filtered canonical state and recent checks, including extraction freshness. Both views reuse SQLite and do not request model work.
+- Add persisted **Realism / Anime** selection to `/imagine` for scene and custom prompts, including character references, prompt-length accounting, reset and alternate-ending preferences.
 - Bound estimated input independently of the model context window with `SILLYTAVERN_CONTEXT_INPUT_CAP_TOKENS` (default 49,152). The existing compactor uses the smaller of this cap and the model's available input budget; `/prompt` shows both values. `max_tokens` remains an output limit.
 - Assimilate story trackers into typed, source-scoped canonical state: supporting-NPC BOND/Sparks/Grudge and agendas, user inventory/skills/conditions, factions, quest metadata and foreshadowing links.
 - Reuse the existing bounded NPC Utility extraction job, including atomic multipart publication, without a second per-source tracker request. Project eligible relationship/agenda fields into NPC Bank and reference existing Narrative arcs/threads; native Scene, Narrative, Director and Ending owners retain authority.

@@ -180,3 +180,42 @@ def test_job_actor_mismatch_cannot_admit_a_check(command_case):
     with pytest.raises(ValueError, match="another session or actor"):
         invoke(command_case, operation_id=job, actor="other")
     assert db.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    "command,lifecycle",
+    [
+        ("/trackers", "unstarted"),
+        ("/TRACKERS", "started"),
+        ("/trackers@BridgeBot", "closed"),
+        ("@BridgeBot /trackers", "started"),
+    ],
+)
+def test_trackers_dispatch_inspects_existing_stories_without_a_turn(command_case, command, lifecycle):
+    from tracker_view_test_support import seed_trackers
+
+    from bridge.conversation_lifecycle import reset_conversation
+    from bridge.meta_repository import store_meta_value
+
+    db, _, _, sent = command_case
+    if lifecycle == "unstarted":
+        reset_conversation(db, "chat", "s1")
+    seed_trackers(db, "chat", "s1")
+    with write_transaction(db):
+        store_meta_value(db, "active_session:chat", "s1")
+        if lifecycle == "closed":
+            db.execute("INSERT INTO ending_state(chat_id,session_id,lifecycle) VALUES('chat','s1','closed')")
+    before = (
+        db.execute("SELECT COUNT(*) FROM messages").fetchone(),
+        db.execute("SELECT revision FROM simulation_revisions").fetchall(),
+        db.execute("SELECT roll FROM simulation_checks").fetchall(),
+    )
+    invoke(command_case, command)
+    assert "Story trackers" in sent.call_args.args[2]
+    assert "Brass key" in sent.call_args.args[2]
+    assert "Secret" not in sent.call_args.args[2]
+    assert before == (
+        db.execute("SELECT COUNT(*) FROM messages").fetchone(),
+        db.execute("SELECT revision FROM simulation_revisions").fetchall(),
+        db.execute("SELECT roll FROM simulation_checks").fetchall(),
+    )

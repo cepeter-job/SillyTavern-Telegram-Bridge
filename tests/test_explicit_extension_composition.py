@@ -3,28 +3,18 @@
 from __future__ import annotations
 
 import ast
-import subprocess
-import sys
 import unittest
 from pathlib import Path
 
+from python_process_test_support import run_python
 from settings_test_support import SettingsTestCase
 
 REPO_ROOT = Path(__file__).parents[1]
 
 
 class ExplicitExtensionCompositionTests(SettingsTestCase):
-    def _run_python(self, source: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-c", source],
-            cwd=REPO_ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-
     def test_importing_main_does_not_mutate_extension_registry(self):
-        completed = self._run_python(
+        completed = run_python(
             "import bridge.extension_registry as registry\n"
             "registry.reset_extension_registry()\n"
             "before = registry.extension_registry_snapshot()\n"
@@ -39,7 +29,7 @@ class ExplicitExtensionCompositionTests(SettingsTestCase):
         )
 
     def test_importing_composition_helper_does_not_mutate_registry(self):
-        completed = self._run_python(
+        completed = run_python(
             "import bridge.extension_registry as registry\n"
             "registry.reset_extension_registry()\n"
             "before = registry.extension_registry_snapshot()\n"
@@ -68,7 +58,7 @@ class ExplicitExtensionCompositionTests(SettingsTestCase):
             self.assertLess(init_lines[0], next(line for called, line in calls if called == name))
 
     def test_explicit_extension_composition_is_deterministic(self):
-        completed = self._run_python(
+        completed = run_python(
             "import bridge.extension_registry as registry\n"
             "from bridge.application_composition import initialize_extensions\n"
             "registry.reset_extension_registry()\n"

@@ -16,12 +16,14 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from aiohttp import web
 from application_test_setup import make_native_test_persona_service
-from miniapp_test_support import make_services, signed_data
+from miniapp_test_support import identity, make_services, signed_data
 from persisted_state_test_support import seed_character_rank
+from tracker_view_test_support import seed_trackers
 
 import bridge.miniapp_system as system
 from bridge.memory_diagnostics import MemoryDiagnostics
 from bridge.miniapp_config import load_miniapp_config
+from bridge.miniapp_context import current_session
 from bridge.miniapp_http import create_miniapp_app
 from bridge.model_router import ModelRouter
 from bridge.provider_port import ProviderPort
@@ -32,20 +34,18 @@ async def serve() -> None:
         services = make_services(Path(directory))
         services.memory_diagnostics = MemoryDiagnostics(services.config.bridge_home, {})
 
+        who = identity()
+        session = current_session(services, who, {})["session"]
         db = services.db_factory()
         try:
             seed_character_rank(db, "Alice.png", "S", app_settings=services.config)
+            seed_trackers(db, who.chat_id, session["session_id"])
         finally:
             db.close()
         if os.environ.get("MINIAPP_FIXTURE_USAGE") == "1":
-            from miniapp_test_support import identity
-
-            from bridge.miniapp_context import current_session
             from bridge.sqlite_store import write_transaction
             from bridge.token_usage_repository import insert_event
 
-            who = identity()
-            session = current_session(services, who, {})["session"]
             with services.db_factory() as usage_db:
                 with write_transaction(usage_db):
                     for day in range(7):

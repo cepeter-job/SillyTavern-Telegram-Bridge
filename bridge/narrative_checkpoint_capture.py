@@ -24,7 +24,7 @@ from bridge.session_repository import load_session_row
 from bridge.simulation_snapshot import snapshot_simulation_state
 from bridge.transcript_repository import transcript_prefix_fingerprint
 
-_CONFIG_PREFIXES = ("humanizer", "grounded_user", "expression_mode", "image_model", "image_size")
+_CONFIG_PREFIXES = ("humanizer", "grounded_user", "expression_mode", "image_model", "image_size", "image_style")
 
 
 def capture_pre_finale_state(

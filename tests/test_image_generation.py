@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 import bridge.command_panels as _m_command_panels
 import bridge.feature_callbacks as _m_feature_callbacks
+import bridge.image_callbacks as _m_image_callbacks
 import bridge.image_generation as _m_image_generation
 import bridge.image_panels as _m_image_panels
 import bridge.model_selection as _m_model_selection
@@ -661,10 +662,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         self.assertIn("blue coat", source)
         self.assertIn("Mira closes her red umbrella", source)
         self.assertIn("Mira has dark hair", source)
-        self.assertEqual(
-            prompt,
-            "cinematic photo, Mira in a blue coat holding a red umbrella at a rainy station",
-        )
+        self.assertEqual(prompt, "cinematic photo, Mira in a blue coat holding a red umbrella at a rainy station")
 
     def test_current_scene_uses_selected_model_prompt_limit(self):
         self.catalog.write_text(
@@ -1009,7 +1007,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         self.assertIn("1024x1024", text)
         self.assertEqual(
             callbacks,
-            {"imagine:scene", "imagine:custom", "imagine:options", "imagine:close"},
+            {f"imagine:{action}" for action in ("scene", "custom", "options", "close", "style:realism", "style:anime")},
         )
 
     def test_auto_model_panel_shows_auto_selected(self):
@@ -1182,7 +1180,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         self.assertNotIn("model-b", model_b["callback_data"])
         callback = {"id": "cb", "message": {"message_id": 77}}
         request_context = SimpleNamespace(app_settings=settings)
-        with patch.object(_m_feature_callbacks, "send_imagine_options_menu"):
+        with patch.object(_m_image_callbacks, "send_imagine_options_menu"):
             handled = _m_feature_callbacks.handle_feature_panel_callback(
                 self.db,
                 "token",
@@ -1214,7 +1212,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         settings = self.app_settings_builder.build()
         callback = {"id": "cb", "message": {"message_id": 77}}
         request_context = SimpleNamespace(app_settings=settings)
-        with patch.object(_m_feature_callbacks, "send_imagine_options_menu"):
+        with patch.object(_m_image_callbacks, "send_imagine_options_menu"):
             handled = _m_feature_callbacks.handle_feature_panel_callback(
                 self.db,
                 "token",
@@ -1329,7 +1327,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         )
         callback = {"id": "cb", "message": {"message_id": 77}}
         request_context = SimpleNamespace(app_settings=self.app_settings_builder.build())
-        with patch.object(_m_feature_callbacks, "start_text_action_input") as start_input:
+        with patch.object(_m_image_callbacks, "start_text_action_input") as start_input:
             _m_feature_callbacks.handle_feature_panel_callback(
                 self.db,
                 "token",
@@ -1348,14 +1346,14 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
             )
         self.assertEqual(
             start_input.call_args.args[5],
-            "Send a custom image prompt (1–1,200 characters).",
+            "Send a custom image prompt (1–1,119 characters). Style: Realism.",
         )
 
     def test_custom_prompt_button_auto_reference_uses_reduced_input_limit(self):
         self._configure_auto_catalog()
         callback = {"id": "cb", "message": {"message_id": 77}}
         request_context = SimpleNamespace(app_settings=self.app_settings_builder.build())
-        with patch.object(_m_feature_callbacks, "start_text_action_input") as start_input:
+        with patch.object(_m_image_callbacks, "start_text_action_input") as start_input:
             _m_feature_callbacks.handle_feature_panel_callback(
                 self.db,
                 "token",
@@ -1381,7 +1379,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         callback = {"id": "cb", "message": {"message_id": 77}}
         request_context = SimpleNamespace(app_settings=self.app_settings_builder.build())
         answers = []
-        with patch.object(_m_feature_callbacks, "start_text_action_input") as start_input:
+        with patch.object(_m_image_callbacks, "start_text_action_input") as start_input:
             handled = _m_feature_callbacks.handle_feature_panel_callback(
                 self.db,
                 "token",
@@ -1406,7 +1404,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
             "chat",
             self.session["session_id"],
             "imagine",
-            "Send a custom image prompt (1–4,000 characters).",
+            "Send a custom image prompt (1–3,919 characters). Style: Realism.",
             callback,
         )
 
@@ -1416,9 +1414,9 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         messages = []
         error = ProviderRequestError("nano-gpt::qwen-image-2.0", "rate_limit", 429, retry_after=37)
         with (
-            patch.object(_m_feature_callbacks, "send_typing"),
-            patch.object(_m_feature_callbacks, "handle_imagine_scene", side_effect=error),
-            patch.object(_m_feature_callbacks, "send_text", side_effect=lambda _t, _c, text: messages.append(text)),
+            patch.object(_m_image_callbacks, "send_typing"),
+            patch.object(_m_image_callbacks, "handle_imagine_scene", side_effect=error),
+            patch.object(_m_image_callbacks, "send_text", side_effect=lambda _t, _c, text: messages.append(text)),
         ):
             handled = _m_feature_callbacks.handle_feature_panel_callback(
                 self.db,
@@ -1499,8 +1497,8 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         request_context = SimpleNamespace(app_settings=self.app_settings_builder.build())
         answers = []
         with (
-            patch.object(_m_feature_callbacks, "send_typing"),
-            patch.object(_m_feature_callbacks, "handle_imagine_scene") as generate_scene,
+            patch.object(_m_image_callbacks, "send_typing"),
+            patch.object(_m_image_callbacks, "handle_imagine_scene") as generate_scene,
         ):
             handled = _m_feature_callbacks.handle_feature_panel_callback(
                 self.db,

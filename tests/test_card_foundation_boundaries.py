@@ -2,13 +2,12 @@
 
 import ast
 import sqlite3
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from python_process_test_support import run_python
 from settings_test_support import SettingsTestCase
 
 import bridge.callback_tokens as _owner_callback_tokens
@@ -52,15 +51,6 @@ CALLBACK_TOKEN_EXPORTS = (
 
 
 class CardFoundationBoundaryTests(SettingsTestCase):
-    def _run_python(self, source: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-c", source],
-            cwd=REPO_ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-
     def test_config_exposes_card_foundation_defaults(self):
         import bridge.config as config
 
@@ -126,7 +116,7 @@ class CardFoundationBoundaryTests(SettingsTestCase):
                 self.assertNotIn("\n" + prefix, source)
 
     def test_panel_utils_imports_without_runtime_or_common(self):
-        completed = self._run_python(
+        completed = run_python(
             "import sys\n"
             "import bridge.panel_utils as panel_utils\n"
             "assert 'bridge.runtime' not in sys.modules\n"
@@ -141,7 +131,7 @@ class CardFoundationBoundaryTests(SettingsTestCase):
         )
 
     def test_card_content_imports_without_legacy_or_persistence_modules(self):
-        completed = self._run_python(
+        completed = run_python(
             "import sys\n"
             "import bridge.card_content\n"
             "for name in ("
@@ -280,7 +270,7 @@ class CardFoundationBoundaryTests(SettingsTestCase):
         self.assertRegex(result, r"^\d{2}:\d{2}$")
 
     def test_callback_tokens_imports_without_runtime_or_common(self):
-        completed = self._run_python(
+        completed = run_python(
             "import sys\n"
             "import bridge.callback_tokens as callback_tokens\n"
             "assert 'bridge.runtime' not in sys.modules\n"

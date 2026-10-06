@@ -1,28 +1,18 @@
 """Runtime import-boundary regression tests."""
 
-import subprocess
-import sys
 import unittest
 from pathlib import Path
 
+from python_process_test_support import run_python
 from settings_test_support import SettingsTestCase
 
 REPO_ROOT = Path(__file__).parents[1]
 
 
 class RuntimeImportBoundaryTests(SettingsTestCase):
-    def _run_python(self, source: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-c", source],
-            cwd=REPO_ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-
     def test_schema_owns_processed_update_retention_default(self):
         self.assertFalse((REPO_ROOT / "bridge" / "runtime_defaults.py").exists())
-        completed = self._run_python(
+        completed = run_python(
             "import sys\n"
             "import bridge.schema as schema\n"
             "assert schema.PROCESSED_UPDATE_RETENTION_SECONDS == 30 * 86400\n"
@@ -38,7 +28,7 @@ class RuntimeImportBoundaryTests(SettingsTestCase):
         )
 
     def test_schema_import_does_not_import_runtime_or_common(self):
-        completed = self._run_python(
+        completed = run_python(
             "import sys\n"
             "import bridge.schema as schema\n"
             "assert 'bridge.runtime' not in sys.modules\n"
@@ -53,7 +43,7 @@ class RuntimeImportBoundaryTests(SettingsTestCase):
         )
 
     def test_performance_and_native_cache_import_without_runtime(self):
-        completed = self._run_python(
+        completed = run_python(
             "import sys\n"
             "import bridge.performance\n"
             "import bridge.native_cache\n"

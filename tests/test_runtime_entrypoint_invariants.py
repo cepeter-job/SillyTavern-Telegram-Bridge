@@ -5,15 +5,14 @@ from __future__ import annotations
 import ast
 import builtins
 import sqlite3
-import subprocess
-import symtable
-import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from python_process_test_support import run_python
 from settings_test_support import SettingsTestCase
+from source_test_support import referenced_globals
 
 REPO_ROOT = Path(__file__).parents[1]
 BRIDGE_DIR = REPO_ROOT / "bridge"
@@ -68,21 +67,6 @@ def _defined_names(source: str) -> set[str]:
     return result
 
 
-def _referenced_globals(source: str, filename: str) -> set[str]:
-    table = symtable.symtable(source, filename, "exec")
-    result: set[str] = set()
-
-    def walk(node):
-        for symbol in node.get_symbols():
-            if symbol.is_referenced() and symbol.is_global():
-                result.add(symbol.get_name())
-        for child in node.get_children():
-            walk(child)
-
-    walk(table)
-    return result
-
-
 def _owner_index() -> dict[str, list[str]]:
     owners: dict[str, list[str]] = {}
     for path in sorted(BRIDGE_DIR.glob("*.py")):
@@ -95,17 +79,8 @@ def _owner_index() -> dict[str, list[str]]:
 
 
 class RuntimeEntrypointInvariantTests(SettingsTestCase):
-    def _run_python(self, source: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-c", source],
-            cwd=REPO_ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-
     def test_main_import_is_ordinary_and_does_not_import_runtime_or_loader(self):
-        completed = self._run_python(
+        completed = run_python(
             "import sys\n"
             "import bridge.main\n"
             "assert 'bridge.runtime' not in sys.modules\n"
@@ -152,10 +127,7 @@ class RuntimeEntrypointInvariantTests(SettingsTestCase):
         source = path.read_text(encoding="utf-8")
         bound = _bound_names(source)
         unresolved = sorted(
-            _referenced_globals(source, "main.py")
-            - bound
-            - set(dir(builtins))
-            - {"__file__", "__name__", "__package__"}
+            referenced_globals(source, "main.py") - bound - set(dir(builtins)) - {"__file__", "__name__", "__package__"}
         )
         owners = _owner_index()
         detail = [name + (" <- " + ",".join(owners[name]) if owners.get(name) else "") for name in unresolved]

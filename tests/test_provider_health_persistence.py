@@ -86,7 +86,11 @@ def test_expired_observations_are_unknown_both_in_memory_and_after_restart(tmp_p
     assert health.snapshot("alpha").state == "healthy"
 
 
-@pytest.mark.parametrize("payload", [b"not json", b"[]", b'{"version":99,"records":[]}', b"x" * 4_000_001])
+@pytest.mark.parametrize(
+    "payload",
+    [b"not json", b"[]", b'{"version":99,"records":[]}', b"x" * 4_000_001],
+    ids=["invalid-json", "wrong-shape", "unknown-version", "oversized"],
+)
 def test_corrupt_unknown_version_or_oversized_store_is_ignored(tmp_path, payload):
     clock = Clock()
     path = tmp_path / "health.json"

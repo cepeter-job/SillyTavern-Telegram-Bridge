@@ -357,3 +357,21 @@ def test_alternate_session_accepts_a_normal_story_turn_without_touching_the_orig
     )
     assert db.execute("SELECT id,content FROM messages WHERE session_id='s1' ORDER BY id").fetchall() == before
     assert load_ending_state(db, "chat", "s1").lifecycle == "closed"
+
+
+@pytest.mark.parametrize("style", ["realism", "anime"])
+def test_alternate_ending_restores_checkpoint_image_style(session_db, style):
+    _, db, _ = session_db
+
+    def seed(db, _through):
+        with write_transaction(db):
+            store_meta_value(db, "image_style:chat:s1", style)
+
+    cp = close_story(session_db, seed)
+    changed_style = "realism" if style == "anime" else "anime"
+    with write_transaction(db):
+        store_meta_value(db, "image_style:chat:s1", changed_style)
+    result = branch(session_db, cp)
+    target = result.session["session_id"]
+    assert load_meta_value(db, f"image_style:chat:{target}") == style
+    assert load_meta_value(db, "image_style:chat:s1") == changed_style

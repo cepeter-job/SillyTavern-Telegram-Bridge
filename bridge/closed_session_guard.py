@@ -56,6 +56,7 @@ def closed_session_allows_input(
     root = pieces[0] if pieces else ""
     if root in {
         "/status",
+        "/trackers",
         "/help",
         "/history",
         "/usage",

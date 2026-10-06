@@ -38,7 +38,7 @@ Personas and Worlds; use separate bridge instances for mutually untrusted users.
 | **Home** | Return to the current story, open recent sessions and check bridge health. |
 | **Characters** | Browse/search cards, upload, review optimizer proposals, restore backups or create a conversation. |
 | **Sessions** | Create, rename, switch or delete inactive sessions. |
-| **Manage** | Models, Personas, Worlds, Generation, Memory, NPC Bank, Data Bank and Advanced settings. |
+| **Manage** | Models, Personas, Worlds, Generation, Memory, NPC Bank, Story trackers, Data Bank and Advanced settings. |
 | **System** | Running/installed version, operations, retained memory diagnostics and signed updates. |
 
 For token counts, open **Manage → Advanced settings → Usage**. It reports
@@ -102,6 +102,22 @@ Data Bank documents belong to the private bot chat and can be shared by sessions
 in that chat. Uploading the same filename creates a version. Search, activate an
 older version, remove all versions of a filename, or reindex as needed. The input
 limit is 10 MB. Full-text search remains available without embeddings.
+
+### Story trackers
+
+Open **Manage → Story trackers** to inspect the active session's saved
+relationships, visible agendas, inventory, skills, conditions, factions, linked
+quests and recent d20 checks. **Last updated** shows the time of the latest story
+text included in the saved trackers; **Catching up** means newer story text is
+waiting for extraction. Refresh reloads the saved view without a model request,
+a new roll or a story turn. A fresh chat shows an empty state without creating
+a session.
+
+The page uses the same SQLite projection as Telegram `/trackers` and respects
+NPC Bank visibility. Private intelligence and future payoffs stay outside this
+view; Director Room exposes its own planning controls separately. See
+[Story trackers and checks](user-guide.md#story-trackers-and-checks) for mechanics
+and storage details.
 
 ### Slow operations and stale forms
 

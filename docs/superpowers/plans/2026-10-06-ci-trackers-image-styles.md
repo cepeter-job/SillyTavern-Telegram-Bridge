@@ -39,12 +39,12 @@ pytest/xdist/coverage, GitHub Actions.
 `tools/ci_gate.py`, `tests/test_ci_gate.py`, existing test support and boundary
 tests, `tests/test_provider_health_persistence.py`.
 
-- [ ] Record baseline counts, exact helper duplication, current timing and ZeroClaw source.
-- [ ] Exercise the gate with literal success/failure/missing/skipped/cancelled outcomes.
-- [ ] Make `test` the strict aggregate of five independent jobs.
-- [ ] Consolidate only identical helpers and shorten giant parameter IDs.
-- [ ] Publish useful JUnit, coverage, smoke, reference and leak-scan evidence.
-- [ ] Verify affected tests and independent CI gate behavior.
+- [x] Record baseline counts, exact helper duplication, current timing and ZeroClaw source.
+- [x] Exercise the gate with literal success/failure/missing/skipped/cancelled outcomes.
+- [x] Make `test` the strict aggregate of five independent jobs.
+- [x] Consolidate only identical helpers and shorten giant parameter IDs.
+- [x] Publish useful JUnit, coverage, smoke, reference and leak-scan evidence.
+- [x] Verify affected tests and independent CI gate behavior.
 
 ## Task 2: Expose saved canonical trackers
 
@@ -57,11 +57,11 @@ tracker tests and the existing Mini App smoke fixture.
 **Interface:** A shared bounded tracker view supplies a whitelisted JSON projection;
 Telegram renders that projection without using an LLM.
 
-- [ ] Test visible fields, hidden-field exclusion and source/session boundaries first.
-- [ ] Add saved progress/freshness reads and the bounded presentation.
-- [ ] Register `/trackers` and allow it for inspection of closed stories.
-- [ ] Add an authenticated read-only API and Manage page with empty/stale states.
-- [ ] Exercise Telegram output bounds and Mini App rendering with real saved data.
+- [x] Test visible fields, hidden-field exclusion and source/session boundaries first.
+- [x] Add saved progress/freshness reads and the bounded presentation.
+- [x] Register `/trackers` and allow it for inspection of closed stories.
+- [x] Add an authenticated read-only API and Manage page with empty/stale states.
+- [x] Exercise Telegram output bounds and Mini App rendering with real saved data.
 
 ## Task 3: Add image style selection
 
@@ -72,20 +72,20 @@ Telegram renders that projection without using an LLM.
 **Interface:** Validated session preference `image_style:<chat>:<session>`
 accepts `realism` or `anime`; absent/invalid saved values fall back to Realism.
 
-- [ ] Test panel state, persistence, invalid input and reset.
-- [ ] Test provider payloads for scene/custom, both styles and text/reference inputs.
-- [ ] Reserve style overhead before advertising/validating custom-input limits.
-- [ ] Include style in alternate-ending configuration copies.
-- [ ] Run affected image and lifecycle regressions.
+- [x] Test panel state, persistence, invalid input and reset.
+- [x] Test provider payloads for scene/custom, both styles and text/reference inputs.
+- [x] Reserve style overhead before advertising/validating custom-input limits.
+- [x] Include style in alternate-ending configuration copies.
+- [x] Run affected image and lifecycle regressions.
 
 ## Task 4: Integrate, review and merge
 
 **Files:** Bot command/help catalogs, user/Mini App docs, changelog, exact shrinking
 module-size exceptions and required dependency-policy entries.
 
-- [ ] Update command/help navigation and document SQLite/style behavior.
+- [x] Update command/help navigation and document SQLite/style behavior.
 - [ ] Run relevant local checks and complete GitHub Linux CI on the final commit.
-- [ ] Independently review feature boundaries, regression maintenance and CI semantics.
+- [x] Independently review feature boundaries, regression maintenance and CI semantics.
 - [ ] Fix concrete findings and rerun covering checks.
 - [ ] Merge only after all required checks succeed on the reviewed head.
 - [ ] Verify merge and update this worktree without disturbing the other active task.
@@ -97,3 +97,14 @@ module-size exceptions and required dependency-policy entries.
 - A concurrent task switched the original checkout. Own test files were copied,
   hash-checked and moved to the dedicated linked worktree before implementation.
 - Windows-only test tooling includes colorama; no runtime lock change is needed.
+
+- Integrated main `4462d1c3` (PRs #382/#383), preserving migration 26 and legacy
+  tracker prompt/bootstrap retirement. The NPC service size limit is now 572.
+- Review and merge evidence is tracked in
+  [PR #384](https://github.com/cepeter/SillyTavern-Telegram-Bridge/pull/384).
+- First Linux run on `8e76e9bd`: 3,782 tests and 811 subtests passed with 82.58%
+  coverage and security floors passing. The fifteen-page UI and tracker assertions
+  passed before a later smoke request burst hit the production rate limit.
+- The aggregate correctly rejected that failed smoke job. The corrected harness
+  reserves capacity before the twelve-request block and its following phase.
+  Focused boundary replay passed; final CI and merge status are recorded in the PR.

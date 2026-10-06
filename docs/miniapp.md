@@ -107,10 +107,11 @@ limit is 10 MB. Full-text search remains available without embeddings.
 
 Open **Manage → Story trackers** to inspect the active session's saved
 relationships, visible agendas, inventory, skills, conditions, factions, linked
-quests and recent d20 checks. The page shows the saved source boundary and
-whether extraction is catching up. Refresh reloads the saved view without a
-model request, a new roll or a story turn. A fresh chat shows an empty state
-without creating a session.
+quests and recent d20 checks. **Last updated** shows the time of the latest story
+text included in the saved trackers; **Catching up** means newer story text is
+waiting for extraction. Refresh reloads the saved view without a model request,
+a new roll or a story turn. A fresh chat shows an empty state without creating
+a session.
 
 The page uses the same SQLite projection as Telegram `/trackers` and respects
 NPC Bank visibility. Private intelligence and future payoffs stay outside this

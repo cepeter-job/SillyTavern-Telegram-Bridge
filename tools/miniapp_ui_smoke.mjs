@@ -430,8 +430,9 @@ try {
   ],'Incomplete summary regeneration must be reported for partial work and old-summary fallback; complete regeneration retains its normal flow');
   console.log('summary-regeneration=partial-notice,old-fallback-notice,complete-normal; summary-session-scope=preserved');
   // Extra real reads make the rolling-window regression reproducible on fast runners.
+  // Reserve the burst and the following phase together before sending either.
+  await reserveFixtureCapacity(12+60);
   for(let extra=0;extra<12;extra++)await app.namespace.api('/status');
-  await reserveFixtureCapacity(60);
   await app.namespace.navigate('models');
   const document=dom.window.document;
   const reasoningLabel=[...document.querySelectorAll('label')].find(n=>n.textContent==='Reasoning level');

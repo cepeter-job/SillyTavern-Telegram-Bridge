@@ -355,9 +355,10 @@ trimmed when the request needs space.
 Use `/trackers` in Telegram, or open **Manage → Story trackers** in the Mini App.
 The view shows saved relationships, visible agendas, inventory, skills,
 conditions, faction state, linked quests and recent d20 checks for the active
-session. It also reports how far accepted extraction has caught up with the
-conversation. An empty view can mean no tracker facts have been established yet,
-or that background extraction is still catching up.
+session. **Last updated** identifies the latest story text included in the saved
+trackers. **Catching up** means newer story text is waiting for extraction. An
+empty view can mean no tracker facts have been established yet, or that
+background extraction is still catching up.
 
 Opening or refreshing this view reads saved state. It does not call a model,
 roll another check, advance agenda timers or add a story turn. NPC visibility

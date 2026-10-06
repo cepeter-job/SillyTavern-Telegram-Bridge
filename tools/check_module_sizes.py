@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -16,11 +17,14 @@ def python_paths(root: Path) -> list[Path]:
     paths = list(root.glob("*.py"))
     for name in ("bridge", "tests", "tools"):
         paths.extend((root / name).rglob("*.py"))
-    return sorted(path for path in paths if "__pycache__" not in path.parts)
+    return sorted(path for path in paths if not {"__pycache__", "node_modules", ".venv"}.intersection(path.parts))
 
 
 def measure_sizes(root: Path) -> dict[str, int]:
-    return {path.relative_to(root).as_posix(): len(path.read_text(encoding="utf-8").splitlines()) for path in python_paths(root)}
+    return {
+        path.relative_to(root).as_posix(): len(path.read_text(encoding="utf-8").splitlines())
+        for path in python_paths(root)
+    }
 
 
 def size_errors(
@@ -67,8 +71,8 @@ def _exceptions(raw: str) -> dict[str, int]:
 
 
 def _git_file(root: Path, ref: str, path: str) -> str | None:
-    result = subprocess.run(  # noqa: S603, S607 -- fixed local git read, validated revision and repository path
-        ["git", "show", f"{ref}:{path}"],
+    result = subprocess.run(  # noqa: S603 -- fixed local git read, validated revision and repository path
+        [shutil.which("git") or "/usr/bin/git", "show", f"{ref}:{path}"],
         cwd=root,
         check=False,
         capture_output=True,
@@ -83,8 +87,12 @@ def _git_file(root: Path, ref: str, path: str) -> str | None:
 def previous_limits(root: Path, ref: str, baseline: dict[str, int]) -> dict[str, int]:
     if not re.fullmatch(r"[0-9a-f]{40,64}", ref) or not ref.strip("0"):
         raise ValueError("Base revision must be a full nonzero commit SHA")
-    subprocess.run(  # noqa: S603, S607 -- fixed local git read with validated SHA
-        ["git", "cat-file", "-e", f"{ref}^{{commit}}"], cwd=root, check=True, capture_output=True, timeout=15
+    subprocess.run(  # noqa: S603 -- fixed local git read with validated SHA
+        [shutil.which("git") or "/usr/bin/git", "cat-file", "-e", f"{ref}^{{commit}}"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        timeout=15,
     )
     raw = _git_file(root, ref, BASELINE)
     if raw is not None:

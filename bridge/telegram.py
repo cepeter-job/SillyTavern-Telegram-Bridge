@@ -23,6 +23,7 @@ from bridge.panel_bindings import (
 )
 from bridge.request_types import RequestContext
 from bridge.settings import AppSettings
+from bridge.text_units import utf16_length
 from bridge.topic_scope import parse_topic_scope
 
 
@@ -236,10 +237,6 @@ def download_telegram_file(token: str, file_id: str, max_bytes: int = SYNC_MAX_B
     return raw
 
 
-def _utf16_length(value: str) -> int:
-    return len(value.encode("utf-16-le")) // 2
-
-
 def _semantic_boundary(text: str, start: int, end: int) -> int:
     """Choose the latest safe paragraph, sentence, or whitespace boundary."""
     segment = text[start:end]
@@ -260,7 +257,7 @@ def split_telegram_text(text: str, limit: int = MAX_TELEGRAM_LENGTH) -> list[str
     text = str(text)
     if limit <= 0:
         raise ValueError("Telegram message limit must be positive")
-    if _utf16_length(text) <= limit:
+    if utf16_length(text) <= limit:
         return [text]
     chunks = []
     start = 0
@@ -268,7 +265,7 @@ def split_telegram_text(text: str, limit: int = MAX_TELEGRAM_LENGTH) -> list[str
         units = 0
         hard_end = start
         for index in range(start, len(text)):
-            width = _utf16_length(text[index])
+            width = utf16_length(text[index])
             if units and units + width > limit:
                 break
             units += width

@@ -9,6 +9,7 @@ from dataclasses import replace
 from typing import Any
 
 import bridge.limits as _limits
+from bridge.actor_visibility import normalize_known_by
 from bridge.memory_contracts import MemoryReadScope
 from bridge.memory_store import pending_memory_invalidation, request_source_cutoff
 from bridge.npc_repository import (
@@ -54,20 +55,6 @@ def _clean_text(value: Any) -> str:
     return " ".join(str(value or "").split()).strip()
 
 
-def _normalize_known_by(values: Any) -> tuple[str, ...]:
-    if not isinstance(values, (list, tuple)):
-        return ()
-    result = []
-    seen = set()
-    for value in values:
-        text = _clean_text(value)
-        key = text.casefold()
-        if text and key not in seen:
-            seen.add(key)
-            result.append(text)
-    return tuple(result)
-
-
 def _expected_mode(field_key: str) -> str | None:
     if field_key in _FIXED_FIELDS:
         return "fixed"
@@ -95,7 +82,7 @@ def validate_npc_operation(operation: NpcOperation) -> NpcOperation | None:
     op = str(operation.operation or "").strip().casefold()
     mode = str(operation.field_mode or "").strip().casefold()
     visibility = str(operation.visibility or "").strip().casefold()
-    known_by = _normalize_known_by(operation.known_by)
+    known_by = normalize_known_by(operation.known_by)
 
     if expected_mode is None or op not in _ALLOWED_OPERATIONS or mode != expected_mode:
         return None

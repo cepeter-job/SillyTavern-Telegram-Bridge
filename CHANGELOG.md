@@ -4,6 +4,126 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ## [Unreleased]
 
+## [0.3.006] - 2026-10-06
+
+### Fixed
+
+- Close SQLite backup, validation and restore connections deterministically on success and failure. Finalize only the destination in DELETE journal mode so a verified backup is a standalone file; leave the live database in WAL mode.
+- Create database backups with private permissions from the start and clean failed temporary snapshots only after closing their handles. Preserve historical backups that still have WAL/SHM sidecars rather than orphaning those sidecars during retention.
+
+### Maintenance
+
+- Share Telegram UTF-16 length and escape calculations, identical episodic/NPC JSON fence parsing, actor visibility normalization, and HTML newline handling without changing the stricter Light Novel parser or raw repository decoding.
+- Add a Python file-size ratchet against the reviewed base commit. Existing oversized files cannot grow, shrinking limits must be updated, and cohesive small modules remain valid.
+- Add reference-audit evidence for aliased/local imports, installer module commands and path-invoked workers. Findings are review candidates, not automatic deletion instructions.
+- Consolidate the repository audit, preserving the live memory snapshot layers, Tailscale installer entrypoint and per-domain callback routing.
+- Backfill six published release entries and document the intentional latest-only release/tag policy without rewriting source history.
+
+### Compatibility and validation
+
+- No runtime dependency-lock or database-schema changes.
+- Regression coverage includes backup/restore failure cleanup, standalone WAL snapshots, Unicode entities, visibility decoding distinctions and audit guardrails. Full release verification remains tied to the exact PR and merge commits in CI.
+
+## [0.3.005] - 2026-10-06
+
+_Backfilled from the published release notes. Verification describes that historical release._
+
+**Release commit:** `28e61d5d323e6ea7f2ea3ef2031372a613feede6`
+**Signed annotated tag:** `v0.3.005`
+
+### Telegram formatting
+
+- Render allowlisted Telegram-safe HTML as native Telegram message entities instead of flattening every style to plain text.
+- Support bold, italic, underline, strikethrough, spoiler, inline code, preformatted code, blockquote, expandable blockquote, and safe HTTP/HTTPS text links.
+- Preserve existing single-star roleplay narration italics and keep general Markdown syntax literal rather than enabling MarkdownV2 parsing.
+- Preserve formatting through story generation, greetings, image replies, edited replies, recovery, streaming finalization, TTS-visible text, and Telegram chunking.
+- Allow compatible nested entities, including bold or spoiler formatting inside blockquotes and narration italics inside spoiler/bold spans.
+- Use UTF-16 entity offsets, split formatting safely across Telegram's message limit, and trim trailing whitespace from entity ranges so multiline spoilers remain valid.
+
+### Safety
+
+- Unknown presentation HTML remains sanitized.
+- Script/style content is discarded.
+- Text links accept only HTTP/HTTPS targets.
+- Persisted delivery checkpoint payloads remain plain-text normalized.
+- Custom emoji, text mentions, and formatted dates remain intentionally out of scope.
+
+### Dependencies
+
+- Update Hindsight client to the reviewed 0.10.2 line and refresh locked runtime dependencies.
+- Refresh the development tooling lock and CI uv bootstrap pin.
+
+### Verification
+
+- PR #374 passed its full CI suite with 3,499 tests plus 806 subtests and 82.09% application coverage.
+- Post-merge CI and CodeQL both passed on the exact release commit.
+- Static analysis, dependency audit, secret scan, Mini App smoke tests, and security-critical coverage gates passed.
+
+## [0.3.004] - 2026-10-06
+
+_Backfilled from the published release notes. Verification describes that historical release._
+
+**Release commit:** `55f786418c4cd6a41e20f6d4f9630e119ca74b94`
+**Signed annotated tag:** `v0.3.004`
+
+### Story memory
+
+- Make accepted story-memory work durable and independently recoverable instead of letting one failed layer discard other completed work.
+- Preserve complete deterministic source coverage rather than relying on a rolling recent-message snapshot.
+- Apply one request-era eligibility scope for branch, incarnation, rewrite watermark, reader visibility, audience/knowledge boundary, and as-of time.
+- Keep SQLite as canonical authority while using Hindsight only for semantic candidate ranking; remote text is never trusted as prompt authority.
+- Preserve valid earlier memory across rewrites, clears, retries, alternate branches, stale workers, and external-memory outages.
+
+### Retrieval and extraction
+
+- Add rebuildable SQLite FTS5 full-corpus episodic/fact search with bounded query expansion and local-authority evidence fusion.
+- Make long-source extraction resumable and complete across summary, scene, curator, and NPC layers before publication.
+- Add durable raw-archive attempt tracking so delayed, timed-out, crashed, or overlapping remote writes remain cleanup obligations without starving ordinary ingestion.
+- Keep recurring uncertain cleanup watches out of the normal ingestion gate while finite due cleanup failures still block and retry safely.
+
+### Request budgeting
+
+- Budget after final Light Novel/story instructions using the actual model/output allowance.
+- Protect current-user, scene, image, and continuation content while trimming only optional sections.
+- Revalidate fallback, recovery, normalized Codex, Muse, and auto-continuation attempts before provider dispatch.
+
+### Evaluation and verification
+
+- Add a reproducible synthetic memory evaluator and documented fixture/results.
+- Final tested branch head passed 3,487 tests plus 806 subtests with 82.07% application coverage.
+- Post-merge `main` CI and CodeQL both completed successfully on the exact release tree.
+- PR #371 completed independent staged and whole-branch review with no remaining Critical or Important finding.
+
+### Database migration
+
+- **Migration 24** adds durable raw-archival attempt tracking used for crash/timeout cleanup recovery.
+- Forward migration preserves canonical story data. Rollback across this schema change requires the matching pre-upgrade database snapshot.
+
+## [0.3.003] - 2026-10-05
+
+_Backfilled from the published release notes. Verification describes that historical release._
+
+**Release commit:** `0049d9ce52486990e3a7ba7eeb8ea300cba12235`
+**Signed annotated tag:** `v0.3.003`
+
+### Added
+
+- Add `/provider` as an alias for the provider panel and pair Story/Utility model selection with their reasoning controls in the same inline flow.
+- Add opt-in direct Codex OAuth model discovery against the bridge-owned native Codex endpoint. Discovery is disabled by default, filters to API-supported picker-visible models, and preserves configured/cached models on failure.
+- Add current GPT-6 Codex catalog entries plus the `gpt-6-luna-900k` context alias.
+- Add a high-churn memory-retention regression covering repeated lifecycle activity so future leaks are caught by CI.
+
+### Documentation
+
+- Rewrite setup, configuration, operations, Mini App and user-facing guidance for clearer installation and day-to-day operation.
+
+### Verification
+
+- The release commit passed both protected push-time workflows on `main`.
+- PR #370 passed its focused Codex provider/auth/context regression suite before merge.
+- The release tag is SSH-signed with the same independently trusted maintainer key used for v0.3.002.
+- No database-schema migration is introduced by this release.
+
 ## [0.3.002] - 2026-10-05
 
 ### Fixed
@@ -78,6 +198,28 @@ and independent alternate endings.
   personal defaults. Its local cleanup is atomic after successful memory purge.
 - Optional NumPy acceleration now falls back to existing Python vector math when
   the installed wheel cannot initialize on a VPS's exposed CPU instruction set.
+
+## [0.2.068] - 2026-10-03
+
+_Backfilled from the published release notes. Verification describes that historical release._
+
+## What's Changed
+* docs: make setup and user guides easier to follow by @cepeter in https://github.com/cepeter/SillyTavern-Telegram-Bridge/pull/355
+
+## [0.2.067] - 2026-10-03
+
+_Backfilled from the published release notes. Verification describes that historical release._
+
+## What's Changed
+* fix: make roleplay italics deterministic including first messages by @cepeter in https://github.com/cepeter/SillyTavern-Telegram-Bridge/pull/353
+* fix: recover invalid optimizer previews safely by @cepeter in https://github.com/cepeter/SillyTavern-Telegram-Bridge/pull/354
+
+## [0.2.066] - 2026-10-03
+
+_Backfilled from the published release notes. Verification describes that historical release._
+
+## What's Changed
+* feat: discover provider model context metadata safely by @cepeter in https://github.com/cepeter/SillyTavern-Telegram-Bridge/pull/351
 
 ## [0.2.058] - 2026-10-02
 

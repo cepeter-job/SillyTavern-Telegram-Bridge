@@ -73,7 +73,9 @@ def main() -> int:
     references = collect_references(args.root.resolve())
     candidates = [name for name, evidence in references.items() if not evidence]
     report = {
-        "limitations": "No-reference candidates are not dead-code verdicts; inspect callback/dynamic use before deletion.",
+        "limitations": (
+            "No-reference candidates are not dead-code verdicts; inspect callback/dynamic use before deletion."
+        ),
         "modules": references,
         "review_candidates": candidates,
     }

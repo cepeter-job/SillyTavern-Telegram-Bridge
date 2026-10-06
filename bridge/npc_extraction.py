@@ -11,6 +11,7 @@ from bridge.extension_context import PostRetainContext
 from bridge.extension_registry import extension_registry_snapshot as _extension_registry_snapshot
 from bridge.extension_registry import register_post_retain_hook as _register_post_retain_hook
 from bridge.generation_settings import get_generation_settings
+from bridge.json_fences import unfence_json
 from bridge.memory_draft_publish import publish_derived, restore_derived
 from bridge.memory_draft_store import run_session_draft
 from bridge.memory_store import enqueue_memory
@@ -30,20 +31,9 @@ from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect
 
 
-def _unfence(value: str) -> str:
-    text = str(value or "").strip()
-    fence = chr(96) * 3
-    if not (text.startswith(fence) and text.endswith(fence)):
-        return text
-    inner = text[len(fence) : -len(fence)].strip()
-    if inner.casefold().startswith("json"):
-        inner = inner[4:].lstrip()
-    return inner
-
-
 def _parse_payload(raw: str, *, primary_name: str, user_name: str) -> tuple[list[NpcExtractionGroup], bool]:
     try:
-        payload = json.loads(_unfence(raw))
+        payload = json.loads(unfence_json(raw))
     except (TypeError, json.JSONDecodeError):
         return [], False
     groups_raw = payload.get("npcs") if isinstance(payload, dict) else payload

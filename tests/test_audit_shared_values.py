@@ -62,3 +62,14 @@ def test_npc_sql_decode_remains_raw_while_episodic_decode_normalizes():
     value = '[" A ","a",""]'
     assert npc(value) == (" A ", "a", "")
     assert episodic(value) == ("A",)
+
+
+@pytest.mark.parametrize(
+    "parts, expected", [([], []), (["text"], ["text", "\n"]), (["text "], ["text "]), (["text\n"], ["text\n"])]
+)
+def test_html_newline_helper_preserves_whitespace_contract(parts, expected):
+    from bridge import telegram_output
+
+    assert hasattr(telegram_output, "_append_newline"), "Missing shared HTML newline helper"
+    telegram_output._append_newline(parts)
+    assert parts == expected

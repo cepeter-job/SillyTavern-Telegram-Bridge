@@ -9,9 +9,9 @@ from email.message import Message
 
 import pytest
 from application_test_setup import make_test_application_services, make_test_rag_service
+from character_test_support import card_context as card_context
+from character_test_support import card_png as _card_png
 from persisted_state_test_support import seed_character_rank
-from test_character_mutation_safety import _card_png
-from test_character_mutation_safety import card_context as card_context
 
 from bridge import (
     callback_dispatch,

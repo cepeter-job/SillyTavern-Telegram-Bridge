@@ -46,8 +46,8 @@ class CharacterSessionChainTests(SettingsTestCase):
     def test_character_selection_opens_narrative_panel_without_mutating_session(self):
         from unittest.mock import patch
 
+        from character_test_support import card_png as _card_png
         from settings_test_support import make_test_settings
-        from test_character_mutation_safety import _card_png
 
         settings = make_test_settings(home=Path(self.tmp.name))
         settings.character_dir.mkdir(parents=True, exist_ok=True)

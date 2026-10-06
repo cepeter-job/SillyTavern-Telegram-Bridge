@@ -255,7 +255,7 @@ git commit -m "feat: recover closed story endings durably"
 - Test: `tests/test_closed_session_guard.py`
 - Test: `tests/test_light_novel_flow.py`
 - Test: `tests/test_image_generation.py`
-- Test: `tests/test_voice_conversation_boundary.py`
+- Test: `tests/test_quoted_voice.py`
 
 **Interfaces:**
 - Produces:
@@ -288,7 +288,7 @@ Do not duplicate lifecycle checks in each feature. Entry points call the canonic
 
 - [ ] **Step 4: Run boundary tests**
 
-Run: `python -m pytest -q tests/test_closed_session_guard.py tests/test_light_novel_flow.py tests/test_image_generation.py tests/test_voice_conversation_boundary.py`  
+Run: `python -m pytest -q tests/test_closed_session_guard.py tests/test_light_novel_flow.py tests/test_image_generation.py tests/test_quoted_voice.py`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**

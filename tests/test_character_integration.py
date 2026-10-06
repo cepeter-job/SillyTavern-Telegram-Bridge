@@ -7,9 +7,10 @@ import json
 from dataclasses import asdict
 
 import pytest
+from character_test_support import apply_proposal, prepare_replacement, upload
+from character_test_support import card_context as card_context
+from character_test_support import card_png as _card_png
 from persisted_state_test_support import seed_character_rank
-from test_character_mutation_safety import _card_png, apply_proposal, prepare_replacement, upload
-from test_character_mutation_safety import card_context as card_context
 
 from bridge import character_optimizer_panels as panels
 from bridge import character_proposals as proposals

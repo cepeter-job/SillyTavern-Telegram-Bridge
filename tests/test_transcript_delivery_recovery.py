@@ -4,6 +4,7 @@ import json
 import sqlite3
 from urllib.error import URLError
 
+import npc_test_support as ns
 import pytest
 from application_test_setup import (
     make_test_memory_service,
@@ -12,7 +13,6 @@ from application_test_setup import (
     make_test_rag_service,
 )
 from settings_test_support import SettingsBuilder
-from test_npc_branch_safety import _db, _fields, _session, _turn
 
 from bridge import edit_messages, response_delivery, schema, telegram
 from bridge.migrations import run_migrations
@@ -21,12 +21,12 @@ from bridge.response_variants import keep_swipe_variant, last_user_variants, sav
 
 
 def test_edit_prunes_discarded_prompt_alternatives_before_unrelated_turn(monkeypatch):
-    db = _db()
+    db = ns.db()
     try:
-        target = _turn(db, "user", "old prompt", 1)
-        _turn(db, "assistant", "old answer", 2)
-        discarded = _turn(db, "user", "discarded prompt", 3)
-        highest = _turn(db, "assistant", "discarded answer", 4)
+        target = ns.turn(db, "user", "old prompt", 1)
+        ns.turn(db, "assistant", "old answer", 2)
+        discarded = ns.turn(db, "user", "discarded prompt", 3)
+        highest = ns.turn(db, "assistant", "discarded answer", 4)
         db.commit()
         save_response_variant(db, "chat", "s1", "old prompt", "old alternative", target)
         save_response_variant(db, "chat", "s1", "discarded prompt", "discarded alternative", discarded)
@@ -36,8 +36,8 @@ def test_edit_prunes_discarded_prompt_alternatives_before_unrelated_turn(monkeyp
             db,
             "token",
             "key",
-            _session(),
-            _fields(),
+            ns.session(),
+            ns.fields(),
             "chat",
             target,
             "edited prompt",
@@ -49,7 +49,7 @@ def test_edit_prunes_discarded_prompt_alternatives_before_unrelated_turn(monkeyp
             rag_service=make_test_rag_service(),
         )
         assert db.execute("SELECT user_content FROM response_variants").fetchall() == [("edited prompt",)]
-        unrelated = _turn(db, "user", "unrelated prompt", 5)
+        unrelated = ns.turn(db, "user", "unrelated prompt", 5)
         db.commit()
         assert unrelated > highest
         assert last_user_variants(db, "chat", "s1") == ((unrelated, "unrelated prompt"), [])
@@ -107,9 +107,9 @@ def test_populated_identity_migration_preserves_rowids_indexes_and_references():
 
 @pytest.mark.parametrize("preview,fail_at", [(None, 2), (71, 2), (71, 3)])
 def test_acknowledged_chunks_survive_failure_and_recovery_without_duplicates(monkeypatch, preview, fail_at):
-    db = _db()
+    db = ns.db()
     try:
-        rowid = _turn(db, "assistant", "A" * 8100, 1)
+        rowid = ns.turn(db, "assistant", "A" * 8100, 1)
         db.commit()
         acknowledged = []
         calls = []
@@ -243,7 +243,7 @@ def test_transient_claim_reaches_guard_then_business_executes_once(tmp_path, mon
         telegram=SimpleNamespace(send_text=lambda *a: executed.append("false failure"), request=lambda *a: {}),
         group=SimpleNamespace(user_turn_allowed=lambda *a: True),
         conversation=SimpleNamespace(process_message=business),
-        session=SimpleNamespace(load=lambda *a: _session()),
+        session=SimpleNamespace(load=lambda *a: ns.session()),
         provider=object(),
         memory=object(),
         npc=object(),
@@ -359,7 +359,7 @@ def test_native_edit_committed_transport_failure_recovers_same_operation(
         group=SimpleNamespace(user_turn_allowed=group_core.group_user_turn_allowed),
         session=make_test_session_service(app_settings=config),
     )
-    monkeypatch.setattr(edit_messages, "card_fields_from_file", lambda *a, **k: _fields())
+    monkeypatch.setattr(edit_messages, "card_fields_from_file", lambda *a, **k: ns.fields())
     monkeypatch.setattr(edit_messages, "send_typing", lambda *a: None)
     delivered = []
     transport_calls = []
@@ -427,13 +427,13 @@ def test_native_edit_committed_transport_failure_recovers_same_operation(
             from bridge.request_types import RequestContext
 
             monkeypatch.setattr(command_routes, "send_text", lambda *a: notices.append(a[-1]))
-            retry_session = dict(_session(), session_id="other" if recovery_mode == "other_session" else "s1")
+            retry_session = dict(ns.session(), session_id="other" if recovery_mode == "other_session" else "s1")
             handled = command_routes._handle_basic(
                 db,
                 "t",
                 "key",
                 "model",
-                _fields(),
+                ns.fields(),
                 "chat",
                 "/retry",
                 "/retry",
@@ -483,8 +483,8 @@ def test_changed_continuation_payload_discards_prior_delivery_checkpoint(monkeyp
     from bridge.delivery_progress import delivery_complete
     from bridge.generation_recovery import _generation_operation_recovery
 
-    db = _db()
-    rowid = _turn(db, "assistant", "old reply", 1)
+    db = ns.db()
+    rowid = ns.turn(db, "assistant", "old reply", 1)
     db.commit()
     deleted = []
     monkeypatch.setattr(telegram, "telegram_request", lambda *a: {"message_id": 71})
@@ -524,8 +524,8 @@ def test_changed_continuation_payload_discards_prior_delivery_checkpoint(monkeyp
 def test_checkpoint_write_failure_never_marks_delivery_complete(monkeypatch):
     from bridge.delivery_progress import DeliveryFailure, delivery_complete
 
-    db = _db()
-    rowid = _turn(db, "assistant", "answer", 1)
+    db = ns.db()
+    rowid = ns.turn(db, "assistant", "answer", 1)
     db.commit()
     monkeypatch.setattr(telegram, "telegram_request", lambda *a: {"message_id": 71})
     # SQLite rejects the checkpoint, representing an actual persistence failure.
@@ -546,7 +546,7 @@ def test_delivery_retry_exhaustion_is_bounded_and_keeps_saved_reply(tmp_path, mo
     from bridge import job_store
     from bridge.delivery_progress import DeliveryFailure
 
-    db = _db()
+    db = ns.db()
     jid = job_store.enqueue_job(db, 1, "chat", "s1", 77, "edit", {})
     try:
         for attempt in range(1, 4):
@@ -585,11 +585,11 @@ def test_message_identity_migration_failure_rolls_back_data_and_ledger():
 def test_committed_lookup_never_borrows_next_turn_assistant():
     from bridge.transcript_repository import committed_assistant_for_message
 
-    db = _db()
-    _turn(db, "user", "failed prompt", 1)
+    db = ns.db()
+    ns.turn(db, "user", "failed prompt", 1)
     db.execute("UPDATE messages SET telegram_message_id='77'")
-    _turn(db, "user", "unrelated prompt", 2)
-    _turn(db, "assistant", "unrelated answer", 3)
+    ns.turn(db, "user", "unrelated prompt", 2)
+    ns.turn(db, "assistant", "unrelated answer", 3)
     db.commit()
     try:
         assert committed_assistant_for_message(db, "chat", 77) is None
@@ -670,7 +670,7 @@ def test_greeting_partial_delivery_resumes_original_opening_without_duplicate_ro
     from bridge.delivery_progress import delivery_complete
     from bridge.operations import operation_phase
 
-    db = _db()
+    db = ns.db()
     if group:
         group_core.save_group_state(
             db, "chat", "s1", {"enabled": True, "mode": "manual", "turn_user_id": "100", "members": ["a", "b"]}
@@ -684,7 +684,7 @@ def test_greeting_partial_delivery_resumes_original_opening_without_duplicate_ro
         return {"message_id": 80 + len(calls)}
 
     monkeypatch.setattr(telegram, "telegram_request", request)
-    fields = dict(_fields(), first_mes="A" * 8100)
+    fields = dict(ns.fields(), first_mes="A" * 8100)
     try:
         with pytest.raises(response_delivery.DeliveryFailure):
             greetings.send_character_greeting(
@@ -705,8 +705,8 @@ def test_greeting_partial_delivery_resumes_original_opening_without_duplicate_ro
 
 
 def test_missing_first_chunk_acknowledgement_stops_before_later_chunks(monkeypatch):
-    db = _db()
-    rowid = _turn(db, "assistant", "A" * 8100, 1)
+    db = ns.db()
+    rowid = ns.turn(db, "assistant", "A" * 8100, 1)
     db.commit()
     calls = []
     monkeypatch.setattr(telegram, "telegram_request", lambda *a: calls.append(a) or {})
@@ -765,7 +765,7 @@ def test_queued_edit_command_and_delivery_recovery_keep_enqueued_session(tmp_pat
         delivery_retry_backend=job_store.retry_delivery_job,
     )
     monkeypatch.setattr(update_message_routing, "send_help_command", lambda *a, **k: False)
-    monkeypatch.setattr(message_commands, "card_fields_from_file", lambda *a, **k: _fields())
+    monkeypatch.setattr(message_commands, "card_fields_from_file", lambda *a, **k: ns.fields())
     monkeypatch.setattr(edit_messages, "send_typing", lambda *a: None)
     transport_calls = []
 
@@ -819,9 +819,9 @@ def test_legacy_committed_delivery_rejects_target_from_another_session():
     from bridge.generation_recovery import _generation_operation_recovery
     from bridge.operations import begin_operation, set_operation_phase
 
-    db = _db()
-    _turn(db, "user", "prompt", 1)
-    _turn(db, "assistant", "answer", 2)
+    db = ns.db()
+    ns.turn(db, "user", "prompt", 1)
+    ns.turn(db, "assistant", "answer", 2)
     foreign = int(
         db.execute(
             "INSERT INTO messages(chat_id,session_id,role,content,created_at) "
@@ -840,8 +840,8 @@ def test_legacy_committed_delivery_rejects_target_from_another_session():
                 db,
                 "t",
                 "k",
-                _session(),
-                _fields(),
+                ns.session(),
+                ns.fields(),
                 "chat",
                 55,
                 provider_port=make_test_provider_port(generate_backend=lambda *a, **k: pytest.fail("generation")),

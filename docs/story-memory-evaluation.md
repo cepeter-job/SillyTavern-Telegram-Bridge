@@ -288,8 +288,8 @@ is separate, even when it covers the same architectural boundary.
 | Same-session recurring-watch progress and finite cleanup failure/retry | Executed-worker assertions are pytest-only | tests/test_raw_retirement_fairness.py |
 | Empty/malformed/stale acceptance | Marker-free sources/parts processed in later CLI scenarios; explicit empty/malformed/stale assertions are pytest-only | tests/test_story_memory_index.py; tests/test_memory_complete_parts.py; tests/test_memory_final_integration.py |
 | Purge/native facts | purge.floor | tests/test_story_memory_scope.py; tests/test_memory_final_integration.py (native curator continuation and raw late retirement) |
-| Five route final payloads, appended contracts/images/scene | budget.accepted-final-request; budget.protected-overflow (ordinary accepted route) | tests/test_final_budget_routes.py; tests/test_final_generation_budget.py |
-| Actual normalized/fallback/recovery/continuation attempts | Not counted as CLI execution | tests/test_provider_attempt_budget.py; tests/test_late_budget_delivery.py |
+| Five route final payloads, appended contracts/images/scene | budget.accepted-final-request; budget.protected-overflow (ordinary accepted route) | tests/test_final_generation_budget.py; tests/test_final_generation_budget.py |
+| Actual normalized/fallback/recovery/continuation attempts | Not counted as CLI execution | tests/test_provider_attempt_budget.py; tests/test_provider_attempt_budget.py |
 | Derived complete publication, Clear and NPC replay | Not counted as CLI execution | tests/test_memory_complete_parts.py; tests/test_memory_stage3_lifecycle.py |
 
 The suite gate runs the evaluator once for normal standalone success and once

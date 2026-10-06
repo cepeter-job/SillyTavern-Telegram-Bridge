@@ -174,7 +174,7 @@ def test_choice_only_request_uses_bounded_roleplay_context_across_strategies(nov
 
 
 def test_choice_recovery_executes_the_normal_conversation_pipeline_exactly_once(novel_db, monkeypatch):
-    from test_character_mutation_safety import _card_png
+    from character_test_support import card_png as _card_png
 
     from bridge import message_commands
     from bridge.delivery_repository import store_delivery_ids

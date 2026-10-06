@@ -233,7 +233,7 @@ def test_light_novel_strategy_b_uses_utility_reasoning(tmp_path):
         state = conversation_state(db, "chat", session["session_id"])
         assert mark_started(db, "chat", session["session_id"], state.epoch)
         session = {**session, "_actor_id": "owner"}
-        record = prepare_turn(db, "chat", session, "message:1", "owner", rng=lambda _choices: 2)
+        record = prepare_turn(db, "chat", session, "message:1", "owner", rng=lambda _choices: 3)
         assert record is not None
         with write_transaction(db):
             rowid = db.execute(
@@ -245,7 +245,7 @@ def test_light_novel_strategy_b_uses_utility_reasoning(tmp_path):
 
         def generate(_key, model, _messages, **kwargs):
             calls.append((model, kwargs["settings"]))
-            return '{"choices":["Go inside","Wait outside"]}'
+            return '{"choices":["Go inside","Wait outside","Look around"]}'
 
         result = ensure_choices(
             db, record.nonce, session, {"name": "Alice"}, provider_port=ProviderPort(generate), app_settings=settings

@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Callable
+from contextlib import closing
 from pathlib import Path
 
 from bridge.subprocess_security import minimal_subprocess_environment
@@ -69,7 +70,29 @@ def _prune_backups(directory: Path, source_stem: str, keep: int) -> None:
         reverse=True,
     )
     for stale in candidates[max(1, int(keep)) :]:
+        # A historical WAL snapshot may still be open. Do not orphan its sidecars.
+        if any(Path(str(stale) + suffix).exists() for suffix in ("-wal", "-shm")):
+            continue
         stale.unlink()
+
+
+def _copy_snapshot(source: Path, destination: Path) -> None:
+    """Close both handles and finalize only the destination as a standalone file."""
+    with closing(_readonly_connection(source)) as input_db:
+        with closing(sqlite3.connect(destination, timeout=10)) as output_db:
+            input_db.backup(output_db, pages=256, sleep=0.01)
+            output_db.commit()
+            mode = output_db.execute("PRAGMA journal_mode=DELETE").fetchone()
+            if not mode or str(mode[0]).casefold() != "delete":
+                raise RuntimeError("database snapshot could not be finalized as a standalone file")
+            _quick_check(output_db)
+
+
+def _remove_partial_snapshot(path: Path) -> None:
+    """Remove only this operation's private destination after its handles close."""
+    path.unlink(missing_ok=True)
+    for suffix in ("-wal", "-shm", "-journal"):
+        Path(str(path) + suffix).unlink(missing_ok=True)
 
 
 def create_database_backup(
@@ -79,24 +102,23 @@ def create_database_backup(
     label: str = "manual",
     keep: int = _BACKUP_KEEP,
 ) -> Path:
-    """Snapshot one live SQLite database using SQLite's online backup API."""
+    """Snapshot live committed data without checkpointing or changing the source."""
     source = Path(database)
     _regular_file(source, label="database")
     directory = Path(backup_dir)
     _private_directory(directory)
     destination = directory / _backup_name(source, label)
-    if destination.exists() or destination.is_symlink():
-        raise RuntimeError("database backup destination already exists")
     try:
-        with _readonly_connection(source) as input_db, sqlite3.connect(destination, timeout=10) as output_db:
-            input_db.backup(output_db, pages=256, sleep=0.01)
-            _quick_check(output_db)
-        if os.name == "posix":
-            destination.chmod(0o600)
+        descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError as exc:
+        raise RuntimeError("database backup destination already exists") from exc
+    os.close(descriptor)
+    try:
+        _copy_snapshot(source, destination)
         _prune_backups(directory, source.stem, keep)
         return destination
     except Exception:
-        destination.unlink(missing_ok=True)
+        _remove_partial_snapshot(destination)
         raise
 
 
@@ -133,7 +155,7 @@ def restore_database_backup(
     _regular_file(source, label="database backup")
     if service_active(service_name):
         raise RuntimeError(f"bridge service {service_name} is active; stop it before restoring the database")
-    with _readonly_connection(source) as backup_db:
+    with closing(_readonly_connection(source)) as backup_db:
         _quick_check(backup_db)
 
     previous: Path | None = None
@@ -146,15 +168,12 @@ def restore_database_backup(
     os.close(descriptor)
     temporary = Path(raw_temp)
     try:
-        with _readonly_connection(source) as input_db, sqlite3.connect(temporary, timeout=10) as output_db:
-            input_db.backup(output_db, pages=256, sleep=0.01)
-            _quick_check(output_db)
+        _copy_snapshot(source, temporary)
         if os.name == "posix":
             temporary.chmod(0o600)
         for suffix in ("-wal", "-shm"):
             Path(str(target) + suffix).unlink(missing_ok=True)
         os.replace(temporary, target)
         return previous
-    except Exception:
-        temporary.unlink(missing_ok=True)
-        raise
+    finally:
+        _remove_partial_snapshot(temporary)

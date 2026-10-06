@@ -28,7 +28,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          version: "0.12.19"
+          version: "0.12.22"
           enable-cache: true
           cache-dependency-glob: |
             requirements.lock
@@ -109,7 +109,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          version: "0.12.19"
+          version: "0.12.22"
           enable-cache: true
           cache-dependency-glob: |
             requirements.lock
@@ -138,7 +138,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          version: "0.12.19"
+          version: "0.12.22"
           enable-cache: true
           cache-dependency-glob: |
             requirements-dev.lock
@@ -179,3 +179,36 @@ jobs:
 
       - name: Run mypy static surface
         run: python tools/static_analysis.py --print-type-targets | xargs python -m mypy
+
+  lock-regeneration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+
+      - name: Regenerate targeted development lock
+        run: >-
+          uv pip compile requirements.txt requirements-dev.txt
+          --constraint requirements.lock
+          --python-version 3.11
+          --generate-hashes
+          --upgrade-package mypy
+          --upgrade-package ruff
+          --upgrade-package coverage
+          --upgrade-package uv
+          --output-file requirements-dev.lock
+
+      - name: Print regenerated development lock diff
+        run: git diff --no-ext-diff --unified=3 -- requirements-dev.lock
+

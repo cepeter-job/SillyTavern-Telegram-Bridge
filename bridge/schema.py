@@ -20,6 +20,7 @@ from bridge.migrations import run_migrations as _run_migrations
 from bridge.narrative_arc_schema import migrate_narrative_arc_evidence
 from bridge.narrative_runtime_schema import migrate_narrative_history_revisions
 from bridge.narrative_schema import migrate_narrative_engine_foundation
+from bridge.simulation_schema import migrate_simulation_trackers
 from bridge.token_usage_schema import migrate_token_usage
 from bridge.transcript_schema import migrate_message_identity
 
@@ -516,6 +517,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(22, "indexed_memory_evidence", migrate_memory_search),
     _Migration(23, "complete_memory_parts", migrate_complete_memory_parts),
     _Migration(24, "raw_archival_attempts", migrate_archival_attempts),
+    _Migration(25, "canonical_simulation_trackers", migrate_simulation_trackers),
 )
 
 

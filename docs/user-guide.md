@@ -229,8 +229,13 @@ or change your selected model. See
 
 ### Long conversations and context limits
 
-Open `/prompt` → **Budget** to see the resolved context window, output reserve,
-safety margin, estimated input budget and what was reduced in the last prompt.
+Open `/prompt` → **Budget** to see the resolved model context window, configured
+input cap, output reserve, effective estimated input budget and what was reduced
+in the last prompt. The input cap defaults to 49,152 estimated tokens per
+provider request; an operator can set `SILLYTAVERN_CONTEXT_INPUT_CAP_TOKENS=32768`
+for a lower-cost limit. The generation `max_tokens` setting reserves output
+space; it does not cap input.
+
 `/status` already includes a compact input/window/compaction summary. These are
 planning estimates; billed usage comes from provider counters.
 

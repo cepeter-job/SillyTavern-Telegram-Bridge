@@ -25,7 +25,7 @@ class CodexContextVariantTests(SettingsTestCase):
             model = f"openai-codex::gpt-5.6-{family}-900k"
             profile = context_profile(model=model, app_settings=self.settings)
             self.assertEqual(profile.window_tokens, 900_000)
-            self.assertEqual(profile.input_budget_tokens, 887_712)
+            self.assertEqual(profile.input_budget_tokens, 49_152)
             self.assertEqual(profile.safety_margin_tokens, 8_192)
             self.assertEqual(codex_wire_model(model.rsplit("::", 1)[1]), f"gpt-5.6-{family}")
 
@@ -34,7 +34,7 @@ class CodexContextVariantTests(SettingsTestCase):
         profile = context_profile(model=model, app_settings=self.settings)
 
         self.assertEqual(profile.window_tokens, 900_000)
-        self.assertEqual(profile.input_budget_tokens, 887_712)
+        self.assertEqual(profile.input_budget_tokens, 49_152)
         self.assertEqual(codex_wire_model("gpt-6-luna-900k"), "gpt-6-luna")
 
     def test_other_models_keep_configured_window(self):
@@ -52,7 +52,7 @@ class CodexContextVariantTests(SettingsTestCase):
             self.assertEqual(context_input_budget_tokens(model=model, app_settings=self.settings), expected)
         self.assertEqual(codex_wire_model("gpt-5.5-900k"), "gpt-5.5-900k")
 
-    def test_large_variant_preserves_prompt_that_default_budget_compacts(self):
+    def test_large_variant_still_compacts_prompt_above_input_cap(self):
         messages = [{"role": "system", "content": "fixed rules"}]
         for index in range(40):
             role = "user" if index % 2 == 0 else "assistant"
@@ -75,8 +75,11 @@ class CodexContextVariantTests(SettingsTestCase):
 
         self.assertGreater(default_stats["dropped_history"], 0)
         self.assertLess(len(default_messages), len(messages))
-        self.assertEqual(large_messages, messages)
-        self.assertEqual(large_stats["dropped_history"], 0)
+        self.assertGreater(large_stats["dropped_history"], 0)
+        self.assertLess(len(default_messages), len(large_messages))
+        self.assertLess(len(large_messages), len(messages))
+        self.assertLessEqual(large_stats["final_tokens"], 49_152)
+        self.assertEqual(large_messages[-1]["content"], "CURRENT TURN")
 
     def test_chat_builder_passes_selected_model_budget_to_compactor(self):
         captured = {}
@@ -123,7 +126,7 @@ class CodexContextVariantTests(SettingsTestCase):
                 persona_service=make_test_persona_service(),
                 app_settings=self.settings,
             )
-        self.assertEqual(captured["budget"], 887_712)
+        self.assertEqual(captured["budget"], 49_152)
         self.assertEqual(captured["chars_per_token"], 4.0)
 
         session.pop("model_id")

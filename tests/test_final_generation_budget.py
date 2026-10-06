@@ -17,6 +17,8 @@ from bridge.context_compaction import (
 from bridge.context_diagnostics import context_stats_key
 from bridge.light_novel_format import add_inline_contract
 from bridge.metadata import get_meta
+from bridge.prompt_panels import prompt_panel_text
+from bridge.settings import ConfigurationError, load_app_settings
 
 
 def settings_for(tmp_path, window=16384):
@@ -147,3 +149,75 @@ def test_actual_builder_marks_only_real_optional_sections(db, tmp_path, monkeypa
     )
     with pytest.raises(ContextWindowBudgetError):
         finalize(db, settings, messages)
+
+
+def test_default_input_cap_compacts_large_window_before_story_dispatch(db, tmp_path):
+    settings = settings_for(tmp_path, 1_000_000)
+    messages = [{"role": "system", "content": "fixed"}]
+    messages.extend({"role": "user" if index % 2 == 0 else "assistant", "content": "x" * 12000} for index in range(45))
+    messages.append({"role": "user", "content": "CURRENT TURN"})
+
+    final = finalize(db, settings, messages, output=4000)
+    saved = json.loads(get_meta(db, context_stats_key("c", "s"), ""))
+
+    assert len(final) < len(messages)
+    assert final[0]["content"] == "fixed" and final[-1]["content"] == "CURRENT TURN"
+    assert estimate_message_tokens(final) <= 49_152
+    assert saved["window_tokens"] == 1_000_000
+    assert saved["input_cap_tokens"] == 49_152
+    assert saved["input_budget_limiter"] == "input-cap"
+    assert saved["budget_tokens"] == 49_152
+    assert saved["dropped_history"] > 0
+
+
+def test_physical_window_and_requested_output_can_limit_below_input_cap(tmp_path):
+    profile = context_profile("synthetic", requested_output_tokens=10_000, app_settings=settings_for(tmp_path, 55_000))
+    assert profile.window_tokens == 55_000
+    assert profile.output_reserve_tokens == 10_000
+    assert profile.input_cap_tokens == 49_152
+    assert profile.input_budget_tokens == 43_900
+    assert profile.input_budget_limiter == "model-window"
+
+
+def test_overlarge_current_turn_reports_input_cap_without_clipping(db, tmp_path):
+    current = "CURRENT " + "x" * 210_000
+    messages = [{"role": "system", "content": "fixed"}, {"role": "user", "content": current}]
+    with pytest.raises(ContextWindowBudgetError) as exc:
+        finalize(db, settings_for(tmp_path, 1_000_000), messages, output=4000)
+    assert exc.value.stats["input_cap_tokens"] == 49_152
+    assert exc.value.stats["budget_tokens"] == 49_152
+    assert "input cap" in str(exc.value).lower()
+    assert "49,152" in str(exc.value)
+    assert messages[-1]["content"] == current
+
+
+@pytest.mark.parametrize("value", ["0", "1023", "1000001", "abc"])
+def test_input_cap_setting_rejects_invalid_values(tmp_path, value):
+    with pytest.raises(ConfigurationError):
+        load_app_settings({"SILLYTAVERN_CONTEXT_INPUT_CAP_TOKENS": value}, home=tmp_path)
+
+
+def test_input_cap_setting_accepts_lower_cost_alternative(tmp_path):
+    settings = load_app_settings(
+        {"SILLYTAVERN_CONTEXT_WINDOW_TOKENS": "1000000", "SILLYTAVERN_CONTEXT_INPUT_CAP_TOKENS": "32768"},
+        home=tmp_path,
+    )
+    profile = context_profile("synthetic", requested_output_tokens=4000, app_settings=settings)
+    assert settings.context_input_cap_tokens == 32_768
+    assert profile.input_budget_tokens == 32_768
+
+
+def test_prompt_budget_shows_true_window_and_effective_input_cap(db, tmp_path):
+    text = prompt_panel_text(
+        db,
+        "c",
+        {"session_id": "s", "model_id": "synthetic"},
+        {"name": "Synthetic"},
+        section="budget",
+        group_service=None,
+        memory_service=None,
+        app_settings=settings_for(tmp_path, 1_000_000),
+    )
+    assert "Context window: 1000000 tokens" in text
+    assert "Configured input cap: 49152 tokens" in text
+    assert "Effective input budget: ~49152 tokens (input cap)" in text

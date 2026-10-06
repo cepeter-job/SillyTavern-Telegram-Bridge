@@ -330,30 +330,30 @@ def test_reset_returns_current_epoch_light_novel_panel_ids(tmp_path):
     try:
         with write_transaction(db):
             historical_consumed = reserve_choice_set(
-                db, "chat", session["session_id"], -1, "old-consumed", "b", 2, "owner", "story::main", 0.1
+                db, "chat", session["session_id"], -1, "old-consumed", "b", 3, "owner", "story::main", 0.1
             )
-            attach_choice_set(db, historical_consumed.nonce, 1, "digest-old-a", ["Go", "Stay"])
+            attach_choice_set(db, historical_consumed.nonce, 1, "digest-old-a", ["Go", "Stay", "Wait"])
             bind_choice_panel(db, historical_consumed.nonce, 79)
             consume_choice_set(db, historical_consumed.nonce, 0, "chat", session["session_id"], "owner", -1, 79)
             historical_invalidated = reserve_choice_set(
-                db, "chat", session["session_id"], -1, "old-invalidated", "b", 2, "owner", "story::main", 0.2
+                db, "chat", session["session_id"], -1, "old-invalidated", "b", 3, "owner", "story::main", 0.2
             )
-            attach_choice_set(db, historical_invalidated.nonce, 2, "digest-old-b", ["Left", "Right"])
+            attach_choice_set(db, historical_invalidated.nonce, 2, "digest-old-b", ["Left", "Right", "Wait"])
             bind_choice_panel(db, historical_invalidated.nonce, 80)
             db.execute(
                 "UPDATE light_novel_choice_sets SET state='invalidated' WHERE nonce=?",
                 (historical_invalidated.nonce,),
             )
             consumed = reserve_choice_set(
-                db, "chat", session["session_id"], 0, "turn-consumed", "b", 2, "owner", "story::main", 1.0
+                db, "chat", session["session_id"], 0, "turn-consumed", "b", 3, "owner", "story::main", 1.0
             )
-            attach_choice_set(db, consumed.nonce, 3, "digest-a", ["Go", "Stay"])
+            attach_choice_set(db, consumed.nonce, 3, "digest-a", ["Go", "Stay", "Wait"])
             bind_choice_panel(db, consumed.nonce, 81)
             consume_choice_set(db, consumed.nonce, 0, "chat", session["session_id"], "owner", 0, 81)
             opened = reserve_choice_set(
-                db, "chat", session["session_id"], 0, "turn-open", "b", 2, "owner", "story::main", 2.0
+                db, "chat", session["session_id"], 0, "turn-open", "b", 3, "owner", "story::main", 2.0
             )
-            attach_choice_set(db, opened.nonce, 4, "digest-b", ["Left", "Right"])
+            attach_choice_set(db, opened.nonce, 4, "digest-b", ["Left", "Right", "Wait"])
             bind_choice_panel(db, opened.nonce, 82)
         panel_ids = reset_conversation(db, "chat", session["session_id"])
         assert sorted(panel_ids) == [81, 82]

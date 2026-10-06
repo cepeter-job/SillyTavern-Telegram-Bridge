@@ -36,6 +36,31 @@ def test_requested_count_sampled_once_and_preserved(novel_db, count):
     assert seen == [(2, 3, 4)]
 
 
+def test_choice_count_candidates_are_three_or_four_only(novel_db):
+    from bridge.light_novel_service import prepare_turn
+
+    db, session, _ = novel_db
+    started(db)
+    seen = []
+    record = prepare_turn(
+        db,
+        "chat",
+        session,
+        "message:choice-count-contract",
+        "owner",
+        rng=lambda choices: seen.append(tuple(choices)) or choices[0],
+    )
+    assert record.requested_count in {3, 4}
+    assert seen == [(3, 4)]
+
+
+def test_choice_validation_rejects_two_choice_contract():
+    from bridge.light_novel_format import validate_choices
+
+    with pytest.raises(ValueError, match="3–4"):
+        validate_choices(["Go", "Stay"], 2)
+
+
 def test_retry_strategy_override_is_scoped_to_one_choice_reservation(novel_db):
     from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
     from bridge.light_novel_service import prepare_turn

@@ -251,6 +251,6 @@ def test_dedicated_lightnovel_help_and_strict_start_documentation_are_discoverab
 
     commands = {command for entries in HELP_CATEGORIES.values() for command, _summary in entries}
     assert "/lightnovel" in commands
-    assert "2–4" in command_detail("/lightnovel", "")
+    assert "3–4" in command_detail("/lightnovel", "")
     assert "/start" in command_detail("/reset", "")
     assert "already started" in command_detail("/start", "").lower()

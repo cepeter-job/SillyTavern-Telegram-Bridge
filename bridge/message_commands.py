@@ -75,7 +75,7 @@ from bridge.session_core import ensure_session, list_sessions, load_session
 from bridge.settings import AppSettings
 from bridge.sqlite_store import optimize_database, write_transaction
 from bridge.telegram import send_panel_request, send_text, send_typing, telegram_request
-from bridge.telegram_output import telegram_safe_output
+from bridge.telegram_output import telegram_safe_output, telegram_transport_output
 
 if TYPE_CHECKING:
     pass
@@ -331,9 +331,9 @@ def generate_and_store_reply(
             generation_settings,
             provider_port=provider_port,
         )
-    reply = telegram_safe_output(reply)
+    reply = telegram_transport_output(reply)
     if novel_turn:
-        reply = telegram_safe_output(novel_turn.finalize(reply))
+        reply = telegram_transport_output(novel_turn.finalize(reply))
     reply = normalize_roleplay_transport(reply)
     stored_reply = (
         reply

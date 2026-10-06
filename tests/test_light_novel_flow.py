@@ -97,6 +97,7 @@ def test_choice_panels_show_full_text_in_body_with_numbered_selector_buttons(nov
     choices = [
         "Walk toward the abandoned station & investigate the sound coming from inside.",
         "Stay hidden behind the wall & watch the strangers before deciding.",
+        "Wait.",
     ]
     record = attached_choice(novel_db, choices=choices)
     db, _, settings = novel_db
@@ -111,16 +112,14 @@ def test_choice_panels_show_full_text_in_body_with_numbered_selector_buttons(nov
         "What will you do?\n\n"
         "<b>1.</b> Walk toward the abandoned station &amp; investigate the sound coming from inside.\n\n"
         "<b>2.</b> Stay hidden behind the wall &amp; watch the strangers before deciding.\n\n"
+        "<b>3.</b> Wait.\n\n"
         "You may also type your own reply."
     )
     rows = payload["reply_markup"]["inline_keyboard"]
-    assert rows == [
-        [
-            {"text": "1", "callback_data": f"lnchoice:{record.nonce}:0"},
-            {"text": "2", "callback_data": f"lnchoice:{record.nonce}:1"},
-        ],
-        [{"text": "⏭ Next Scene", "callback_data": f"lnnext:{record.nonce}"}],
+    assert rows[0] == [
+        {"text": str(index + 1), "callback_data": f"lnchoice:{record.nonce}:{index}"} for index in range(3)
     ]
+    assert rows[1] == [{"text": "⏭ Next Scene", "callback_data": f"lnnext:{record.nonce}"}]
     assert all(choice not in button["text"] for row in rows for button in row for choice in choices)
     assert load_choice_set(db, record.nonce).panel_message_id == 81
 
@@ -166,7 +165,7 @@ def test_choice_click_consumes_and_queues_stored_user_text_once(novel_db):
     from bridge.light_novel_callbacks import route_light_novel_callback
     from bridge.light_novel_repository import bind_choice_panel
 
-    record = attached_choice(novel_db, choices=["Go inside", "Stay & wait"])
+    record = attached_choice(novel_db, choices=["Go inside", "Stay & wait", "Look around"])
     db, _session, settings = novel_db
     sent = []
     services = bridge_services(settings, sent)
@@ -546,7 +545,7 @@ def test_mode_a_automatic_choice_worker_recovers_invalid_inline_choices(novel_db
 
     recovered = load_choice_set(db, turn.record.nonce)
     assert recovered.generation_status == "ready"
-    assert recovered.choices == ("Open the door", "Wait outside")
+    assert recovered.choices == ("Open the door", "Wait outside", "Look around")
     assert len(calls) == 1
     assert calls[0][1]["request_timeout"] == 60
     assert [item.generation_status for item in rendered] == ["pending", "ready"]
@@ -693,7 +692,7 @@ def test_choice_worker_does_not_regenerate_ready_inline_story(novel_db, monkeypa
     monkeypatch.setattr(workers, "render_choices", lambda db, token, record, **k: panels.append(record))
     job_id = db.execute("SELECT job_id FROM jobs WHERE update_id=?", (-record.id,)).fetchone()[0]
     workers.process_light_novel_choices_job(services, "chat", record.nonce, False, job_id)
-    assert panels[-1].choices == ("Go inside", "Stay outside")
+    assert panels[-1].choices == ("Go inside", "Stay", "Wait")
     assert db.execute("SELECT state FROM jobs WHERE job_id=?", (job_id,)).fetchone()[0] == "done"
     assert db.execute("SELECT count(*) FROM messages").fetchone()[0] == 1
 

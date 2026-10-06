@@ -102,7 +102,7 @@ class CharacterUploadConfirmationTests(SettingsTestCase):
         with mock.patch.object(
             native_imports,
             "send_panel_request",
-            side_effect=lambda _t, method, payload, *, request_context: panels.append((method, payload)),
+            side_effect=lambda _t, method, payload, **_kwargs: panels.append((method, payload)),
         ):
             native_imports.import_character_card(
                 self.db, "token", "chat", "Alice.png", updated, app_settings=self.app_settings, request_context=ctx

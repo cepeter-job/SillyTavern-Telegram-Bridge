@@ -236,7 +236,7 @@ def _imagine_style_selection(
         answer_callback(token, str(callback.get("id", "")), "Unsupported image style")
     else:
         answer_callback(token, str(callback.get("id", "")), "Image style updated")
-    send_imagine_menu(token, chat_id, db, session, message_id, request_context=request_context)
+    send_imagine_options_menu(token, chat_id, db, session, message_id, request_context=request_context)
     return True
 
 

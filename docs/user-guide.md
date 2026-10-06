@@ -698,9 +698,9 @@ Configure an image provider first, then open `/imagine`:
 - **Current Scene** uses the latest saved assistant turn and structured scene
   state to prepare a visual prompt with Utility, then calls the image model.
 - **Custom Prompt** asks you to type a one-off image description.
-- **Realism / Anime** chooses the visual style. The checkmark shows the saved
-  selection; Realism is the default. It applies to both generation buttons.
-- **Options** selects the session's image model and size preference.
+- **Options** contains the session-scoped image settings: **Realism / Anime**,
+  image model, and size. The style checkmark shows the saved selection; Realism
+  is the default and applies to both generation buttons.
 
 If the catalog supplies valid text and reference targets, **Auto** uses the active
 character PNG as one visual reference when available; otherwise it uses the text

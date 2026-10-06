@@ -40,6 +40,7 @@ def prompt_diagnostics(
         f"dropped={context['dropped_history']}, memory={context['memory_trimmed']}, "
         f"rag={context['rag_trimmed']}, npc={context['npc_trimmed']}, summary={context['summary_trimmed']}"
     )
+    budget_label = "Last request input budget" if context["final_tokens"] is not None else "Effective input budget"
     return (
         "Prompt inspector\nCharacter: "
         f"{fields['name']}"
@@ -54,9 +55,11 @@ def prompt_diagnostics(
         " tokens\nSafety margin: "
         f"{context['safety_margin_tokens']}"
         " tokens\nConfigured input cap: "
+        f"{context['configured_input_cap_tokens']}"
+        " tokens\nRequest input cap: "
         f"{context['input_cap_tokens']}"
-        " tokens\nEffective input budget: ~"
-        f"{context['budget_tokens']}"
+        " tokens\n"
+        f"{budget_label}: ~{context['budget_tokens']}"
         " tokens ("
         f"{'input cap' if context['input_budget_limiter'] == 'input-cap' else 'model window'}"
         ")\nLast assembled prompt: "

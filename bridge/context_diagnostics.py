@@ -84,6 +84,7 @@ def context_diagnostics_snapshot(
         "output_reserve_tokens": profile.output_reserve_tokens,
         "safety_margin_tokens": profile.safety_margin_tokens,
         "budget_tokens": profile.input_budget_tokens,
+        "configured_input_cap_tokens": profile.input_cap_tokens,
         "input_cap_tokens": profile.input_cap_tokens,
         "input_budget_limiter": profile.input_budget_limiter,
         "chars_per_token": profile.chars_per_token,

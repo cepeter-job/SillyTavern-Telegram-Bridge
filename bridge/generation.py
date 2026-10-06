@@ -14,6 +14,7 @@ from bridge.context_compaction import (
     budget_chat_messages,
     compact_chat_messages,
     context_profile,
+    profile_stats,
 )
 from bridge.context_diagnostics import record_context_attempts, save_context_stats
 from bridge.delivery_port import DeliveryPort
@@ -313,15 +314,7 @@ def build_chat_messages(
         chars_per_token=profile.chars_per_token,
         app_settings=app_settings,
     )
-    stats.update(
-        {
-            "window_tokens": profile.window_tokens,
-            "output_reserve_tokens": profile.output_reserve_tokens,
-            "safety_margin_tokens": profile.safety_margin_tokens,
-            "chars_per_token": profile.chars_per_token,
-            "source": profile.source,
-        }
-    )
+    stats.update(profile_stats(profile))
     if context_stats is not None:
         context_stats.clear()
         context_stats.update(stats)

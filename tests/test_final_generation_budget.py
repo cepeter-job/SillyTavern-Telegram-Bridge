@@ -14,7 +14,7 @@ from bridge.context_compaction import (
     context_profile,
     estimate_message_tokens,
 )
-from bridge.context_diagnostics import context_stats_key
+from bridge.context_diagnostics import context_diagnostics_snapshot, context_stats_key, save_context_stats
 from bridge.light_novel_format import add_inline_contract
 from bridge.metadata import get_meta
 from bridge.prompt_panels import prompt_panel_text
@@ -151,6 +151,30 @@ def test_actual_builder_marks_only_real_optional_sections(db, tmp_path, monkeypa
         finalize(db, settings, messages)
 
 
+def test_direct_builder_over_cap_error_reports_input_cap(tmp_path, monkeypatch):
+    settings = settings_for(tmp_path, 1_000_000)
+    monkeypatch.setattr(generation, "build_system_prompt", lambda *a, **k: "FIXED " + "x" * 210_000)
+    persona = SimpleNamespace(name=lambda *a: pytest.fail("unexpected persona read"), get=lambda *a: None)
+    stats = {}
+
+    with pytest.raises(ContextWindowBudgetError) as exc:
+        generation.build_chat_messages(
+            {"session_id": "s", "model_id": "synthetic", "persona_id": "", "world_file": ""},
+            {"name": "Synthetic", "first_mes": "", "post_history_instructions": ""},
+            "CURRENT",
+            [],
+            persona_service=persona,
+            app_settings=settings,
+            context_stats=stats,
+        )
+
+    assert exc.value.stats["window_tokens"] == 1_000_000
+    assert exc.value.stats["input_cap_tokens"] == 49_152
+    assert exc.value.stats["input_budget_limiter"] == "input-cap"
+    assert stats["input_cap_tokens"] == 49_152
+    assert "configured input cap" in str(exc.value).lower()
+
+
 def test_default_input_cap_compacts_large_window_before_story_dispatch(db, tmp_path):
     settings = settings_for(tmp_path, 1_000_000)
     messages = [{"role": "system", "content": "fixed"}]
@@ -221,3 +245,44 @@ def test_prompt_budget_shows_true_window_and_effective_input_cap(db, tmp_path):
     assert "Context window: 1000000 tokens" in text
     assert "Configured input cap: 49152 tokens" in text
     assert "Effective input budget: ~49152 tokens (input cap)" in text
+
+
+def test_prompt_budget_distinguishes_current_cap_from_saved_request(db, tmp_path):
+    old_settings = settings_for(tmp_path, 1_000_000)
+    session = {"session_id": "s", "model_id": "synthetic"}
+    save_context_stats(
+        db,
+        "c",
+        "s",
+        {
+            "window_tokens": 1_000_000,
+            "output_reserve_tokens": 4_000,
+            "safety_margin_tokens": 8_192,
+            "budget_tokens": 49_152,
+            "input_cap_tokens": old_settings.context_input_cap_tokens,
+            "input_budget_limiter": "input-cap",
+            "final_tokens": 48_000,
+        },
+    )
+    current_settings = make_test_settings(base=old_settings, context_input_cap_tokens=32_768)
+
+    snapshot = context_diagnostics_snapshot(db, "c", session, app_settings=current_settings)
+    text = prompt_panel_text(
+        db,
+        "c",
+        session,
+        {"name": "Synthetic"},
+        section="budget",
+        group_service=None,
+        memory_service=None,
+        app_settings=current_settings,
+    )
+
+    assert snapshot["configured_input_cap_tokens"] == 32_768
+    assert snapshot["input_cap_tokens"] == 49_152
+    assert snapshot["budget_tokens"] == 49_152
+    assert snapshot["input_budget_limiter"] == "input-cap"
+    assert "Configured input cap: 32768 tokens" in text
+    assert "Request input cap: 49152 tokens" in text
+    assert "Last request input budget: ~49152 tokens (input cap)" in text
+    assert "Last assembled prompt: 48000 / 49152 estimated tokens" in text

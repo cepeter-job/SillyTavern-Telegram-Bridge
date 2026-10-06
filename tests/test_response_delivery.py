@@ -96,6 +96,34 @@ class ResponseDeliveryTests(SettingsTestCase):
             ],
         )
 
+    def test_send_reply_renders_text_link_entity(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 85}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                "[Docs](https://example.com/reference)",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], "Docs")
+        self.assertEqual(
+            requests[0][1]["entities"],
+            [
+                {
+                    "type": "text_link",
+                    "offset": 0,
+                    "length": 4,
+                    "url": "https://example.com/reference",
+                }
+            ],
+        )
+
     def test_send_reply_renders_code_pre_and_blockquotes(self):
         requests = []
 

@@ -57,18 +57,19 @@ class ResponseDeliveryTests(SettingsTestCase):
             response_delivery.send_reply(
                 "token",
                 "chat",
-                "<b>Bold</b> <u>Under</u> <s>Strike</s> <tg-spoiler>Secret</tg-spoiler>",
+                "<b>Bold</b> <i>Italic</i> <u>Under</u> <s>Strike</s> <tg-spoiler>Secret</tg-spoiler>",
                 app_settings=self.app_settings_builder.build(),
             )
 
-        self.assertEqual(requests[0][1]["text"], "Bold Under Strike Secret")
+        self.assertEqual(requests[0][1]["text"], "Bold Italic Under Strike Secret")
         self.assertEqual(
             requests[0][1]["entities"],
             [
                 {"type": "bold", "offset": 0, "length": 4},
-                {"type": "underline", "offset": 5, "length": 5},
-                {"type": "strikethrough", "offset": 11, "length": 6},
-                {"type": "spoiler", "offset": 18, "length": 6},
+                {"type": "italic", "offset": 5, "length": 6},
+                {"type": "underline", "offset": 12, "length": 5},
+                {"type": "strikethrough", "offset": 18, "length": 6},
+                {"type": "spoiler", "offset": 25, "length": 6},
             ],
         )
 

@@ -28,7 +28,7 @@ from bridge.response_variants import save_response_variant
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
 from bridge.telegram import send_text, send_typing
-from bridge.telegram_output import telegram_safe_output
+from bridge.telegram_output import telegram_transport_output
 
 
 def process_image_message(
@@ -150,7 +150,7 @@ def process_image_message(
         provider_port=provider_port,
     )
     if novel_turn:
-        reply = telegram_safe_output(novel_turn.finalize(reply))
+        reply = telegram_transport_output(novel_turn.finalize(reply))
     stored_reply = (
         reply
         if group_turn and group_turn[1].get("mode") == "autonomous"

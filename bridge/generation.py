@@ -36,7 +36,7 @@ from bridge.provider_port import ProviderPort
 from bridge.rag_service import RagService
 from bridge.roleplay_format import normalize_roleplay_transport
 from bridge.settings import AppSettings
-from bridge.telegram_output import telegram_safe_output
+from bridge.telegram_output import telegram_transport_output
 
 _ROLEPLAY_OUTPUT_CONTRACT = (
     "## Telegram Roleplay Output Contract\n"
@@ -75,7 +75,8 @@ def render_response_language(
                 " ("
                 f"""{normalized}"""
                 "). Preserve meaning, names, dialogue, markdown, action formatting, URLs, "
-                "filenames, and code blocks. You MUST translate every prose segment into "
+                "filenames, code blocks, and Telegram-safe HTML tags and attributes exactly. "
+                "You MUST translate every prose segment into "
                 "the target language, even when the source is long or uses roleplay "
                 "formatting. Do not continue, summarize, censor, explain, or add content. "
                 "Output only the rendered text."
@@ -117,7 +118,7 @@ def render_session_response(
             settings,
             provider_port=provider_port,
         )
-    return normalize_roleplay_transport(telegram_safe_output(rendered))
+    return normalize_roleplay_transport(telegram_transport_output(rendered))
 
 
 def format_user_dialogue_action(text: str) -> str:
@@ -419,6 +420,6 @@ def _generation_generate_rendered_reply(
         provider_port=provider_port,
     )
     if novel_turn:
-        reply = telegram_safe_output(novel_turn.finalize(reply))
+        reply = telegram_transport_output(novel_turn.finalize(reply))
         reply = normalize_roleplay_transport(reply)
     return reply

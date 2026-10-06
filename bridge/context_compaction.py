@@ -18,7 +18,7 @@ from typing import cast
 from bridge.codex_models import codex_context_window_tokens
 from bridge.provider_catalog import context_metadata_for_model
 from bridge.provider_errors import ProviderRequestError
-from bridge.settings import AppSettings
+from bridge.settings import DEFAULT_CONTEXT_INPUT_CAP_TOKENS, AppSettings
 
 DEFAULT_CONTEXT_WINDOW_TOKENS = 32768
 DEFAULT_CONTEXT_OUTPUT_RESERVE_TOKENS = 4096
@@ -40,6 +40,8 @@ class ContextProfile:
     source: str
     requested_output_tokens: int = 0
     output_reservation_only: bool = False
+    input_cap_tokens: int = DEFAULT_CONTEXT_INPUT_CAP_TOKENS
+    input_budget_limiter: str = "model-window"
 
 
 class ContextWindowBudgetError(ProviderRequestError):
@@ -53,6 +55,13 @@ class ContextWindowBudgetError(ProviderRequestError):
         final_tokens = int(cast(int, self.stats.get("final_tokens") or 0))
         budget_tokens = int(cast(int, self.stats.get("budget_tokens") or 0))
         window_tokens = int(cast(int, self.stats.get("window_tokens") or 0))
+        if self.stats.get("input_budget_limiter") == "input-cap":
+            return (
+                f"Prompt for {self.model} exceeds the configured input cap "
+                f"({final_tokens:,} estimated input tokens; {budget_tokens:,} allowed). "
+                "Reduce fixed character/world/system instructions or the current message, "
+                "or increase SILLYTAVERN_CONTEXT_INPUT_CAP_TOKENS."
+            )
         return (
             f"Prompt for {self.model} cannot fit the configured context window "
             f"({final_tokens:,} estimated input tokens; {budget_tokens:,} usable of "
@@ -103,6 +112,9 @@ def context_profile(
         requested = int(requested_output_tokens)
         reserve = max(3000, requested) if actual_transport == "opencode_muse" else requested
         budget = window - reserve - safety
+    cap = app_settings.context_input_cap_tokens
+    limiter = "input-cap" if budget > cap else "model-window"
+    budget = min(budget, cap)
     profile = ContextProfile(
         window,
         reserve,
@@ -112,6 +124,8 @@ def context_profile(
         source,
         requested,
         actual_transport == "openai_codex" or codex_window is not None,
+        input_cap_tokens=cap,
+        input_budget_limiter=limiter,
     )
     if requested <= 0 or budget <= 0:
         stats = profile_stats(profile)
@@ -127,6 +141,8 @@ def profile_stats(profile: ContextProfile) -> dict[str, object]:
         "requested_output_tokens": profile.requested_output_tokens,
         "safety_margin_tokens": profile.safety_margin_tokens,
         "budget_tokens": max(0, profile.input_budget_tokens),
+        "input_cap_tokens": profile.input_cap_tokens,
+        "input_budget_limiter": profile.input_budget_limiter,
         "chars_per_token": profile.chars_per_token,
         "source": profile.source,
         "output_reservation_only": profile.output_reservation_only,

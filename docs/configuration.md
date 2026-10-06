@@ -192,8 +192,9 @@ Hindsight origins and explicitly bypasses environment proxy routing for loopback
 
 | Variable | Default | Valid range / behavior |
 |---|---:|---|
-| `SILLYTAVERN_CONTEXT_WINDOW_TOKENS` | `32768` | `4096..1000000`; total prompt context window. |
-| `SILLYTAVERN_CONTEXT_OUTPUT_RESERVE_TOKENS` | `4096` | `512..131072`; tokens reserved for model output. |
+| `SILLYTAVERN_CONTEXT_WINDOW_TOKENS` | `32768` | `4096..1000000`; fallback model context window. |
+| `SILLYTAVERN_CONTEXT_INPUT_CAP_TOKENS` | `49152` | `1024..1000000`; estimated input-token cap per provider request, independent of model window. Set `32768` for a lower-cost limit. |
+| `SILLYTAVERN_CONTEXT_OUTPUT_RESERVE_TOKENS` | `4096` | `512..131072`; reserve used by default/planning profiles. Actual requests reserve their generation `max_tokens` output setting. |
 | `SILLYTAVERN_CONTEXT_HISTORY_CANDIDATES` | `96` | `8..512`; recent transcript messages considered before compaction. |
 | `SILLYTAVERN_PERF_LOG` | `false` | Boolean (`true/yes/on/1` or `false/no/off/0`); logs low-overhead timing spans. |
 | `SILLYTAVERN_MEMORY_DIAGNOSTICS` | disabled | Exact opt-in: only `1` enables low-overhead OOM diagnostics; never enabled automatically. |
@@ -227,16 +228,23 @@ report at 384 MiB. Reports are private files under
 retained. See [operations](operations.md#memory-oom-diagnostics) for the
 enable/collect/disable workflow and privacy boundary.
 
-The input budget subtracts **both** the output reserve and safety margin:
+The effective input budget is the smaller of the configured input cap and the
+model's remaining physical allowance:
 
 ```text
-input budget = context window − output reserve − safety margin
-default      = 32,768 − 4,096 − 656 = 28,016 estimated input tokens
+input budget = min(input cap, context window − output reserve − safety margin)
+default planning profile = min(49,152, 32,768 − 4,096 − 656) = 28,016 estimated input tokens
 ```
 
-For small windows, the reserve is clamped to leave room for input. Open `/prompt`
-→ **Budget** to inspect the resolved values, their source and the last prompt's
-compaction. Token estimates guide request planning; they are not billed usage.
+Actual provider requests reserve the session generation setting `max_tokens`
+for output, rather than the 4,096-token planning reserve. Increasing
+`max_tokens` can reduce the input allowance when the model window is the
+limiting factor; it does not raise the input cap. For small windows, the planning
+reserve is clamped to leave room for input. Open `/prompt` → **Budget** to inspect
+the true resolved model window, configured input cap, effective budget, limiting
+factor and last prompt's compaction. The cap applies to each estimated provider
+request, including fallback and continuation attempts; it is not a per-turn
+aggregate usage limit or an exact provider-tokenizer guarantee.
 
 When over budget, older history, Data Bank context, Hindsight/episodic recall,
 NPC state and continuity summary are reduced before fixed character/system
@@ -293,17 +301,18 @@ Character-scoped private trackers require every group reader to be authorized.
 Director and separate choices compact tracker context against their selected
 model before dispatch while preserving their fixed planning and output data.
 
-Migration 25 schedules the existing NPC work for tracker backfill from retained
-sources. This can add Utility calls while older sessions catch up. Immutable
-checkpoint source floors remain in force; unavailable earlier history is not
-recreated. Native NPC fields in an unchanged previously covered prefix are
-preserved, while rewrites retire that backfill protection for the invalidated
-suffix. Quoted legacy numeric baselines are imported only when their original
-assistant source proves the name and values.
+Migration 25 creates native tracker storage without replaying previously processed
+NPC history. Migration 26 retires any pending tracker bootstrap from an earlier
+installation, retains accepted native state and resumes new work from the last
+complete source. Genuine edits still roll back their invalidated suffix, and a
+partially processed new message is read again from its beginning.
 
-Stored prompt files, character cards and old assistant messages are not rewritten
-by migration. Legacy template suppression operates on effective prompt copies;
-new model output is cleaned before rewriting, transport and story commit. See
+Tracker values come from accepted native state and new committed story evidence.
+The bridge does not import numeric ledgers from an old system prompt. Choose a
+normal story prompt for voice and style; remove obsolete tracker-output
+instructions from any custom prompt you continue to use. Stored prompts, character
+cards and transcripts are not automatically edited. Prompt assembly and Telegram
+formatting no longer contain a special Internal States parser or filter. See
 [Story trackers and checks](user-guide.md#story-trackers-and-checks) for mechanics,
 visibility, commands and lifecycle behavior.
 

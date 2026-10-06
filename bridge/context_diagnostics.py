@@ -17,6 +17,7 @@ _INT_FIELDS = {
     "output_reserve_tokens",
     "safety_margin_tokens",
     "budget_tokens",
+    "input_cap_tokens",
     "original_tokens",
     "final_tokens",
     "dropped_history",
@@ -39,7 +40,9 @@ def context_stats_key(chat_id: str, session_id: str) -> str:
 
 def save_context_stats(db: sqlite3.Connection, chat_id: str, session_id: str, stats: dict[str, object]) -> None:
     """Persist only numbers, flags and known metadata; never prompt content."""
-    allowed = _INT_FIELDS | _BOOL_FIELDS | {"chars_per_token", "source", "model", "request_stage"}
+    allowed = (
+        _INT_FIELDS | _BOOL_FIELDS | {"chars_per_token", "source", "input_budget_limiter", "model", "request_stage"}
+    )
     redacted = {key: value for key, value in stats.items() if key in allowed}
     set_meta(db, context_stats_key(chat_id, session_id), json.dumps(redacted, sort_keys=True))
 
@@ -81,6 +84,9 @@ def context_diagnostics_snapshot(
         "output_reserve_tokens": profile.output_reserve_tokens,
         "safety_margin_tokens": profile.safety_margin_tokens,
         "budget_tokens": profile.input_budget_tokens,
+        "configured_input_cap_tokens": profile.input_cap_tokens,
+        "input_cap_tokens": profile.input_cap_tokens,
+        "input_budget_limiter": profile.input_budget_limiter,
         "chars_per_token": profile.chars_per_token,
         "source": profile.source,
         "original_tokens": None,
@@ -115,6 +121,9 @@ def context_diagnostics_snapshot(
         "codex-alias",
     }:
         result["source"] = source
+    limiter = saved.get("input_budget_limiter")
+    if limiter in {"input-cap", "model-window"}:
+        result["input_budget_limiter"] = limiter
     for key in ("model", "request_stage"):
         if isinstance(saved.get(key), str):
             result[key] = saved[key][:160]

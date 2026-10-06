@@ -97,18 +97,6 @@ def _handle_delete_menu(token, callback, answer_callback, chat_id, message, sess
 
 
 def _handle_upload_menu(db, token, callback, answer_callback, chat_id, message, *, request_context) -> bool:
-    """Handle upload menu callbacks."""
-    set_meta(
-        db,
-        f"character_upload:{chat_id}:{request_context.actor_id}",
-        json.dumps(
-            {
-                "session_id": request_context.session_id,
-                "actor_id": request_context.actor_id,
-                "expires_at": time.time() + PENDING_SETTINGS_TTL_SECONDS,
-            }
-        ),
-    )
     answer_callback(token, str(callback.get("id", "")), "Upload")
     send_panel_request(
         token,
@@ -130,6 +118,18 @@ def _handle_upload_menu(db, token, callback, answer_callback, chat_id, message, 
             },
         },
         request_context=request_context,
+    )
+    set_meta(
+        db,
+        f"character_upload:{chat_id}:{request_context.actor_id}",
+        json.dumps(
+            {
+                "session_id": request_context.session_id,
+                "actor_id": request_context.actor_id,
+                "panel_message_id": str(message.get("message_id") or ""),
+                "expires_at": time.time() + PENDING_SETTINGS_TTL_SECONDS,
+            }
+        ),
     )
     return True
 

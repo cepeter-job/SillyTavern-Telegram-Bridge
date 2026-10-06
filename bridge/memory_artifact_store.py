@@ -12,6 +12,12 @@ from bridge.memory_fact_store import classified_audience, digest_value
 from bridge.memory_store import request_source_cutoff
 from bridge.narrative_repository import load_narrative_clock
 
+CLASSIFIED_AUDIENCE_PROMPT = (
+    'Audience contract: visibility="shared" requires known_by=[]; '
+    'visibility="restricted" requires known_by to contain one or more actual character names. '
+    "Never attach character names to a shared block."
+)
+
 
 def parse_classified_blocks(value: object) -> list[dict[str, Any]]:
     """Require explicit audiences; malformed model classifications fail closed."""

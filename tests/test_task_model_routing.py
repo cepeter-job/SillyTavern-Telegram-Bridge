@@ -81,6 +81,48 @@ class TaskModelRoutingTests(SettingsTestCase):
         self.assertEqual(summary, "Blue key in drawer.")
         self.assertEqual(seen_models, ["cheap::summary-model"] * 2)
 
+    def test_stale_utility_model_falls_back_to_routable_main(self):
+        catalog = Path(self.tmp.name) / "providers.yaml"
+        catalog.write_text(
+            "providers:\n  primary:\n    models: [main-model]\n  cheap:\n    models: [summary-model]\n",
+            encoding="utf-8",
+        )
+        self.app_settings_builder.provider_config_file = catalog
+        settings = self.app_settings_builder.build()
+        for stale in ("retired::old-model", "cheap::removed-model"):
+            with self.subTest(stale=stale):
+                _owner_model_selection.set_task_model(self.db, "chat", self.session["session_id"], stale, "utility")
+                self.assertEqual(
+                    _owner_model_selection.task_model_for_session(
+                        self.db, "chat", self.session, "summary", app_settings=settings
+                    ),
+                    "primary::main-model",
+                )
+
+    def test_summary_prompt_states_exact_audience_contract(self):
+        now = time.time()
+        self.db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+            ("chat", self.session["session_id"], "user", "A public fact.", now),
+        )
+        self.db.commit()
+        prompts = []
+
+        def generate(_key, _model, messages, **_kwargs):
+            prompts.append(messages[0]["content"])
+            return '{"blocks":[{"text":"Public fact.","visibility":"shared","known_by":[]}]}'
+
+        _owner_memory.generate_session_summary(
+            self.db,
+            "chat",
+            self.session,
+            force=True,
+            provider_port=make_test_provider_port(generate_backend=generate),
+            app_settings=self.app_settings_builder.build(),
+        )
+        self.assertTrue(prompts)
+        self.assertTrue(all('visibility="shared" requires known_by=[]' in prompt for prompt in prompts))
+
     def test_main_clears_utility_override(self):
         _owner_model_selection.set_task_model(self.db, "chat", self.session["session_id"], "cheap::summary-model")
         _owner_model_selection.set_task_model(self.db, "chat", self.session["session_id"], "main")

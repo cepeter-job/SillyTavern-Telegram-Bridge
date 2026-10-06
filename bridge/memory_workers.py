@@ -20,6 +20,7 @@ from bridge.memory_store import (
     recover_expired_jobs,
     source_is_valid,
 )
+from bridge.model_router import ModelRoutingError
 from bridge.narrative_repository import load_narrative_clock
 from bridge.sqlite_store import write_transaction
 
@@ -217,6 +218,9 @@ def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_sett
                 if acknowledge_job(db, claim):
                     return result
             result = "stale_source"
+    except ModelRoutingError:
+        logging.warning("Durable memory layer %s blocked by model configuration", claim.layer, exc_info=True)
+        result = "configuration"
     except Exception:
         logging.warning("Durable memory layer %s failed", claim.layer, exc_info=True)
         result = "work_failed"

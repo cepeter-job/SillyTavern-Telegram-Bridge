@@ -246,10 +246,7 @@ class TelegramSafeOutputTests(unittest.TestCase):
             "response_language": "auto",
             "humanizer": "off",
         }
-        source = (
-            '<tg-spoiler><b>Secret</b></tg-spoiler> '
-            '<a href="https://example.com/reference">Docs</a>'
-        )
+        source = '<tg-spoiler><b>Secret</b></tg-spoiler> <a href="https://example.com/reference">Docs</a>'
         result = render_session_response(
             "key",
             session,

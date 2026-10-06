@@ -131,7 +131,10 @@ class ResponseDeliveryTests(SettingsTestCase):
             requests.append((method, payload))
             return {"message_id": 83}
 
-        source = "<code>code</code>\n<pre>block</pre>\n<blockquote>Quote</blockquote>\n<blockquote expandable>Hidden quote</blockquote>"
+        source = (
+            "<code>code</code>\n<pre>block</pre>\n<blockquote>Quote</blockquote>\n"
+            "<blockquote expandable>Hidden quote</blockquote>"
+        )
         with patch.object(telegram, "telegram_request", side_effect=request):
             response_delivery.send_reply(
                 "token",

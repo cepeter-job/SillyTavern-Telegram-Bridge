@@ -70,7 +70,8 @@ _ENTITY_TYPES = {
     "code": "code",
     "pre": "pre",
 }
-_EXCLUSIVE_ENTITY_TYPES = {"code", "pre", "blockquote", "expandable_blockquote"}
+_STYLE_ENTITY_TYPES = {"bold", "italic", "underline", "strikethrough", "spoiler"}
+_HARD_EXCLUSIVE_ENTITY_TYPES = {"code", "pre"}
 
 
 @dataclass(frozen=True)
@@ -334,22 +335,47 @@ def _spans_overlap(first: TelegramFormatSpan, second: TelegramFormatSpan) -> boo
     return first.start < second.end and second.start < first.end
 
 
-def _sanitize_spans(spans: list[TelegramFormatSpan]) -> list[TelegramFormatSpan]:
-    exclusive: list[TelegramFormatSpan] = []
-    for span in sorted(
-        (item for item in spans if item.type in _EXCLUSIVE_ENTITY_TYPES),
-        key=lambda item: (item.start, item.end),
-    ):
-        if not any(_spans_overlap(span, other) for other in exclusive):
-            exclusive.append(span)
+def _trim_span(span: TelegramFormatSpan, text: str) -> TelegramFormatSpan | None:
+    end = span.end
+    while end > span.start and text[end - 1].isspace():
+        end -= 1
+    if end <= span.start:
+        return None
+    if end == span.end:
+        return span
+    return TelegramFormatSpan(span.type, span.start, end, span.url)
 
-    result: list[TelegramFormatSpan] = []
-    for span in spans:
-        if span.type in _EXCLUSIVE_ENTITY_TYPES:
-            if span in exclusive:
-                result.append(span)
-        elif not any(_spans_overlap(span, other) for other in exclusive):
-            result.append(span)
+
+def _sanitize_spans(spans: list[TelegramFormatSpan], text: str) -> list[TelegramFormatSpan]:
+    trimmed = [candidate for span in spans if (candidate := _trim_span(span, text)) is not None]
+
+    hard_exclusive: list[TelegramFormatSpan] = []
+    for span in sorted(
+        (item for item in trimmed if item.type in _HARD_EXCLUSIVE_ENTITY_TYPES),
+        key=lambda item: (item.start, -(item.end - item.start), item.type),
+    ):
+        if not any(_spans_overlap(span, other) for other in hard_exclusive):
+            hard_exclusive.append(span)
+
+    candidates = [
+        span
+        for span in trimmed
+        if span.type not in _HARD_EXCLUSIVE_ENTITY_TYPES
+        and not any(_spans_overlap(span, other) for other in hard_exclusive)
+    ]
+    non_style: list[TelegramFormatSpan] = []
+    for span in sorted(
+        (item for item in candidates if item.type not in _STYLE_ENTITY_TYPES),
+        key=lambda item: (item.start, -(item.end - item.start), item.type, item.url),
+    ):
+        if not any(_spans_overlap(span, other) for other in non_style):
+            non_style.append(span)
+
+    result = [
+        *hard_exclusive,
+        *non_style,
+        *(item for item in candidates if item.type in _STYLE_ENTITY_TYPES),
+    ]
     return sorted(result, key=lambda item: (item.start, -(item.end - item.start), item.type, item.url))
 
 
@@ -403,4 +429,5 @@ def telegram_format_spans(text: str) -> tuple[str, list[TelegramFormatSpan]]:
         parser.finish()
     except Exception:
         return telegram_safe_output(transport), []
-    return "".join(parser.parts), _sanitize_spans(parser.spans)
+    visible = "".join(parser.parts)
+    return visible, _sanitize_spans(parser.spans, visible)

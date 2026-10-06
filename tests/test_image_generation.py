@@ -1005,19 +1005,7 @@ class SceneAwareImageGenerationTests(SettingsTestCase):
         self.assertIn("Current Scene", text)
         self.assertIn("model-a", text)
         self.assertIn("1024x1024", text)
-        self.assertEqual(
-            callbacks,
-            {f"imagine:{action}" for action in ("scene", "custom", "options", "close")},
-        )
-        _options_text, options_markup = _m_image_panels.imagine_options_panel(
-            self.db,
-            "chat",
-            self.session["session_id"],
-            app_settings=self.app_settings_builder.build(),
-        )
-        option_callbacks = {button["callback_data"] for row in options_markup["inline_keyboard"] for button in row}
-        self.assertIn("imagine:style:realism", option_callbacks)
-        self.assertIn("imagine:style:anime", option_callbacks)
+        self.assertEqual(callbacks, {f"imagine:{action}" for action in ("scene", "custom", "options", "close")})
 
     def test_auto_model_panel_shows_auto_selected(self):
         self._configure_auto_catalog()

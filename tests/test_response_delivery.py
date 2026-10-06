@@ -57,7 +57,7 @@ class ResponseDeliveryTests(SettingsTestCase):
             response_delivery.send_reply(
                 "token",
                 "chat",
-                "**Bold** __Under__ ~~Strike~~ ||Secret||",
+                "<b>Bold</b> <u>Under</u> <s>Strike</s> <tg-spoiler>Secret</tg-spoiler>",
                 app_settings=self.app_settings_builder.build(),
             )
 
@@ -83,7 +83,7 @@ class ResponseDeliveryTests(SettingsTestCase):
             response_delivery.send_reply(
                 "token",
                 "chat",
-                "🙂 ||**Secret**||",
+                "🙂 <tg-spoiler><b>Secret</b></tg-spoiler>",
                 app_settings=self.app_settings_builder.build(),
             )
 
@@ -107,7 +107,7 @@ class ResponseDeliveryTests(SettingsTestCase):
             response_delivery.send_reply(
                 "token",
                 "chat",
-                "[Docs](https://example.com/reference)",
+                '<a href="https://example.com/reference">Docs</a>',
                 app_settings=self.app_settings_builder.build(),
             )
 
@@ -131,7 +131,7 @@ class ResponseDeliveryTests(SettingsTestCase):
             requests.append((method, payload))
             return {"message_id": 83}
 
-        source = "`code`\n```\nblock\n```\n> Quote\n>! Hidden quote"
+        source = "<code>code</code>\n<pre>block</pre>\n<blockquote>Quote</blockquote>\n<blockquote expandable>Hidden quote</blockquote>"
         with patch.object(telegram, "telegram_request", side_effect=request):
             response_delivery.send_reply(
                 "token",
@@ -158,7 +158,7 @@ class ResponseDeliveryTests(SettingsTestCase):
             requests.append((method, payload))
             return {"message_id": 90 + len(requests)}
 
-        source = "||" + ("A" * 4100) + "||"
+        source = "<tg-spoiler>" + ("A" * 4100) + "</tg-spoiler>"
         with patch.object(telegram, "telegram_request", side_effect=request):
             response_delivery.send_reply(
                 "token",
@@ -168,34 +168,29 @@ class ResponseDeliveryTests(SettingsTestCase):
             )
 
         self.assertEqual(len(requests), 2)
-        self.assertEqual(requests[0][1]["text"], "A" * 3998)
-        self.assertEqual(requests[0][1]["entities"], [{"type": "spoiler", "offset": 0, "length": 3998}])
-        self.assertEqual(requests[1][1]["text"], "A" * 102)
-        self.assertEqual(requests[1][1]["entities"], [{"type": "spoiler", "offset": 0, "length": 102}])
+        self.assertEqual(requests[0][1]["text"], "A" * 4000)
+        self.assertEqual(requests[0][1]["entities"], [{"type": "spoiler", "offset": 0, "length": 4000}])
+        self.assertEqual(requests[1][1]["text"], "A" * 100)
+        self.assertEqual(requests[1][1]["entities"], [{"type": "spoiler", "offset": 0, "length": 100}])
 
-    def test_send_reply_maps_safe_html_to_native_entities(self):
+    def test_send_reply_keeps_general_markdown_literal(self):
         requests = []
 
         def request(_token, method, payload):
             requests.append((method, payload))
             return {"message_id": 84}
 
+        source = "**Bold** ||Secret|| __Under__ ~~Strike~~ [Docs](https://example.com/reference)"
         with patch.object(telegram, "telegram_request", side_effect=request):
             response_delivery.send_reply(
                 "token",
                 "chat",
-                "<b>Bold</b> <tg-spoiler>Secret</tg-spoiler>",
+                source,
                 app_settings=self.app_settings_builder.build(),
             )
 
-        self.assertEqual(requests[0][1]["text"], "Bold Secret")
-        self.assertEqual(
-            requests[0][1]["entities"],
-            [
-                {"type": "bold", "offset": 0, "length": 4},
-                {"type": "spoiler", "offset": 5, "length": 6},
-            ],
-        )
+        self.assertEqual(requests[0][1]["text"], source)
+        self.assertNotIn("entities", requests[0][1])
 
     def test_send_reply_renders_single_star_narration_as_telegram_italic(self):
         requests = []

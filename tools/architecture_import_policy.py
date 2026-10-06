@@ -114,6 +114,7 @@ LOW_LEVEL_IMPORTS = {
     "bridge.light_novel_repository": frozenset(["bridge.repository_contracts"]),
     "bridge.light_novel_service": frozenset(
         [
+            "bridge.context_compaction",
             "bridge.closed_session_guard",
             "bridge.narrative_context",
             "bridge.simulation_context",

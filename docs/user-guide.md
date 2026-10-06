@@ -332,8 +332,15 @@ state continues to own location, weather and physical participants; Narrative,
 Director and Ending continue to own plot progression and closure. A completed
 agenda counter alone does not establish an unseen consequential scene.
 
+When NPC Bank later establishes a fuller name and an unambiguous alias, prior
+tracker values follow that identity. Earlier story views retain the old name.
+Conflicting values under two names stop that extraction publication until the
+source or NPC identity is corrected; scores are never added together by guesswork.
+
 Private agendas, faction intelligence and future payoffs are narrator data.
 Character-scoped prompts do not receive other characters' private trackers.
+For a shared group prompt, every reader must be authorized; an unresolved member
+does not grant access to another character's agenda.
 Wider narrator viewpoints can use these facts without granting characters new
 knowledge. Tracker context shares the normal optional-context budget and can be
 trimmed when the request needs space.
@@ -385,6 +392,9 @@ Delivery retries and `/retry` reuse the saved result. A new `/check` message is
 a new action and roll. Editing or replacing its source invalidates the old
 result; reset removes session checks. Alternate endings restore independent
 copies of eligible checks and tracker state from their checkpoint.
+Checkpoints preserve the tracker revisions needed for historical reads and
+rollback. A checkpoint that exceeds its bounded history/size limit is rejected
+instead of saving a partial history.
 
 ### Existing prompts and older sessions
 

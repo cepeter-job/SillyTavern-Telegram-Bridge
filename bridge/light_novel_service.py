@@ -12,6 +12,7 @@ from collections.abc import Callable, Sequence
 
 from bridge.card_content import build_world_info, replace_macros
 from bridge.closed_session_guard import guard_story_mutation, story_mutation_message
+from bridge.context_compaction import budget_chat_messages
 from bridge.conversation_lifecycle import conversation_state
 from bridge.job_store import enqueue_job
 from bridge.light_novel_format import (
@@ -36,7 +37,7 @@ from bridge.persona_service import PersonaService
 from bridge.provider_errors import ProviderRequestError
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
-from bridge.simulation_context import story_simulation_context
+from bridge.simulation_context import simulation_json_prompt, story_simulation_context
 from bridge.simulation_output import effective_tracker_prompt, strip_internal_state_blocks, visible_story_history
 from bridge.sqlite_store import write_transaction
 
@@ -363,8 +364,9 @@ def ensure_choices(
                     + str(context["narrative_policy"])
                 ),
             },
-            {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
+            simulation_json_prompt(context),
         ]
+        messages, _ = budget_chat_messages(messages, model, 1200, app_settings=app_settings)
     except Exception as exc:
         _log_choice_failure(record, model, "prepare", exc, started_at, retrying=False)
     else:

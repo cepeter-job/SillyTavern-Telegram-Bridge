@@ -44,6 +44,10 @@ Inventory, skills and conditions preserve the chronological order of add/remove 
 
 The default aggregate limits are 64 records per domain, 64 actor entries per collection, 32 incoming updates per bounded source part, 16 KiB per stored record and 6,000 characters per simulation prompt section. Accumulation must stay below the existing memory draft size limit and must not discard an early update silently. Historical reconstruction selects the latest qualifying revision per entity in SQL rather than materializing the full journal.
 
+Checkpoint format 1 retains the ordered tracker revisions, including identity-deletion markers, together with current records, locked checks and accepted-source receipts. Capture rejects more than 4,096 revisions or a payload beyond the shared 1 MiB checkpoint budget; it never truncates old revisions while retaining receipts. Restoration rebuilds records from those revisions and verifies the current-state summary before accepting receipts. Pre-feature checkpoints without simulation data remain valid; unreleased tracker snapshots without reversible history are rejected.
+
+An NPC identity established later can adopt an existing unambiguous alias tracker at that accepted source. Earlier historical reads retain the alias, and rollback reverses the identity transition. Mechanically identical records can coalesce without counting their scores twice; conflicting records reject the complete publication until explicitly corrected. Native/manual field ownership remains authoritative. Future NPC identities cannot be projected into earlier backfill sources.
+
 ## Extraction and existing values
 
 Reuse the NPC Utility call and durable `npc` job; do not add a new call or worker for every turn. Its JSON result contains ordinary NPC operations plus a validated `simulation` object. Only a complete, accepted source row may publish. A malformed simulation object rejects that source part rather than silently advancing coverage without its tracker changes.
@@ -53,6 +57,8 @@ The extractor receives the bounded canonical tracker state at the source boundar
 ## Prompt and output integration
 
 All story generation paths, historical edit/regeneration calls, image-backed turns, separate Light Novel choices and Director input receive appropriate bounded simulation context. Historical reads use their captured source cutoff. Simulation descriptions are an optional context span participating in normal token-budget compaction; the fixed output/knowledge policy stays outside that span.
+
+Character-scoped private trackers require every resolved prompt reader to be the owning NPC; mixed or unresolved group readers receive no such private state. Explicit narrator viewpoints retain their broader context. Director and separate-choice prompts keep their fixed JSON intact and append a separately registered optional tracker body in the same user message. Both routes compact against their selected model and actual output reservation before dispatch; Director repair checks preserve the original fixed context.
 
 The final bridge-owned output policy says to write story/dialogue only and never emit Internal States, GM notebooks, private tracker blocks or mechanics unless the user explicitly requests a check result. Recognizable legacy Internal States output templates are excluded from the effective session prompt without editing the user's stored prompt file. Normal transport drops an accidentally emitted `<internal_states>` block, including incomplete streaming blocks; those discarded blocks are not a substitute for canonical state and are not retained as hidden assistant history.
 

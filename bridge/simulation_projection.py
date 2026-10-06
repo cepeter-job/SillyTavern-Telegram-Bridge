@@ -22,6 +22,8 @@ def canonicalize_tracker_npcs(
     session_id: str,
     payload: dict[str, Any],
     *,
+    source_rowid: int,
+    now: float,
     primary_name: str = "",
     user_name: str = "",
 ) -> dict[str, Any]:
@@ -29,6 +31,8 @@ def canonicalize_tracker_npcs(
     names = {}
     ambiguous = set()
     for entity in list_npc_entities(db, chat_id, session_id):
+        if entity.first_seen_rowid > source_rowid:
+            continue
         aliases = {key(entity.canonical_name), *(key(alias) for alias in entity.aliases)}
         for alias in aliases:
             if alias in names:
@@ -36,6 +40,8 @@ def canonicalize_tracker_npcs(
             names[alias] = entity.display_name
         if aliases & blocked:
             blocked.update(aliases)
+    eligible = {alias: name for alias, name in names.items() if alias not in blocked | ambiguous}
+    _adopt_tracker_aliases(db, chat_id, session_id, eligible, source_rowid, now)
     result = dict(payload)
     for group in ("relationships", "agendas"):
         result[group] = [
@@ -45,6 +51,43 @@ def canonicalize_tracker_npcs(
         ]
     result["on_screen_npcs"] = [names.get(key(name), name) for name in payload.get("on_screen_npcs", [])]
     return normalize_simulation_payload(result)
+
+
+def _adopt_tracker_aliases(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    names: dict[str, str],
+    source_rowid: int,
+    now: float,
+) -> None:
+    for kind in ("relationship", "agenda"):
+        groups: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+        for _, name, value, _, _ in list_states(db, chat_id, session_id, kind=kind):
+            if name in names:
+                groups.setdefault(key(names[name]), []).append((name, value))
+        for canonical, records in groups.items():
+            if all(name == canonical for name, _ in records):
+                continue
+            mechanics = [
+                {k: v for k, v in value.items() if k not in {"display_name", "_projection"}} for _, value in records
+            ]
+            if any(value != mechanics[0] for value in mechanics[1:]):
+                raise ValueError("Conflicting simulation alias states require explicit correction")
+            adopted = dict(next((value for name, value in records if name == canonical), records[0][1]))
+            adopted["display_name"] = names[records[0][0]]
+            entity = find_npc_by_name_or_alias(db, chat_id, session_id, canonical)
+            current = load_npc_fields(db, entity.npc_id).get(kind) if entity else None
+            projections = [value["_projection"] for _, value in records if value.get("_projection") is not None]
+            if projections:
+                fingerprint = _fingerprint(current)
+                adopted["_projection"] = fingerprint if fingerprint in projections else projections[0]
+            # Attribute identity changes to this source; retain old keys in historical reads.
+            # Delete first so an otherwise full domain can still rename one live entity.
+            for name, _ in records:
+                if name != canonical:
+                    store_state(db, chat_id, session_id, kind, name, None, source_rowid=source_rowid, now=now)
+            store_state(db, chat_id, session_id, kind, canonical, adopted, source_rowid=source_rowid, now=now)
 
 
 def _fingerprint(field: NpcFieldState | None) -> dict[str, Any] | None:
@@ -79,7 +122,11 @@ def project_simulation_state(
     for kind in ("relationship", "agenda"):
         for _, name, value, _, _ in list_states(db, chat_id, session_id, kind=kind):
             entity = find_npc_by_name_or_alias(db, chat_id, session_id, name)
-            if entity is None or key(entity.canonical_name) in {key(primary_name), key(user_name)}:
+            if (
+                entity is None
+                or entity.first_seen_rowid > source_rowid
+                or key(entity.canonical_name) in {key(primary_name), key(user_name)}
+            ):
                 continue
             current = load_npc_fields(db, entity.npc_id).get(kind)
             previous = value.get("_projection")

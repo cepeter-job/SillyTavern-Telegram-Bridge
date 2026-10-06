@@ -108,7 +108,14 @@ class SimulationService(SimulationMechanics):
             if not accepted:
                 return
             payload = canonicalize_tracker_npcs(
-                db, chat_id, session_id, payload, primary_name=primary_name, user_name=user_name
+                db,
+                chat_id,
+                session_id,
+                payload,
+                source_rowid=source_rowid,
+                now=now,
+                primary_name=primary_name,
+                user_name=user_name,
             )
             validate_narrative_links(db, chat_id, session_id, payload, source_rowid)
             self._relationship_updates(db, chat_id, session_id, payload, source_rowid, now, tick=role == "assistant")

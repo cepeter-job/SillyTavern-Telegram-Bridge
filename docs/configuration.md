@@ -283,6 +283,14 @@ dropping changes. Prompt context is at most 6,000 characters, includes up to
 three recent eligible checks, and remains optional under the request budget.
 The Utility input includes bounded prior state and existing Narrative IDs.
 
+Alternate-ending checkpoints retain up to 4,096 tracker revisions, including
+alias transitions, together with source receipts and locked checks. The complete
+checkpoint remains subject to the existing 1 MiB limit; capture fails instead of
+dropping earlier revisions that historical regeneration or rollback might need.
+Character-scoped private trackers require every group reader to be authorized.
+Director and separate choices compact tracker context against their selected
+model before dispatch while preserving their fixed planning and output data.
+
 Migration 25 schedules the existing NPC work for tracker backfill from retained
 sources. This can add Utility calls while older sessions catch up. Immutable
 checkpoint source floors remain in force; unavailable earlier history is not

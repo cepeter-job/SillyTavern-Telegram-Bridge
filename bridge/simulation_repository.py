@@ -117,7 +117,7 @@ def store_state(
     session_id: str,
     kind: str,
     entity_key: str,
-    value: dict[str, Any],
+    value: dict[str, Any] | None,
     *,
     source_rowid: int,
     now: float,
@@ -131,7 +131,8 @@ def store_state(
     if before == value:
         return False
     if (
-        existing is None
+        value is not None
+        and existing is None
         and db.execute(
             "SELECT COUNT(*) FROM simulation_state WHERE chat_id=? AND session_id=? AND kind=?",
             (chat_id, session_id, kind),
@@ -139,15 +140,23 @@ def store_state(
         >= MAX_DOMAIN_RECORDS
     ):
         raise ValueError("Simulation domain record limit reached")
-    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    if len(encoded.encode()) > MAX_RECORD_BYTES:
-        raise ValueError("Simulation state record exceeds storage bound")
-    db.execute(
-        "INSERT INTO simulation_state(chat_id,session_id,kind,entity_key,value_json,updated_rowid,updated_at) "
-        "VALUES(?,?,?,?,?,?,?) ON CONFLICT(chat_id,session_id,kind,entity_key) DO UPDATE SET "
-        "value_json=excluded.value_json,updated_rowid=excluded.updated_rowid,updated_at=excluded.updated_at",
-        (chat_id, session_id, kind, entity_key, encoded, int(source_rowid), float(now)),
+    encoded = (
+        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) if value is not None else None
     )
+    if encoded is not None and len(encoded.encode()) > MAX_RECORD_BYTES:
+        raise ValueError("Simulation state record exceeds storage bound")
+    if encoded is None:
+        db.execute(
+            "DELETE FROM simulation_state WHERE chat_id=? AND session_id=? AND kind=? AND entity_key=?",
+            (chat_id, session_id, kind, entity_key),
+        )
+    else:
+        db.execute(
+            "INSERT INTO simulation_state(chat_id,session_id,kind,entity_key,value_json,updated_rowid,updated_at) "
+            "VALUES(?,?,?,?,?,?,?) ON CONFLICT(chat_id,session_id,kind,entity_key) DO UPDATE SET "
+            "value_json=excluded.value_json,updated_rowid=excluded.updated_rowid,updated_at=excluded.updated_at",
+            (chat_id, session_id, kind, entity_key, encoded, int(source_rowid), float(now)),
+        )
     db.execute(
         "INSERT INTO simulation_state_history("
         "chat_id,session_id,kind,entity_key,before_json,after_json,before_rowid,after_rowid,source_rowid,created_at"
@@ -178,10 +187,14 @@ def load_states_as_of(
     through_rowid: int,
 ) -> list[tuple[str, str, dict[str, Any], int]]:
     rows = db.execute(
-        "SELECT kind,entity_key,after_json,after_rowid FROM simulation_state_history WHERE change_id IN "
+        "WITH live AS (SELECT kind,entity_key,after_json,after_rowid,"
+        "ROW_NUMBER() OVER(PARTITION BY kind ORDER BY entity_key) AS domain_rank "
+        "FROM simulation_state_history WHERE change_id IN "
         "(SELECT MAX(change_id) FROM simulation_state_history WHERE chat_id=? AND session_id=? AND source_rowid<=? "
-        "GROUP BY kind,entity_key) ORDER BY kind,entity_key LIMIT ?",
-        (chat_id, session_id, int(through_rowid), MAX_DOMAIN_RECORDS * 6),
+        "GROUP BY kind,entity_key) AND after_json IS NOT NULL) "
+        "SELECT kind,entity_key,after_json,after_rowid FROM live WHERE domain_rank<=? "
+        "ORDER BY kind,entity_key LIMIT ?",
+        (chat_id, session_id, int(through_rowid), MAX_DOMAIN_RECORDS, MAX_DOMAIN_RECORDS * 6),
     ).fetchall()
     state: dict[tuple[str, str], tuple[dict[str, Any], int]] = {}
     for kind, key, after_json, after_rowid in rows:
@@ -191,6 +204,27 @@ def load_states_as_of(
         else:
             state[(str(kind), str(key))] = (decoded, int(after_rowid))
     return [(kind, key, value, rowid) for (kind, key), (value, rowid) in sorted(state.items())]
+
+
+def snapshot_history(db: sqlite3.Connection, chat_id: str, session_id: str, through_rowid: int) -> list[dict[str, Any]]:
+    # Bound encoded values in SQL before fetching them; snapshots never truncate history.
+    count, size = db.execute(
+        "SELECT COUNT(*),COALESCE(SUM(COALESCE(LENGTH(CAST(after_json AS BLOB)),4)"
+        "+LENGTH(CAST(entity_key AS BLOB))+128),0) FROM simulation_state_history "
+        "WHERE chat_id=? AND session_id=? AND source_rowid<=?",
+        (chat_id, session_id, through_rowid),
+    ).fetchone()
+    if count > 4096 or size > 1048576:
+        raise ValueError("Simulation history exceeds the bounded checkpoint")
+    rows = db.execute(
+        "SELECT kind,entity_key,after_json,source_rowid,created_at FROM simulation_state_history "
+        "WHERE chat_id=? AND session_id=? AND source_rowid<=? ORDER BY change_id LIMIT 4096",
+        (chat_id, session_id, through_rowid),
+    ).fetchall()
+    return [
+        {"kind": kind, "entity_key": key, "value": _decode(value), "source_rowid": source, "created_at": created}
+        for kind, key, value, source, created in rows
+    ]
 
 
 def rollback_from_row(

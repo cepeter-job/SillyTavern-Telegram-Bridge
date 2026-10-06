@@ -1028,7 +1028,7 @@ class DurableRecoveryOwnershipTests(SettingsTestCase):
         for raw, expected in cases.items():
             with self.subTest(raw=raw):
                 self.assertEqual(
-                    _m_message_commands._operation_command(raw),
+                    _m_message_commands.split_command_text(raw)[0],
                     expected,
                 )
 

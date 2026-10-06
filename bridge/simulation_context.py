@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from typing import Any
 
@@ -13,6 +14,21 @@ from bridge.simulation_values import integer, key, relationship_tier, text
 from bridge.sqlite_store import write_transaction
 
 MAX_CONTEXT = 6000
+
+
+def simulation_json_prompt(payload: dict[str, Any]) -> dict[str, Any]:
+    """Keep fixed JSON intact while exposing only the appended tracker body to compaction."""
+    fixed = dict(payload)
+    simulation = str(fixed.pop("simulation_state", "") or "")
+    content = json.dumps(fixed, ensure_ascii=False)
+    spans = []
+    if simulation:
+        content += "\n\n<untrusted_simulation_state>\n"
+        start = len(content)
+        content += simulation
+        spans.append({"kind": "simulation", "start": start, "end": len(content)})
+        content += "\n</untrusted_simulation_state>"
+    return {"role": "user", "content": content, "_context_optional": spans}
 
 
 def context_cutoff(
@@ -115,7 +131,7 @@ def simulation_context_for_prompt(
         if not narrator:
             if kind in {"faction", "foreshadowing"}:
                 continue
-            if kind in {"agenda", "relationship"} and key(name) not in readers:
+            if kind in {"agenda", "relationship"} and readers != {key(name)}:
                 continue
         line = _state_line(kind, name, value, narrator=narrator)
         buckets[kind].append("- " + (line[:377] + "…" if len(line) > 380 else line))

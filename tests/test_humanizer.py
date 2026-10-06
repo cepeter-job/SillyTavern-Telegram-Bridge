@@ -237,6 +237,31 @@ class TelegramSafeOutputTests(unittest.TestCase):
         self.assertTrue(result.startswith("*Before"))
         self.assertTrue(result.endswith("After*"))
 
+    def test_render_session_response_preserves_allowlisted_telegram_html(self):
+        from bridge.generation import render_session_response
+
+        session = {
+            "session_id": "s",
+            "model_id": "model",
+            "response_language": "auto",
+            "humanizer": "off",
+        }
+        source = (
+            '<tg-spoiler><b>Secret</b></tg-spoiler> '
+            '<a href="https://example.com/reference">Docs</a>'
+        )
+        result = render_session_response(
+            "key",
+            session,
+            source,
+            "chat",
+            {},
+            provider_port=make_test_provider_port(),
+        )
+        self.assertIn("<tg-spoiler>", result)
+        self.assertIn("<b>Secret</b>", result)
+        self.assertIn('<a href="https://example.com/reference">Docs</a>', result)
+
     def test_render_session_response_preserves_html_inside_code(self):
         from bridge.generation import render_session_response
 

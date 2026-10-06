@@ -242,7 +242,7 @@ def test_choice_recovery_executes_the_normal_conversation_pipeline_exactly_once(
     ]
     current = latest_choice_set(db, "chat", "story")
     assert current.nonce != record.nonce and current.actor_id == "owner"
-    assert current.choices == ("Call for help", "Look upstairs")
+    assert current.choices == ("Call for help", "Look upstairs", "Wait")
     assert db.execute("SELECT state FROM jobs WHERE job_id=?", (row[0],)).fetchone()[0] == "done"
 
 

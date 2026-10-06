@@ -8,6 +8,9 @@ from bridge.memory_store import pending_memory_invalidation
 from bridge.npc_repository import set_npc_extraction_coverage
 from bridge.npc_service import NpcService
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
+from bridge.simulation_projection import is_managed_field
+from bridge.simulation_repository import bootstrap_through
+from bridge.simulation_service import SimulationService
 
 
 def publish_derived(db, chat_id, session_id, layer, payload, through):
@@ -48,10 +51,12 @@ def publish_derived(db, chat_id, session_id, layer, payload, through):
         )
     elif layer == "npc":
         service = NpcService()
-        for item in payload.get("npcs", []):
+        native_groups = [] if through <= bootstrap_through(db, chat_id, session_id) else payload.get("npcs", [])
+        for item in native_groups:
             operations = tuple(
                 NpcOperation(op["field"], op["op"], op["value"], op["mode"], op["visibility"], tuple(op["known_by"]))
                 for op in item["operations"]
+                if not is_managed_field(db, chat_id, session_id, item["name"], op["field"])
             )
             group = NpcExtractionGroup(item["name"], tuple(item["aliases"]), operations)
             service.apply_group(
@@ -63,6 +68,15 @@ def publish_derived(db, chat_id, session_id, layer, payload, through):
                 primary_name=payload["primary_name"],
                 user_name=payload["user_name"],
             )
+        SimulationService().apply_payload(
+            db,
+            chat_id,
+            session_id,
+            payload.get("simulation") or {},
+            source_rowid=through,
+            primary_name=payload.get("primary_name", ""),
+            user_name=payload.get("user_name", ""),
+        )
         set_npc_extraction_coverage(db, chat_id, session_id, through, time.time())
         db.execute(
             "UPDATE memory_layer_state SET invalidated_from_id=MAX(invalidated_from_id,?) "
@@ -80,6 +94,7 @@ def restore_derived(db, chat_id, session_id, layer, payload, through):
         invalidated = pending_memory_invalidation(db, chat_id, session_id, "npc")
         if invalidated is not None:
             NpcService().rollback_from_row(db, chat_id, session_id, invalidated)
+            SimulationService().rollback_from_row(db, chat_id, session_id, invalidated)
         set_npc_extraction_coverage(db, chat_id, session_id, through, time.time())
     elif payload:
         publish_derived(db, chat_id, session_id, layer, payload, through)

@@ -18,6 +18,9 @@ from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
 from bridge.rag_service import RagService
 from bridge.settings import AppSettings
+from bridge.simulation_context import story_simulation_context
+from bridge.simulation_output import strip_internal_state_blocks
+from bridge.simulation_service import SimulationService
 from bridge.sqlite_store import write_transaction
 
 
@@ -128,6 +131,7 @@ def continue_last(
         memory_context=memory_prompt.recall,
         episodic_context=memory_prompt.episodic,
         npc_context=npc_context,
+        simulation_context=story_simulation_context(db, chat_id, session_id, memory_prompt.scope, through_rowid=None),
         session_summary=memory_prompt.summary,
         scene_context=memory_prompt.scene,
         defer_compaction=True,
@@ -153,7 +157,7 @@ def continue_last(
         novel_turn=novel_turn,
         preserve_last_assistant=True,
     )
-    combined = assistant_row[2].rstrip() + " " + reply.lstrip()
+    combined = strip_internal_state_blocks(assistant_row[2]).rstrip() + " " + reply.lstrip()
     old_message_ids = recovery.message_ids_from_rows(
         db.execute(
             "SELECT telegram_message_id,telegram_message_ids FROM messages WHERE rowid=?",
@@ -170,6 +174,8 @@ def continue_last(
     )
 
     def persist_continuation():
+        npc_service.rollback_from_row(db, chat_id, session_id, int(assistant_row[0]))
+        SimulationService().rollback_from_row(db, chat_id, session_id, int(assistant_row[0]))
         clear_progress(db, int(assistant_row[0]))
         if novel_turn:
             novel_turn.commit(db, int(assistant_row[0]), combined)

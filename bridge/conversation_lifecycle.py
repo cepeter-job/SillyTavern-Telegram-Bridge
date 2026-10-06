@@ -104,6 +104,19 @@ def is_command_text(text: str) -> bool:
     return pieces[0].startswith("/") or (pieces[0].startswith("@") and len(pieces) > 1 and pieces[1].startswith("/"))
 
 
+def split_command_text(text: str) -> tuple[str, str]:
+    """Normalize a bot-addressed command token while preserving the original arguments."""
+    parts = str(text or "").strip().split(None, 1)
+    if not parts:
+        return "", ""
+    if parts[0].startswith("@") and len(parts) > 1:
+        parts = parts[1].split(None, 1)
+    token = parts[0].casefold()
+    if token.startswith("/"):
+        token = token.split("@", 1)[0]
+    return token, parts[1] if len(parts) > 1 else ""
+
+
 def has_pending_character_upload(db: sqlite3.Connection, chat_id: str, session_id: str, actor_id: str) -> bool:
     """Return whether this actor/session owns a live Character → Upload prompt."""
     try:

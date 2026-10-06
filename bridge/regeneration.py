@@ -20,6 +20,8 @@ from bridge.provider_port import ProviderPort
 from bridge.rag_service import RagService
 from bridge.response_variants import save_response_variant
 from bridge.settings import AppSettings
+from bridge.simulation_context import story_simulation_context
+from bridge.simulation_service import SimulationService
 from bridge.sqlite_store import write_transaction
 
 
@@ -140,6 +142,9 @@ def regenerate_last(
         memory_context=memory_prompt.recall,
         episodic_context=memory_prompt.episodic,
         npc_context=npc_context,
+        simulation_context=story_simulation_context(
+            db, chat_id, session_id, memory_prompt.scope, through_rowid=last_user_rowid
+        ),
         session_summary=memory_prompt.summary,
         scene_context=memory_prompt.scene,
         defer_compaction=True,
@@ -194,6 +199,7 @@ def regenerate_last(
 
     def persist_regeneration():
         npc_service.rollback_from_row(db, chat_id, session_id, last_user_rowid + 1)
+        SimulationService().rollback_from_row(db, chat_id, session_id, last_user_rowid + 1)
         db.execute(
             "DELETE FROM messages WHERE chat_id=? AND session_id=? AND rowid>?",
             (chat_id, session_id, last_user_rowid),

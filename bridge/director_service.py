@@ -10,6 +10,7 @@ import uuid
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from bridge.context_compaction import budget_chat_messages
 from bridge.director_cadence import DIRECTOR_LEASE_SECONDS, director_event_key, director_interval
 from bridge.director_contracts import DirectorProposal, DirectorProposalError, parse_director_proposal
 from bridge.director_goal_repository import store_director_goal
@@ -41,6 +42,7 @@ from bridge.persona_service import PersonaService
 from bridge.provider_errors import ProviderRequestError
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
+from bridge.simulation_context import simulation_json_prompt
 from bridge.sqlite_store import write_transaction
 
 _TERMINAL = frozenset({"resolution_committed", "epilogue_pending", "epilogue_committed", "closed"})
@@ -184,7 +186,7 @@ class DirectorService:
             data["reassessment_reason"] = str(reason)[:100]
             messages = [
                 {"role": "system", "content": DIRECTOR_INSTRUCTION},
-                {"role": "user", "content": json.dumps(data, ensure_ascii=False)},
+                simulation_json_prompt(data),
             ]
             generation = get_generation_settings(db, chat_id, session_id)
             generation.update(
@@ -194,12 +196,16 @@ class DirectorService:
                 reasoning_budget=director_reasoning_for_session(db, chat_id, session_id),
             )
             model = task_model_for_session(db, chat_id, session, "director", app_settings=app_settings)
+            messages, _ = budget_chat_messages(messages, model, 2000, app_settings=app_settings)
             ending_work = reason in {"ending", "finale", "finale_readiness"} or (
                 settings.ending_mode == "closed_story" and state.story_phase in {"escalation", "climax", "resolution"}
             )
             port = provider_port.for_usage(chat_id, session_id, "director_ending" if ending_work else "director")
             proposal = None
             for attempt in range(2):
+                if attempt:
+                    # Repair must retain the original fixed JSON even after a newer user message.
+                    budget_chat_messages(messages, model, 2000, app_settings=app_settings, compact=False)
                 if (
                     load_director_state(db, chat_id, session_id)["inflight_token"] != token
                     or load_narrative_clock(db, chat_id, session_id) != clock

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sqlite3
 import time
 from dataclasses import dataclass
@@ -64,6 +65,9 @@ class NovelTurn:
         """Remove protocol text reintroduced by model-backed visible-response rewrites."""
         if self.record.strategy != "a":
             return rendered
+        wrapper = re.fullmatch(r"\s*<final>\s*([\s\S]*?)\s*</final>\s*", rendered, re.I)
+        if wrapper:
+            rendered = wrapper.group(1)
         story, choices, _reason, _observed_count = parse_story_response_diagnostic(
             rendered, self.record.requested_count
         )

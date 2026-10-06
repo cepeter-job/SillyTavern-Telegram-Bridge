@@ -18,6 +18,7 @@ from bridge.memory_store import (
     source_is_valid,
     store_segment,
 )
+from bridge.simulation_repository import revision as simulation_revision
 from bridge.sqlite_store import write_transaction
 
 MAX_DRAFT_BYTES = 262144
@@ -66,7 +67,7 @@ def _publication_snapshot(db: sqlite3.Connection, claim: MemoryClaim) -> tuple:
         )
     )
     coverage = db.execute("SELECT * FROM npc_extraction_state WHERE chat_id=? AND session_id=?", owner).fetchone()
-    return entities, fields, coverage
+    return entities, fields, coverage, simulation_revision(db, *owner)
 
 
 def load_draft(db: sqlite3.Connection, claim: MemoryClaim) -> MemoryDraft:

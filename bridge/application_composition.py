@@ -14,10 +14,18 @@ def initialize_extensions() -> None:
     # Keep feature imports inside the explicit composition boundary. This
     # prevents importing bridge.main or this helper from mutating registry state
     # or eagerly expanding the cyclic application graph.
-    from bridge import director_goals, director_runtime, memory_curator, npc_extraction, scene_state
+    from bridge import (
+        director_goals,
+        director_runtime,
+        memory_curator,
+        npc_extraction,
+        scene_state,
+        simulation_commands,
+    )
 
     reset_extension_registry()
     scene_state.register_scene_state_extensions()
+    simulation_commands.register_simulation_extensions()
     npc_extraction.register_npc_state_extensions()
     director_goals.register_director_goal_extensions()
     memory_curator.register_memory_curator_extensions()

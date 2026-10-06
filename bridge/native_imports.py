@@ -319,6 +319,7 @@ def import_character_card(
                 },
             },
             request_context=request_context,
+            character_upload_handoff=True,
         )
         return None
     send_text(
@@ -328,7 +329,6 @@ def import_character_card(
 
 
 def _retain_character_upload(db: sqlite3.Connection, chat_id: str, request_context: RequestContext) -> bool:
-    """Keep a live Character → Upload mode active for its owning actor/session."""
     with write_transaction(db):
         key = f"character_upload:{chat_id}:{request_context.actor_id}"
         raw_state = get_meta(db, key)

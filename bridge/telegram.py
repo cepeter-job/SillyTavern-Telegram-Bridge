@@ -14,6 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from bridge.limits import MAX_TELEGRAM_LENGTH, SYNC_MAX_BYTES
+from bridge.metadata import get_meta, set_meta
 from bridge.panel_bindings import (
     active_management_panel,
     bind_management_panel,
@@ -98,11 +99,36 @@ def delete_pending_input_prompts(token: str, chat_id: str, state: dict) -> None:
             )
 
 
-def close_active_management_panel(token: str, chat_id: str, *, request_context: RequestContext) -> None:
+def _character_upload_for_panel(request_context: RequestContext, chat_id: str, message_id: int) -> dict | None:
+    """Find the upload owned by this actor and management panel."""
+    owner = str(request_context.actor_id or "")
+    if not owner:
+        return None
+    try:
+        state = json.loads(get_meta(request_context.db, f"character_upload:{chat_id}:{owner}", "") or "{}")
+    except (TypeError, ValueError):
+        return None
+    if (
+        isinstance(state, dict)
+        and state.get("actor_id") == owner
+        and str(state.get("panel_message_id") or "") == str(message_id)
+    ):
+        return state
+    return None
+
+
+def close_active_management_panel(
+    token: str,
+    chat_id: str,
+    *,
+    request_context: RequestContext,
+    preserve_character_upload: bool = False,
+) -> None:
     owner = str(request_context.actor_id or "")
     previous = active_management_panel(request_context.db, chat_id, owner)
     if previous is None:
         return
+    upload_state = _character_upload_for_panel(request_context, chat_id, previous)
     try:
         telegram_request(token, "deleteMessage", {"chat_id": chat_id, "message_id": previous})
     except Exception:
@@ -122,6 +148,8 @@ def close_active_management_panel(token: str, chat_id: str, *, request_context: 
             logging.info("Could not close previous management panel", exc_info=True)
     discard_panel_session(request_context.db, chat_id, previous)
     clear_management_panel(request_context.db, chat_id, owner, previous)
+    if upload_state and not preserve_character_upload:
+        set_meta(request_context.db, f"character_upload:{chat_id}:{owner}", "")
 
 
 def send_panel_request(
@@ -131,21 +159,50 @@ def send_panel_request(
     *,
     request_context: RequestContext,
     track_management: bool = True,
+    character_upload_handoff: bool = False,
 ) -> dict:
     scoped_chat_id = str(payload.get("chat_id", "")) if payload.get("chat_id") is not None else ""
     panel_content = payload.get("reply_markup")
+    upload_panel_id = None
     if track_management and panel_content and method == "sendMessage" and request_context.actor_id:
-        close_active_management_panel(token, scoped_chat_id, request_context=request_context)
+        if character_upload_handoff:
+            previous = active_management_panel(request_context.db, scoped_chat_id, str(request_context.actor_id))
+            state = (
+                _character_upload_for_panel(request_context, scoped_chat_id, previous) if previous is not None else None
+            )
+            if state and state.get("session_id") == request_context.session_id:
+                upload_panel_id = previous
+        close_active_management_panel(
+            token,
+            scoped_chat_id,
+            request_context=request_context,
+            preserve_character_upload=upload_panel_id is not None,
+        )
     try:
         result = telegram_request(token, method, payload)
     except RuntimeError as exc:
         if method in {"editMessageText", "editMessageReplyMarkup"} and "message is not modified" in str(exc).casefold():
             result = {}
         else:
+            if upload_panel_id is not None:
+                set_meta(request_context.db, f"character_upload:{scoped_chat_id}:{request_context.actor_id}", "")
             raise
+    except Exception:
+        if upload_panel_id is not None:
+            set_meta(request_context.db, f"character_upload:{scoped_chat_id}:{request_context.actor_id}", "")
+        raise
     if panel_content and method in {"sendMessage", "editMessageText", "editMessageReplyMarkup"}:
         bound_message_id = result.get("message_id") if isinstance(result, dict) else None
         bound_message_id = bound_message_id or payload.get("message_id")
+        if upload_panel_id is not None:
+            state = _character_upload_for_panel(request_context, scoped_chat_id, upload_panel_id)
+            if state:
+                key = f"character_upload:{scoped_chat_id}:{request_context.actor_id}"
+                if bound_message_id:
+                    state["panel_message_id"] = str(bound_message_id)
+                    set_meta(request_context.db, key, json.dumps(state))
+                else:
+                    set_meta(request_context.db, key, "")
         if request_context.session_id and bound_message_id:
             bind_panel_session(
                 request_context.db,

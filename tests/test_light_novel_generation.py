@@ -335,7 +335,7 @@ def test_choice_only_strategy_routes_correct_model_outside_transaction(novel_db,
     result = ensure_choices(
         db, record.nonce, session, {"name": "Alice"}, provider_port=ProviderPort(generate), app_settings=settings
     )
-    assert result.choices == ("Go inside", "Wait outside")
+    assert result.choices == ("Go inside", "Wait outside", "Look around")
     assert calls[0][0] == expected
     prompt = calls[0][1][0]["content"]
     assert "Make the choices differ in motive and approach, not just wording." in prompt
@@ -398,7 +398,7 @@ def test_choice_generation_retries_transient_timeout_once(novel_db, caplog):
         )
 
     assert result.generation_status == "ready"
-    assert result.choices == ("Go inside", "Wait outside")
+    assert result.choices == ("Go inside", "Wait outside", "Look around")
     assert calls == [60, 60]
     assert "stage=provider" in caplog.text
     assert "error_type=ProviderRequestError" in caplog.text

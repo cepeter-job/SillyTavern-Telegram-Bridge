@@ -93,6 +93,7 @@ def regenerate_edited_turn(
     persona_service: PersonaService,
     app_settings: AppSettings,
     rag_service: RagService,
+    delete_original_user_message: bool = False,
 ) -> None:
     guard_story_mutation(db, chat_id, session["session_id"])
     session_id = session["session_id"]
@@ -239,6 +240,18 @@ def regenerate_edited_turn(
         session_id,
         int(user_rowid),
     )
+    if delete_original_user_message:
+        # Native Telegram edits keep their updated input; /edit replaces the visible input.
+        original_user = db.execute(
+            "SELECT telegram_message_id FROM messages WHERE chat_id=? AND session_id=? AND rowid=? AND role='user'",
+            (chat_id, session_id, int(user_rowid)),
+        ).fetchone()
+        try:
+            original_message_id = int(original_user[0]) if original_user else 0
+        except (TypeError, ValueError):
+            original_message_id = 0
+        if original_message_id > 0:
+            old_message_ids.append(str(original_message_id))
     old_message_ids = list(
         dict.fromkeys(
             [
@@ -377,6 +390,7 @@ def edit_last_user(
         persona_service=persona_service,
         app_settings=app_settings,
         rag_service=rag_service,
+        delete_original_user_message=True,
     )
 
 

@@ -8,43 +8,13 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from test_character_upload_confirmation import _card_png
+from character_test_support import apply_proposal, prepare_replacement, proposal_nonce, upload
+from character_test_support import card_context as card_context
+from character_test_support import card_png as _card_png
 
 from bridge import character_quality as quality
 from bridge import native_imports as imports
 from bridge.card_content import character_card_paths
-from bridge.request_types import RequestContext
-from bridge.settings import load_app_settings
-from bridge.sqlite_store import db_connect
-
-
-@pytest.fixture
-def card_context(tmp_path, monkeypatch):
-    settings = replace(
-        load_app_settings({}, home=tmp_path),
-        character_dir=tmp_path / "characters",
-        character_backup_dir=tmp_path / "backups",
-    )
-    settings.character_dir.mkdir()
-    db = db_connect(app_settings=settings)
-    ctx = RequestContext(db, "session", "actor", app_settings=settings)
-    panels = []
-    monkeypatch.setattr(imports, "send_text", lambda *a, **k: [])
-    monkeypatch.setattr(
-        imports, "send_panel_request", lambda _token, _method, payload, **kwargs: panels.append(payload)
-    )
-    try:
-        yield db, ctx, panels
-    finally:
-        db.close()
-
-
-def upload(card_context, raw):
-    db, ctx, panels = card_context
-    imports.import_character_card(
-        db, "token", "chat", "Alice.png", raw, app_settings=ctx.app_settings, request_context=ctx
-    )
-    return panels
 
 
 @pytest.mark.parametrize(
@@ -94,24 +64,6 @@ def test_overwrite_backup_is_the_original_not_the_new_upload(card_context):
     apply_proposal(card_context, proposal_nonce(card_context))
     assert (ctx.app_settings.character_backup_dir / "Alice.png").read_bytes() == original
     assert (ctx.app_settings.character_dir / "Alice.png").read_bytes() == updated
-
-
-def proposal_nonce(card_context):
-    callback = card_context[2][-1]["reply_markup"]["inline_keyboard"][0][0]["callback_data"]
-    return callback.rsplit(":", 1)[1]
-
-
-def apply_proposal(card_context, nonce, action="overwrite", *, context=None, chat_id="chat"):
-    db, ctx, _ = card_context
-    assert hasattr(imports, "apply_character_proposal"), "missing nonce-bound character mutation boundary"
-    return imports.apply_character_proposal(db, chat_id, nonce, action, request_context=context or ctx)
-
-
-def prepare_replacement(card_context):
-    original, updated = _card_png("Alice", "original"), _card_png("Alice", "updated")
-    upload(card_context, original)
-    upload(card_context, updated)
-    return original, updated, proposal_nonce(card_context)
 
 
 @pytest.mark.parametrize("field,value", [("actor_id", "other"), ("session_id", "other-session")])

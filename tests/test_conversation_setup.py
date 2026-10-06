@@ -1,6 +1,6 @@
 import pytest
 from application_test_setup import make_test_persona_service
-from test_character_mutation_safety import _card_png
+from character_test_support import card_png as _card_png
 from test_light_novel_storage import novel_db as novel_db
 
 from bridge.conversation_lifecycle import conversation_state, mark_started

@@ -14,10 +14,13 @@ from application_test_setup import (
     make_test_provider_port,
     make_test_rag_service,
 )
+from npc_test_support import db as _db
+from npc_test_support import fields as _fields
+from npc_test_support import session as _session
+from npc_test_support import turn as _turn
 from test_light_novel_flow import attached_choice, bridge_services
 from test_light_novel_storage import novel_db as novel_db
 from test_narrative_reconciliation import proposal
-from test_npc_branch_safety import _db, _fields, _session, _turn
 
 from bridge.conversation_lifecycle import conversation_state, mark_started
 from bridge.generation import build_chat_messages

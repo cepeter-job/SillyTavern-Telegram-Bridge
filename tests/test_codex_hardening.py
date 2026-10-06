@@ -7,9 +7,9 @@ import threading
 import time
 
 import pytest
+from codex_test_support import StreamingResponse as _StreamingResponse
+from codex_test_support import jwt_token as _jwt
 from settings_test_support import make_test_settings
-from test_codex_auth import _jwt
-from test_codex_transport import _StreamingResponse
 
 from bridge import codex_auth as auth
 from bridge import codex_transport as transport

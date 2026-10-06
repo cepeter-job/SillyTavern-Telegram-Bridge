@@ -1,18 +1,21 @@
 """Review regressions for retained NPC history and persistent artifact Clear."""
 
 import json
+import time
 
 import pytest
 from application_test_setup import ensure_application_extensions, make_test_provider_port
 from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
 from settings_test_support import make_test_settings
 from test_memory_complete_parts import FIELDS, SESSION, backend, long_source, published, run
+from test_memory_completion_safety import session_db as session_db
 from test_story_memory_scope import append
 from test_story_memory_scope import db as db
 
-from bridge import memory, scene_state
+from bridge import memory, memory_workers, scene_state
 from bridge.memory_scope_store import resolve_memory_scope
-from bridge.memory_store import pending_memory_invalidation
+from bridge.memory_store import claim_jobs, pending_memory_invalidation
+from bridge.model_router import ModelRoutingError
 from bridge.npc_repository import set_npc_extraction_coverage
 from bridge.npc_service import NpcService
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
@@ -196,3 +199,27 @@ def test_summary_clear_retires_its_scene_hook_in_the_same_transaction(db, tmp_pa
         assert db.execute(
             "SELECT dirty_version>completed_version FROM memory_jobs WHERE layer=?", (layer,)
         ).fetchone() == (1,)
+
+
+def test_model_configuration_failure_uses_long_backoff(session_db, monkeypatch):
+    settings, db, session = session_db
+    db.execute("INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat','s1','user','event',1)")
+    db.commit()
+    claim = claim_jobs(db, layers=("summary",))[0]
+
+    def fail_route(*_args, **_kwargs):
+        raise ModelRoutingError("retired provider")
+
+    monkeypatch.setattr(memory_workers, "_run_derived_layer", fail_route)
+    started = time.time()
+    assert (
+        memory_workers.run_memory_claim(
+            db, claim, session, {"name": "Alice"}, provider_port=None, app_settings=settings
+        )
+        == "configuration"
+    )
+    error, next_attempt = db.execute(
+        "SELECT last_error,next_attempt_at FROM memory_jobs WHERE layer='summary'"
+    ).fetchone()
+    assert error == "configuration"
+    assert next_attempt >= started + 3599

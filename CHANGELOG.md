@@ -6,6 +6,7 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Maintenance
 
+- Consolidate fragmented one-test and simulation-review test modules into topical owners without removing coverage, move reused Character/Codex/NPC/provider-budget fixtures into canonical test-support modules, and retire PR-number/Codex-review naming.
 - Audit regression-test size and source-inspection patterns; share identical boundary-test helpers while retaining their assertions, and use short parameter IDs for oversized provider-health fixtures.
 - Run Python regression/coverage and Mini App smoke as independent CI jobs. Preserve the protected `test` check as a strict final gate over both jobs and the existing security/static checks; publish JUnit, timings and diagnostic artifacts.
 

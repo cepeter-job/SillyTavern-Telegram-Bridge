@@ -1,4 +1,3 @@
-import base64
 import io
 import json
 import stat
@@ -8,6 +7,8 @@ import unittest
 import urllib.error
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+from codex_test_support import jwt_token as _jwt
 
 import bridge.codex_auth as codex_auth
 
@@ -25,14 +26,6 @@ class _Response:
 
     def read(self, _limit=-1):
         return json.dumps(self.payload).encode()
-
-
-def _jwt(**claims):
-    def segment(payload):
-        raw = json.dumps(payload, separators=(",", ":")).encode()
-        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
-
-    return f"{segment({'alg': 'none'})}.{segment(claims)}.signature"
 
 
 class CodexAuthTests(unittest.TestCase):

@@ -222,7 +222,7 @@ def regenerate_edited_turn(
             )
         )
     if novel_turn:
-        reply = novel_turn.extract(reply)
+        reply = map_visible_reply(reply, novel_turn.extract)
     reply += rag_service.citation_footer(db, chat_id, new_text, rag_bundle)
     reply = render_session_response(
         api_key,

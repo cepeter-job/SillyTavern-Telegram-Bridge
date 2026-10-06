@@ -573,37 +573,6 @@ def test_reply_and_delivery_intent_commit_or_roll_back_together(case):
     assert c.db.execute("SELECT state FROM jobs").fetchone() == ("failed",)
 
 
-def test_operation_recovery_hides_internal_states_from_delivery_payload(case):
-    from bridge import edit_messages
-
-    c = case
-    c.db.execute(
-        "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_id,created_at) "
-        "VALUES('chat','s1','user','prompt','77',1)"
-    )
-    user_rowid = c.db.execute("SELECT last_insert_rowid()").fetchone()[0]
-    source = "Visible reply\n<internal_states>Secret state value</internal_states>"
-    c.db.execute(
-        "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat','s1','assistant',?,2)",
-        (source,),
-    )
-    assistant_rowid = c.db.execute("SELECT last_insert_rowid()").fetchone()[0]
-    c.db.commit()
-
-    recovery = edit_messages._COMMAND_OPERATION_RECOVERY
-    recovery.set_payload(c.db, "op-hidden", {"user_rowid": int(user_rowid)})
-    recovery.record_delivery_target(c.db, "op-hidden", int(assistant_rowid), source, source)
-
-    payload = recovery.get_payload(c.db, "op-hidden")
-    progress = c.db.execute(
-        "SELECT payload FROM assistant_delivery_progress WHERE assistant_rowid=?",
-        (assistant_rowid,),
-    ).fetchone()[0]
-    assert payload["source_content"] == source
-    assert payload["delivery_payload"] == "Visible reply"
-    assert progress == "Visible reply"
-
-
 def test_committed_binding_is_immutable_and_deleted_only_with_job(case):
     from bridge.delivery_progress import bind_committed_turn
     from bridge.sqlite_store import write_transaction

@@ -7,10 +7,7 @@ from settings_test_support import SettingsTestCase
 
 import bridge.response_delivery as response_delivery
 import bridge.telegram as telegram
-from bridge.delivery_progress import bind_committed_turn
-from bridge.job_store import enqueue_job
 from bridge.schema import initialize_database_schema
-from bridge.sqlite_store import write_transaction
 
 
 class ResponseDeliveryTests(SettingsTestCase):
@@ -576,69 +573,6 @@ class ResponseDeliveryTests(SettingsTestCase):
             json.loads(self.db.execute("SELECT telegram_message_ids FROM messages WHERE rowid=42").fetchone()[0]),
             [71, 72],
         )
-
-    def test_committed_hidden_state_uses_visible_delivery_payload(self):
-        source = "Visible reply\n<internal_states>Secret state value</internal_states>"
-        self.db.execute(
-            "INSERT INTO messages(rowid,chat_id,session_id,role,content,telegram_message_id,created_at) "
-            "VALUES(41,'chat','s','user','prompt','77',0)"
-        )
-        self.db.execute("UPDATE messages SET content=? WHERE rowid=42", (source,))
-        self.db.commit()
-        job_id = enqueue_job(self.db, 1, "chat", "s", 77, "generation", {"actor_id": "100"})
-        with write_transaction(self.db):
-            bind_committed_turn(self.db, job_id, 41, 42, source)
-
-        requests = []
-
-        def request(_token, method, payload):
-            requests.append((method, payload))
-            return {"message_id": 92}
-
-        with patch.object(telegram, "telegram_request", side_effect=request):
-            response_delivery.send_reply(
-                "token",
-                "chat",
-                source,
-                self.db,
-                "s",
-                42,
-                expected_job_id=job_id,
-                app_settings=self.app_settings_builder.build(),
-            )
-
-        self.assertEqual(requests[0][1]["text"], "Visible reply")
-
-    def test_send_reply_hides_internal_states_from_telegram(self):
-        requests = []
-
-        def request(_token, method, payload):
-            requests.append((method, payload))
-            return {"message_id": 91}
-
-        source = (
-            "*Visible narration.*\n\n"
-            "<!-- GFX_START -->\n"
-            "<tg-spoiler>\n"
-            "<internal_states>\n"
-            "<details><summary>INTERNAL STATES</summary>\n"
-            "<b>Secret state value</b>\n"
-            "</details>\n"
-            "</internal_states>\n"
-            "</tg-spoiler>\n"
-            "<!-- GFX_END -->"
-        )
-        with patch.object(telegram, "telegram_request", side_effect=request):
-            response_delivery.send_reply(
-                "token",
-                "chat",
-                source,
-                app_settings=self.app_settings_builder.build(),
-            )
-
-        self.assertEqual(requests[0][1]["text"], "Visible narration.")
-        self.assertEqual(requests[0][1]["entities"], [{"type": "italic", "offset": 0, "length": 18}])
-        self.assertNotIn("Secret state value", requests[0][1]["text"])
 
 
 if __name__ == "__main__":

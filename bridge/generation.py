@@ -98,9 +98,10 @@ def render_session_response(
     settings: dict[str, object],
     *,
     provider_port: ProviderPort,
+    usage: str = "render",
 ) -> str:
     session_id = str(session["session_id"])
-    provider_port = provider_port.for_usage(chat_id, session_id, "render")
+    provider_port = provider_port.for_usage(chat_id, session_id, usage)
     rendered = map_visible_reply(
         text,
         lambda visible: render_response_language(
@@ -417,7 +418,7 @@ def _generation_generate_rendered_reply(
             settings=settings,
         )
     if novel_turn:
-        reply = novel_turn.extract(reply)
+        reply = map_visible_reply(reply, novel_turn.extract)
     reply += rag_service.citation_footer(db, chat_id, query, rag_bundle)
     reply = render_session_response(
         api_key,

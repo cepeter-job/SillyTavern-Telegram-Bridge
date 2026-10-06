@@ -31,10 +31,9 @@ from bridge.edit_messages import edit_last_user
 from bridge.ending_runtime import recover_ending_workflow
 from bridge.episodic_memory import purge_episodic_memories
 from bridge.failed_turns import clear_failed_turn
-from bridge.generation import build_chat_messages, finalize_generation_messages, render_response_language
+from bridge.generation import build_chat_messages, finalize_generation_messages, render_session_response
 from bridge.generation_settings import get_generation_settings
 from bridge.group_service import GroupService
-from bridge.humanize import render_humanized_response
 from bridge.humanizer_settings import humanizer_enabled
 from bridge.internal_state_output import delivery_visible_reply, map_visible_reply
 from bridge.job_store import job_actor_id
@@ -318,33 +317,17 @@ def generate_and_store_reply(
             app_settings=app_settings,
         )
     if novel_turn:
-        reply = novel_turn.extract(reply)
+        reply = map_visible_reply(reply, novel_turn.extract)
     reply += rag_service.citation_footer(db, chat_id, text, rag_bundle)
-    reply = map_visible_reply(
+    reply = render_session_response(
+        api_key,
+        dict(session, model_id=current_model),
         reply,
-        lambda visible: render_response_language(
-            api_key,
-            current_model,
-            visible,
-            language,
-            generation_session_id,
-            generation_settings,
-            provider_port=provider_port,
-        ),
+        chat_id,
+        generation_settings,
+        provider_port=provider_port,
+        usage="story",
     )
-    if humanizer_on:
-        reply = map_visible_reply(
-            reply,
-            lambda visible: render_humanized_response(
-                api_key,
-                current_model,
-                visible,
-                generation_session_id,
-                generation_settings,
-                provider_port=provider_port,
-            ),
-        )
-    reply = map_visible_reply(reply, telegram_transport_output)
     if novel_turn:
         reply = map_visible_reply(reply, novel_turn.finalize)
         reply = map_visible_reply(reply, telegram_transport_output)

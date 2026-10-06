@@ -136,6 +136,13 @@ def test_choice_repo_rejects_two_choice_reservations(novel_db):
         reserve(db, key="two-choice-contract", count=2)
 
 
+def test_choice_validation_rejects_two_choice_contract():
+    from bridge.light_novel_format import validate_choices
+
+    with pytest.raises(ValueError, match="3–4"):
+        validate_choices(["Go", "Stay"], 2)
+
+
 def test_choice_repo_requires_caller_transaction(novel_db):
     from bridge.light_novel_repository import reserve_choice_set
 

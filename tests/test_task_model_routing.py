@@ -84,20 +84,14 @@ class TaskModelRoutingTests(SettingsTestCase):
     def test_stale_utility_model_falls_back_to_routable_main(self):
         catalog = Path(self.tmp.name) / "providers.yaml"
         catalog.write_text(
-            "providers:\n"
-            "  primary:\n"
-            "    models: [main-model]\n"
-            "  cheap:\n"
-            "    models: [summary-model]\n",
+            "providers:\n  primary:\n    models: [main-model]\n  cheap:\n    models: [summary-model]\n",
             encoding="utf-8",
         )
         self.app_settings_builder.provider_config_file = catalog
         settings = self.app_settings_builder.build()
         for stale in ("retired::old-model", "cheap::removed-model"):
             with self.subTest(stale=stale):
-                _owner_model_selection.set_task_model(
-                    self.db, "chat", self.session["session_id"], stale, "utility"
-                )
+                _owner_model_selection.set_task_model(self.db, "chat", self.session["session_id"], stale, "utility")
                 self.assertEqual(
                     _owner_model_selection.task_model_for_session(
                         self.db, "chat", self.session, "summary", app_settings=settings

@@ -11,9 +11,7 @@ from bridge.model_router import ModelRoutingError
 
 def test_model_configuration_failure_uses_long_backoff(session_db, monkeypatch):
     settings, db, session = session_db
-    db.execute(
-        "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat','s1','user','event',1)"
-    )
+    db.execute("INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat','s1','user','event',1)")
     db.commit()
     claim = claim_jobs(db, layers=("summary",))[0]
 

@@ -114,7 +114,8 @@ In Telegram, open your bot's **private chat**:
    `*I look around the room.* "Where should we go next?"`
 
 Use `/session` to return to an earlier story and `/status` to check which story
-is active. `/settings` changes generation settings; `/narrative` changes viewpoint
+is active. `/usage` shows the active session’s last 7 days of provider-reported
+tokens as plain text. `/settings` changes generation settings; `/narrative` changes viewpoint
 and focus. Explore `/director` for planning and endings after the first exchange
 works.
 

@@ -100,6 +100,7 @@ confirmation apply to the new story.
 | Start a fresh story | `/new`, then `/character` and `/start` |
 | Switch between existing stories | `/session` |
 | Check the active session and context budget | `/status` |
+| Read the active session’s last 7 days of provider-reported tokens | `/usage` |
 | Choose Story, Utility or Director models and reasoning | `/providers` |
 | Choose point of view, cast focus and off-screen freedom | `/narrative` |
 | Adjust sampling, reply length or optional style controls | `/settings` |

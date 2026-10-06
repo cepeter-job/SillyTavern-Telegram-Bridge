@@ -12,6 +12,21 @@ A token is a unit of text used by a model; it is not always a whole word. The
 tracker shows what providers reported to the bridge, not a bill or your remaining
 subscription allowance. Use your provider's account page for billing.
 
+## Telegram command
+
+Send `/usage` for a plain-text summary of the **active session in the current
+chat or Forum Topic over the last 7 days**. It shows input, output, total, cached
+and reasoning tokens; reported/complete coverage and failed/cancelled calls;
+daily UTC totals; and up to five top models and purposes. Missing counters
+appear as **unknown**, not zero. Partial counts remain included with a coverage
+warning. Cached and reasoning tokens are subsets, not additions to Total.
+
+The command reads the existing ledger without calling a model, adding story
+messages, or opening a Mini App or inline panel. It remains available before
+`/start` and after a story ends. Provider-reported usage is not a billing
+statement or remaining quota. Use the Mini App for other time windows or
+all-session reports.
+
 ## Reading the numbers
 
 The tracker records **provider-reported token counts**. The estimates in

@@ -12,6 +12,7 @@ HELP_CATEGORIES = {
         ("/help", "Open this guide. Use /help <command> to jump straight to one command."),
         ("/cancel", "Cancel the current scoped input step without applying a change."),
         ("/status", "Show a formatted read-only session status message in Telegram."),
+        ("/usage", "Show provider-reported token usage for the active session over the last 7 days."),
         ("/new", "Name and create a fresh isolated session, then switch to it."),
         (
             "/reset",

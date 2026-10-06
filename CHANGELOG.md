@@ -11,6 +11,7 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Added
 
+- Add plain-text `/usage` for the active session’s last 7 days of provider-reported token usage, coverage, failures/cancellations and daily/model/task breakdowns. Reuse the existing ledger without a model call or Mini App panel; include Telegram command-menu and Help entries.
 - Add `/trackers` and Mini App **Manage → Story trackers** for saved, visibility-filtered canonical state and recent checks, including extraction freshness. Both views reuse SQLite and do not request model work.
 - Add persisted **Realism / Anime** selection under `/imagine` → **Options** for scene and custom prompts, including character references, prompt-length accounting, reset and alternate-ending preferences.
 - Bound estimated input independently of the model context window with `SILLYTAVERN_CONTEXT_INPUT_CAP_TOKENS` (default 49,152). The existing compactor uses the smaller of this cap and the model's available input budget; `/prompt` shows both values. `max_tokens` remains an output limit.

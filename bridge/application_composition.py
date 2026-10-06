@@ -21,6 +21,7 @@ def initialize_extensions() -> None:
         npc_extraction,
         scene_state,
         simulation_commands,
+        usage_panels,
     )
 
     reset_extension_registry()
@@ -30,3 +31,4 @@ def initialize_extensions() -> None:
     director_goals.register_director_goal_extensions()
     memory_curator.register_memory_curator_extensions()
     director_runtime.register_narrative_extensions()
+    usage_panels.register_usage_extensions()

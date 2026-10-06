@@ -28,6 +28,7 @@ def set_bot_commands(token: str) -> None:
                     {"command": "persona", "description": "Choose user persona"},
                     {"command": "world", "description": "Choose World Info lore"},
                     {"command": "status", "description": "Show read-only session status"},
+                    {"command": "usage", "description": "Show 7-day token usage for this session"},
                     {"command": "edit", "description": "Edit last user message"},
                     {"command": "voice", "description": "Open automatic voice panel"},
                     {"command": "voice_input", "description": "Open transcription/model/language panel"},

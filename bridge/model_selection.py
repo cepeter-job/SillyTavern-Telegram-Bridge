@@ -9,6 +9,8 @@ import time
 
 import bridge.limits as _limits
 from bridge.metadata import get_meta, set_meta
+from bridge.model_router import ModelRouter, ModelRoutingError
+from bridge.provider_catalog import load_routing_catalog
 from bridge.settings import AppSettings
 
 
@@ -17,16 +19,50 @@ def task_model_key(chat_id: str, session_id: str, task: str = "utility") -> str:
     return f"task_model:{task_name}:{chat_id}:{session_id}"
 
 
+def _catalog_route_state(model: str, *, app_settings: AppSettings) -> bool | None:
+    """Return routability when a usable catalog exists; otherwise preserve the stored selection."""
+    if not model:
+        return False
+    if not app_settings.provider_config_file.is_file():
+        return None
+    catalog = load_routing_catalog(app_settings=app_settings)
+    if not catalog:
+        return None
+    try:
+        ModelRouter(lambda: catalog).route(model)
+    except ModelRoutingError:
+        return False
+    return True
+
+
 def task_model_for_session(
     db: sqlite3.Connection, chat_id: str, session: dict[str, str], task: str = "utility", *, app_settings: AppSettings
 ) -> str:
-    """Resolve a per-task model with utility -> main-model fallback."""
+    """Resolve a task model, skipping persisted selections no longer routable in the live catalog."""
     session_id = str(session["session_id"])
     task_name = str(task or "utility").casefold()
-    model = get_meta(db, task_model_key(chat_id, session_id, task_name), "").strip()
-    if not model and task_name != "utility":
-        model = get_meta(db, task_model_key(chat_id, session_id, "utility"), "").strip()
-    return model or str(session.get("model_id") or app_settings.default_model)
+    candidates: list[str] = []
+
+    def add(value: object) -> None:
+        model = str(value or "").strip()
+        if model and model not in candidates:
+            candidates.append(model)
+
+    add(get_meta(db, task_model_key(chat_id, session_id, task_name), ""))
+    if task_name != "utility":
+        add(get_meta(db, task_model_key(chat_id, session_id, "utility"), ""))
+    add(session.get("model_id"))
+    add(app_settings.default_model)
+    if not candidates:
+        return ""
+
+    for candidate in candidates:
+        state = _catalog_route_state(candidate, app_settings=app_settings)
+        if state is None:
+            return candidates[0]
+        if state:
+            return candidate
+    return candidates[0]
 
 
 def set_task_model(

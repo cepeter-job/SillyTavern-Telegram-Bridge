@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from bridge.episodic_memory import store_episodic_memory
 from bridge.generation_settings import get_generation_settings
 from bridge.json_fences import unfence_json
+from bridge.memory_artifact_store import CLASSIFIED_AUDIENCE_PROMPT
 from bridge.memory_contracts import MemoryFact
 from bridge.memory_fact_store import accept_source_facts, classified_audience
 from bridge.memory_store import MemorySource
@@ -130,7 +131,8 @@ def extract_episodic_memories_result(
                 "style instructions, and speculation stated as fact. Preserve uncertainty. "
                 "Return only a JSON array with objects containing kind, importance (0 to 1), "
                 "summary, visibility, and known_by. visibility must be shared or restricted. "
-                "For restricted memories, known_by must list only character names explicitly "
+                + CLASSIFIED_AUDIENCE_PROMPT
+                + " For restricted memories, known_by must list only character names explicitly "
                 "established as knowing the fact. Allowed kinds: scene_event, relationship_change, "
                 "fact, goal, world_change, secret."
             ),

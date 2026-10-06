@@ -124,6 +124,24 @@ class ResponseDeliveryTests(SettingsTestCase):
             ],
         )
 
+    def test_send_reply_rejects_unsafe_text_link_scheme(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 86}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                '<a href="javascript:alert(1)">Bad</a>',
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], "Bad")
+        self.assertNotIn("entities", requests[0][1])
+
     def test_send_reply_renders_code_pre_and_blockquotes(self):
         requests = []
 
@@ -326,10 +344,10 @@ class ResponseDeliveryTests(SettingsTestCase):
             )
 
         self.assertEqual(len(requests), 2)
-        self.assertEqual(requests[0][1]["text"], "A" * 3999)
-        self.assertEqual(requests[0][1]["entities"], [{"type": "italic", "offset": 0, "length": 3999}])
-        self.assertEqual(requests[1][1]["text"], ("A" * 101) + ' "Done."')
-        self.assertEqual(requests[1][1]["entities"], [{"type": "italic", "offset": 0, "length": 101}])
+        self.assertEqual(requests[0][1]["text"], "A" * 4000)
+        self.assertEqual(requests[0][1]["entities"], [{"type": "italic", "offset": 0, "length": 4000}])
+        self.assertEqual(requests[1][1]["text"], ("A" * 100) + ' "Done."')
+        self.assertEqual(requests[1][1]["entities"], [{"type": "italic", "offset": 0, "length": 100}])
 
     def test_send_reply_applies_italic_entities_to_streaming_preview(self):
         requests = []

@@ -216,7 +216,7 @@ def test_inline_parser_never_leaks_envelope():
 
 
 @pytest.mark.parametrize(
-    "values", [["/reset", "S", "X"], ["@x", "S", "X"], ["A", " a ", "X"], ["X"], ["x" * 161, "S", "X"], [True, "S", "X"]]
+    "values", [["/reset", "S", "X"], ["@x", "S", "X"], ["A", " a ", "X"], [], ["x" * 161, "S", "X"], [True, "S", "X"]]
 )
 def test_unsafe_or_invalid_choices_are_rejected(values):
     from bridge.light_novel_format import validate_choices

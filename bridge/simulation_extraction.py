@@ -1,4 +1,4 @@
-"""Bounded parsing and accumulation for utility-model simulation updates."""
+"""Bounded typed extraction and chronological accumulation of simulation changes."""
 
 from __future__ import annotations
 
@@ -6,266 +6,179 @@ import json
 from typing import Any
 
 from bridge.json_fences import unfence_json
+from bridge.simulation_repository import MAX_RECORD_BYTES
+from bridge.simulation_values import MAX_ITEMS, MAX_NAME, boolean, integer, key, modifier_entry, text
 
-_MAX_ITEMS = 32
-_MAX_NAME = 160
-_MAX_TEXT = 1000
-
-
-def _text(value: Any, maximum: int = _MAX_TEXT) -> str:
-    return " ".join(str(value or "").split()).strip()[:maximum]
+_IDENTIFIERS = {"relationships": "npc", "agendas": "npc", "factions": "name", "quests": "id", "foreshadowing": "id"}
+_ACTOR_COLLECTIONS = ("inventory", "skills", "conditions")
 
 
-def _integer(value: Any, low: int, high: int, default: int = 0) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError, OverflowError):
-        parsed = default
-    return max(low, min(high, parsed))
+def _items(value: Any, limit: int) -> list:
+    if value is None:
+        return []
+    if not isinstance(value, list) or len(value) > limit:
+        raise ValueError("Simulation collection exceeds its bound")
+    return value
 
 
-def _modifier_entry(value: Any) -> dict[str, Any] | None:
-    if isinstance(value, str):
-        name = _text(value, 120)
-        return {"name": name, "domain": "any", "modifier": 0} if name else None
+def _bounded(value: Any, limit: int = MAX_RECORD_BYTES) -> None:
+    if len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode()) > limit:
+        raise ValueError("Simulation value exceeds its encoded storage bound")
+
+
+def _relationship(item: dict) -> dict:
+    if integer(item.get("bond_delta"), -2, 20) > 0:
+        raise ValueError("positive BOND changes must come from Sparks conversion")
+    return {
+        "npc": text(item.get("npc"), MAX_NAME),
+        "bond_delta": integer(item.get("bond_delta"), -2, 0),
+        "sparks_delta": integer(item.get("sparks_delta"), -2, 2),
+        "grudge_delta": integer(item.get("grudge_delta"), -1, 1),
+        "apology": boolean(item.get("apology")),
+    }
+
+
+def _record(group: str, item: dict) -> dict:
+    identifier = _IDENTIFIERS[group]
+    name = text(item.get(identifier), MAX_NAME if identifier != "id" else 100)
+    if identifier == "id":
+        name = name.casefold().replace(" ", "-")
+    result: dict[str, Any] = {identifier: name}
+    fields = {
+        "agendas": {"objective": 500, "location": 300, "status": 20},
+        "factions": {"goal": 1000, "intel": 1000, "morale": 120, "conflict": 1000},
+        "quests": {"kind": 20, "status": 20, "objective": 1000, "reward": 500, "arc_id": 100},
+        "foreshadowing": {"status": 20, "seed": 1000, "payoff": 1000, "thread_id": 100, "arc_id": 100},
+    }[group]
+    for field, maximum in fields.items():
+        if field in item:
+            result[field] = text(item[field], maximum)
+    if group == "agendas":
+        for field, maximum, default in (("step", 20, 0), ("max_steps", 20, 1)):
+            if field in item:
+                result[field] = integer(item[field], default, maximum, default)
+        if "complete" in item:
+            result["complete"] = boolean(item["complete"])
+        if "status" in result and result["status"] not in {"active", "paused", "completed"}:
+            raise ValueError("Invalid agenda status")
+    if group == "quests":
+        for field in ("progress_current", "progress_target"):
+            if field in item:
+                result[field] = integer(item[field], 0, 100000)
+        if "status" in result and result["status"] not in {"active", "completed", "failed", "paused"}:
+            raise ValueError("Invalid quest status")
+        if "kind" in result and result["kind"] not in {"main", "side"}:
+            raise ValueError("Invalid quest kind")
+    if (
+        group == "foreshadowing"
+        and "status" in result
+        and result["status"] not in {"planted", "developing", "resolved", "abandoned"}
+    ):
+        raise ValueError("Invalid foreshadowing status")
+    if group == "factions":
+        if "lies" in item:
+            result["lies"] = [text(value, 240) for value in _items(item["lies"], 32) if text(value, 240)]
+        if "relations" in item:
+            values = item["relations"]
+            if not isinstance(values, dict) or len(values) > 32:
+                raise ValueError("Faction relations must be a bounded object")
+            result["relations"] = {text(k, 120): text(v, 240) for k, v in values.items() if text(k, 120)}
+    _bounded(result)
+    return result
+
+
+def normalize_simulation_payload(value: Any, *, limit: int = MAX_ITEMS) -> dict[str, Any]:
     if not isinstance(value, dict):
-        return None
-    name = _text(value.get("name"), 120)
-    if not name:
-        return None
-    domain = _text(value.get("domain") or "any", 40).casefold()
-    return {"name": name, "domain": domain or "any", "modifier": _integer(value.get("modifier"), -2, 2)}
-
-
-def _modifier_list(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    result = []
-    for item in value[:_MAX_ITEMS]:
-        normalized = _modifier_entry(item)
-        if normalized:
-            result.append(normalized)
-    return result
-
-
-def _relationships(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    result = []
-    seen = set()
-    for item in value[:_MAX_ITEMS]:
-        if not isinstance(item, dict):
-            continue
-        name = _text(item.get("npc"), _MAX_NAME)
-        key = name.casefold()
-        if not name or key in seen:
-            continue
-        seen.add(key)
-        result.append(
-            {
-                "npc": name,
-                "bond_delta": _integer(item.get("bond_delta"), -2, 0),
-                "sparks_delta": _integer(item.get("sparks_delta"), -2, 2),
-                "grudge_delta": _integer(item.get("grudge_delta"), -1, 1),
-                "apology": bool(item.get("apology")),
-            }
-        )
-    return result
-
-
-def _agendas(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    result = []
-    seen = set()
-    for item in value[:_MAX_ITEMS]:
-        if not isinstance(item, dict):
-            continue
-        name = _text(item.get("npc"), _MAX_NAME)
-        objective = _text(item.get("objective"), 500)
-        key = name.casefold()
-        if not name or not objective or key in seen:
-            continue
-        seen.add(key)
-        max_steps = _integer(item.get("max_steps"), 1, 20, 1)
-        step = _integer(item.get("step"), 0, max_steps)
-        status = _text(item.get("status") or "active", 20).casefold()
-        if status not in {"active", "paused", "completed"}:
-            status = "active"
-        result.append(
-            {
-                "npc": name,
-                "objective": objective,
-                "step": step,
-                "max_steps": max_steps,
-                "location": _text(item.get("location"), 300),
-                "status": status,
-                "complete": bool(item.get("complete")),
-            }
-        )
-    return result
-
-
-def _factions(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    result = []
-    seen = set()
-    for item in value[:_MAX_ITEMS]:
-        if not isinstance(item, dict):
-            continue
-        name = _text(item.get("name"), _MAX_NAME)
-        key = name.casefold()
-        if not name or key in seen:
-            continue
-        seen.add(key)
-        relations = item.get("relations")
-        result.append(
-            {
-                "name": name,
-                "goal": _text(item.get("goal")),
-                "intel": _text(item.get("intel")),
-                "lies": [_text(part, 240) for part in (item.get("lies") or [])[:_MAX_ITEMS] if _text(part, 240)]
-                if isinstance(item.get("lies"), list)
-                else [],
-                "morale": _text(item.get("morale"), 120),
-                "conflict": _text(item.get("conflict")),
-                "relations": {
-                    _text(k, 120): _text(v, 240)
-                    for k, v in list(relations.items())[:_MAX_ITEMS]
-                    if _text(k, 120)
-                }
-                if isinstance(relations, dict)
-                else {},
-            }
-        )
-    return result
-
-
-def _quests(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    result = []
-    seen = set()
-    for item in value[:_MAX_ITEMS]:
-        if not isinstance(item, dict):
-            continue
-        identifier = _text(item.get("id"), 120).casefold().replace(" ", "-")
-        if not identifier or identifier in seen:
-            continue
-        seen.add(identifier)
-        kind = _text(item.get("kind") or "side", 20).casefold()
-        status = _text(item.get("status") or "active", 20).casefold()
-        result.append(
-            {
-                "id": identifier,
-                "kind": kind if kind in {"main", "side"} else "side",
-                "status": status if status in {"active", "completed", "failed", "paused"} else "active",
-                "objective": _text(item.get("objective")),
-                "progress_current": _integer(item.get("progress_current"), 0, 100000),
-                "progress_target": _integer(item.get("progress_target"), 0, 100000),
-                "reward": _text(item.get("reward"), 500),
-            }
-        )
-    return result
-
-
-def _foreshadowing(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    result = []
-    seen = set()
-    for item in value[:_MAX_ITEMS]:
-        if not isinstance(item, dict):
-            continue
-        identifier = _text(item.get("id"), 120).casefold().replace(" ", "-")
-        if not identifier or identifier in seen:
-            continue
-        seen.add(identifier)
-        status = _text(item.get("status") or "planted", 20).casefold()
-        result.append(
-            {
-                "id": identifier,
-                "status": status if status in {"planted", "developing", "resolved", "abandoned"} else "planted",
-                "seed": _text(item.get("seed")),
-                "payoff": _text(item.get("payoff")),
-            }
-        )
-    return result
-
-
-def _actor(value: Any) -> dict[str, Any]:
-    if not isinstance(value, dict):
-        return {}
+        raise ValueError("Simulation payload must be an object")
     result: dict[str, Any] = {}
-    for collection in ("inventory", "skills", "conditions"):
-        for operation in ("add", "remove"):
-            key = f"{collection}_{operation}"
-            values = _modifier_list(value.get(key))
-            if values:
-                result[key] = values
+    for group, identifier in _IDENTIFIERS.items():
+        records = []
+        for item in _items(value.get(group), limit):
+            if not isinstance(item, dict) or not text(item.get(identifier), MAX_NAME):
+                continue
+            records.append(_relationship(item) if group == "relationships" else _record(group, item))
+        result[group] = records
+    result["on_screen_npcs"] = [
+        name for item in _items(value.get("on_screen_npcs"), limit) if (name := text(item, MAX_NAME))
+    ]
+    actor = value.get("actor") or {}
+    if not isinstance(actor, dict):
+        raise ValueError("Actor updates must be an object")
+    result["actor"] = {}
+    for collection in _ACTOR_COLLECTIONS:
+        sets = []
+        for operation in ("remove", "add"):
+            field = f"{collection}_{operation}"
+            entries = [entry for item in _items(actor.get(field), limit) if (entry := modifier_entry(item))]
+            sets.append({key(entry["name"]) for entry in entries})
+            if entries:
+                result["actor"][field] = entries
+        if sets[0] & sets[1]:
+            raise ValueError("One source part cannot both add and remove the same actor item")
+    result = merge_simulation_payload({}, result)
+    result["relationships"] = [_relationship(item) for item in result["relationships"]]
+    _bounded(result, 262144)
     return result
 
 
 def parse_simulation_payload(raw: str) -> tuple[dict[str, Any], bool]:
     try:
         decoded = json.loads(unfence_json(raw))
-    except (TypeError, json.JSONDecodeError):
+        if not isinstance(decoded, dict):
+            return {}, False
+        if "simulation" not in decoded:
+            return {}, True
+        return normalize_simulation_payload(decoded["simulation"], limit=32), True
+    except (TypeError, ValueError, OverflowError):
         return {}, False
-    if not isinstance(decoded, dict):
-        return {}, False
-    simulation = decoded.get("simulation")
-    if simulation is None:
-        return {}, True
-    if not isinstance(simulation, dict):
-        return {}, False
-    on_screen = simulation.get("on_screen_npcs")
-    return (
-        {
-            "relationships": _relationships(simulation.get("relationships")),
-            "agendas": _agendas(simulation.get("agendas")),
-            "on_screen_npcs": [
-                name
-                for item in (on_screen[:_MAX_ITEMS] if isinstance(on_screen, list) else [])
-                if (name := _text(item, _MAX_NAME))
-            ],
-            "actor": _actor(simulation.get("actor")),
-            "factions": _factions(simulation.get("factions")),
-            "quests": _quests(simulation.get("quests")),
-            "foreshadowing": _foreshadowing(simulation.get("foreshadowing")),
-        },
-        True,
-    )
 
 
 def merge_simulation_payload(previous: Any, current: Any) -> dict[str, Any]:
-    base = dict(previous) if isinstance(previous, dict) else {}
-    incoming = dict(current) if isinstance(current, dict) else {}
+    base = previous if isinstance(previous, dict) else {}
+    incoming = current if isinstance(current, dict) else {}
     result: dict[str, Any] = {}
-    for key in ("relationships", "agendas", "factions", "quests", "foreshadowing"):
-        left = base.get(key) if isinstance(base.get(key), list) else []
-        right = incoming.get(key) if isinstance(incoming.get(key), list) else []
-        result[key] = list(left) + list(right)
-    names = []
-    seen = set()
-    for item in list(base.get("on_screen_npcs") or []) + list(incoming.get("on_screen_npcs") or []):
-        value = _text(item, _MAX_NAME)
-        key = value.casefold()
-        if value and key not in seen:
-            seen.add(key)
-            names.append(value)
-    result["on_screen_npcs"] = names[:_MAX_ITEMS]
-    actor: dict[str, Any] = {}
-    for key in (
-        "inventory_add",
-        "inventory_remove",
-        "skills_add",
-        "skills_remove",
-        "conditions_add",
-        "conditions_remove",
-    ):
-        values = list((base.get("actor") or {}).get(key) or []) + list((incoming.get("actor") or {}).get(key) or [])
-        if values:
-            actor[key] = values[:_MAX_ITEMS]
+    for group, identifier in _IDENTIFIERS.items():
+        items: dict[str, dict] = {}
+        for part in (base, incoming):
+            for item in _items(part.get(group), MAX_ITEMS):
+                if not isinstance(item, dict) or not (name := key(item.get(identifier))):
+                    continue
+                if group == "relationships" and name in items:
+                    old = items[name]
+                    merged = old | item
+                    for field in ("bond_delta", "sparks_delta", "grudge_delta"):
+                        merged[field] = integer(old.get(field), -128, 128) + integer(item.get(field), -128, 128)
+                    merged["apology"] = boolean(old.get("apology")) or boolean(item.get("apology"))
+                    items[name] = merged
+                else:
+                    items[name] = items.get(name, {}) | item
+                if len(items) > MAX_ITEMS:
+                    raise ValueError("Simulation source accumulation exceeds entity limit")
+        result[group] = list(items.values())
+    names = {}
+    for part in (base, incoming):
+        for item in _items(part.get("on_screen_npcs"), MAX_ITEMS):
+            if name := text(item, MAX_NAME):
+                names[key(name)] = name
+    if len(names) > MAX_ITEMS:
+        raise ValueError("Simulation participant accumulation exceeds limit")
+    result["on_screen_npcs"] = list(names.values())
+    actor: dict[str, list] = {}
+    for collection in _ACTOR_COLLECTIONS:
+        operations = {}
+        for part in (base, incoming):
+            current_actor = part.get("actor") or {}
+            if not isinstance(current_actor, dict):
+                raise ValueError("Actor updates must be an object")
+            for operation in ("remove", "add"):
+                for entry in _items(current_actor.get(f"{collection}_{operation}"), MAX_ITEMS):
+                    name = key(entry.get("name") if isinstance(entry, dict) else entry)
+                    if name:
+                        operations[name] = (operation, entry)
+            if len(operations) > MAX_ITEMS:
+                raise ValueError("Actor source accumulation exceeds limit")
+        for operation, entry in operations.values():
+            actor.setdefault(f"{collection}_{operation}", []).append(entry)
     result["actor"] = actor
+    _bounded(result, 262144)
     return result

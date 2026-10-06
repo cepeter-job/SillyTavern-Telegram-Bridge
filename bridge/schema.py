@@ -60,10 +60,8 @@ def _create_core_tables(db: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS messages_session_created_idx ON messages(chat_id, session_id, created_at DESC)"
     )
     db.execute(
-        (
-            "CREATE INDEX IF NOT EXISTS messages_chat_telegram_session_idx ON "
-            "messages(chat_id, telegram_message_id, session_id)"
-        )
+        "CREATE INDEX IF NOT EXISTS messages_chat_telegram_session_idx ON "
+        "messages(chat_id, telegram_message_id, session_id)"
     )
     db.execute("""CREATE TABLE IF NOT EXISTS response_variants (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,10 +75,8 @@ def _create_core_tables(db: sqlite3.Connection) -> None:
         created_at REAL NOT NULL
     )""")
     db.execute(
-        (
-            "CREATE INDEX IF NOT EXISTS variants_session_idx ON "
-            "response_variants(chat_id, session_id, user_rowid, created_at)"
-        )
+        "CREATE INDEX IF NOT EXISTS variants_session_idx ON "
+        "response_variants(chat_id, session_id, user_rowid, created_at)"
     )
 
 

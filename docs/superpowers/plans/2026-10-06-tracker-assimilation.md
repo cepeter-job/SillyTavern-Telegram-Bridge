@@ -35,11 +35,11 @@
 
 **Interfaces:** Preserve `SimulationService.state`, `apply_payload(..., source_rowid=...)`, `rollback_from_row`, `purge_session`, `context_for_prompt(..., through_rowid=None)`, and `perform_check`. Add a completed-row receipt/progress contract and valid-source checks. Context can accept reader scope and resolves pending NPC invalidation. Repositories remain caller-transaction-owned.
 
-- [ ] Add failing tests for replay, empty rows, user-message ticking, nonexistent/cross-session/older source rows, invalidated reads, and historical check modifiers. Use explicit expected numeric values from the spec.
-- [ ] Run these tests and record the failing behavior before changes.
-- [ ] Implement source fencing, bounded receipt/revision handling and SQL historical reconstruction; split mechanics, checks and context into focused modules.
-- [ ] Add failing multipart tests for add-then-remove, remove-then-add, more than 32 total updates, invalid booleans and maximal records; normalize with chronological operation semantics and enforced aggregate bounds.
-- [ ] Run `python -m pytest -q tests/test_simulation_trackers.py tests/test_simulation_safety.py tests/test_simulation_parts.py tests/test_simulation_extraction.py` and commit only after it passes.
+- [x] Add failing tests for replay, empty rows, user-message ticking, nonexistent/cross-session/older source rows, invalidated reads, and historical check modifiers. Use explicit expected numeric values from the spec.
+- [x] Run these tests and record the failing behavior before changes.
+- [x] Implement source fencing, bounded receipt/revision handling and SQL historical reconstruction; split mechanics, checks and context into focused modules.
+- [x] Add failing multipart tests for add-then-remove, remove-then-add, more than 32 total updates, invalid booleans and maximal records; normalize with chronological operation semantics and enforced aggregate bounds.
+- [x] Run `python -m pytest -q tests/test_simulation_trackers.py tests/test_simulation_safety.py tests/test_simulation_parts.py tests/test_simulation_extraction.py` and commit only after it passes.
 
 ### Task 2: Integrate canonical owners and story lifecycle
 

@@ -2,11 +2,68 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from typing import Any
 
 from bridge.repository_contracts import require_active_transaction
+
+MAX_DOMAIN_RECORDS = 64
+MAX_RECORD_BYTES = 16384
+
+
+def source_identity(db: sqlite3.Connection, chat_id: str, session_id: str, source_rowid: int) -> tuple[str, str]:
+    row = db.execute(
+        "SELECT role,content FROM messages WHERE chat_id=? AND session_id=? AND id=?",
+        (chat_id, session_id, int(source_rowid)),
+    ).fetchone()
+    if row is None:
+        raise ValueError("Simulation source must exist in this session")
+    return str(row[0]), hashlib.sha256((str(row[0]) + "\0" + str(row[1])).encode()).hexdigest()
+
+
+def revision(db: sqlite3.Connection, chat_id: str, session_id: str) -> int:
+    row = db.execute(
+        "SELECT revision FROM simulation_revisions WHERE chat_id=? AND session_id=?", (chat_id, session_id)
+    ).fetchone()
+    return int(row[0]) if row else 0
+
+
+def bump_revision(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
+    require_active_transaction(db)
+    db.execute(
+        "INSERT INTO simulation_revisions(chat_id,session_id,revision) VALUES(?,?,1) "
+        "ON CONFLICT(chat_id,session_id) DO UPDATE SET revision=revision+1",
+        (chat_id, session_id),
+    )
+
+
+def validate_publication(db: sqlite3.Connection, chat_id: str, session_id: str, source_rowid: int) -> tuple[bool, str]:
+    """Fence ordered complete-row acceptance, including empty rows and source rewrites."""
+    from bridge.memory_store import pending_memory_invalidation
+
+    require_active_transaction(db)
+    role, digest = source_identity(db, chat_id, session_id, source_rowid)
+    latest = db.execute(
+        "SELECT COALESCE(MAX(source_rowid),0) FROM simulation_sources WHERE chat_id=? AND session_id=?",
+        (chat_id, session_id),
+    ).fetchone()[0]
+    pending = pending_memory_invalidation(db, chat_id, session_id, "npc")
+    if pending is not None and pending <= latest:
+        raise ValueError("Simulation invalidated source suffix requires rollback")
+    receipt = db.execute(
+        "SELECT source_digest FROM simulation_sources WHERE chat_id=? AND session_id=? AND source_rowid=?",
+        (chat_id, session_id, source_rowid),
+    ).fetchone()
+    if receipt is not None:
+        if receipt[0] != digest:
+            raise ValueError("Simulation source was rewritten; rollback is required")
+        return False, role
+    if source_rowid < latest:
+        raise ValueError("Simulation publication is older than the accepted source")
+    db.execute("INSERT INTO simulation_sources VALUES(?,?,?,?)", (chat_id, session_id, source_rowid, digest))
+    return True, role
 
 
 def _decode(value: str | None) -> dict[str, Any] | None:
@@ -43,19 +100,16 @@ def list_states(
     if kind is None:
         rows = db.execute(
             "SELECT kind,entity_key,value_json,updated_rowid,updated_at FROM simulation_state "
-            "WHERE chat_id=? AND session_id=? ORDER BY kind,entity_key",
-            (chat_id, session_id),
+            "WHERE chat_id=? AND session_id=? ORDER BY kind,entity_key LIMIT ?",
+            (chat_id, session_id, MAX_DOMAIN_RECORDS * 6),
         ).fetchall()
     else:
         rows = db.execute(
             "SELECT kind,entity_key,value_json,updated_rowid,updated_at FROM simulation_state "
-            "WHERE chat_id=? AND session_id=? AND kind=? ORDER BY entity_key",
-            (chat_id, session_id, kind),
+            "WHERE chat_id=? AND session_id=? AND kind=? ORDER BY entity_key LIMIT ?",
+            (chat_id, session_id, kind, MAX_DOMAIN_RECORDS),
         ).fetchall()
-    return [
-        (str(row[0]), str(row[1]), _decode(row[2]) or {}, int(row[3]), float(row[4]))
-        for row in rows
-    ]
+    return [(str(row[0]), str(row[1]), _decode(row[2]) or {}, int(row[3]), float(row[4])) for row in rows]
 
 
 def store_state(
@@ -73,10 +127,21 @@ def store_state(
     existing = load_state(db, chat_id, session_id, kind, entity_key)
     before = existing[0] if existing else None
     before_rowid = existing[1] if existing else 0
+    if existing and source_rowid < before_rowid:
+        raise ValueError("Simulation state cannot accept an older source")
     if before == value:
         return False
+    if (
+        existing is None
+        and db.execute(
+            "SELECT COUNT(*) FROM simulation_state WHERE chat_id=? AND session_id=? AND kind=?",
+            (chat_id, session_id, kind),
+        ).fetchone()[0]
+        >= MAX_DOMAIN_RECORDS
+    ):
+        raise ValueError("Simulation domain record limit reached")
     encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    if len(encoded) > 16384:
+    if len(encoded.encode()) > MAX_RECORD_BYTES:
         raise ValueError("Simulation state record exceeds storage bound")
     db.execute(
         "INSERT INTO simulation_state(chat_id,session_id,kind,entity_key,value_json,updated_rowid,updated_at) "
@@ -93,7 +158,9 @@ def store_state(
             session_id,
             kind,
             entity_key,
-            json.dumps(before, ensure_ascii=False, sort_keys=True, separators=(",", ":")) if before is not None else None,
+            json.dumps(before, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            if before is not None
+            else None,
             encoded,
             int(before_rowid),
             int(source_rowid),
@@ -112,10 +179,10 @@ def load_states_as_of(
     through_rowid: int,
 ) -> list[tuple[str, str, dict[str, Any], int]]:
     rows = db.execute(
-        "SELECT kind,entity_key,after_json,after_rowid FROM simulation_state_history "
-        "WHERE chat_id=? AND session_id=? AND source_rowid<=? "
-        "ORDER BY source_rowid,change_id",
-        (chat_id, session_id, int(through_rowid)),
+        "SELECT kind,entity_key,after_json,after_rowid FROM simulation_state_history WHERE change_id IN "
+        "(SELECT MAX(change_id) FROM simulation_state_history WHERE chat_id=? AND session_id=? AND source_rowid<=? "
+        "GROUP BY kind,entity_key) ORDER BY kind,entity_key LIMIT ?",
+        (chat_id, session_id, int(through_rowid), MAX_DOMAIN_RECORDS * 6),
     ).fetchall()
     state: dict[tuple[str, str], tuple[dict[str, Any], int]] = {}
     for kind, key, after_json, after_rowid in rows:
@@ -136,32 +203,38 @@ def rollback_from_row(
     now: float,
 ) -> int:
     require_active_transaction(db)
-    rows = db.execute(
-        "SELECT change_id,kind,entity_key,before_json,before_rowid FROM simulation_state_history "
-        "WHERE chat_id=? AND session_id=? AND source_rowid>=? ORDER BY source_rowid DESC,change_id DESC",
+    count = db.execute(
+        "SELECT COUNT(*) FROM simulation_state_history WHERE chat_id=? AND session_id=? AND source_rowid>=?",
         (chat_id, session_id, int(rowid)),
-    ).fetchall()
-    for change_id, kind, key, before_json, before_rowid in rows:
-        before = _decode(before_json)
-        if before is None:
-            db.execute(
-                "DELETE FROM simulation_state WHERE chat_id=? AND session_id=? AND kind=? AND entity_key=?",
-                (chat_id, session_id, kind, key),
-            )
-        else:
-            encoded = json.dumps(before, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-            db.execute(
-                "INSERT INTO simulation_state(chat_id,session_id,kind,entity_key,value_json,updated_rowid,updated_at) "
-                "VALUES(?,?,?,?,?,?,?) ON CONFLICT(chat_id,session_id,kind,entity_key) DO UPDATE SET "
-                "value_json=excluded.value_json,updated_rowid=excluded.updated_rowid,updated_at=excluded.updated_at",
-                (chat_id, session_id, kind, key, encoded, int(before_rowid), float(now)),
-            )
-        db.execute("DELETE FROM simulation_state_history WHERE change_id=?", (int(change_id),))
+    ).fetchone()[0]
+    db.execute(
+        "DELETE FROM simulation_state_history WHERE chat_id=? AND session_id=? AND source_rowid>=?",
+        (chat_id, session_id, int(rowid)),
+    )
+    db.execute("DELETE FROM simulation_state WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+    for kind, key, value, source in load_states_as_of(db, chat_id, session_id, through_rowid=rowid - 1):
+        db.execute(
+            "INSERT INTO simulation_state VALUES(?,?,?,?,?,?,?)",
+            (
+                chat_id,
+                session_id,
+                kind,
+                key,
+                json.dumps(value, ensure_ascii=False),
+                source,
+                now,
+            ),
+        )
+    db.execute(
+        "DELETE FROM simulation_sources WHERE chat_id=? AND session_id=? AND source_rowid>=?",
+        (chat_id, session_id, int(rowid)),
+    )
     db.execute(
         "DELETE FROM simulation_checks WHERE chat_id=? AND session_id=? AND source_rowid>=?",
         (chat_id, session_id, int(rowid)),
     )
-    return len(rows)
+    bump_revision(db, chat_id, session_id)
+    return int(count)
 
 
 def purge_session(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
@@ -172,6 +245,8 @@ def purge_session(db: sqlite3.Connection, chat_id: str, session_id: str) -> None
     )
     db.execute("DELETE FROM simulation_state WHERE chat_id=? AND session_id=?", (chat_id, session_id))
     db.execute("DELETE FROM simulation_checks WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+    db.execute("DELETE FROM simulation_sources WHERE chat_id=? AND session_id=?", (chat_id, session_id))
+    bump_revision(db, chat_id, session_id)
 
 
 def load_check(
@@ -181,7 +256,7 @@ def load_check(
     request_key: str,
 ) -> dict[str, Any] | None:
     row = db.execute(
-        "SELECT source_rowid,domain,actor,action,dc,roll,modifier,delta,outcome,created_at "
+        "SELECT source_rowid,domain,actor,action,dc,roll,modifier,delta,outcome,created_at,source_digest "
         "FROM simulation_checks WHERE chat_id=? AND session_id=? AND request_key=?",
         (chat_id, session_id, request_key),
     ).fetchone()
@@ -199,6 +274,7 @@ def load_check(
         "delta": int(row[7]),
         "outcome": str(row[8]),
         "created_at": float(row[9]),
+        "source_digest": str(row[10]),
     }
 
 
@@ -211,8 +287,8 @@ def insert_check(
     require_active_transaction(db)
     db.execute(
         "INSERT INTO simulation_checks("
-        "chat_id,session_id,request_key,source_rowid,domain,actor,action,dc,roll,modifier,delta,outcome,created_at"
-        ") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "chat_id,session_id,request_key,source_rowid,domain,actor,action,dc,roll,modifier,delta,outcome,created_at,source_digest"
+        ") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             chat_id,
             session_id,
@@ -227,6 +303,7 @@ def insert_check(
             int(check["delta"]),
             check["outcome"],
             float(check["created_at"]),
+            check["source_digest"],
         ),
     )
     return check
@@ -240,19 +317,9 @@ def list_checks(
     through_rowid: int | None = None,
     limit: int = 3,
 ) -> list[dict[str, Any]]:
-    sql = (
-        "SELECT request_key FROM simulation_checks WHERE chat_id=? AND session_id=?"
-        + (" AND source_rowid<=?" if through_rowid is not None else "")
-        + " ORDER BY check_id DESC LIMIT ?"
-    )
-    params: tuple[Any, ...] = (
-        (chat_id, session_id, int(through_rowid), max(1, min(8, int(limit))))
-        if through_rowid is not None
-        else (chat_id, session_id, max(1, min(8, int(limit))))
-    )
-    rows = db.execute(sql, params).fetchall()
-    return [
-        item
-        for key, in rows
-        if (item := load_check(db, chat_id, session_id, str(key))) is not None
-    ]
+    rows = db.execute(
+        "SELECT request_key FROM simulation_checks WHERE chat_id=? AND session_id=? "
+        "AND (? IS NULL OR source_rowid<=?) ORDER BY check_id DESC LIMIT ?",
+        (chat_id, session_id, through_rowid, through_rowid, max(1, min(8, int(limit)))),
+    ).fetchall()
+    return [item for (key,) in rows if (item := load_check(db, chat_id, session_id, str(key))) is not None]

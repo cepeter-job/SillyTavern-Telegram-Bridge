@@ -35,7 +35,6 @@ def test_requested_count_sampled_once_and_preserved(novel_db, count):
     assert second.requested_count == record.requested_count == count
     assert seen == [(3, 4)]
 
-
 def test_retry_strategy_override_is_scoped_to_one_choice_reservation(novel_db):
     from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
     from bridge.light_novel_service import prepare_turn

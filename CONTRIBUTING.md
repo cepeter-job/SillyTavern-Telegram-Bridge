@@ -82,6 +82,36 @@ required check names aligned with the checks that report on pull requests and
 preserve strict up-to-date branch protection. Do not force a merge if a head
 changes during review or checks.
 
+## GitHub Actions layout
+
+Workflow entry files live at `.github/workflows/` root, one concern per file, with
+executable tooling in `tools/` so the repository tests and the size ratchet cover
+it. `.github/workflows/README.md` is the registry: it lists every entry file and
+records each bespoke gate's protected invariant, origin and retirement condition.
+Add the registry row before adding a gate, and keep the registry in step with the
+executable workflow.
+
+`ci.yml` hosts the required jobs. The branch-protected check remains the `test`
+aggregate job, which waits for `python-tests`, `miniapp-smoke`, `secret-scan`,
+`dependency-audit` and `static-analysis` and fails on a missing, cancelled,
+skipped or unsuccessful dependency. Keep the `test`, `secret-scan`,
+`dependency-audit` and `static-analysis` check names stable; if a quality job is
+added, update both `test.needs` and the required list in `tools/ci_gate.py`, whose
+CLI tests reject an incomplete dependency report.
+
+Keep the `pull_request` trigger and avoid `paths` or `paths-ignore` on the
+required gate: a skipped required workflow leaves a pull request blocked on a
+check that can never report. Do not add a `pull_request_target` workflow without
+the trusted-revision pattern used by `pr-size-labeler.yml`, which fetches its
+classifier from the base revision and never checks out pull-request code. Keep
+untrusted text, such as a pull-request title, in an environment variable instead
+of interpolating it into a script body.
+
+Advisory workflows (`pr-title.yml`, `pr-size-labeler.yml`, `scheduled-audit.yml`)
+never gate a merge. Prefer a small `tools/` script with a unit test over a new
+marketplace action, and pin every external action to a full commit SHA with the
+reviewed version in a trailing comment.
+
 ## Documentation changes
 
 Write for the person doing the task. Start with what they want to achieve, give
@@ -145,7 +175,9 @@ it automatically. Deployment still needs checking in actual Telegram clients.
 Dependabot is configured for weekly `pip` and `github-actions` checks. It proposes
 pull requests; this repository does not configure automatic merging. Development
 minor/patch updates are grouped to reduce review noise. Open version-update
-requests are bounded, without disabling security updates.
+requests are bounded, without disabling security updates. Both ecosystems use a
+seven-day version-update `cooldown`, so a release withdrawn shortly after
+publication is not adopted here; security updates are never delayed.
 
 GitHub's documented pip support covers `.txt` manifests. **Do not assume** a
 Dependabot change regenerates the **custom requirements.lock and requirements-dev.lock files** used here.

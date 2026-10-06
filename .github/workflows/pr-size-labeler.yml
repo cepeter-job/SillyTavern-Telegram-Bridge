@@ -1,0 +1,51 @@
+name: PR size labeler
+
+# Advisory PR metadata: keeps one canonical `size:*` label on each pull request.
+# It is outside the protected `test` aggregate and never blocks a merge.
+# This is the only workflow that uses `pull_request_target`, because labelling a
+# fork pull request needs a write-scoped token. It deliberately never checks out
+# pull-request code: the classifier is fetched from the trusted base revision
+# (`github.sha` on this event) with `gh api`. See .github/workflows/README.md.
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-size-labeler-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  size-label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write # label reads and writes use the REST issues endpoints
+    steps:
+      - name: Fetch the trusted classifier from the base revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/contents/tools/pr_size_label.py?ref=${WORKFLOW_SHA}" \
+            --jq .content | base64 --decode > "$RUNNER_TEMP/pr_size_label.py"
+          test -s "$RUNNER_TEMP/pr_size_label.py" || {
+            echo "trusted classifier fetch produced an empty file" >&2
+            exit 1
+          }
+
+      - name: Apply the size label from pull-request metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python3 "$RUNNER_TEMP/pr_size_label.py"

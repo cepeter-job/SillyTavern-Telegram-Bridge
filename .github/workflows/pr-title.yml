@@ -1,0 +1,40 @@
+name: PR title
+
+# Advisory, non-blocking convention check for pull-request titles. Pull-request
+# titles become squash-commit subjects on `main`, so `type(scope): subject` keeps
+# history readable and lets release notes group changes. It is outside the
+# protected `test` aggregate and never blocks a merge; the promotion path and the
+# gate registry are in .github/workflows/README.md.
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout trusted revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Validate pull-request title
+        continue-on-error: true
+        env:
+          # Passed through the environment, never interpolated into the script
+          # body: a title is attacker-controlled text.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: python3 tools/check_pr_title.py

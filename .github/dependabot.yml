@@ -5,6 +5,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7 # version updates wait for a week of public exposure; security updates are unaffected
     open-pull-requests-limit: 3
     groups:
       development-tooling:
@@ -28,6 +30,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 7 # version updates wait for a week of public exposure; security updates are unaffected
     open-pull-requests-limit: 2
     groups:
       actions-minor-patch:

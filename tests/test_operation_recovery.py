@@ -246,7 +246,7 @@ class DurableRecoveryCharacterizationTests(SettingsTestCase):
                 self.session["model_id"],
                 now,
             )
-            attach_choice_set(self.db, selected.nonce, int(story.lastrowid), story_digest("story"), ["Go", "Stay", "Wait"])
+            attach_choice_set(self.db, selected.nonce, int(story.lastrowid), story_digest("story"), ["Go", "Stay", "X"])
             bind_choice_panel(self.db, selected.nonce, 81)
             consume_choice_set(
                 self.db,

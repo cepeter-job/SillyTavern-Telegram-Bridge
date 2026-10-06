@@ -97,6 +97,56 @@ class ResponseDeliveryTests(SettingsTestCase):
             ],
         )
 
+    def test_send_reply_keeps_style_entities_inside_blockquote(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 87}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                "<blockquote><b>Bold</b> <tg-spoiler>Secret</tg-spoiler></blockquote>",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], "Bold Secret")
+        self.assertCountEqual(
+            requests[0][1]["entities"],
+            [
+                {"type": "blockquote", "offset": 0, "length": 11},
+                {"type": "bold", "offset": 0, "length": 4},
+                {"type": "spoiler", "offset": 5, "length": 6},
+            ],
+        )
+
+    def test_send_reply_combines_generated_narration_italic_with_html_entities(self):
+        requests = []
+
+        def request(_token, method, payload):
+            requests.append((method, payload))
+            return {"message_id": 88}
+
+        with patch.object(telegram, "telegram_request", side_effect=request):
+            response_delivery.send_reply(
+                "token",
+                "chat",
+                "<tg-spoiler><b>*Secret*</b></tg-spoiler>",
+                app_settings=self.app_settings_builder.build(),
+            )
+
+        self.assertEqual(requests[0][1]["text"], "Secret")
+        self.assertCountEqual(
+            requests[0][1]["entities"],
+            [
+                {"type": "spoiler", "offset": 0, "length": 6},
+                {"type": "bold", "offset": 0, "length": 6},
+                {"type": "italic", "offset": 0, "length": 6},
+            ],
+        )
+
     def test_send_reply_renders_text_link_entity(self):
         requests = []
 

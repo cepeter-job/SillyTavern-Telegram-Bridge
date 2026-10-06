@@ -26,6 +26,7 @@ def story_row(db, text="The door opens."):
 @pytest.mark.parametrize("count", [3, 4])
 def test_requested_count_sampled_once_and_preserved(novel_db, count):
     from bridge.light_novel_service import prepare_turn
+
     db, session, _ = novel_db
     started(db)
     seen = []

@@ -457,7 +457,7 @@ Strategy A hides raw structured streaming and can run one automatic choice-only
 repair when usable prose arrives without valid choices. B/C retain ordinary story
 streaming when other settings allow it.
 
-The panel offers 2–4 full-text choices with numbered buttons. When your character
+The panel offers 3–4 full-text choices with numbered buttons. When your character
 is present, these can be in-world actions. Off-screen scenes instead offer
 narrative steering, such as following another thread or cutting to a new scene.
 **Next Scene** respects Narrative Style: World-driven and Observer do not force

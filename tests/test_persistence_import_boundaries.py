@@ -1,12 +1,11 @@
 """Persistence import-boundary regression tests."""
 
-import subprocess
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from python_process_test_support import run_python
 from settings_test_support import SettingsTestCase
 
 import bridge.config as _owner_config
@@ -59,17 +58,8 @@ PERSISTENCE_OWNERS = {
 
 
 class PersistenceImportBoundaryTests(SettingsTestCase):
-    def _run_python(self, source: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-c", source],
-            cwd=REPO_ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-
     def test_config_imports_without_runtime_common_or_database(self):
-        completed = self._run_python(
+        completed = run_python(
             "import sys\n"
             "import bridge.config as config\n"
             "import bridge.limits as limits\n"
@@ -100,7 +90,7 @@ class PersistenceImportBoundaryTests(SettingsTestCase):
         self.assertEqual(config.REASONING_LEVELS["high"], 8192)
 
     def test_database_imports_without_runtime_or_common(self):
-        completed = self._run_python(
+        completed = run_python(
             "import sys\n"
             "import bridge.metadata as metadata\n"
             "import bridge.sqlite_store as store\n"

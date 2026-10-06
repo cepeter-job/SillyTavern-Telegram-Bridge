@@ -370,3 +370,21 @@ def bootstrap_through(db: sqlite3.Connection, chat_id: str, session_id: str) -> 
         "SELECT backfill_through FROM simulation_revisions WHERE chat_id=? AND session_id=?", (chat_id, session_id)
     ).fetchone()
     return int(row[0]) if row else 0
+
+
+def tracker_progress(db: sqlite3.Connection, chat_id: str, session_id: str, cutoff: int) -> dict[str, Any]:
+    latest = db.execute(
+        "SELECT COALESCE(MAX(id),0) FROM messages WHERE chat_id=? AND session_id=?", (chat_id, session_id)
+    ).fetchone()[0]
+    accepted = db.execute(
+        "SELECT s.source_rowid,m.created_at FROM simulation_sources s JOIN messages m "
+        "ON m.chat_id=s.chat_id AND m.session_id=s.session_id AND m.id=s.source_rowid "
+        "WHERE s.chat_id=? AND s.session_id=? AND s.source_rowid<=? ORDER BY s.source_rowid DESC LIMIT 1",
+        (chat_id, session_id, cutoff),
+    ).fetchone()
+    source = int(accepted[0]) if accepted else 0
+    return {
+        "last_source_rowid": source,
+        "last_updated_at": float(accepted[1]) if accepted else None,
+        "pending": int(latest) > source,
+    }

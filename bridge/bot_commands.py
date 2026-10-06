@@ -38,6 +38,7 @@ def set_bot_commands(token: str) -> None:
                     {"command": "stscript", "description": "Open allowlisted STscript actions"},
                     {"command": "memory", "description": "Open active-session memory controls"},
                     {"command": "npc", "description": "Open persistent NPC Bank"},
+                    {"command": "trackers", "description": "View saved story trackers and recent checks"},
                     {"command": "check", "description": "Record an action with a bridge-owned d20 check"},
                     {"command": "remember", "description": "Store an explicit memory"},
                     {"command": "summarize", "description": "Confirm active-session summary regeneration"},

@@ -13,6 +13,7 @@ const sections = [
   ['Knowledge', [
     ['memory','Memory','Keep important details across replies','memory'],
     ['npcs','NPC Bank','Review supporting-character state','characters'],
+    ['trackers','Story trackers','See saved relationships, goals and character state','usage'],
     ['databank','Data Bank','Ground replies in your documents','databank'],
   ]],
   ['Advanced', [

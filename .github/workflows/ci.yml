@@ -12,13 +12,19 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
-  test:
+  python-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python 3.11
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
@@ -43,6 +49,54 @@ jobs:
       - name: Validate dependency environment
         run: python -m pip check
 
+      - name: Run full test suite with resource warnings as errors
+        run: >-
+          python -X dev -W error::ResourceWarning -m pytest -q -n auto --maxprocesses=4 --dist=loadfile
+          --cov --cov-report=term-missing:skip-covered
+          --cov-report=json:coverage.json --cov-report=xml:coverage.xml
+          --junitxml=pytest-results.xml --durations=20 --durations-min=1
+          2>&1 | tee pytest.log
+
+      - name: Check security-critical coverage
+        run: python tools/check_security_coverage.py coverage.json
+
+      - name: Publish regression reports and application coverage
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: application-coverage
+          path: |
+            coverage.json
+            coverage.xml
+            pytest-results.xml
+            pytest.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  miniapp-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+          enable-cache: true
+          cache-dependency-glob: requirements.lock
+
+      - name: Install locked runtime dependencies for browser fixture
+        run: uv pip install --system --python python --require-hashes -r requirements.lock
+
       - name: Set up Node for development-only Mini App tests
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -55,24 +109,14 @@ jobs:
         env:
           MINIAPP_JSDOM_ROOT: ${{ github.workspace }}/tests/miniapp-ui
           PYTHON: python
-        run: node --experimental-vm-modules tools/miniapp_ui_smoke.mjs
-      - name: Run full test suite with resource warnings as errors
-        run: >-
-          python -X dev -W error::ResourceWarning -m pytest -q -n auto --maxprocesses=4 --dist=loadfile
-          --cov --cov-report=term-missing:skip-covered
-          --cov-report=json:coverage.json --cov-report=xml:coverage.xml
+        run: node --experimental-vm-modules tools/miniapp_ui_smoke.mjs 2>&1 | tee miniapp-ui.log
 
-      - name: Check security-critical coverage
-        run: python tools/check_security_coverage.py coverage.json
-
-      - name: Publish application coverage
+      - name: Publish Mini App smoke log
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: application-coverage
-          path: |
-            coverage.json
-            coverage.xml
+          name: miniapp-smoke
+          path: miniapp-ui.log
           if-no-files-found: warn
           retention-days: 14
 
@@ -100,6 +144,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Python 3.11
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
@@ -131,6 +177,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python 3.11
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
@@ -165,12 +212,14 @@ jobs:
       - name: Scan production tree for leak-shaped code
         run: python tools/leakscan.py bridge/ --fail-on high --format markdown -o leakscan.md
 
-      - name: Publish leak scan
+      - name: Publish static analysis reports
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: memory-leak-scan
-          path: leakscan.md
+          path: |
+            leakscan.md
+            module-references.json
           if-no-files-found: warn
           retention-days: 14
 
@@ -189,3 +238,27 @@ jobs:
 
       - name: Run mypy static surface
         run: python tools/static_analysis.py --print-type-targets | xargs python -m mypy
+
+  # Preserve the existing branch-protected context; all independent checks feed it.
+  # Scope, provenance and retirement conditions are in .github/workflows/README.md.
+  test:
+    name: test
+    if: ${{ always() }}
+    needs: [python-tests, miniapp-smoke, secret-scan, dependency-audit, static-analysis]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+
+      - name: Require complete CI success
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python tools/ci_gate.py

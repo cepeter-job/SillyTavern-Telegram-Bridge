@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import ast
 import builtins
-import subprocess
-import symtable
-import sys
 import unittest
 from pathlib import Path
 
+from python_process_test_support import run_python
 from settings_test_support import SettingsTestCase
+from source_test_support import referenced_globals
 
 from bridge import continuation, regeneration
 
@@ -136,21 +135,6 @@ def _module_bound_names(source: str) -> set[str]:
     return names
 
 
-def _referenced_globals(source: str, filename: str) -> set[str]:
-    table = symtable.symtable(source, filename, "exec")
-    result: set[str] = set()
-
-    def walk(node):
-        for symbol in node.get_symbols():
-            if symbol.is_referenced() and symbol.is_global():
-                result.add(symbol.get_name())
-        for child in node.get_children():
-            walk(child)
-
-    walk(table)
-    return result
-
-
 def _module_defined_names(source: str) -> set[str]:
     tree = ast.parse(source)
     names: set[str] = set()
@@ -182,22 +166,11 @@ def _owner_index() -> dict[str, list[str]]:
 
 
 class ApplicationImportBoundaryTests(SettingsTestCase):
-    def _run_python(self, source: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-c", source],
-            cwd=REPO_ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-
     def test_application_modules_import_without_runtime(self):
         for filename in APPLICATION_BOUNDARY_FILES:
             module = "bridge." + filename.removesuffix(".py")
             with self.subTest(module=module):
-                completed = self._run_python(
-                    f"import sys\nimport {module}\nassert 'bridge.runtime' not in sys.modules\n"
-                )
+                completed = run_python(f"import sys\nimport {module}\nassert 'bridge.runtime' not in sys.modules\n")
                 self.assertEqual(
                     completed.returncode,
                     0,
@@ -212,7 +185,7 @@ class ApplicationImportBoundaryTests(SettingsTestCase):
             source = (BRIDGE_DIR / filename).read_text(encoding="utf-8")
             bound = _module_bound_names(source)
             unresolved = sorted(
-                _referenced_globals(source, filename) - bound - builtin_names - {"__file__", "__name__", "__package__"}
+                referenced_globals(source, filename) - bound - builtin_names - {"__file__", "__name__", "__package__"}
             )
             if unresolved:
                 detail = []

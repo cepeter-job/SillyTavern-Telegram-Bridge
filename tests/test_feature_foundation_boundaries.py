@@ -1,10 +1,9 @@
 """Memory and group foundation boundary tests."""
 
-import subprocess
-import sys
 import unittest
 from pathlib import Path
 
+from python_process_test_support import run_python
 from settings_test_support import SettingsTestCase
 
 import bridge.limits as _limits
@@ -73,15 +72,6 @@ GROUP_CORE_EXPORTS = (
 
 
 class FeatureFoundationBoundaryTests(SettingsTestCase):
-    def _run_python(self, source: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            [sys.executable, "-c", source],
-            cwd=REPO_ROOT,
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-
     def test_config_owns_memory_and_rag_defaults(self):
 
         self.assertEqual(_limits.HINDSIGHT_DEFAULT_URL, "http://127.0.0.1:8890")
@@ -142,7 +132,7 @@ class FeatureFoundationBoundaryTests(SettingsTestCase):
         )
         for module in modules:
             with self.subTest(module=module):
-                completed = self._run_python(
+                completed = run_python(
                     "import sys\n"
                     f"import {module}\n"
                     "assert 'bridge.runtime' not in sys.modules\n"

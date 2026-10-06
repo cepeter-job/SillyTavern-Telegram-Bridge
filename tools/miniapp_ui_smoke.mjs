@@ -22,6 +22,7 @@ assert.ok(initialDocument.querySelector('#content .skeleton-shell'),'Initial con
 assert.equal(initialDocument.querySelector('#more-menu'),null,'Management is a full page, not a navigation sheet');
 const context=dom.getInternalVMContext(),errors=[],expectedFailures=new Set(),observedFailures=[];
 let portraitMode='success',forcedFailure='',scrollResets=0;
+let trackerScenario=null,trackerReads=0,trackerInspection=false;
 let summaryScenario=null,memoryStatusScenario=null,contextStatusScenario=null,memoryDetailScenario=null,memoryDetailRequests=0;
 const fixtureRequestTimes=[];
 async function reserveFixtureCapacity(count) {
@@ -52,6 +53,14 @@ dom.window.URL.createObjectURL=()=> 'blob:test-fixture';
 dom.window.URL.revokeObjectURL=()=>{};
 dom.window.fetch=async (path,options)=>{
   assert.ok(String(path).startsWith('/api/v1/'),'Only local API requests are permitted');
+  if(trackerInspection) {
+    assert.equal(options.method,'GET','Tracker inspection cannot mutate state or enqueue work');
+    assert.equal(String(path),'/api/v1/trackers','Tracker inspection reads only its saved projection');
+  }
+  if(String(path)==='/api/v1/trackers') {
+    trackerReads++;
+    if(trackerScenario)return new Response(JSON.stringify(trackerScenario),{status:200,headers:{'Content-Type':'application/json'}});
+  }
   if(String(path)===forcedFailure)return new Response(JSON.stringify({error:{message:'forced optional failure'}}),{status:503,headers:{'Content-Type':'application/json'}});
   if(/^\/api\/v1\/characters\/[^/]+\/portrait$/.test(String(path))) {
     return new Response(new Blob([portraitMode==='success'?'portrait':''],{type:'image/png'}),{status:200,headers:{'Content-Type':'image/png'}});
@@ -118,7 +127,7 @@ try {
   const sessionsTab=[...shellDocument.querySelectorAll('#navigation button')].find(n=>n.textContent.trim()==='Sessions');
   assert.ok(sessionsTab,'Sessions navigation button exists');sessionsTab.click();
   await until(()=>shellDocument.getElementById('page-title').textContent==='Sessions'&&shellDocument.querySelector('main').textContent.includes('Create session'),'Sessions tab click renders Sessions');
-  for(const page of ['dashboard','characters','sessions','manage','advanced','usage','models','personas','worlds','memory','director','npcs','databank','system']) {
+  for(const page of ['dashboard','characters','sessions','manage','advanced','usage','models','personas','worlds','memory','director','npcs','trackers','databank','system']) {
     await app.namespace.navigate(page);
     assert.ok(shellDocument.getElementById('page-title').textContent.trim().length>0,page+' updates the compact page title');
     const body=dom.window.document.querySelector('main').textContent;
@@ -146,8 +155,12 @@ try {
       portraitMode='empty';
     }
     if(page==='manage') {
-      assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['models','director','personas','worlds','generation','memory','npcs','databank','advanced'],'Manage exposes unique design destinations in order');
+      assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['models','director','personas','worlds','generation','memory','npcs','trackers','databank','advanced'],'Manage exposes unique design destinations in order');
       assert.deepEqual([...shellDocument.querySelectorAll('.manage-section-title')].map(node=>node.textContent.trim()),['Story setup','Knowledge','Advanced']);
+      const trackers=shellDocument.querySelector('.manage-link[data-page="trackers"]');
+      trackers.click();
+      await until(()=>shellDocument.querySelector('.story-trackers-page'),'Manage opens saved Story trackers');
+      await app.namespace.navigate('manage');
       const generation=[...shellDocument.querySelectorAll('.manage-link')].find(node=>node.textContent.includes('Generation'));
       generation.click();
       await until(()=>shellDocument.getElementById('page-title').textContent==='Models','Generation opens the existing generation controls');
@@ -166,6 +179,26 @@ try {
     if(page==='npcs') {
       assert.ok(shellDocument.querySelector('.npc-bank-page'),'NPC Bank page renders');
       assert.ok(body.includes('NPC Bank'),'NPC Bank labels its page');
+    }
+    if(page==='trackers') {
+      assert.ok(shellDocument.querySelector('.story-trackers-page'),'Story trackers has a dedicated read-only page');
+      for(const value of ['Maya <guide>','BOND -1','Sparks 2','Grudge 1','Reach <b>the tower</b>','Step 1 of 3','North ridge','Steady',
+        'Brass key','Persuasion','Tired','Harbor Watch','Protect the docks','Smugglers','Open gate','Passage',
+        'Watchtower route','Narrative: Active','Progress: 2 of 4','Open the locked door','Roll: 12','Modifier: +1','DC: 10']) {
+        assert.ok(body.includes(value),'Story trackers renders saved '+value);
+      }
+      for(const privateValue of ['Secret','_projection','source_digest','request_key','private-operation-key']) {
+        assert.ok(!body.includes(privateValue),'Story trackers excludes private '+privateValue);
+      }
+      for(const [section,values] of [['inventory',['Brass key','Stealth','Modifier: +1']],
+        ['skills',['Persuasion','Social','Modifier: +2']],['conditions',['Tired','Any','Modifier: -1']]]) {
+        const text=shellDocument.getElementById('tracker-'+section).closest('section').textContent;
+        for(const value of values)assert.ok(text.includes(value),section+' retains saved '+value);
+      }
+      assert.equal(shellDocument.querySelector('main guide, main b, main script'),null,'Tracker text never becomes markup');
+      assert.ok(body.includes('Last updated'),'Saved trackers show a freshness label');
+      assert.ok(shellDocument.querySelector('main time[datetime]'),'Saved tracker freshness has a real timestamp');
+      assert.equal(shellDocument.querySelectorAll('main input, main textarea, main select').length,0,'Tracker inspection has no editing controls');
     }
     if(page==='usage') {
       assert.ok(shellDocument.querySelector('.usage-dashboard'),'Dedicated usage page renders');
@@ -200,7 +233,35 @@ try {
     }
     console.log('render='+page+' ok');
   }
-  await reserveFixtureCapacity(10);
+  await reserveFixtureCapacity(15);
+  trackerInspection=true;
+  const savedTrackers=await app.namespace.api('/trackers');
+  await app.namespace.navigate('trackers');
+  const trackerRefresh=[...shellDocument.querySelectorAll('main button')].find(node=>node.textContent==='Refresh');
+  assert.ok(trackerRefresh,'Story trackers offers a read-only refresh');
+  const readsBefore=trackerReads;trackerRefresh.click();
+  await until(()=>trackerReads>readsBefore&&!shellDocument.querySelector('main').hasAttribute('aria-busy'),'tracker refresh finishes');
+  assert.ok(shellDocument.querySelector('main').textContent.includes('Maya <guide>'),'Refresh retains saved tracker values');
+  trackerScenario={...savedTrackers,pending:true,last_source_rowid:987654321,last_updated_at:1791244800,
+    quests:savedTrackers.quests.map(item=>item.narrative_linked?{...item,status:'native=unavailable'}:item)};
+  await app.namespace.navigate('trackers');
+  assert.ok(shellDocument.querySelector('main').textContent.includes('Catching up'),'Pending saved extraction is explained');
+  assert.ok(shellDocument.querySelector('main').textContent.includes('Narrative: Unavailable'),'Unreconciled linked quests do not invent a narrative status');
+  assert.equal(shellDocument.querySelector('main time').getAttribute('datetime'),'2026-10-06T00:00:00.000Z');
+  assert.ok(!shellDocument.querySelector('main').textContent.includes('987654321'),'Storage row IDs never masquerade as message numbers');
+  trackerScenario={session:null,last_source_rowid:0,last_updated_at:null,pending:false,
+    relationships:[],agendas:[],inventory:[],skills:[],conditions:[],factions:[],quests:[],checks:[]};
+  await app.namespace.navigate('trackers');
+  assert.ok(shellDocument.querySelector('main').textContent.includes('No story selected'),'A fresh chat can inspect trackers without creating a session');
+  assert.equal(shellDocument.querySelector('main time'),null,'Fresh chat does not invent a last-updated timestamp');
+  trackerScenario=null;forcedFailure='/api/v1/trackers';
+  await app.namespace.navigate('trackers');
+  assert.ok(shellDocument.querySelector('main').textContent.includes('Could not load this page'),'A tracker read error offers the normal retry state');
+  forcedFailure='';
+  [...shellDocument.querySelectorAll('main button')].find(node=>node.textContent==='Retry').click();
+  await until(()=>shellDocument.querySelector('.story-trackers-page'),'Tracker read retry recovers');
+  trackerInspection=false;
+  console.log('trackers=seeded,safe-text,read-only-refresh,catching-up,empty-chat,retry passed');
   await app.namespace.navigate('director');
   const objectiveLabel=[...shellDocument.querySelectorAll('main label')].find(node=>node.textContent==='Persistent objective');
   assert.ok(objectiveLabel,'Director Room exposes a persistent objective input');
@@ -419,6 +480,10 @@ try {
   [...document.querySelectorAll('main button')].find(n=>n.textContent==='Create and open').click();
   await until(()=>document.querySelector('main').textContent.includes('DOM verified session'),'create session');
   const sessions=await app.namespace.api('/sessions');assert.equal(sessions.session.title,'DOM verified session');
+  await app.namespace.navigate('trackers');
+  assert.ok(document.querySelector('main').textContent.includes('No saved trackers yet'),'A new session starts with an honest empty tracker state');
+  assert.ok(!document.querySelector('main').textContent.includes('Brass key'),'Tracker values do not leak from the previously active session');
+  await app.namespace.navigate('sessions');
   const defaultCard=[...document.querySelectorAll('main .card')].find(node=>node.querySelector('h2')?.textContent==='Default session');
   assert.ok(defaultCard,'Inactive Default session card is present');
   const defaultOpen=[...defaultCard.querySelectorAll('button')].find(n=>n.textContent==='Open');
@@ -466,7 +531,7 @@ try {
   const newView=document.createElement('div');newView.textContent='Current view';finishNew(newView);await newNavigation;
   assert.equal(document.querySelector('main').textContent,'Current view','Only the latest page is committed');
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
-  console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=14 passed; browser-errors=0');
+  console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=15 passed; browser-errors=0');
 } finally {
   dom.window.close();lines.close();child.kill('SIGTERM');
 }

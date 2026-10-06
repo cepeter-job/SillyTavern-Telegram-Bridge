@@ -21,6 +21,8 @@ from bridge.provider_port import ProviderPort
 from bridge.request_types import RequestContext
 from bridge.simulation_checks import perform_check
 from bridge.simulation_repository import load_check, source_identity
+from bridge.simulation_view import active_tracker_view
+from bridge.simulation_view_output import format_tracker_view
 from bridge.sqlite_store import write_transaction
 
 _USAGE = "Use /check <domain> <DC> <action>. DC must be an integer from 1 to 20."
@@ -233,6 +235,10 @@ def _simulation_command_route(
     delivery_port: DeliveryPort,
     provider_port: ProviderPort,
 ) -> bool:
+    if command == "/trackers" or command.startswith("/trackers "):
+        view = active_tracker_view(db, chat_id, app_settings=request_context.app_settings)
+        delivery_port.send_text(token, chat_id, format_tracker_view(view))
+        return True
     if command != "/check" and not command.startswith("/check "):
         return False
     root, arguments = split_command_text(stripped)

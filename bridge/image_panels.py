@@ -12,6 +12,7 @@ from bridge.image_routing import (
     resolve_image_route,
     session_image_settings,
 )
+from bridge.image_styles import IMAGE_STYLE_OPTIONS, session_image_style
 
 
 def _short_model(selection: str) -> str:
@@ -71,16 +72,25 @@ def imagine_panel(
     except ValueError:
         settings_line = "Model: Not configured\nSize: 1024x1024"
 
+    style = session_image_style(db, chat_id, session_id)
     text = (
         "Image generation\n\n"
-        "Choose how to build the image.\n\n"
+        "Choose a style and how to build the image.\n\n"
         "🎬 Current Scene — visualize the latest committed roleplay scene using "
         "structured scene state and recent story context. This does not alter the story.\n"
         "✏️ Custom Prompt — enter a one-off image prompt after choosing it here.\n\n"
+        f"Style: {style.title()}\n"
         f"{settings_line}"
     )
     markup = {
         "inline_keyboard": [
+            [
+                {
+                    "text": ("✅ " if value == style else "") + label,
+                    "callback_data": f"imagine:style:{value}",
+                }
+                for value, label in IMAGE_STYLE_OPTIONS
+            ],
             [{"text": "🎬 Current Scene", "callback_data": "imagine:scene"}],
             [{"text": "✏️ Custom Prompt", "callback_data": "imagine:custom"}],
             [{"text": "⚙️ Options", "callback_data": "imagine:options"}],
@@ -114,8 +124,10 @@ def imagine_options_panel(
     except ValueError:
         model, size = "Not configured", "1024x1024"
 
+    style = session_image_style(db, chat_id, session_id)
     text = (
         "Image options\n\n"
+        f"Style: {style.title()}\n"
         f"Model: {model}\n"
         f"Size: {size}\n\n"
         "These settings are scoped to the active session and apply to both "

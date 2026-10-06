@@ -345,6 +345,29 @@ Wider narrator viewpoints can use these facts without granting characters new
 knowledge. Tracker context shares the normal optional-context budget and can be
 trimmed when the request needs space.
 
+### View saved trackers
+
+Use `/trackers` in Telegram, or open **Manage → Story trackers** in the Mini App.
+The view shows saved relationships, visible agendas, inventory, skills,
+conditions, faction state, linked quests and recent d20 checks for the active
+session. It also reports how far accepted extraction has caught up with the
+conversation. An empty view can mean no tracker facts have been established yet,
+or that background extraction is still catching up.
+
+Opening or refreshing this view reads saved state. It does not call a model,
+roll another check, advance agenda timers or add a story turn. NPC visibility
+rules apply; private intelligence and future plot payoffs are omitted. Use
+Director Room to inspect the plans it exposes. Telegram shows a bounded summary;
+use the Mini App when you need the fuller list. `/status` continues to describe
+the active session and its configuration.
+
+Trackers remain in the bridge's **SQLite database** alongside source receipts,
+revisions and checks. That keeps updates and rewinds consistent with the saved
+conversation. Separate JSON or text files would duplicate the state and need
+their own locking and recovery rules. JSON is useful for an API response or an
+export; it is not an additional source of truth for these trackers. This view
+requires no new database migration.
+
 ### Relationship mechanics
 
 BOND ranges from **−5 to 20**: hostile through −3, neutral through 2, warmth through
@@ -667,6 +690,8 @@ Configure an image provider first, then open `/imagine`:
 - **Current Scene** uses the latest saved assistant turn and structured scene
   state to prepare a visual prompt with Utility, then calls the image model.
 - **Custom Prompt** asks you to type a one-off image description.
+- **Realism / Anime** chooses the visual style. The checkmark shows the saved
+  selection; Realism is the default. It applies to both generation buttons.
 - **Options** selects the session's image model and size preference.
 
 If the catalog supplies valid text and reference targets, **Auto** uses the active
@@ -677,7 +702,14 @@ overrides Auto, and a manually selected reference model needs a usable PNG.
 Size presets are Square (`1024x1024`), Landscape (`1536x1024`) and Portrait
 (`1024x1536`). A reference model may use provider-controlled sizing instead of
 the exact preset. Reset selects Auto when configured, or the provider's first
-image model, and restores Square.
+image model, and restores Square and Realism. The style belongs to this session
+and is included when an alternate-ending session copies its image preferences.
+
+Style selection guides both the visual prompt and the final image request. A
+character reference preserves identity while the selected style controls the
+medium. The selected model's capabilities still affect the result. Custom Prompt
+shows the available input length after reserving space for style and reference
+instructions, so that overhead is included in the provider's prompt limit.
 
 Generation leaves the story transcript unchanged. Successful delivery contains
 only the image, with no source or revised prompt caption. A provider failure

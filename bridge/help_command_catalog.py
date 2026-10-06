@@ -73,7 +73,7 @@ HELP_CATEGORIES = {
         ("/language", "Open the reply-language panel for this session."),
         ("/language <language>", "Set the session reply language directly, or use auto to follow the user's language."),
         ("/expression", "Open native expression controls for the active character."),
-        ("/imagine", "Open the image panel for Current Scene or Custom Prompt generation."),
+        ("/imagine", "Choose Realism or Anime, then generate the Current Scene or a Custom Prompt."),
     ],
     "generation": [
         (
@@ -126,6 +126,7 @@ HELP_CATEGORIES = {
                 "history, refresh and stale-safe undo."
             ),
         ),
+        ("/trackers", "View saved story trackers and recent checks for this session without a model call."),
         ("/remember", "Open scoped input for one explicit long-term fact."),
         ("/remember <fact>", "Store one explicit long-term fact immediately in active-session Hindsight memory."),
         ("/summarize", "Open a confirmation panel before regenerating the active-session summary."),

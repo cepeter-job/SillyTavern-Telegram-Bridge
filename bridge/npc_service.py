@@ -9,7 +9,7 @@ from dataclasses import replace
 from typing import Any
 
 import bridge.limits as _limits
-from bridge.actor_visibility import normalize_known_by
+from bridge.actor_visibility import normalize_known_by, npc_field_visible
 from bridge.memory_contracts import MemoryReadScope
 from bridge.memory_store import pending_memory_invalidation, request_source_cutoff
 from bridge.npc_repository import (
@@ -326,10 +326,7 @@ class NpcService:
 
     @staticmethod
     def _field_visible(state: NpcFieldState, active_character: str) -> bool:
-        if state.visibility != "restricted":
-            return True
-        allowed = {normalize_npc_name(name) for name in state.known_by}
-        return bool(active_character and active_character in allowed)
+        return npc_field_visible(state, active_character)
 
     def visible_fields(
         self,

@@ -39,6 +39,7 @@ _ASSETS = {
     "memory.js": "text/javascript",
     "director.js": "text/javascript",
     "npcs.js": "text/javascript",
+    "trackers.js": "text/javascript",
     "system.js": "text/javascript",
 }
 
@@ -53,6 +54,7 @@ def api_routes() -> list[ApiRoute]:
     from bridge.miniapp_npc import routes as npc_routes
     from bridge.miniapp_sessions import routes as session_routes
     from bridge.miniapp_system import routes as system_routes
+    from bridge.miniapp_trackers import routes as tracker_routes
     from bridge.miniapp_usage import routes as usage_routes
     from bridge.miniapp_worlds import routes as world_routes
 
@@ -67,6 +69,7 @@ def api_routes() -> list[ApiRoute]:
         *memory_routes(),
         *director_routes(),
         *npc_routes(),
+        *tracker_routes(),
         *system_routes(),
         *usage_routes(),
     ]
@@ -163,6 +166,7 @@ def create_miniapp_app(services: Any, config: MiniAppConfig) -> web.Application:
                     "memory",
                     "director",
                     "npcs",
+                    "trackers",
                     "databank",
                     "system",
                 ],

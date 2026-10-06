@@ -41,13 +41,14 @@ const pageInfo = {
   director:{label:'Director Room',module:'director',hint:'STORY DIRECTION',description:'Review hidden plans and steer the next scene.'},
   memory:{label:'Memory',module:'memory',hint:'CONTINUITY',description:'Keep the details that matter.'},
   npcs:{label:'NPC Bank',module:'npcs',hint:'SUPPORTING CAST',description:'Review persistent supporting-character state.'},
+  trackers:{label:'Story trackers',module:'trackers',hint:'STORY STATE',description:'Follow saved relationships, goals and checks.'},
   databank:{label:'Data Bank',module:'memory',hint:'REFERENCE LIBRARY',description:'Ground replies in your documents.'},
   advanced:{label:'Advanced settings',module:'manage',hint:'FINE TUNE',description:'Usage and workspace diagnostics.'},
   usage:{label:'Usage',module:'usage',hint:'TOKEN INSIGHTS',description:'Know where your tokens go.'},
 };
 const pages = {};
 const primaryPages = [['dashboard','Home'],['characters','Characters'],['sessions','Sessions'],['manage','Manage'],['system','System']];
-const managedPages = new Set(['manage','models','personas','worlds','memory','npcs','databank','advanced','usage','director']);
+const managedPages = new Set(['manage','models','personas','worlds','memory','npcs','trackers','databank','advanced','usage','director']);
 const loadedModules = new Map();
 async function loadPage(key) {
   const name=pageInfo[key].module;

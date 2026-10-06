@@ -7,6 +7,7 @@ from typing import Literal
 
 import yaml
 
+from bridge.image_styles import reset_session_image_style
 from bridge.metadata import get_meta, set_meta
 from bridge.settings import AppSettings
 
@@ -290,6 +291,7 @@ def set_session_image_size(db, chat_id: str, session_id: str, size: str) -> str:
 def reset_session_image_settings(db, chat_id: str, session_id: str) -> None:
     set_meta(db, _image_model_key(chat_id, session_id), "")
     set_meta(db, _image_size_key(chat_id, session_id), "")
+    reset_session_image_style(db, chat_id, session_id)
 
 
 def resolve_image_route(

@@ -25,13 +25,13 @@ def make_started(novel_db, strategy="a"):
 
 def attached_choice(novel_db, strategy="b", ready=True, choices=None):
     db, session, _settings = make_started(novel_db, strategy)
-    record = prepare_turn(db, "chat", session, "turn:1", "owner", rng=lambda _: 2)
+    record = prepare_turn(db, "chat", session, "turn:1", "owner", rng=lambda _: 3)
     with write_transaction(db):
         rowid = db.execute(
             "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_ids,crea"
             "ted_at) VALUES('chat','story','assistant','The door opens.','[71]',1)"
         ).lastrowid
-        attach_turn(db, record, rowid, "The door opens.", (choices or ["Go inside", "Stay outside"]) if ready else None)
+        attach_turn(db, record, rowid, "The door opens.", (choices or ["Go inside", "Stay outside", "Look around"]) if ready else None)
     return load_choice_set(db, record.nonce)
 
 
@@ -59,13 +59,13 @@ def test_story_commit_atomically_schedules_choice_recovery(novel_db):
 
 def test_story_and_choice_job_roll_back_together(novel_db):
     db, session, _settings = make_started(novel_db)
-    record = prepare_turn(db, "chat", session, "new-turn", "owner", rng=lambda _: 2)
+    record = prepare_turn(db, "chat", session, "new-turn", "owner", rng=lambda _: 3)
     with pytest.raises(RuntimeError), write_transaction(db):
         rowid = db.execute(
             "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat'"
             ",'story','assistant','Hello',1)"
         ).lastrowid
-        attach_turn(db, record, rowid, "Hello", ["Go", "Stay"])
+        attach_turn(db, record, rowid, "Hello", ["Go", "Stay", "Wait"])
         raise RuntimeError("crash")
     assert db.execute("SELECT count(*) FROM jobs").fetchone()[0] == 0
     assert db.execute("SELECT count(*) FROM messages").fetchone()[0] == 0
@@ -250,7 +250,7 @@ def test_retry_choices_enqueues_only_choice_job_with_unchanged_count(novel_db):
     rows = db.execute("SELECT kind,payload_json FROM jobs WHERE state='queued'").fetchall()
     assert len(rows) == 1 and rows[0][0] == "novel_choices"
     assert json.loads(rows[0][1])["retry"] is True
-    assert load_choice_set(db, record.nonce).requested_count == 2
+    assert load_choice_set(db, record.nonce).requested_count == 3
     assert db.execute("SELECT count(*) FROM messages").fetchone()[0] == 1
 
 
@@ -342,7 +342,7 @@ def test_opening_light_novel_commit_creates_first_choice_job(novel_db, monkeypat
     )
     assert db.execute("SELECT count(*) FROM messages").fetchone()[0] == 1
     row = db.execute("SELECT requested_count,actor_id,strategy FROM light_novel_choice_sets").fetchone()
-    assert row[0] in (2, 3, 4) and row[1:] == ("owner", "a")
+    assert row[0] in (3, 4) and row[1:] == ("owner", "a")
     assert db.execute("SELECT count(*) FROM jobs WHERE kind='novel_choices'").fetchone()[0] == 1
 
 
@@ -354,7 +354,7 @@ def test_generation_attaches_choices_without_leaking_protocol(novel_db, monkeypa
     session["_actor_id"] = "owner"
     session["response_language"] = "auto"
     session["humanizer"] = "off"
-    raw = '{"story":"The scene moves.","choices":["Go", "Stay"]}' if strategy == "a" else "The scene moves."
+    raw = '{"story":"The scene moves.","choices":["Go", "Stay", "Wait"]}' if strategy == "a" else "The scene moves."
     provider_calls = []
 
     def generate(*a, **k):
@@ -366,7 +366,7 @@ def test_generation_attaches_choices_without_leaking_protocol(novel_db, monkeypa
     monkeypatch.setattr(
         message_commands,
         "prepare_turn",
-        lambda db, chat, sess, key, actor: prepare_turn(db, chat, sess, key, actor, rng=lambda _: 2),
+        lambda db, chat, sess, key, actor: prepare_turn(db, chat, sess, key, actor, rng=lambda _: 3),
     )
     monkeypatch.setattr(message_commands, "build_chat_messages", lambda *a, **k: [{"role": "user", "content": "Go"}])
     monkeypatch.setattr(message_commands, "send_typing", lambda *a: None)
@@ -412,8 +412,8 @@ def test_generation_strips_envelope_reintroduced_by_language_renderer(novel_db, 
     session["_actor_id"] = "owner"
     session["response_language"] = "en"
     session["humanizer"] = "off"
-    original_choices = ["Open the door", "Wait outside"]
-    rendered_choices = ["Open it", "Keep waiting"]
+    original_choices = ["Open the door", "Wait outside", "Look around"]
+    rendered_choices = ["Open it", "Keep waiting", "Look around"]
 
     def generate(*_args, **kwargs):
         if str(kwargs.get("session_id") or "").endswith(":language-render"):
@@ -429,7 +429,7 @@ def test_generation_strips_envelope_reintroduced_by_language_renderer(novel_db, 
     monkeypatch.setattr(
         message_commands,
         "prepare_turn",
-        lambda db, chat, sess, key, actor: prepare_turn(db, chat, sess, key, actor, rng=lambda _: 2),
+        lambda db, chat, sess, key, actor: prepare_turn(db, chat, sess, key, actor, rng=lambda _: 3),
     )
     monkeypatch.setattr(message_commands, "build_chat_messages", lambda *a, **k: [{"role": "user", "content": "Go"}])
     monkeypatch.setattr(message_commands, "send_typing", lambda *a: None)
@@ -514,7 +514,7 @@ def test_mode_a_automatic_choice_worker_recovers_invalid_inline_choices(novel_db
     from bridge.sqlite_store import db_connect
 
     db, session, settings = make_started(novel_db, "a")
-    record = prepare_turn(db, "chat", session, "message:23", "owner", rng=lambda _: 2)
+    record = prepare_turn(db, "chat", session, "message:23", "owner", rng=lambda _: 3)
     turn = NovelTurn(record)
     assert turn.extract('{"story":"The rain falls.","choices":[]}') == "The rain falls."
     with write_transaction(db):
@@ -528,7 +528,7 @@ def test_mode_a_automatic_choice_worker_recovers_invalid_inline_choices(novel_db
 
     def generate(*args, **kwargs):
         calls.append((args, kwargs))
-        return '{"choices":["Open the door","Wait outside"]}'
+        return '{"choices":["Open the door","Wait outside","Look around"]}'
 
     services = bridge_services(settings, [])
     filename = db.execute("PRAGMA database_list").fetchone()[2]

@@ -31,7 +31,7 @@ def attached_choice(novel_db, strategy="b", ready=True, choices=None):
             "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_ids,crea"
             "ted_at) VALUES('chat','story','assistant','The door opens.','[71]',1)"
         ).lastrowid
-        attach_turn(db, record, rowid, "The door opens.", (choices or ["Go inside", "Stay outside", "Look around"]) if ready else None)
+        attach_turn(db, record, rowid, "The door opens.", (choices or ["Go inside", "Stay", "Wait"]) if ready else None)
     return load_choice_set(db, record.nonce)
 
 

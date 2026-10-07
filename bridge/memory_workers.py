@@ -7,9 +7,9 @@ import time
 import uuid
 
 from bridge import memory_backend
-from bridge.legacy_tracker_history import prompt_text
 from bridge.card_content import card_fields_from_file
 from bridge.episodic_extraction import extract_episodic_memories_result
+from bridge.legacy_tracker_history import prompt_text
 from bridge.memory_fact_store import index_fact_is_current
 from bridge.memory_store import (
     acknowledge_job,

@@ -30,7 +30,6 @@ PROCESSED_UPDATE_RETENTION_SECONDS = 30 * 86400
 
 
 def _create_core_tables(db: sqlite3.Connection) -> None:
-    """Create metadata, messages, sessions, and response variant tables."""
     db.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     db.execute("""CREATE TABLE IF NOT EXISTS messages (
         chat_id TEXT NOT NULL,
@@ -82,7 +81,6 @@ def _create_core_tables(db: sqlite3.Connection) -> None:
 
 
 def _create_generation_tables(db: sqlite3.Connection) -> None:
-    """Create generation settings, presets, and summary tables."""
     db.execute("""CREATE TABLE IF NOT EXISTS generation_settings (
         chat_id TEXT NOT NULL,
         session_id TEXT NOT NULL,

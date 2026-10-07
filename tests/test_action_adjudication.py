@@ -10,6 +10,7 @@ def proposal(**changes):
         "schema_version": 1,
         "decision": "check",
         "domain": "stealth",
+        "focus": "quietly open the door",
         "dc": 13,
         "reason": "A nearby guard could hear the latch.",
         "success": "The attempted opening is quiet.",
@@ -22,7 +23,9 @@ def proposal(**changes):
 def parse(raw):
     from bridge.action_contracts import parse_action_proposal
 
-    return parse_action_proposal(raw, {"17": "A guard waits beside the noisy door."})
+    return parse_action_proposal(
+        raw, {"17": "A guard waits beside the noisy door.", "action": "I quietly open the door."}
+    )
 
 
 def test_meaningful_action_proposal_keeps_dice_bridge_owned():

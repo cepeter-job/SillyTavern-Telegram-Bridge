@@ -6,6 +6,7 @@ import sqlite3
 import time
 from functools import partial as _partial
 
+from bridge.action_turn import begin_action_for_job
 from bridge.card_content import card_fields_from_file
 from bridge.cards import send_session_menu
 from bridge.character_identity import reconcile_session_character
@@ -185,13 +186,7 @@ def generate_and_store_reply(
         text,
         app_settings=app_settings,
     )
-    memory_prompt = memory_service.prompt_context(
-        db,
-        chat_id,
-        session,
-        fields,
-        text,
-    )
+    memory_prompt = memory_service.prompt_context(db, chat_id, session, fields, text)
     memory_context = memory_prompt.recall
     episodic_context = memory_prompt.episodic
     session_summary = memory_prompt.summary
@@ -231,6 +226,19 @@ def generate_and_store_reply(
         else (operation_id if operation_id is not None else time.time_ns())
     )
     actor_id = str(session.get("_actor_id") or job_actor_id(db, operation_id))
+    action_turn = begin_action_for_job(
+        db,
+        chat_id,
+        session,
+        text,
+        operation_id,
+        provider_port=provider_port,
+        app_settings=app_settings,
+        actor_id=actor_id,
+        group_turn=group_turn,
+        telegram_message_id=telegram_message_id,
+    )
+    messages = action_turn.messages(messages)
     choice_record = prepare_turn(db, chat_id, session, f"message:{identity}", actor_id)
     novel_turn = (
         NovelTurn(choice_record, choice_policy=narrative_context_for_session(db, chat_id, session_id, "choices"))
@@ -322,6 +330,7 @@ def generate_and_store_reply(
 
     def persist_turn():
         with write_transaction(db):
+            action_turn.validate(db)
             now = time.time()
             user_cursor = db.execute(
                 (
@@ -341,18 +350,14 @@ def generate_and_store_reply(
                 "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
                 (chat_id, session_id, "assistant", stored_reply, now + 0.001),
             )
+            action_turn.bind(db, int(user_cursor.lastrowid))
             assistant_rowid = assistant_cursor.lastrowid
             bind_committed_turn(db, operation_id, int(user_cursor.lastrowid), int(assistant_rowid), stored_reply)
             if novel_turn:
                 novel_turn.commit(db, int(assistant_rowid), stored_reply)
             save_response_variant(db, chat_id, session_id, text, stored_reply)
             if group_turn:
-                group_service.advance_turn(
-                    db,
-                    chat_id,
-                    session_id,
-                    operation_id,
-                )
+                group_service.advance_turn(db, chat_id, session_id, operation_id)
             return assistant_rowid
 
     with write_transaction(db):
@@ -583,13 +588,7 @@ def prepare_message(
     group_context = ""
     if group_turn:
         fields = card_fields_from_file(group_turn[0], app_settings=app_settings)
-        group_context = group_director.prompt_context(
-            db,
-            chat_id,
-            session,
-            group_turn[0],
-            director_instruction,
-        )
+        group_context = group_director.prompt_context(db, chat_id, session, group_turn[0], director_instruction)
     current_model = session["model_id"] or model
     current_persona = session["persona_id"]
     user_name = persona_service.name(current_persona) if current_persona else app_settings.default_user_name

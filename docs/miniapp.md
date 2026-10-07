@@ -105,6 +105,11 @@ limit is 10 MB. Full-text search remains available without embeddings.
 
 ### Story trackers
 
+User tasks show the saved objective, stage, progress, completed and pending steps,
+complications and established consequences. These are extracted after narration;
+a successful die roll is not itself task completion. Set automatic mechanics in
+Telegram with `/check mode auto|director|manual`.
+
 Open **Manage → Story trackers** to inspect the active session's saved
 relationships, visible agendas, inventory, skills, conditions, factions, linked
 quests and recent d20 checks. **Last updated** shows the time of the latest story

@@ -61,6 +61,15 @@ def restore_simulation_snapshot(db: sqlite3.Connection, chat_id: str, session_id
         raise ValueError("Simulation checkpoint lacks reversible history")
     if len(payload.get("history", [])) > 4096 or len(json.dumps(payload, ensure_ascii=False).encode()) > 1048576:
         raise ValueError("Simulation history exceeds the bounded checkpoint")
+    # Remap task references together with check identities; pending preflights are never portable.
+    payload = json.loads(json.dumps(payload, ensure_ascii=False))
+    check_keys = {check["request_key"] for check in payload.get("checks", [])}
+    for item in [*payload.get("history", []), *payload.get("records", [])]:
+        value = item.get("value")
+        if item.get("kind") == "task" and value and value.get("last_check_key"):
+            if value["last_check_key"] not in check_keys:
+                raise ValueError("Task checkpoint refers to a missing check")
+            value["last_check_key"] = "restored:" + value["last_check_key"]
     purge_session(db, chat_id, session_id)
     for item in payload.get("history", []):
         source_identity(db, chat_id, session_id, item["source_rowid"])

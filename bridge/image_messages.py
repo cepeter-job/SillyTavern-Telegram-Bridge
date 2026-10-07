@@ -6,6 +6,7 @@ import base64
 import sqlite3
 import time
 
+from bridge.action_turn import begin_action_for_job
 from bridge.card_content import card_fields_from_file
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.context_diagnostics import record_context_attempts
@@ -114,6 +115,20 @@ def process_image_message(
         narrative_context=narrative_context_for_session(db, chat_id, session["session_id"], "story"),
         app_settings=app_settings,
     )
+    stored_text = f"[Image input] {caption}"
+    action_turn = begin_action_for_job(
+        db,
+        chat_id,
+        session,
+        stored_text,
+        operation_id,
+        provider_port=provider_port,
+        app_settings=app_settings,
+        actor_id=str(session.get("_actor_id") or ""),
+        group_turn=group_turn,
+        telegram_message_id=telegram_message_id,
+    )
+    messages = action_turn.messages(messages)
     novel_turn = begin_novel_turn(db, chat_id, session, "image", telegram_message_id)
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
@@ -156,8 +171,8 @@ def process_image_message(
         if group_turn and group_turn[1].get("mode") == "autonomous"
         else (f"{fields['name']}: {reply}" if group_turn else reply)
     )
-    stored_text = f"[Image input] {caption}"
     with write_transaction(db):
+        action_turn.validate(db)
         user_cursor = db.execute(
             "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_id,created_at) VALUES(?,?,?,?,?,?)",
             (
@@ -173,6 +188,7 @@ def process_image_message(
             "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
             (chat_id, session["session_id"], "assistant", stored_reply, time.time()),
         )
+        action_turn.bind(db, int(user_cursor.lastrowid))
         assistant_rowid = assistant_cursor.lastrowid
         bind_committed_turn(db, operation_id, int(user_cursor.lastrowid), int(assistant_rowid), stored_reply)
         if novel_turn:

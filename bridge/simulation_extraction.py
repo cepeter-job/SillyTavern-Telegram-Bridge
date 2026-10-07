@@ -9,7 +9,14 @@ from bridge.json_fences import unfence_json
 from bridge.simulation_repository import MAX_RECORD_BYTES
 from bridge.simulation_values import MAX_ITEMS, MAX_NAME, boolean, integer, key, modifier_entry, text
 
-_IDENTIFIERS = {"relationships": "npc", "agendas": "npc", "factions": "name", "quests": "id", "foreshadowing": "id"}
+_IDENTIFIERS = {
+    "relationships": "npc",
+    "agendas": "npc",
+    "factions": "name",
+    "quests": "id",
+    "foreshadowing": "id",
+    "tasks": "id",
+}
 _ACTOR_COLLECTIONS = ("inventory", "skills", "conditions")
 
 
@@ -86,6 +93,7 @@ def _record(group: str, item: dict) -> dict:
         name = _stable_id(name)
     result: dict[str, Any] = {identifier: name}
     fields = {
+        "tasks": {"actor": 20, "objective": 500, "stage": 240, "status": 20, "consequence": 500, "last_check_key": 160},
         "agendas": {"objective": 500, "location": 300, "status": 20},
         "factions": {"goal": 1000, "intel": 1000, "morale": 120, "conflict": 1000},
         "quests": {"kind": 20, "status": 20, "objective": 1000, "reward": 500, "arc_id": 100},
@@ -105,6 +113,20 @@ def _record(group: str, item: dict) -> dict:
             result["complete"] = boolean(item["complete"])
         if "status" in result and result["status"] not in {"active", "paused", "completed"}:
             raise ValueError("Invalid agenda status")
+    if group == "tasks":
+        if item.get("actor", "user") != "user":
+            raise ValueError("Tasks belong only to the user, not private NPC activity")
+        if "status" in result and result["status"] not in {"active", "completed", "failed", "paused"}:
+            raise ValueError("Invalid task status")
+        _typed_fields(item, ("progress_current", "progress_target"), int)
+        for field in ("progress_current", "progress_target"):
+            if field in item:
+                if not 0 <= item[field] <= 20:
+                    raise ValueError("Task progress must be between 0 and 20")
+                result[field] = item[field]
+        for field in ("completed_steps", "pending_steps", "complications"):
+            if field in item:
+                result[field] = [_name(value, 240) for value in _items(item[field], 16)]
     if group == "quests":
         _typed_fields(item, ("progress_current", "progress_target"), int)
         for field in ("progress_current", "progress_target"):

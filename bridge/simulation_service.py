@@ -157,6 +157,30 @@ class SimulationService(SimulationMechanics):
                 identifier="id",
                 fields=("status", "seed", "payoff", "arc_id", "thread_id"),
             )
+            self._replace_named_states(
+                db,
+                chat_id,
+                session_id,
+                payload,
+                source_rowid,
+                now,
+                payload_key="tasks",
+                kind="task",
+                identifier="id",
+                fields=(
+                    "actor",
+                    "objective",
+                    "stage",
+                    "status",
+                    "progress_current",
+                    "progress_target",
+                    "completed_steps",
+                    "pending_steps",
+                    "complications",
+                    "consequence",
+                    "last_check_key",
+                ),
+            )
             project_simulation_state(
                 db, chat_id, session_id, source_rowid, primary_name=primary_name, user_name=user_name
             )

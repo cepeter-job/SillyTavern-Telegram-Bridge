@@ -102,6 +102,7 @@ HELP_CATEGORIES = {
             "/check <domain> <DC> <action>",
             "Roll one recorded d20 check for an explicit action; retry never rerolls it.",
         ),
+        ("/check mode", "Show or set session action checks: auto (Utility), director, or manual."),
         ("/continue", "Continue the latest assistant response from where it stopped."),
         ("/edit", "Open scoped input for replacement text for the latest user turn."),
         ("/edit <text>", "Replace the latest user turn immediately and regenerate from the new text."),

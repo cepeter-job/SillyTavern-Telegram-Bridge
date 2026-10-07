@@ -78,6 +78,13 @@ def _state_line(kind: str, name: str, value: dict[str, Any], *, narrator: bool) 
             f"[{value.get('progress_current', 0)}/{value.get('progress_target', 0)}] "
             f"reward={value.get('reward', '')}"
         )
+    if kind == "task":
+        return (
+            f"TASK {display}: {value.get('status', 'active')} {value.get('objective', '')} "
+            f"[{value.get('progress_current', 0)}/{value.get('progress_target', 0)}] "
+            f"stage={value.get('stage', '')}; pending={value.get('pending_steps', [])}; "
+            f"established consequence={value.get('consequence', '')}"
+        )
     if kind == "faction":
         line = (
             f"FACTION {display}: goal={value.get('goal', '')} morale={value.get('morale', '')} "
@@ -122,7 +129,7 @@ def simulation_context_for_prompt(
             f"DC {check['dc']} roll {check['roll']} mod {check['modifier']} => {check['outcome']}"
         )
     buckets: dict[str, list[str]] = {
-        kind: [] for kind in ("actor", "quest", "relationship", "faction", "foreshadowing", "agenda")
+        kind: [] for kind in ("actor", "quest", "task", "relationship", "faction", "foreshadowing", "agenda")
     }
     for kind, name, value, _ in sorted(
         states,

@@ -13,6 +13,7 @@ _SECTIONS = (
     ("conditions", "Conditions"),
     ("factions", "Factions"),
     ("quests", "Quests"),
+    ("tasks", "Tasks"),
     ("checks", "Recent d20 checks"),
 )
 
@@ -31,6 +32,11 @@ def _line(section: str, item: dict[str, Any]) -> str:
         return f"{name} ({item['modifier']:+d} {item['domain']})"
     if section == "factions":
         return f"{name}: {item['goal']} · Morale: {item['morale']} · Conflict: {item['conflict']}"
+    if section == "tasks":
+        return (
+            f"{name}: {_status(item['status'])} [{item['progress_current']}/{item['progress_target']}] "
+            f"{item['objective']} · {item['stage']}"
+        )
     if section == "quests":
         progress = f" [{item['progress_current']}/{item['progress_target']}]" if item["progress_target"] else ""
         return f"{name}: {_status(item['status'])}{progress} · {item['objective']} · Reward: {item['reward']}"
@@ -55,15 +61,15 @@ def format_tracker_view(data: dict[str, Any]) -> str:
     shortened = False
     has_items = False
     for section, title in _SECTIONS:
-        items = data[section]
+        items = data.get(section, [])
         if not items:
             continue
         has_items = True
         lines.append(f"\n{title} ({len(items)})")
-        # Eight sections, two 180-byte lines each, plus bounded labels fit Telegram's UTF-16 limit.
+        # Nine sections, two 160-byte lines each, plus bounded labels fit Telegram's UTF-16 limit.
         for item in items[:2]:
             full = _line(section, item)
-            bounded = text(full, 180)
+            bounded = text(full, 160)
             if bounded != full:
                 bounded += "…"
                 shortened = True

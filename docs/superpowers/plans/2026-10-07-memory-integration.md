@@ -36,40 +36,41 @@
 ### Task 2: Commit reset locally and retain cleanup obligations
 **Files:** bridge/memory_backend.py; bridge/memory_store.py; bridge/memory_workers.py; bridge/memory_archival_schema.py; bridge/schema.py and its migration registry; bridge/memory.py; bridge/hindsight_integrity.py; bridge/message_commands.py; bridge/session_core.py; relevant reset/session UI and tests.
 **Interfaces:** Add an explicit transactional queue_cleanup service port for reset/delete; retain purge_session as the synchronous compatibility contract. Reuse exact document identities, incarnation, epoch, source validation and retirement storage.
-- [ ] Pin reset/delete success with an unavailable Hindsight transport, durable work after reopen, and old-scope rejection.
-- [ ] Pin reset while a remote retain/delete is in flight; a new-generation fact must survive late cleanup and late acknowledgments.
-- [ ] Pin cleanup admission with memory off and preservation of unresolved raw/native dispatch obligations.
-- [ ] Add the minimal forward migration and local cleanup enqueue transaction. Release session locks across remote I/O and fence completion.
-- [ ] Replace misleading failure copy with local completion and pending external-cleanup semantics. Keep explicit remote purge status accurate.
-- [ ] Run targeted lifecycle, scope, retirement, migration and route tests; update runtime docs. Review and merge a separate PR after required CI.
+- [x] Pin reset/delete success with an unavailable Hindsight transport, durable work after reopen, and old-scope rejection.
+- [x] Pin reset while a remote retain/delete is in flight; a new-generation fact must survive late cleanup and late acknowledgments.
+- [x] Pin cleanup admission with memory off and preservation of unresolved raw/native dispatch obligations.
+- [x] Add the minimal forward migration and local cleanup enqueue transaction. Release session locks across remote I/O and fence completion.
+- [x] Replace misleading failure copy with local completion and pending external-cleanup semantics. Keep explicit remote purge status accurate.
+- [x] Run targeted lifecycle, scope, retirement, migration and route tests; update runtime docs. Review and merge a separate PR after required CI.
 
 ### Task 3: Index facts only and retire raw archival work
 **Files:** bridge/memory_workers.py; bridge/memory_backend.py; bridge/memory_store.py; bridge/alternate_ending_memory.py; memory lifecycle/diagnostics and migrations; associated tests and docs.
 **Interfaces:** Preserve local source/provenance APIs and native fact rehydration. Hindsight worker consumes pending native facts; alternate-ending readiness consumes local memory work.
-- [ ] Pin that accepted turns produce native-fact retains and no new raw source_segment retains.
-- [ ] Pin complete local extraction of long messages and alternate-ending readiness with Hindsight unavailable.
-- [ ] Pin continued cleanup of pre-existing raw documents and unresolved attempts through restart.
-- [ ] Remove raw dispatch and obsolete branch-seed dependencies, retire old pending archival state, and compact only terminal unreferenced records.
-- [ ] Adjust existing contract fixtures to the new behavior; do not keep tests asserting removed raw ingestion.
-- [ ] Run affected worker/lifecycle/branch/evaluation tests, document migration behavior, review and merge after required CI.
+- [x] Pin that accepted turns produce native-fact retains and no new raw source_segment retains.
+- [x] Pin complete local extraction of long messages and alternate-ending readiness with Hindsight unavailable.
+- [x] Pin continued cleanup of pre-existing raw documents and unresolved attempts through restart.
+- [x] Remove raw dispatch and obsolete branch-seed dependencies, retire old pending archival state, and compact only terminal unreferenced records.
+- [x] Adjust existing contract fixtures to the new behavior; do not keep tests asserting removed raw ingestion.
+- [x] Run affected worker/lifecycle/branch/evaluation tests, document migration behavior, review and merge after required CI.
 
 ### Task 4: Bound foreground recall and stabilize client setup
 **Files:** bridge/memory_backend.py or a focused client adapter; bridge/memory_service.py; application lifecycle/configuration seams; dedicated recall/lifecycle tests and docs.
 **Interfaces:** Keep scoped recall results as locally rehydrated native-fact IDs. No remote response text grants authority.
-- [ ] Pin a finite total recall deadline, repeated-outage bypass, recovery, and unchanged local memory output when semantic recall fails.
-- [ ] Pin scope invalidation while recall is in progress and prevent stale responses from entering the prompt.
-- [ ] Configure foreground recall separately from background ingestion; establish a bounded failure cache and predictable loop-owned client lifecycle.
-- [ ] Move proxy-bypass preparation out of repeated request work while preserving destination validation and supported SDK behavior.
-- [ ] Run focused tests plus required CI; review and merge a separate PR.
+- [x] Pin a finite total recall deadline, repeated-outage bypass, recovery, and unchanged local memory output when semantic recall fails.
+- [x] Pin scope invalidation while recall is in progress and prevent stale responses from entering the prompt.
+- [x] Configure foreground recall separately from background ingestion; establish a bounded failure cache and predictable loop-owned client lifecycle.
+- [x] Move proxy-bypass preparation out of repeated request work while preserving destination validation and supported SDK behavior.
+- [x] Run focused tests plus required CI; review and merge a separate PR.
 
 ### Task 5: Compare retrieval approaches reproducibly
-**Files:** tools/evaluate_memory_retrieval.py; a focused versioned synthetic roleplay fixture and tool tests; docs/memory-retrieval-comparison.md and measured result artifact.
+**Files:** tools/compare_story_memory_retrieval.py and supporting tools/story_memory_retrieval_*.py modules; tests/fixtures/story_memory/retrieval_v1.json and focused tool tests; docs/story-memory-retrieval-comparison.md, docs/story-memory-retrieval-comparison-results.json and companion immutable artifacts.
 **Interfaces:** Explicit backend selection for FTS, Hindsight and ordinary BLOB exact-vector scoring. Reuse canonical eligibility before ranking; never reintroduce a latest-200 cap.
-- [ ] Pin deterministic candidate authorization, non-lexical semantic matches, provider failure behavior, and result schema in small offline tests.
-- [ ] Implement a bounded comparison harness with corpus/embedding-profile identity, per-stage latency, retrieval judgments, and precise measurement boundary labels.
-- [ ] Use only isolated synthetic data for optional genuine-provider runs. Protect credentials and existing story banks; do not invent results if a usable embedding endpoint is unavailable.
-- [ ] Run available comparisons, record quality/latency and limitations, and retain facts-only Hindsight unless evidence justifies a later migration.
-- [ ] Review and merge the tooling, tests, results and operating documentation after required CI.
+- [x] Pin deterministic candidate authorization, non-lexical semantic matches, provider failure behavior, and result schema in small offline tests.
+- [x] Implement a bounded comparison harness with corpus/embedding-profile identity, per-stage latency, retrieval judgments, and precise measurement boundary labels.
+- [x] Use only isolated synthetic data for optional genuine-provider runs. Protect credentials and existing story banks; do not invent results if a usable embedding endpoint is unavailable.
+- [x] Run available comparisons, record quality/latency and limitations, and retain facts-only Hindsight unless evidence justifies a later migration.
+
+**Integration gate:** Independent review and complete required checks before merge; current status is tracked in [PR409](https://github.com/cepeter/SillyTavern-Telegram-Bridge/pull/409).
 
 ## Progress
 - Approved design captured from the 2026-10-07 audit and explicit implementation approval.
@@ -77,7 +78,10 @@
 - Task1 complete: PR398 merged as bfb71bfbd1b175274db4154a426565244143857d after independent review and all required checks.
 - Task2 complete: PR401 merged as e379214 after independent review and all required checks.
 - Task3 complete: PR404 merged as 2a049fd2aee4d37c712e0c8142a228f9eedbb270 after independent specification/code review and all required checks.
-- Task4 in progress: bounded foreground recall implementation; independent review, required CI, and merge remain pending.
+- Task4 complete: PR406 merged as b9b11ebca5a0e7fc162ce3e4f5a0844df22a9b05 after independent source/integration review and all required CI (3,979 tests plus 814 subtests; 82.85% coverage).
+- Task5 implementation and measured artifacts complete. Integration and required checks are tracked in [PR409](https://github.com/cepeter/SillyTavern-Telegram-Bridge/pull/409).
+  Frozen measurements use caea8e7fb05d60e98981c53c3e598798cf4559d4. The default baseline and genuine-cache replay completed with zero HTTP.
+  The one bounded live study saved complete genuine embeddings, then recorded an uncertain first Hindsight retain and pending cleanup. Results, raw artifacts and limits are documented; production backend selection remains unchanged.
 
 ### Checkpoint 1 verification
 

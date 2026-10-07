@@ -327,9 +327,10 @@ class EvaluationRuntime:
             self.db.close()
         self.stack.close()
 
-    def accept_turn(self, user_text, assistant_text="A quiet moment."):
+    def accept_turn(self, user_text, assistant_text="A quiet moment.", *, session=None):
         from bridge.message_commands import generate_and_store_reply
 
+        session = self.session if session is None else session
         before = self.db.execute("SELECT COALESCE(MAX(id),0) FROM messages").fetchone()[0]
         self.transport.reply = assistant_text
         generate_and_store_reply(
@@ -339,8 +340,8 @@ class EvaluationRuntime:
             self.fields,
             CHAT,
             user_text,
-            self.session,
-            "main",
+            session,
+            session["session_id"],
             "offline::fixture",
             None,
             "",
@@ -370,19 +371,20 @@ class EvaluationRuntime:
         stored = index_fact_is_current(self.db, document_id)
         return stored.fact.summary if stored else None
 
-    def run_one(self, layer):
+    def run_one(self, layer, *, session=None):
         from bridge.memory_store import claim_jobs
         from bridge.memory_workers import run_memory_claim
 
+        session = self.session if session is None else session
         self.due(layer)
-        claims = claim_jobs(self.db, chat_id=CHAT, session_id="main", layers=(layer,))
+        claims = claim_jobs(self.db, chat_id=CHAT, session_id=session["session_id"], layers=(layer,))
         if not claims:
             return "idle"
         calls_before = len(self.transport.calls)
         result = run_memory_claim(
             self.db,
             claims[0],
-            self.session,
+            session,
             self.fields,
             provider_port=self.provider,
             app_settings=self.settings,
@@ -393,10 +395,10 @@ class EvaluationRuntime:
             raise AssertionError("Production worker exceeded its eight-call budget")
         return result
 
-    def drain(self, layer):
+    def drain(self, layer, *, session=None):
         outcomes = []
         for _ in range(200):
-            outcome = self.run_one(layer)
+            outcome = self.run_one(layer, session=session)
             outcomes.append(outcome)
             if outcome in {"idle", "complete"}:
                 return outcomes

@@ -1,0 +1,1 @@
+{"status": "failed", "measurement_status": "frozen_source", "source_revision": "caea8e7fb05d60e98981c53c3e598798cf4559d4", "backend_status": {"fts": "available", "blob_contract": "available", "blob": "available", "hindsight": "failed"}, "http_requests": 11}

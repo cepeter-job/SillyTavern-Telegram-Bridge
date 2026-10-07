@@ -216,6 +216,11 @@ visual-secrecy or universal information-flow claim.
 
 ## Reproduce the deterministic evaluation
 
+The separate [retrieval comparison](story-memory-retrieval-comparison.md) measures
+FTS, exact SQLite BLOB scoring and explicitly enabled genuine-provider retrieval
+on a fixed synthetic panel. Its default CLI remains offline; it reports component
+ranks separately from production-selected sets and does not change the backend.
+
 From a checkout with the existing project environment:
 
 ```sh

@@ -392,7 +392,8 @@ def test_direct_sql_npc_rewrite_recovers_fixed_suffix_and_preserves_prior_field(
                             }
                         ],
                     }
-                ]
+                ],
+                "simulation": {},
             }
         )
 

@@ -118,7 +118,7 @@ def claim_jobs(
         rows = db.execute(
             "SELECT chat_id,session_id,session_created_at,layer,dirty_version,target_id FROM memory_jobs "
             "WHERE dirty_version>completed_version AND lease_token='' AND next_attempt_at<=? "
-            "AND (?=0 OR EXISTS(SELECT 1 FROM messages m WHERE m.chat_id=memory_jobs.chat_id "
+            "AND (?=0 OR layer='hindsight' OR EXISTS(SELECT 1 FROM messages m WHERE m.chat_id=memory_jobs.chat_id "
             "AND m.session_id=memory_jobs.session_id AND m.created_at>=?)) "
             "AND (?=0 OR NOT (attempts>=? AND last_error IN ('work_failed','retain_failed'))) "
             "AND EXISTS(SELECT 1 FROM sessions s WHERE s.chat_id=memory_jobs.chat_id "

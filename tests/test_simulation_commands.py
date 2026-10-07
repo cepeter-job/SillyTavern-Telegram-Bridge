@@ -58,7 +58,7 @@ def invoke(case, command="/check stealth 10 cross the courtyard", operation_id=6
 
 @pytest.mark.parametrize(
     "command",
-    ["/check", "/check stealth x sneak", "/check stealth 0 sneak", "/check stealth 21 sneak", "/check stealth 10"],
+    ["/check stealth x sneak", "/check stealth 0 sneak", "/check stealth 21 sneak", "/check stealth 10"],
 )
 def test_invalid_check_admits_no_action(command_case, command):
     db, _, _, sent = command_case

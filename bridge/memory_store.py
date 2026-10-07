@@ -1,7 +1,4 @@
-"""SQLite durable memory leases and archival source provenance.
-
-Raw source validity does not authorize any character to know a fact.
-"""
+"""SQLite durable memory leases; raw source validity never grants fact authority."""
 
 from __future__ import annotations
 
@@ -39,11 +36,9 @@ from bridge.memory_contracts import MemoryReadScope
 from bridge.memory_retry import CONFIGURATION_RETRY_SECONDS, MEMORY_FAILURE_CODES
 from bridge.sqlite_store import write_transaction
 
-MAX_CLAIMS = 1
-LEASE_SECONDS = 900
-SEGMENT_CHARS = 12000
-# Accepted readers require 1; 2 reserves retryable raw work without granting coverage.
-ARCHIVAL_PENDING = 2
+MAX_CLAIMS, LEASE_SECONDS, SEGMENT_CHARS = 1, 900, 12000
+AUTO_IDLE_SECONDS, AUTO_FAILURE_LIMIT = 86400, 8
+ARCHIVAL_PENDING = 2  # Accepted readers require 1; 2 reserves retryable raw work without granting coverage.
 
 
 @dataclass(frozen=True)
@@ -85,7 +80,8 @@ def enqueue_memory(db: sqlite3.Connection, chat_id: str, session_id: str, layer:
             "(SELECT COALESCE(MAX(id),0) FROM messages WHERE chat_id=? AND session_id=?) "
             "FROM sessions WHERE chat_id=? AND session_id=? "
             "ON CONFLICT(chat_id,session_id,session_created_at,layer) DO UPDATE SET "
-            "dirty_version=memory_jobs.dirty_version+1,target_id=excluded.target_id,next_attempt_at=0",
+            "dirty_version=memory_jobs.dirty_version+1,target_id=excluded.target_id,"
+            "attempts=0,last_error='',next_attempt_at=0",
             (layer, chat_id, session_id, chat_id, session_id),
         )
     return bool(cursor.rowcount)
@@ -109,6 +105,7 @@ def claim_jobs(
     session_id: str | None = None,
     limit: int = MAX_CLAIMS,
     lease_seconds: float = LEASE_SECONDS,
+    autonomous: bool = False,
 ) -> list[MemoryClaim]:
     now = time.time() if now is None else now
     recover_expired_jobs(db, now=now)
@@ -121,10 +118,13 @@ def claim_jobs(
         rows = db.execute(
             "SELECT chat_id,session_id,session_created_at,layer,dirty_version,target_id FROM memory_jobs "
             "WHERE dirty_version>completed_version AND lease_token='' AND next_attempt_at<=? "
+            "AND (?=0 OR EXISTS(SELECT 1 FROM messages m WHERE m.chat_id=memory_jobs.chat_id "
+            "AND m.session_id=memory_jobs.session_id AND m.created_at>=?)) "
+            "AND (?=0 OR NOT (attempts>=? AND last_error IN ('work_failed','retain_failed'))) "
             "AND EXISTS(SELECT 1 FROM sessions s WHERE s.chat_id=memory_jobs.chat_id "
             "AND s.session_id=memory_jobs.session_id AND s.created_at=memory_jobs.session_created_at) "
             "ORDER BY next_attempt_at,attempts,chat_id,session_id,layer",
-            (now,),
+            (now, int(autonomous), now - AUTO_IDLE_SECONDS, int(autonomous), AUTO_FAILURE_LIMIT),
         )
         try:
             for row in rows:

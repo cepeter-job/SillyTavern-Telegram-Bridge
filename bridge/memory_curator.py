@@ -19,6 +19,7 @@ from bridge.extension_registry import extension_registry_snapshot as _extension_
 from bridge.extension_registry import register_command_route as _register_command_route
 from bridge.extension_registry import register_post_retain_hook as _register_post_retain_hook
 from bridge.generation_settings import get_generation_settings
+from bridge.legacy_tracker_history import prompt_text
 from bridge.memory_backend import _retain_with_client as _retain_with_client
 from bridge.memory_backend import clear_curated_memory_state as clear_curated_memory_state
 from bridge.memory_backend import (
@@ -172,7 +173,7 @@ def extract_curator_segment(
                 + f"\nSource role: {source.role}; message {source.start_id};"
                 + f" offsets {source.start_offset}:{source.end_offset}"
                 + "\n\nCanonical source part:\n"
-                + source.content
+                + prompt_text(source.role, source.content)
             ),
         },
     ]

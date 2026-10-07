@@ -8,6 +8,7 @@ from bridge.memory_store import pending_memory_invalidation
 from bridge.npc_repository import set_npc_extraction_coverage
 from bridge.npc_service import NpcService
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
+from bridge.simulation_narrative import canonicalize_narrative_links
 from bridge.simulation_projection import is_managed_field
 from bridge.simulation_service import SimulationService
 
@@ -66,11 +67,14 @@ def publish_derived(db, chat_id, session_id, layer, payload, through):
                 primary_name=payload["primary_name"],
                 user_name=payload["user_name"],
             )
+        simulation = canonicalize_narrative_links(
+            db, chat_id, session_id, payload.get("simulation") or {}, through
+        )
         SimulationService().apply_payload(
             db,
             chat_id,
             session_id,
-            payload.get("simulation") or {},
+            simulation,
             source_rowid=through,
             primary_name=payload.get("primary_name", ""),
             user_name=payload.get("user_name", ""),

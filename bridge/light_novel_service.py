@@ -15,7 +15,6 @@ from bridge.closed_session_guard import guard_story_mutation, story_mutation_mes
 from bridge.context_compaction import budget_chat_messages
 from bridge.conversation_lifecycle import conversation_state
 from bridge.job_store import enqueue_job
-from bridge.legacy_tracker_history import prompt_text, strip_legacy_tracker_blocks
 from bridge.light_novel_format import (
     CHOICE_MATURITY_POLICY,
     CHOICE_MOTIVE_POLICY,
@@ -240,11 +239,11 @@ def build_choice_context_snapshot(
         "SELECT role,content FROM messages WHERE chat_id=? AND session_id=? AND id<=? ORDER BY rowid DESC LIMIT 6",
         (record.chat_id, record.session_id, record.assistant_rowid),
     ).fetchall()
-    history_rows = [(str(role), prompt_text(str(role), str(text))) for role, text in reversed(history)]
+    history_rows = [(str(role), str(text)) for role, text in reversed(history)]
     persona_id = str(session.get("persona_id") or "")
     persona = persona_service.get(persona_id) if persona_service is not None and persona_id else None
     user_name = str((persona or {}).get("name") or app_settings.default_user_name)
-    story_context = strip_legacy_tracker_blocks(story)[-10000:]
+    story_context = story[-10000:]
     world_context = "\n".join(
         [story_context, *(text for _role, text in history_rows), user_name, str(fields.get("name") or "")]
     )[-24000:]

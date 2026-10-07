@@ -12,7 +12,6 @@ from bridge.extension_registry import extension_registry_snapshot as _extension_
 from bridge.extension_registry import register_post_retain_hook as _register_post_retain_hook
 from bridge.generation_settings import get_generation_settings
 from bridge.json_fences import unfence_json
-from bridge.legacy_tracker_history import prompt_text
 from bridge.memory_draft_publish import publish_derived, restore_derived
 from bridge.memory_draft_store import run_session_draft
 from bridge.memory_store import enqueue_memory
@@ -213,7 +212,7 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
                 + f"\nSource role: {source.role}; message {source.start_id};"
                 + f" offsets {source.start_offset}:{source.end_offset}"
                 + "\n\nCanonical source part:\n"
-                + prompt_text(source.role, source.content)
+                + source.content
             ),
         },
     ]

@@ -14,7 +14,6 @@ from bridge.extension_registry import run_post_retain_hooks as _run_post_retain_
 from bridge.extension_registry import run_summary_clear_hooks as _run_summary_clear_hooks
 from bridge.generation_settings import get_generation_settings
 from bridge.hindsight_integrity import HindsightStaleGuard as _HindsightStaleGuard
-from bridge.legacy_tracker_history import prompt_text
 from bridge.limits import (
     SUMMARY_MAX_CHARS,
     SUMMARY_MAX_OUTPUT_TOKENS,
@@ -26,7 +25,6 @@ from bridge.memory_artifact_store import (
     parse_classified_blocks,
     parse_classified_response,
     previous_classified_artifact,
-    read_summary_block,
 )
 from bridge.memory_backend import (
     _memory_hindsight_conversation_snapshot,
@@ -53,7 +51,6 @@ from bridge.memory_backend import recall_memory_context as recall_memory_context
 from bridge.memory_backend import remember_fact as remember_fact
 from bridge.memory_draft_publish import publish_derived, restore_derived
 from bridge.memory_draft_store import run_session_draft
-from bridge.memory_scope_store import resolve_memory_scope
 from bridge.memory_store import enqueue_memory, retire_derived_layer
 from bridge.metadata import set_meta
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
@@ -293,7 +290,7 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
                 + f"\nSource role: {source.role}; message {source.start_id};"
                 + f" offsets {source.start_offset}:{source.end_offset}"
                 + "\n\nCanonical source part:\n"
-                + prompt_text(source.role, source.content)
+                + source.content
             ),
         },
     ]
@@ -362,18 +359,3 @@ def generate_session_summary_result(
         return _current_summary_result(db, chat_id, session_id)
     summary, through = get_session_summary(db, chat_id, session_id)
     return SessionSummaryResult(summary, through, status == "complete" and through >= target)
-
-
-def session_summary_for_prompt(
-    db: sqlite3.Connection,
-    chat_id: str,
-    session: dict[str, str],
-    *,
-    provider_port: ProviderPort,
-    app_settings: AppSettings,
-    fields: dict[str, str] | None = None,
-    through_rowid: int | None = None,
-) -> str:
-    """Read-only compatibility adapter; an unidentified character has no authority."""
-    scope = resolve_memory_scope(db, chat_id, session, fields or {}, through_rowid=through_rowid)
-    return read_summary_block(db, scope).text if scope else ""

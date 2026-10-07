@@ -457,3 +457,16 @@ def test_operations_docs_describe_generated_typed_surface_not_stale_fixed_count(
     text = (ROOT / "docs/operations.md").read_text(encoding="utf-8")
     assert "24 explicitly listed source files" not in text
     assert "--print-type-target-count" in text
+
+def test_retired_tracker_and_memory_compatibility_surfaces_are_gone():
+    assert not (BRIDGE / "legacy_tracker_history.py").exists()
+    assert not (BRIDGE / "memory_relevance.py").exists()
+    assert "session_summary_for_prompt" not in owner_definitions("memory.py")
+    assert "extract_episodic_memories" not in owner_definitions("episodic_extraction.py")
+    assert "legacy_tracker_history" not in "\n".join(path.read_text() for path in BRIDGE.glob("*.py"))
+    imports = [
+        node
+        for node in ast.parse((BRIDGE / "memory_search_store.py").read_text()).body
+        if isinstance(node, ast.ImportFrom) and node.module == "bridge.memory_contracts"
+    ]
+    assert any(alias.name == "ordered_relevance_terms" for node in imports for alias in node.names)

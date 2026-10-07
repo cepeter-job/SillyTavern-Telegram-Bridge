@@ -196,8 +196,3 @@ def extract_episodic_memories_result(
                 )
             )
     return EpisodicExtractionResult("complete", inserted)
-
-
-def extract_episodic_memories(*args, **kwargs) -> int:
-    """Compatibility integer view; durable workers consume the explicit result."""
-    return extract_episodic_memories_result(*args, **kwargs).inserted

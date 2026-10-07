@@ -10,8 +10,7 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from bridge.memory_contracts import MemoryReadScope
-from bridge.memory_relevance import ordered_relevance_terms
+from bridge.memory_contracts import MemoryReadScope, ordered_relevance_terms
 from bridge.memory_store import request_source_cutoff
 
 MAX_SEARCH_CANDIDATES = 48

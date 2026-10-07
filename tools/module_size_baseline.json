@@ -37,7 +37,7 @@
     "tests/test_memory_completion_safety.py": 624,
     "tests/test_memory_diagnostics.py": 856,
     "tests/test_memory_native_backend.py": 504,
-    "tests/test_memory_service.py": 880,
+    "tests/test_memory_service.py": 865,
     "tests/test_operation_recovery.py": 1141,
     "tests/test_persona_editor.py": 823,
     "tests/test_provider_ingestion_safety.py": 538,

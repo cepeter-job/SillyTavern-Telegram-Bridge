@@ -197,7 +197,10 @@ def test_npc_recovery_after_recall_respects_old_request_and_preserves_prefix(db,
                 else []
             )
             return json.dumps(
-                {"npcs": [{"name": "Maya", "aliases": [], "operations": operations}] if operations else []}
+                {
+                    "npcs": [{"name": "Maya", "aliases": [], "operations": operations}] if operations else [],
+                    "simulation": {},
+                }
             )
 
         provider = make_test_provider_port(generate_backend=generate)

@@ -341,43 +341,15 @@ def handle_curated_memory_command(
     delivery_port: DeliveryPort,
     request_context,
 ) -> None:
-    suffix = command[len("/memory curated") :].strip().casefold()
-    if suffix in {"", "status"}:
-        send_curated_memory_menu(
-            token,
-            chat_id,
-            db,
-            session,
-            delivery_port=delivery_port,
-            request_context=request_context,
-        )
-        return
-    if suffix == "refresh":
-        if memory_mode(db, chat_id) != "on":
-            delivery_port.send_text(token, chat_id, "Hindsight memory is off. Enable /memory first.")
-            return
-        delivery_port.send_typing(token, chat_id)
-        items = curate_memory_now(
-            db,
-            api_key,
-            chat_id,
-            session,
-            str(fields.get("name") or "unknown"),
-            provider_port=provider_port,
-            app_settings=request_context.app_settings,
-        )
-        delivery_port.send_text(
-            token,
-            chat_id,
-            "Curated memory refreshed:\n"
-            + (
-                curated_memory_text(db, chat_id, session["session_id"])
-                if items is not None
-                else "No curated memory update was produced."
-            ),
-        )
-        return
-    delivery_port.send_text(token, chat_id, "Use /memory curated or /memory curated refresh.")
+    """Keep all curated-memory command aliases on the canonical panel surface."""
+    send_curated_memory_menu(
+        token,
+        chat_id,
+        db,
+        session,
+        delivery_port=delivery_port,
+        request_context=request_context,
+    )
 
 
 def _memory_curator_command_route(

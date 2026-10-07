@@ -10,7 +10,6 @@ from bridge.callback_tokens import resolve_dynamic_callback_token
 from bridge.callbacks import close_panel_message, discard_panel_binding
 from bridge.cards import send_panel_message
 from bridge.config import GENERATION_DEFAULTS, REASONING_LEVELS
-from bridge.databank_commands import handle_data_bank_command
 from bridge.databank_panels import (
     send_databank_menu,
     send_databank_remove_confirm,
@@ -381,14 +380,7 @@ def _handle_ragremoveconfirm(
 ) -> None:
     filename = resolve_dynamic_callback_token(parts[2], "rag_document", chat_id, db=request_context.db) or ""
     if filename:
-        handle_data_bank_command(
-            db,
-            token,
-            chat_id,
-            "/databank remove " + filename + " confirm",
-            app_settings=request_context.app_settings,
-            rag_service=rag_service,
-        )
+        rag_service.remove(db, chat_id, filename)
     send_databank_menu(token, chat_id, db, message_id, request_context=request_context)
 
 
@@ -403,21 +395,14 @@ def _handle_ragremove(db: sqlite3.Connection, token: str, chat_id: str, request_
 def _handle_rag_reindex(
     db: sqlite3.Connection, token: str, chat_id: str, request_context, rag_service: RagService, message_id
 ) -> None:
-    total, indexed = rag_service.reindex(db, chat_id)
-    send_text(token, chat_id, f"Data Bank reindex complete: {indexed}/{total} chunks indexed.")
+    rag_service.reindex(db, chat_id)
     send_databank_menu(token, chat_id, db, message_id, request_context=request_context)
 
 
-def _handle_rag(
-    db: sqlite3.Connection, token: str, chat_id: str, request_context, rag_service: RagService, message_id, parts
-) -> None:
+def _handle_rag(db: sqlite3.Connection, token: str, chat_id: str, request_context, message_id, parts) -> None:
     value = parts[2]
     if value in {"on", "off"}:
         set_meta(db, f"rag_mode:{chat_id}", value)
-    elif value == "list":
-        handle_data_bank_command(
-            db, token, chat_id, "/databank list", app_settings=request_context.app_settings, rag_service=rag_service
-        )
     send_databank_menu(token, chat_id, db, message_id, request_context=request_context)
 
 
@@ -531,7 +516,7 @@ def _bind_routes(
                 lambda: _handle_ragremoveconfirm(db, token, chat_id, request_context, rag_service, message_id, parts),
             ),
             ("enum:ragremove:", lambda: _handle_ragremove(db, token, chat_id, request_context, message_id, parts)),
-            ("enum:rag:", lambda: _handle_rag(db, token, chat_id, request_context, rag_service, message_id, parts)),
+            ("enum:rag:", lambda: _handle_rag(db, token, chat_id, request_context, message_id, parts)),
         ),
     )
 

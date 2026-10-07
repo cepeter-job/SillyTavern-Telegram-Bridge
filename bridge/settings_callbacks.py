@@ -14,7 +14,7 @@ from bridge.expressions import (
     expression_mode_key,
     send_expression_menu,
 )
-from bridge.language import response_language_label, send_language_menu, set_response_language
+from bridge.language import send_language_menu, set_response_language
 from bridge.limits import PENDING_SETTINGS_TTL_SECONDS
 from bridge.metadata import set_meta
 from bridge.note_panels import send_note_menu
@@ -138,8 +138,14 @@ def handle_language_callback(
             answer_callback(token, str(callback.get("id", "")), "Language choice expired")
             return True
         answer_callback(token, str(callback.get("id", "")), "Language selected")
-        remove_inline_keyboard(db, token, callback)
-        send_text(token, chat_id, f"Model response language set to: {response_language_label(language)}.")
+        send_language_menu(
+            token,
+            chat_id,
+            language,
+            message.get("message_id"),
+            delivery_port=delivery_port,
+            request_context=request_context,
+        )
         return True
     return False
 

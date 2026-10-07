@@ -8,7 +8,6 @@ import time
 import uuid
 from typing import Any
 
-from bridge.action_adjudication import action_mode, set_action_mode
 from bridge.check_panels import send_check_menu
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.conversation_lifecycle import START_REQUIRED, require_started, split_command_text
@@ -167,22 +166,6 @@ def handle_check_command(
     operation_id: int | str | None,
     delivery_port: DeliveryPort,
 ) -> None:
-    parts = command.split()
-    if len(parts) >= 2 and parts[1].casefold() == "mode":
-        try:
-            if len(parts) == 3:
-                guard_story_mutation(db, chat_id, session_id)
-                set_action_mode(db, chat_id, session_id, parts[2].casefold())
-            elif len(parts) != 2:
-                raise ValueError("Use /check mode auto, director, or manual.")
-            mode = action_mode(db, chat_id, session_id)
-            label = {"auto": "Utility", "director": "Director", "manual": "Manual only"}[mode]
-            delivery_port.send_text(
-                token, chat_id, f"Action checks: {label}. Bridge-owned dice; /check remains available."
-            )
-        except ValueError as exc:
-            delivery_port.send_text(token, chat_id, str(exc))
-        return
     try:
         domain, dc, action = _parse(command)
     except ValueError:

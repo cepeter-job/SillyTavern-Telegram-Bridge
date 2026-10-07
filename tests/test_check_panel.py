@@ -113,11 +113,8 @@ def test_check_panel_recent_view_uses_saved_checks_without_model_call(session_db
     settings, db, session = session_db
     calls = _open_panel(db, settings, session, monkeypatch)
     with write_transaction(db):
-        sql = (
-            "INSERT INTO messages(chat_id,session_id,role,content,created_at) "
-            "VALUES('chat','s1','user','Open door',1)"
-        )
-        rowid = db.execute(sql).lastrowid
+        sql = "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)"
+        rowid = db.execute(sql, ("chat", "s1", "user", "Open door", 1)).lastrowid
     perform_check(
         db,
         "chat",

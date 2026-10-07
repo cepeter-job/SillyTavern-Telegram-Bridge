@@ -10,6 +10,27 @@ from bridge.narrative_repository import load_narrative_clock, load_narrative_thr
 _LINKS = {"arc_id": load_arc_row, "thread_id": load_narrative_thread}
 
 
+def canonicalize_narrative_links(
+    db: sqlite3.Connection, chat_id: str, session_id: str, payload: dict[str, Any], source_rowid: int
+) -> dict[str, Any]:
+    """Drop optional plot references the extractor cannot prove at this source boundary."""
+    result = dict(payload)
+    for group in ("quests", "foreshadowing"):
+        records = []
+        for item in payload.get(group, []):
+            record = dict(item)
+            for field, loader in _LINKS.items():
+                identifier = record.get(field)
+                if not identifier:
+                    continue
+                row = loader(db, chat_id, session_id, identifier)
+                if row is None or row["source_revision"] > source_rowid:
+                    record.pop(field, None)
+            records.append(record)
+        result[group] = records
+    return result
+
+
 def validate_narrative_links(
     db: sqlite3.Connection, chat_id: str, session_id: str, payload: dict[str, Any], source_rowid: int
 ) -> None:

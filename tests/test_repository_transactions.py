@@ -539,7 +539,6 @@ class GroupTransactionTests(SettingsTestCase):
             patch.object(RagService, "bundle", return_value={}),
             patch.object(_m_message_commands, "build_chat_messages", return_value=[]),
             patch.object(_m_memory_backend, "recall_memory_context", return_value=""),
-            patch.object(_m_memory, "session_summary_for_prompt", return_value=""),
             patch.object(RagService, "context_for_prompt", return_value=""),
             patch.object(_m_message_commands, "send_typing", return_value=None),
             patch.object(RagService, "citation_footer", return_value=""),

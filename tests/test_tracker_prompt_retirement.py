@@ -319,10 +319,13 @@ def test_migration_27_cleans_retired_tracker_wrapper_without_losing_native_state
         assert pending_memory_invalidation(db, "chat", "s1", "npc") is None
         _, new_digest = source_identity(db, "chat", "s1", source)
         assert new_digest != old_digest
-        assert db.execute(
-            "SELECT source_digest FROM simulation_sources WHERE chat_id='chat' AND session_id='s1' AND source_rowid=?",
-            (source,),
-        ).fetchone()[0] == new_digest
+        assert (
+            db.execute(
+                "SELECT source_digest FROM simulation_sources WHERE chat_id='chat' AND session_id='s1' AND source_rowid=?",
+                (source,),
+            ).fetchone()[0]
+            == new_digest
+        )
     finally:
         db.close()
 

@@ -38,3 +38,29 @@ test('Recovery remains reachable after a page replaces the operation target',asy
     assert.equal(posts,1);assert.equal(lookup,1);assert.match(target.textContent,/Draft retained/);
   } finally {page.close();}
 });
+
+for(const status of [401,403,404])test(`A null error envelope preserves permanent HTTP ${status} and stops recovery`,async()=>{
+  let posts=0,reads=0;
+  const page=await fixture(async(path,options={})=>{
+    assert.equal(options.method,'POST');posts++;
+    return {id:'accepted-job',state:'running'};
+  });
+  try {
+    const fetch=page.window.fetch;
+    page.window.fetch=async(path,options)=>{
+      if(path.startsWith('/api/v1/jobs/')){
+        reads++;
+        return new Response('null',{status,headers:{'Content-Type':'application/json'}});
+      }
+      return fetch(path,options);
+    };
+    await assert.rejects(page.namespace.runJob('/director/reassess',{session_id:'story-a'}),error=>{
+      assert.equal(error.status,status);
+      assert.equal(error.recoverable,false);
+      assert.equal(error.uncertain,true);
+      return true;
+    });
+    assert.equal(posts,1);assert.equal(reads,1);
+    assert.equal(page.document.querySelector('.operation-recovery'),null);
+  } finally {page.close();}
+});

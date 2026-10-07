@@ -14,7 +14,7 @@ export async function api(path, {method='GET', body, signal, binary=false}={}) {
   let result;
   try {result=await response.json();}
   catch {throw Object.assign(new Error('The bridge response could not be read.'),{status:response.ok?502:response.status});}
-  if (!response.ok) { const error = new Error(result.error?.message || 'Request failed.'); error.status=response.status; throw error; }
+  if (!response.ok) { const error = new Error(result?.error?.message || 'Request failed.'); error.status=response.status; throw error; }
   return result;
 }
 export function createSessionScope() {
@@ -183,7 +183,7 @@ function showRecovery(error) {
   const resume=button(error.jobId?'Continue tracking':'Recover original operation',async()=>{
     await resumeJob(error.operationId,panel);
     panel.classList.add('recovery-completed');
-    panel.append(el('p',{},'Your editor has not been refreshed; unsaved edits are still in its original view.'),
+    panel.append(el('p',{},'The saved operation has been recovered. Refresh the current view when you are ready to review saved state.'),
       button('Refresh view (discard unsaved edits)',async()=>{await navigate();panel.remove();},'secondary'),
       button('Dismiss',()=>panel.remove(),'secondary'));
   },'secondary');

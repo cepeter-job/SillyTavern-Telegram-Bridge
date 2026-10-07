@@ -17,7 +17,8 @@ from bridge.memory_retry_schema import migrate_memory_retry_guard
 from bridge.memory_schema import migrate_durable_memory
 from bridge.memory_scope_schema import migrate_memory_knowledge
 from bridge.memory_search_schema import migrate_memory_search
-from bridge.migrations import Migration as _Migration, run_migrations as _run_migrations
+from bridge.migrations import Migration as _Migration
+from bridge.migrations import run_migrations as _run_migrations
 from bridge.narrative_arc_schema import migrate_narrative_arc_evidence
 from bridge.narrative_runtime_schema import migrate_narrative_history_revisions
 from bridge.narrative_schema import migrate_narrative_engine_foundation

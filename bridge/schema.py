@@ -1,6 +1,7 @@
 import sqlite3
 import time
 
+from bridge.action_schema import migrate_action_adjudication
 from bridge.alternate_ending_schema import migrate_alternate_ending_lineage
 from bridge.closed_story_schema import migrate_closed_story_guards
 from bridge.conversation_schema import migrate_conversation_modes
@@ -514,6 +515,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(25, "canonical_simulation_trackers", migrate_simulation_trackers),
     _Migration(26, "retire_prompt_tracker_bootstrap", retire_prompt_tracker_bootstrap),
     _Migration(27, "local_first_memory_cleanup", migrate_local_first_memory_cleanup),
+    _Migration(28, "natural_action_adjudication", migrate_action_adjudication),
 )
 
 

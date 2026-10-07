@@ -345,6 +345,17 @@ def test_autonomous_claim_keeps_hindsight_recovery_eligible_when_source_is_old(d
     assert len(claim_jobs(db, now=2 * 86400, layers=("hindsight",), autonomous=True)) == 1
 
 
+def test_autonomous_claim_keeps_hindsight_recovery_eligible_after_repeated_retain_failures(db):
+    from bridge.memory_store import claim_jobs
+
+    append(db, "old archival source")
+    db.execute(
+        "UPDATE memory_jobs SET attempts=8,last_error='retain_failed',next_attempt_at=0 WHERE layer='hindsight'"
+    )
+    db.commit()
+    assert len(claim_jobs(db, now=2 * 86400, layers=("hindsight",), autonomous=True)) == 1
+
+
 def test_autonomous_claim_parks_repeated_failures_but_manual_recovery_remains_available(db):
     from bridge.memory_store import claim_jobs
 

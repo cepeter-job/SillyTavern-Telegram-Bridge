@@ -399,9 +399,7 @@ def _handle_rag_reindex(
     send_databank_menu(token, chat_id, db, message_id, request_context=request_context)
 
 
-def _handle_rag(
-    db: sqlite3.Connection, token: str, chat_id: str, request_context, rag_service: RagService, message_id, parts
-) -> None:
+def _handle_rag(db: sqlite3.Connection, token: str, chat_id: str, request_context, message_id, parts) -> None:
     value = parts[2]
     if value in {"on", "off"}:
         set_meta(db, f"rag_mode:{chat_id}", value)
@@ -518,7 +516,7 @@ def _bind_routes(
                 lambda: _handle_ragremoveconfirm(db, token, chat_id, request_context, rag_service, message_id, parts),
             ),
             ("enum:ragremove:", lambda: _handle_ragremove(db, token, chat_id, request_context, message_id, parts)),
-            ("enum:rag:", lambda: _handle_rag(db, token, chat_id, request_context, rag_service, message_id, parts)),
+            ("enum:rag:", lambda: _handle_rag(db, token, chat_id, request_context, message_id, parts)),
         ),
     )
 

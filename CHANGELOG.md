@@ -12,7 +12,7 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Added
 
-- Adjudicate eligible in-world actions before narration with Utility or Director, bridge-owned d20/modifiers, durable retry-safe receipts and `/check mode auto|director|manual`. No automatic rolls for narrator steering, greetings or groups.
+- Adjudicate eligible in-world actions before narration with Utility or Director, bridge-owned d20/modifiers, durable retry-safe receipts and an inline `/check` mode/recent-checks panel; typed `/check mode auto|director|manual` remains available. No automatic rolls for narrator steering, greetings or groups.
 - Track user tasks in canonical reversible state and Story Trackers: objective, stage, progress, pending/completed steps and established consequences.
 
 - Add plain-text `/usage` for the active session’s last 7 days of provider-reported token usage, coverage, failures/cancellations and daily/model/task breakdowns. Reuse the existing ledger without a model call or Mini App panel; include Telegram command-menu and Help entries.

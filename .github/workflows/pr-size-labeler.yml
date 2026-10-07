@@ -30,6 +30,7 @@ jobs:
     permissions:
       contents: read
       issues: write # label reads and writes use the REST issues endpoints
+      pull-requests: write # required for labels attached to pull-request resources
     steps:
       - name: Fetch the trusted classifier from the base revision
         env:

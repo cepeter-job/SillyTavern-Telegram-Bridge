@@ -266,7 +266,6 @@ def test_hindsight_sync_operations_close_owned_event_loops(monkeypatch, tmp_path
     monkeypatch.setattr(asyncio.BaseEventLoop, "__init__", track)
     monkeypatch.setattr(Hindsight, operation, response)
     monkeypatch.setattr(memory_backend, "memory_mode", lambda *args: "on")
-    monkeypatch.setattr(memory_backend, "_record_hindsight_document", lambda *args, **kwargs: None)
     settings = make_test_settings(home=tmp_path, environ={"HINDSIGHT_API_URL": "http://127.0.0.1:8890"})
 
     def exercise():

@@ -201,7 +201,6 @@ class NarrativeResetTests(SettingsTestCase):
         from bridge.memory_retirement_store import queue_session_memory_cleanup
 
         with (
-            patch.object(_m_message_commands, "delete_outgoing_messages"),
             patch.object(_m_message_commands, "delete_tracked_panel_messages"),
             patch.object(_m_message_commands, "telegram_request", return_value={}),
         ):

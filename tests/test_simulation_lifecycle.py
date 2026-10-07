@@ -34,8 +34,7 @@ def test_reset_purges_trackers_checks_and_receipts(session_db, monkeypatch):
 
     _, db, session = session_db
     seed(db)
-    monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a: None)
-    monkeypatch.setattr(message_commands, "delete_tracked_panel_messages", lambda *a: None)
+    monkeypatch.setattr(message_commands, "delete_tracked_panel_messages", lambda *a, **k: None)
     message_commands.reset_session(
         db, "", "chat", session, memory_service=SimpleNamespace(queue_cleanup=lambda *a: None), npc_service=NpcService()
     )

@@ -6,10 +6,10 @@ from settings_test_support import make_test_settings
 
 from bridge import (
     cards,
+    message_commands,
     model_selection,
     provider_callbacks,
     provider_panels,
-    response_delivery,
     settings_input,
     settings_panels,
     telegram,
@@ -19,7 +19,6 @@ from bridge.generation_settings import get_generation_settings, update_generatio
 from bridge.light_novel_repository import attach_choice_set, bind_choice_panel, consume_choice_set, reserve_choice_set
 from bridge.light_novel_service import attach_turn, ensure_choices, prepare_turn
 from bridge.memory import generate_session_summary
-from bridge.message_commands import reset_session
 from bridge.metadata import get_meta
 from bridge.provider_port import ProviderPort
 from bridge.session_core import create_session
@@ -376,11 +375,11 @@ def test_reset_deletes_tracked_user_messages_but_not_other_sessions(tmp_path, mo
         db.commit()
         calls = []
         monkeypatch.setattr(
-            response_delivery,
+            message_commands,
             "telegram_request",
             lambda _token, method, payload=None: calls.append((method, payload)) or {},
         )
-        reset_session(
+        message_commands.reset_session(
             db,
             "token",
             "chat",

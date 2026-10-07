@@ -9,9 +9,11 @@ backend, deploy a service, or read an existing story database.
 ## Checkpoint status
 
 The source, fixtures, transport contracts and report schema are implemented.
-**Frozen empirical results are pending source publication, independent review and
-CI.** Test-server responses and hand-authored vectors are contract fixtures;
-they are not evidence of model retrieval quality. The follow-up measured artifact
+The source is under review in
+[PR409](https://github.com/cepeter/SillyTavern-Telegram-Bridge/pull/409).
+**Frozen empirical results are pending corrected-source review and CI.**
+Test-server responses and hand-authored vectors are contract fixtures; they are not
+evidence of model retrieval quality. The follow-up measured artifact
 will be `docs/story-memory-retrieval-comparison-results.json`, with its exact
 measured commit and source hashes. Genuine cache and live results will be retained
 if the authorized bounded study produces them. A skipped or failed optional run
@@ -52,8 +54,11 @@ Facts come from actual accepted turns, production source segmentation and the
 episodic extraction worker. The scripted provider acknowledgment remains exactly
 `Rowan records the observation.` Production transport normalization determines
 its stored form. The harness checks that result and records actual row IDs and
-hashes. Marker-free reconciliation packets drive the real checkpoint, ending,
-epilogue and delivery bookkeeping before `create_alternate_ending` executes.
+hashes. If the production post-retain hook reconciles a finale before acceptance
+returns, the scripted provider identifies the exact committed resolution assistant
+row in the supplied transcript payload. It uses that observed identity immediately;
+no predicted offset or later caller-side stage change grants resolution. Marker-free
+reconciliation packets drive the real checkpoint, ending, epilogue and delivery bookkeeping before `create_alternate_ending` executes.
 There are no direct derived-fact or provenance inserts. The clone records actual
 source remapping and new session incarnation; local memory readiness is `ready`.
 Historical cutoffs use captured assistant row IDs, never arithmetic offsets.
@@ -102,8 +107,11 @@ number of relevant facts in each case, then averages cases. With five two-fact
 queries, the panel's true macro Recall@1 ceiling is **88.636%**, not 100%.
 The two no-answer cases report candidate-return rate; they do not measure
 hallucination. Failed/skipped query IDs and expected/successful denominators are
-explicit. Paired differences use only jointly successful IDs. Contract vectors
-omit quality aggregate fields even when their adapter succeeds.
+explicit. Each observation retains its predeclared category, and category summaries
+separately report successful, failed and skipped denominators plus applicable
+component or selected-set quality. Paired differences use only jointly successful
+IDs. Contract vectors omit quality aggregate fields both overall and within every
+category, even when their adapter succeeds.
 
 Production-selected sets report Recall@6, selected/relevant counts and forbidden
 counts, with no global fused MRR. Zero forbidden evidence, complete current vector
@@ -226,8 +234,10 @@ does not create an abandoned retry thread. Frontend caps do not exactly bound
 Hindsight's internal LLM/embedding requests or provider charges. Token counters,
 when returned, are partial observations rather than a complete cost statement.
 
-An atomic ownership manifest is saved **before creation**. The generated bank ID
-uses `story-memory-eval-`, a random UUID and the fixture hash. The harness checks
+An atomic ownership manifest is saved **before creation**. The temporary file is
+fsynced before replacement, and the parent directory is fsynced after replacement,
+before any creation or retain request can dispatch. A directory-sync failure stops
+dispatch. The generated bank ID uses `story-memory-eval-`, a random UUID and the fixture hash. The harness checks
 that exact bank's `/config` returns 404, explicitly creates it with
 `enable_observations: false`, and verifies the resolved setting before ingestion.
 It never lists or adopts another bank. Retains include only canonical summaries;

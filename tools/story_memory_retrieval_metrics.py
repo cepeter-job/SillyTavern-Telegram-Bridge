@@ -27,6 +27,7 @@ def latency_summary(values):
 def query_base(corpus, case):
     return {
         "query_id": case.query_id,
+        "category": case.category,
         "relevant_fact_keys": list(case.relevant_fact_keys),
         "eligible_count": len(corpus.eligible(case)),
         "forbidden_fact_keys": list(case.forbidden_fact_keys),
@@ -123,7 +124,7 @@ def _quality(rows, *, selected_set=False):
     return result
 
 
-def aggregate_backend(rows, evidence_kind, *, selected_set=False):
+def aggregate_backend(rows, evidence_kind, *, selected_set=False, include_categories=True):
     available = [row for row in rows if row["status"] == "available"]
     failed = [row["query_id"] for row in rows if row["status"] == "failed"]
     skipped = [row["query_id"] for row in rows if row["status"] == "skipped"]
@@ -141,6 +142,14 @@ def aggregate_backend(rows, evidence_kind, *, selected_set=False):
         "denominators": {
             "expected_queries": len(rows),
             "successful_queries": len(available),
+            "failed_queries": len(failed),
+            "skipped_queries": len(skipped),
+            "failed_positive_queries": sum(
+                row["status"] == "failed" and bool(row["relevant_fact_keys"]) for row in rows
+            ),
+            "failed_no_answer_queries": sum(
+                row["status"] == "failed" and not row["relevant_fact_keys"] for row in rows
+            ),
             "expected_positive_queries": sum(bool(row["relevant_fact_keys"]) for row in rows),
             "successful_positive_queries": sum(bool(row["relevant_fact_keys"]) for row in available),
             "expected_no_answer_queries": sum(not row["relevant_fact_keys"] for row in rows),
@@ -155,6 +164,13 @@ def aggregate_backend(rows, evidence_kind, *, selected_set=False):
         result["display_order"] = "memory_id ascending; not a global retrieval rank"
     if evidence_kind != "contract_only" and available:
         result["quality"] = _quality(available, selected_set=selected_set)
+    if include_categories:
+        categories = {}
+        for category in sorted({row.get("category", "uncategorized") for row in rows}):
+            group = [row for row in rows if row.get("category", "uncategorized") == category]
+            summary = aggregate_backend(group, evidence_kind, selected_set=selected_set, include_categories=False)
+            categories[category] = {key: value for key, value in summary.items() if key not in {"queries", "latency"}}
+        result["categories"] = categories
     return result
 
 

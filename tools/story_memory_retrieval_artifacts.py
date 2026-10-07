@@ -37,6 +37,12 @@ def save_artifact(path: Path, artifact: dict) -> None:
             stream.flush()
             os.fsync(stream.fileno())
         temporary.replace(path)
+        # Persist the directory entry before an owned bank mutation can dispatch.
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)

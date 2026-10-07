@@ -90,7 +90,21 @@ class PanelTransport(OfflineTransport):
                 }
             )
         if sid.startswith("narrative:"):
-            return json.dumps(narrative_packet(self.stage, self.resolution_rowid))
+            stage, rowid = self.stage, self.resolution_rowid
+            # The production finale hook may reconcile before accept_turn returns.
+            # Bind this packet to its supplied committed assistant row, never a
+            # predicted ID or a caller-side stage update after acceptance.
+            if stage == "ready":
+                from bridge.roleplay_format import normalize_roleplay_transport
+                from bridge.telegram_output import telegram_transport_output
+
+                rows = json.loads(messages[-1]["content"].split("Complete committed transcript rows:\n", 1)[1])
+                expected = normalize_roleplay_transport(telegram_transport_output(RESOLUTION[1]))
+                if rows and rows[-1]["role"] == "assistant" and rows[-1]["content"] == expected:
+                    rowid = rows[-1]["rowid"]
+                    require(type(rowid) is int and rowid > 0, "Resolution needs a committed assistant identity")
+                    stage = "resolution"
+            return json.dumps(narrative_packet(stage, rowid))
         if sid.endswith(":epilogue"):
             self.stage = "epilogue"
             return EPILOGUE

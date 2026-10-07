@@ -156,10 +156,8 @@ def _create_rag_tables(db: sqlite3.Connection) -> None:
     )
     db.execute("CREATE INDEX IF NOT EXISTS data_bank_chunks_chat_chunk_idx ON data_bank_chunks(chat_id, chunk_id)")
     db.execute(
-        (
-            "CREATE INDEX IF NOT EXISTS data_bank_embeddings_namespace_chunk_idx ON "
-            "data_bank_embeddings(embedding_namespace, chunk_id)"
-        )
+        "CREATE INDEX IF NOT EXISTS data_bank_embeddings_namespace_chunk_idx ON "
+        "data_bank_embeddings(embedding_namespace, chunk_id)"
     )
     db.execute(
         (

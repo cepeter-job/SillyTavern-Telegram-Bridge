@@ -74,31 +74,10 @@ def test_set_response_language_uses_injected_session_update():
     ]
 
 
-def test_language_command_uses_injected_delivery_and_update_session():
+def test_direct_language_command_adapter_is_retired():
     import bridge.language as language
 
-    sent = []
-    updates = []
-    delivery = make_test_delivery_port(
-        send_text=lambda token, chat_id, text: sent.append((token, chat_id, text)) or [],
-    )
-
-    language.handle_language_command(
-        object(),
-        "token",
-        "chat",
-        {"session_id": "session", "response_language": "auto"},
-        "/language id",
-        operation_id=11,
-        delivery_port=delivery,
-        update_session=lambda *args, **kwargs: updates.append((args, kwargs)),
-        request_context="ctx",
-    )
-
-    assert updates
-    assert updates[0][0][1:3] == ("chat", "session")
-    assert updates[0][1]["response_language"] == "id"
-    assert sent == [("token", "chat", "Model response language set to: Bahasa Indonesia.")]
+    assert not hasattr(language, "handle_language_command")
 
 
 def test_language_boundary_does_not_change_remember_inline_action(monkeypatch):

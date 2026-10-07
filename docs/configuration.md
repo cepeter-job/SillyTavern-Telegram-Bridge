@@ -277,8 +277,9 @@ enabled.
 
 #### Canonical story trackers
 
-Natural action checks default to Utility preflight before eligible new turns. Use
-`/check mode auto|director|manual` per session; no new provider configuration or
+Natural action checks default to Utility preflight before eligible new turns. Open
+the `/check` panel per session, or use `/check mode auto|director|manual` directly;
+no new provider configuration or
 environment variable is required. Director mode selects the existing Director
 route, not an additional call. Migration 29 adds bounded, session-owned pending
 check receipts. User task state reuses the existing simulation tables and history.
@@ -288,8 +289,8 @@ retry semantics and the distinction between a roll and established consequences.
 Tracker extraction shares the existing NPC Utility job and its provider routing,
 leases, multipart source coverage and rewrite checks. It adds no endpoint,
 runtime dependency or separate per-source model request. Use the existing NPC
-refresh/recovery workflow if background extraction is delayed. `/check` rolls
-locally and consumes no model tokens.
+refresh/recovery workflow if background extraction is delayed. Opening the `/check` panel
+and reading recent checks are local; explicit `/check <domain> <DC> <action>` rolls locally.
 
 Records are limited to 64 entities per tracker kind and 16 KiB of encoded JSON
 per record. Each user inventory/skill/condition collection is bounded to 64

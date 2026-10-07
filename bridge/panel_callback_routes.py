@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from bridge.character_callbacks import handle_character_callback
 from bridge.character_optimizer_callbacks import handle_character_optimizer_callback
-from bridge.character_proposal_callbacks import handle_character_proposal_callback\nfrom bridge.check_callbacks import handle_check_panel_callback
+from bridge.character_proposal_callbacks import handle_character_proposal_callback
+from bridge.check_callbacks import handle_check_panel_callback
 from bridge.conversation_callbacks import handle_greeting_callback, handle_reset_callback, handle_swipe_callback
 from bridge.delivery_port import DeliveryPort
 from bridge.director_callbacks import handle_director_callback

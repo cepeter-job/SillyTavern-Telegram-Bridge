@@ -17,7 +17,8 @@ from bridge.metadata import set_meta
 
 def add(db, text="A durable event"):
     db.execute(
-        "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat','s1','user',?,1)", (text,)
+        "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat','s1','user',?,?)",
+        (text, memory_backend.time.time()),
     )
     db.commit()
 

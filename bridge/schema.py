@@ -15,6 +15,7 @@ from bridge.memory_archival_schema import migrate_archival_attempts
 from bridge.memory_draft_schema import migrate_complete_memory_parts
 from bridge.memory_facts_only_schema import migrate_facts_only_hindsight
 from bridge.memory_retirement_schema import migrate_local_first_memory_cleanup
+from bridge.memory_retry_schema import migrate_memory_retry_guard
 from bridge.memory_schema import migrate_durable_memory
 from bridge.memory_scope_schema import migrate_memory_knowledge
 from bridge.memory_search_schema import migrate_memory_search
@@ -156,10 +157,8 @@ def _create_rag_tables(db: sqlite3.Connection) -> None:
     )
     db.execute("CREATE INDEX IF NOT EXISTS data_bank_chunks_chat_chunk_idx ON data_bank_chunks(chat_id, chunk_id)")
     db.execute(
-        (
-            "CREATE INDEX IF NOT EXISTS data_bank_embeddings_namespace_chunk_idx ON "
-            "data_bank_embeddings(embedding_namespace, chunk_id)"
-        )
+        "CREATE INDEX IF NOT EXISTS data_bank_embeddings_namespace_chunk_idx ON "
+        "data_bank_embeddings(embedding_namespace, chunk_id)"
     )
     db.execute(
         (
@@ -514,6 +513,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(27, "local_first_memory_cleanup", migrate_local_first_memory_cleanup),
     _Migration(28, "facts_only_hindsight", migrate_facts_only_hindsight),
     _Migration(29, "natural_action_adjudication", migrate_action_adjudication),
+    _Migration(30, "autonomous_memory_backlog_guard", migrate_memory_retry_guard),
 )
 
 

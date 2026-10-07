@@ -14,7 +14,7 @@ from bridge.expressions import (
     expression_mode_key,
     send_expression_menu,
 )
-from bridge.language import response_language_label, send_language_menu, set_response_language
+from bridge.language import send_language_menu, set_response_language
 from bridge.limits import PENDING_SETTINGS_TTL_SECONDS
 from bridge.metadata import set_meta
 from bridge.note_panels import send_note_menu

@@ -1,5 +1,6 @@
 import {el,card,button,notice,feedback} from './ui.js';
 import {icon} from './icons.js';
+import {createJobController} from './jobs.js';
 import {setupNative,selectionFeedback} from './native.js';
 const telegram = window.Telegram?.WebApp;
 const raw = telegram?.initData || '';
@@ -10,8 +11,10 @@ export async function api(path, {method='GET', body, signal, binary=false}={}) {
     headers:{Authorization:'tma '+raw, ...(body === undefined ? {} : {'Content-Type':'application/json'})},
     body:body === undefined ? undefined : JSON.stringify(body), signal:signal || AbortSignal.timeout(30000)});
   if (binary && response.ok) return response.blob();
-  const result = await response.json();
-  if (!response.ok) { const error = new Error(result.error?.message || 'Request failed.'); error.status=response.status; throw error; }
+  let result;
+  try {result=await response.json();}
+  catch {throw Object.assign(new Error('The bridge response could not be read.'),{status:response.ok?502:response.status});}
+  if (!response.ok) { const error = new Error(result?.error?.message || 'Request failed.'); error.status=response.status; throw error; }
   return result;
 }
 export function createSessionScope() {
@@ -142,32 +145,49 @@ async function start() {
 }
 start();
 
-export async function runJob(path, body, target) {
-  const operationId=crypto.randomUUID();let job;
+const jobController=createJobController({request:api,identity:()=>state.user?.id||'current-document'});
+export const resumeJob=(id,target)=>displayJob(notify=>jobController.resume(id,notify),target);
+export const runJob=(path,body,target)=>displayJob(notify=>jobController.run(path,body,notify),target);
+async function displayJob(run,target) {
+  document.querySelectorAll('.recovery-completed').forEach(node=>node.remove());
   const label=el('span',{class:'badge'},'Pending'),message=el('p',{},'Submitting the operation…');
   const progress=card('Operation',label,message,el('progress',{'aria-label':'Operation in progress'}));
   progress.classList.add('operation-status');progress.setAttribute('role','status');
   if(target)target.replaceChildren(progress);
   try {
-    job=await api(path,{method:'POST',body:{...body,operation_id:operationId}});
-    const deadline=Date.now()+600000;
-    while(['queued','running'].includes(job.state)) {
-      label.textContent=job.state==='queued'?'Queued':'Running';
-      message.textContent=job.state==='queued'?'Waiting for a worker.':'You may leave this page; work continues on the bridge.';
-      if(!job.id||Date.now()>deadline)throw new Error('The operation has not reported a final result.');
-      await new Promise(resolve=>setTimeout(resolve,1500));
-      if(document.hidden)continue;
-      job=await api('/jobs/'+encodeURIComponent(job.id));
-    }
-    if(job.state!=='succeeded')throw new Error(job.error||'Operation did not complete.');
+    const result=await run(event=>{
+      label.textContent=event.state==='queued'?'Queued':event.state==='running'?'Running':event.state;
+      message.textContent=event.state==='reconnecting'?'Connection interrupted. Last observed: '+(event.lastState||'unknown')+'. Reconnecting to the same operation.'
+        :event.state==='queued'?'Waiting for a worker.':'You may leave this page; saved work remains in Operations.';
+    });
     label.textContent='Completed';message.textContent='The operation completed.';progress.querySelector('progress')?.remove();
-    return job.result;
+    if(result!==undefined)progress.append(el('details',{},el('summary',{},'Result'),el('pre',{},JSON.stringify(result,null,2))));
+    return result;
   } catch(error) {
-    error.operationId=operationId;error.jobId=job?.id;
-    error.uncertain=Boolean(job&&['queued','running'].includes(job.state)||!job&&(!error.status||error.status>=500));
-    const summary=error.uncertain?'Status unavailable. Unable to confirm whether the operation finished. Check Operations before starting it again.':error.message;
-    progress.replaceChildren(el('h2',{},error.uncertain?'Status unavailable':'Operation failed'),feedback(summary),
-      button('Open operations',()=>navigate('system'),'secondary'));
+    if(error.recoverable)error.resume=nextTarget=>resumeJob(error.operationId,nextTarget);
+    const summary=error.uncertain?'Status unavailable. Unable to confirm whether the operation finished. Recovery checks the original operation without submitting another.':error.message;
+    const controls=el('div',{class:'actions'},button('Open Operations',()=>navigate('system'),'secondary'));
+    if(error.resume)showRecovery(error);
+    progress.replaceChildren(el('h2',{},error.uncertain?'Status unavailable':'Operation failed'),feedback(summary),controls);
     throw error;
   }
+}
+
+function showRecovery(error) {
+  const id='recovery-'+error.operationId;
+  let panel=document.getElementById(id);
+  if(!panel) {
+    panel=el('section',{id,class:'card operation-recovery','aria-label':'Unconfirmed operation'});
+    document.getElementById('content').before(panel);
+  }
+  const resume=button(error.jobId?'Continue tracking':'Recover original operation',async()=>{
+    await resumeJob(error.operationId,panel);
+    panel.classList.add('recovery-completed');
+    panel.append(el('p',{},'The saved operation has been recovered. Refresh the current view when you are ready to review saved state.'),
+      button('Refresh view (discard unsaved edits)',async()=>{await navigate();panel.remove();},'secondary'),
+      button('Dismiss',()=>panel.remove(),'secondary'));
+  },'secondary');
+  panel.replaceChildren(el('h2',{},'Unconfirmed operation'),
+    el('p',{},'Current status is unknown. Recovery checks the saved operation and never starts it again.'),resume,
+    button('Open Operations',()=>navigate('system'),'secondary'));
 }

@@ -49,6 +49,8 @@ dom.window.scrollTo=()=>{scrollResets++;};
 process.on('unhandledRejection',error=>errors.push(error));
 dom.window.Telegram={WebApp:{initData:ready.initData,initDataUnsafe:{start_param:'dashboard'},ready(){},expand(){},BackButton:{onClick(){},hide(){},show(){}}}};
 dom.window.AbortSignal=globalThis.AbortSignal;
+dom.window.TextEncoder=globalThis.TextEncoder;
+Object.defineProperty(dom.window.crypto,'subtle',{value:globalThis.crypto.subtle});
 dom.window.URL.createObjectURL=()=> 'blob:test-fixture';
 dom.window.URL.revokeObjectURL=()=>{};
 dom.window.fetch=async (path,options)=>{

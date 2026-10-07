@@ -38,6 +38,22 @@ def job_status(services: Any, who: MiniAppIdentity, values: dict) -> dict:
         return result
 
 
+def job_by_operation(services: Any, who: MiniAppIdentity, values: dict) -> dict:
+    """Recover a lost submission response without admitting or replaying work."""
+    key = text(values, "operation_id", 100)
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", key):
+        raise MiniAppError("Invalid operation identifier.")
+    with closing(services.db_factory()) as db:
+        exists = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='miniapp_jobs'").fetchone()
+        previous = store.by_key(db, who.user_id, key) if exists else None
+        result = store.load(db, who.user_id, previous[0]) if previous else None
+        if result is None:
+            raise MiniAppError(
+                "Operation not found. Review saved state before starting another.", status=404, code="not_found"
+            )
+        return result
+
+
 def recent_jobs(services: Any, who: MiniAppIdentity, values: dict) -> dict:
     with closing(services.db_factory()) as db:
         with write_transaction(db):

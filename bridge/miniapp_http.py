@@ -27,6 +27,7 @@ _RANK_ASSET_NAMES = tuple(f"rank_{tier}.webm" for tier in ("S", "A", "B", "C", "
 _ASSETS = {
     "index.html": "text/html",
     "app.js": "text/javascript",
+    "jobs.js": "text/javascript",
     "ui.js": "text/javascript",
     "icons.js": "text/javascript",
     "native.js": "text/javascript",
@@ -48,7 +49,7 @@ def api_routes() -> list[ApiRoute]:
     from bridge.miniapp_characters import routes as character_routes
     from bridge.miniapp_context import current_session
     from bridge.miniapp_director import routes as director_routes
-    from bridge.miniapp_jobs import job_status, recent_jobs
+    from bridge.miniapp_jobs import job_by_operation, job_status, recent_jobs
     from bridge.miniapp_memory import routes as memory_routes
     from bridge.miniapp_models import routes as model_routes
     from bridge.miniapp_npc import routes as npc_routes
@@ -62,6 +63,7 @@ def api_routes() -> list[ApiRoute]:
         ApiRoute("GET", "/session", current_session),
         ApiRoute("GET", "/jobs", recent_jobs),
         ApiRoute("GET", "/jobs/{job_id}", job_status),
+        ApiRoute("GET", "/jobs/by-operation/{operation_id}", job_by_operation),
         *character_routes(),
         *model_routes(),
         *session_routes(),

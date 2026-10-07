@@ -268,32 +268,6 @@ def test_populated_migration_twenty_replays_opaque_derived_coverage_from_canonic
         connection.close()
 
 
-def test_legacy_summary_adapter_is_scoped_and_does_not_refresh_or_append_scene(db, monkeypatch):
-    row = append(db)
-    write_artifacts(db, row)
-    monkeypatch.setattr(memory, "generate_session_summary", lambda *a, **k: pytest.fail("Foreground model call"))
-    result = memory.session_summary_for_prompt(
-        db,
-        "c",
-        {"session_id": "s"},
-        fields={"name": "Bob"},
-        through_rowid=row,
-        provider_port=make_test_provider_port(),
-        app_settings=make_test_settings(),
-    )
-    assert result == "Public tower" and "Location:" not in result
-    assert (
-        memory.session_summary_for_prompt(
-            db,
-            "c",
-            {"session_id": "s"},
-            provider_port=make_test_provider_port(),
-            app_settings=make_test_settings(),
-        )
-        == ""
-    )
-
-
 @pytest.mark.parametrize("kind", ["summary", "scene"])
 def test_final_validation_rejects_changed_classification_with_identical_parent_payload(db, kind):
     from bridge.memory_artifact_store import store_artifact_visibility

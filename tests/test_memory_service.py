@@ -230,11 +230,6 @@ class MemoryServiceMessageIntegrationTests(SettingsTestCase):
             ),
             patch.object(
                 _m_memory,
-                "session_summary_for_prompt",
-                side_effect=legacy_called,
-            ),
-            patch.object(
-                _m_memory,
                 "retain_session_memory",
                 side_effect=legacy_called,
             ),
@@ -380,11 +375,6 @@ class MemoryServiceMessageIntegrationTests(SettingsTestCase):
             patch.object(
                 _m_memory,
                 "get_session_summary",
-                side_effect=legacy_called,
-            ),
-            patch.object(
-                _m_memory,
-                "session_summary_for_prompt",
                 side_effect=legacy_called,
             ),
             patch.object(
@@ -597,11 +587,6 @@ class MemoryServiceMessageIntegrationTests(SettingsTestCase):
             patch.object(
                 _m_memory_backend,
                 "recall_memory_context",
-                side_effect=legacy_called,
-            ),
-            patch.object(
-                _m_memory,
-                "session_summary_for_prompt",
                 side_effect=legacy_called,
             ),
             patch.object(

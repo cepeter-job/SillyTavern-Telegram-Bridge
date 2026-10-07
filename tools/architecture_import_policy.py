@@ -1,7 +1,6 @@
 """Explicit dependency allowlists for low-level bridge owners."""
 
 LOW_LEVEL_IMPORTS = {
-    "bridge.legacy_tracker_history": frozenset(),
     "bridge.npc_rollback": frozenset({"bridge.npc_repository", "bridge.repository_contracts"}),
     "bridge.token_usage_schema": frozenset(),
     "bridge.token_usage": frozenset(
@@ -126,7 +125,6 @@ LOW_LEVEL_IMPORTS = {
             "bridge.job_store",
             "bridge.light_novel_format",
             "bridge.light_novel_repository",
-            "bridge.legacy_tracker_history",
             "bridge.model_selection",
             "bridge.provider_errors",
             "bridge.provider_port",

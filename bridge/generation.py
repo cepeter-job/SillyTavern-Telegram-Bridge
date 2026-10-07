@@ -23,7 +23,6 @@ from bridge.grounded_user_settings import grounded_user_policy
 from bridge.humanize import render_humanized_response
 from bridge.humanizer_settings import humanizer_enabled
 from bridge.language import normalize_response_language, response_language_instruction, response_language_label
-from bridge.legacy_tracker_history import prompt_text, strip_legacy_tracker_blocks
 from bridge.light_novel_turn import NovelTurn
 from bridge.limits import (
     EPISODIC_CONTEXT_MAX_CHARS,
@@ -183,17 +182,9 @@ def build_chat_messages(
     user_name = persona_service.name(current_persona) if current_persona else app_settings.default_user_name
     persona = persona_service.get(current_persona) if current_persona else None
     history = [
-        {
-            "role": role,
-            "content": format_user_dialogue_action(content) if role == "user" else prompt_text(role, content),
-        }
+        {"role": role, "content": format_user_dialogue_action(content) if role == "user" else content}
         for role, content in history_rows
     ]
-    memory_context = strip_legacy_tracker_blocks(memory_context)
-    episodic_context = strip_legacy_tracker_blocks(episodic_context)
-    npc_context = strip_legacy_tracker_blocks(npc_context)
-    session_summary = strip_legacy_tracker_blocks(session_summary)
-    scene_context = strip_legacy_tracker_blocks(scene_context)
     language_value = session.get("response_language") or "auto"
     language_instruction = response_language_instruction(language_value)
     system = build_system_prompt(fields, user_name, app_settings=app_settings)

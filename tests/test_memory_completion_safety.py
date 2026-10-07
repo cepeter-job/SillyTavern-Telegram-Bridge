@@ -447,7 +447,7 @@ def test_summary_failure_after_reset_returns_no_old_fallback(session_db, monkeyp
 
 @pytest.mark.parametrize("change", ["reset", "delete", "recreate", "edit"])
 def test_episodic_completion_after_invalidation_does_not_restore_old_facts(session_db, monkeypatch, change):
-    from bridge.episodic_extraction import extract_episodic_memories
+    from bridge.episodic_extraction import extract_episodic_memories_result
 
     settings, db, session = session_db
     add_rows(db, 2, size=30)
@@ -480,7 +480,7 @@ def test_episodic_completion_after_invalidation_does_not_restore_old_facts(sessi
             ]
         )
 
-    inserted = extract_episodic_memories(
+    result = extract_episodic_memories_result(
         db,
         "chat",
         session,
@@ -490,13 +490,13 @@ def test_episodic_completion_after_invalidation_does_not_restore_old_facts(sessi
         provider_port=make_test_provider_port(generate_backend=generate),
         app_settings=settings,
     )
-    assert inserted == 0
+    assert result.inserted == 0
     assert db.execute("SELECT count(*) FROM episodic_memories").fetchone()[0] == 0
     assert not db.in_transaction
 
 
 def test_episodic_extraction_rejects_outer_transaction_before_provider(session_db):
-    from bridge.episodic_extraction import extract_episodic_memories
+    from bridge.episodic_extraction import extract_episodic_memories_result
 
     settings, db, session = session_db
     add_rows(db, 2, size=30)
@@ -504,7 +504,7 @@ def test_episodic_extraction_rejects_outer_transaction_before_provider(session_d
     db.execute("BEGIN")
     try:
         with pytest.raises(RuntimeError, match="transaction"):
-            extract_episodic_memories(
+            extract_episodic_memories_result(
                 db,
                 "chat",
                 session,
@@ -541,7 +541,7 @@ def test_episodic_candidate_batch_rolls_back_together(session_db, monkeypatch):
         ]
     )
     with pytest.raises(RuntimeError, match="second candidate"):
-        episodic_extraction.extract_episodic_memories(
+        episodic_extraction.extract_episodic_memories_result(
             db,
             "chat",
             session,
@@ -556,7 +556,7 @@ def test_episodic_candidate_batch_rolls_back_together(session_db, monkeypatch):
 
 
 def test_duplicate_fact_with_new_audience_adds_an_attestation(session_db):
-    from bridge.episodic_extraction import extract_episodic_memories
+    from bridge.episodic_extraction import extract_episodic_memories_result
     from bridge.episodic_memory import store_episodic_memory
 
     settings, db, session = session_db
@@ -573,7 +573,7 @@ def test_duplicate_fact_with_new_audience_adds_an_attestation(session_db):
             source_end_rowid=2,
         )
     raw = '[{"kind":"fact","importance":0.9,"summary":"Hidden key","visibility":"restricted","known_by":["Mara"]}]'
-    inserted = extract_episodic_memories(
+    result = extract_episodic_memories_result(
         db,
         "chat",
         session,
@@ -583,7 +583,7 @@ def test_duplicate_fact_with_new_audience_adds_an_attestation(session_db):
         provider_port=make_test_provider_port(generate_backend=lambda *a, **k: raw),
         app_settings=settings,
     )
-    assert inserted == 1
+    assert result.inserted == 1
     assert not db.in_transaction
     assert db.execute(
         "SELECT visibility,known_by_json FROM episodic_memory_visibility ORDER BY memory_id"

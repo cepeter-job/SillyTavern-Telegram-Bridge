@@ -21,7 +21,6 @@ from bridge.extension_registry import register_command_route as _register_comman
 from bridge.extension_registry import register_post_retain_hook as _register_post_retain_hook
 from bridge.extension_registry import register_summary_clear_hook as _register_summary_clear_hook
 from bridge.generation_settings import get_generation_settings
-from bridge.legacy_tracker_history import prompt_text
 from bridge.memory_artifact_store import (
     CLASSIFIED_AUDIENCE_PROMPT,
     parse_classified_blocks,
@@ -160,7 +159,7 @@ def extract_scene_segment(
                 + f"\nSource role: {source.role}; message {source.start_id};"
                 + f" offsets {source.start_offset}:{source.end_offset}"
                 + "\n\nCanonical source part:\n"
-                + prompt_text(source.role, source.content)
+                + source.content
             ),
         },
     ]

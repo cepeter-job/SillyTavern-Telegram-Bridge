@@ -9,7 +9,6 @@ import uuid
 from bridge import memory_backend
 from bridge.card_content import card_fields_from_file
 from bridge.episodic_extraction import extract_episodic_memories_result
-from bridge.legacy_tracker_history import prompt_text
 from bridge.memory_fact_store import index_fact_is_current
 from bridge.memory_store import (
     acknowledge_job,
@@ -166,7 +165,7 @@ def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_sett
                             db,
                             claim.chat_id,
                             session,
-                            source_text=prompt_text(source.role, source.content),
+                            source_text=source.content,
                             source_start_rowid=source.start_id,
                             source_end_rowid=source.end_id,
                             provider_port=provider_port,

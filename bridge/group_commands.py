@@ -20,6 +20,7 @@ def handle_group_command(
     operation_id: int | str | None = None,
     *,
     group_service: GroupService,
+    emit_success: bool = True,
 ) -> None:
     parts = command_text.split(None, 2)
     action = parts[1].casefold() if len(parts) > 1 else "status"
@@ -63,16 +64,17 @@ def handle_group_command(
         state["members"] = members
         state["enabled"] = len(members) >= 2
         group_service.save(db, chat_id, session["session_id"], state, operation_id)
-        send_text(
-            token,
-            chat_id,
-            (
-                "Group members: "
-                f"""{", ".join(group_service.member_labels(members))}"""
-                "\nGroup chat: "
-                f"""{("on" if state["enabled"] else "off")}"""
-            ),
-        )
+        if emit_success:
+            send_text(
+                token,
+                chat_id,
+                (
+                    "Group members: "
+                    f"""{", ".join(group_service.member_labels(members))}"""
+                    "\nGroup chat: "
+                    f"""{("on" if state["enabled"] else "off")}"""
+                ),
+            )
         return
     if action == "remove":
         requested = parts[2].strip() if len(parts) > 2 else ""
@@ -85,16 +87,17 @@ def handle_group_command(
         state["enabled"] = len(members) >= 2
         state["turn_index"] = 0
         group_service.save(db, chat_id, session["session_id"], state, operation_id)
-        send_text(
-            token,
-            chat_id,
-            (
-                "Group chat: "
-                f"""{", ".join(group_service.member_labels(members))}"""
-                "\nGroup chat: "
-                f"""{("on" if state["enabled"] else "off")}"""
-            ),
-        )
+        if emit_success:
+            send_text(
+                token,
+                chat_id,
+                (
+                    "Group chat: "
+                    f"""{", ".join(group_service.member_labels(members))}"""
+                    "\nGroup chat: "
+                    f"""{("on" if state["enabled"] else "off")}"""
+                ),
+            )
         return
     if action == "mode":
         requested_mode = parts[2].casefold() if len(parts) > 2 else ""
@@ -112,7 +115,8 @@ def handle_group_command(
         if requested_mode != "manual":
             state["turn_user_id"] = ""
         group_service.save(db, chat_id, session["session_id"], state, operation_id)
-        send_text(token, chat_id, f"Group mode set to {requested_mode}.")
+        if emit_success:
+            send_text(token, chat_id, f"Group mode set to {requested_mode}.")
         return
     if action == "speak":
         requested = parts[2].strip() if len(parts) > 2 else ""
@@ -123,7 +127,8 @@ def handle_group_command(
         state["forced_speaker"] = filename
         state["enabled"] = len(members) >= 2
         group_service.save(db, chat_id, session["session_id"], state, operation_id)
-        send_text(token, chat_id, f"Next speaker forced to {group_service.member_labels([filename])[0]}.")
+        if emit_success:
+            send_text(token, chat_id, f"Next speaker forced to {group_service.member_labels([filename])[0]}.")
         return
     if action == "on":
         if len(members) < 2:
@@ -131,13 +136,15 @@ def handle_group_command(
             return
         state["enabled"] = True
         group_service.save(db, chat_id, session["session_id"], state, operation_id)
-        send_text(token, chat_id, "Group chat enabled.")
+        if emit_success:
+            send_text(token, chat_id, "Group chat enabled.")
         return
     if action == "off":
         state["enabled"] = False
         state["turn_user_id"] = ""
         group_service.save(db, chat_id, session["session_id"], state, operation_id)
-        send_text(token, chat_id, "Group chat disabled; the session uses its default character.")
+        if emit_success:
+            send_text(token, chat_id, "Group chat disabled; the session uses its default character.")
         return
     if action == "next":
         if len(members) < 2:
@@ -145,8 +152,9 @@ def handle_group_command(
             return
         state["turn_index"] = int(state["turn_index"]) + 1
         group_service.save(db, chat_id, session["session_id"], state, operation_id)
-        current = group_service.member_labels(members)[state["turn_index"] % len(members)]
-        send_text(token, chat_id, f"Next group speaker: {current}")
+        if emit_success:
+            current = group_service.member_labels(members)[state["turn_index"] % len(members)]
+            send_text(token, chat_id, f"Next group speaker: {current}")
         return
     send_text(
         token,

@@ -49,3 +49,7 @@ No live deployment changes. No new runtime dependency or provider. One d20 per a
 - [ ] Run full CI, architecture, formatting, type, resource, Mini App and security checks.
 - [ ] Perform author review, distinguish it from unavailable independent agent review, and address GitHub findings.
 - [ ] Merge only the exact green reviewed head; verify main contains the merge. No release/deployment.
+
+## Integration rulings
+
+Main acquired memory migrations 27 and 28 during implementation. Natural action receipts use migration 29, preserving both memory upgrades. Overlapping unmerged preflight prototypes were consolidated into one SQL-only reservation store and ActionTurn owner; no duplicate model calls or competing mode keys are shipped. Their tests are covered by the action runtime/generation suites. Production was not modified.

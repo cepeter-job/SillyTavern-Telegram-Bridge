@@ -53,20 +53,19 @@ def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_sett
         initial_epoch = memory_backend._memory_hindsight_epoch(db, claim.chat_id, claim.session_id)
         if claim.layer in {"hindsight", "curator"} and memory_backend.memory_mode(db, claim.chat_id) != "on":
             result = "disabled"
-        elif claim.layer in {"hindsight", "episodes"}:
-            if claim.layer == "hindsight":
-                if not memory_backend.cleanup_retired_memory_documents(
-                    db, claim.chat_id, claim.session_id, app_settings=app_settings, blocking_only=True
-                ):
-                    fail_job(db, claim, "work_failed")
-                    return "work_failed"
-            fact_calls = 0
-            if claim.layer == "hindsight":
-                result, fact_calls = _run_fact_index(db, claim, fields, app_settings=app_settings)
-                if result != "complete":
-                    fail_job(db, claim, result)
-                    return result
-            for _ in range(MAX_SEGMENTS_PER_RUN - fact_calls):
+        elif claim.layer == "hindsight":
+            result, _ = _run_fact_index(db, claim, fields, app_settings=app_settings)
+            if (
+                result == "complete"
+                and db.execute(
+                    "SELECT 1 FROM memory_fact_index WHERE chat_id=? AND session_id=? AND session_created_at=? "
+                    "AND state='pending' LIMIT 1",
+                    (claim.chat_id, claim.session_id, claim.session_created_at),
+                ).fetchone()
+            ):
+                result = "deferred"
+        elif claim.layer == "episodes":
+            for _ in range(MAX_SEGMENTS_PER_RUN):
                 source = next_source_segment(
                     db, claim.chat_id, claim.session_id, claim.layer, through_id=claim.target_id
                 )
@@ -81,40 +80,21 @@ def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_sett
                 if not _claim_current(db, claim) or not source_is_valid(db, source):
                     result = "stale_source"
                     break
-                if claim.layer == "hindsight":
-                    # Recheck mode at the external-call boundary.
-                    if memory_backend.memory_mode(db, claim.chat_id) != "on":
-                        result = "disabled"
-                        break
-                    result = memory_backend.retain_archival_source(
-                        db,
-                        source,
-                        fields.get("name", "Story"),
-                        f"Archival transcript part: {source.role}; source={source.start_id}; "
-                        f"offsets={source.start_offset}:{source.end_offset}",
-                        app_settings=app_settings,
-                        claim=claim,
-                    )
-                    if result != "complete":
-                        break
-                else:
-                    extraction = extract_episodic_memories_result(
-                        db,
-                        claim.chat_id,
-                        session,
-                        source_text=source.content,
-                        source_start_rowid=source.start_id,
-                        source_end_rowid=source.end_id,
-                        provider_port=provider_port,
-                        app_settings=app_settings,
-                        source_valid=lambda captured=source: (
-                            _claim_current(db, claim) and source_is_valid(db, captured)
-                        ),
-                        source_ref=source,
-                    )
-                    if extraction.status != "complete":
-                        result = "stale_source"
-                        break
+                extraction = extract_episodic_memories_result(
+                    db,
+                    claim.chat_id,
+                    session,
+                    source_text=source.content,
+                    source_start_rowid=source.start_id,
+                    source_end_rowid=source.end_id,
+                    provider_port=provider_port,
+                    app_settings=app_settings,
+                    source_valid=lambda captured=source: _claim_current(db, claim) and source_is_valid(db, captured),
+                    source_ref=source,
+                )
+                if extraction.status != "complete":
+                    result = "stale_source"
+                    break
             else:
                 result = (
                     "complete"
@@ -122,16 +102,6 @@ def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_sett
                     is None
                     else "deferred"
                 )
-            if (
-                claim.layer == "hindsight"
-                and result == "complete"
-                and db.execute(
-                    "SELECT 1 FROM memory_fact_index WHERE chat_id=? AND session_id=? AND session_created_at=? "
-                    "AND state='pending' LIMIT 1",
-                    (claim.chat_id, claim.session_id, claim.session_created_at),
-                ).fetchone()
-            ):
-                result = "deferred"
         else:
             result = _run_derived_layer(
                 db, claim, session, fields, provider_port=provider_port, app_settings=app_settings

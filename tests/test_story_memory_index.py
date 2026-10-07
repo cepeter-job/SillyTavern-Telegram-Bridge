@@ -82,12 +82,9 @@ def test_provider_and_late_stale_completion_never_accept_a_part(db):
     assert db.execute("SELECT count(*) FROM memory_segments WHERE valid=1").fetchone()[0] == 0
 
 
-def test_raw_complete_fact_failure_remains_pending_and_retries_same_identity(db, monkeypatch):
-    from bridge.memory_store import store_segment
-
+def test_fact_failure_remains_pending_and_retries_same_identity(db, monkeypatch):
     append(db)
     accept(db)
-    store_segment(db, next_source_segment(db, "c", "s", "hindsight"))
     attempts = []
     monkeypatch.setattr(memory_backend, "_retain_with_client", lambda *a, **k: attempts.append(a[2]) or False)
     assert run(db, "hindsight") == "retain_failed"

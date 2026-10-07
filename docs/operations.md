@@ -413,18 +413,19 @@ Alternate Ending. Retrying the same operation returns the same new session;
 making a later, separate request can create another branch. The original ending
 stays closed.
 
-A Hindsight warning means the copied history could not be added to external
-memory. It does not mean the local story was lost. The new session can still use
-its copied messages and local continuity, and it does not borrow the original
-finale's memories. See [Try an alternate ending](user-guide.md#try-an-alternate-ending)
+A memory initialization warning means local setup was interrupted or its target
+became invalid. Hindsight availability does not determine branch readiness. The
+new session uses its copied messages and restored local evidence with independent
+background work. See [Try an alternate ending](user-guide.md#try-an-alternate-ending)
 for the normal workflow.
 
 For operators, the new session, checkpoint messages and local state are created
 in one database transaction. A failed local copy leaves no half-created session.
-Restart recovery uses the same durable request identity. Optional Hindsight
-seeding follows under an expiring lease and uses only the new session's document
-and tags. A normal seeding error completes with a warning rather than retrying
-forever; interrupted work can resume after the lease expires.
+Restart recovery uses the same durable request identity. The existing expiring
+memory_seeding lease now covers local initialization: validate the target and
+idempotently queue missing jobs. Memory on/off and provider outages do not affect
+ready status. Interrupted operations resume locally after the lease expires; a
+deleted target is rejected and cannot complete the operation.
 
 The new session receives its own message IDs and work records. It does not reuse
 source Telegram delivery state, jobs, response variants or callbacks. Once the

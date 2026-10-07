@@ -11,6 +11,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from bridge.alternate_ending_memory import seed_local_session_memory
 from bridge.alternate_ending_repository import (
     activate_branch_if_origin,
     branch_for_operation,
@@ -71,7 +72,7 @@ def finish_alternate_ending(
     seed_memory: SeedMemory | None = None,
 ) -> AlternateEndingResult:
     if db.in_transaction:
-        raise ValueError("External branch-memory work cannot run inside a database transaction")
+        raise ValueError("Local branch-memory initialization must own its database transaction")
     current = _result(db, operation_id)
     if current.applied:
         return current
@@ -86,13 +87,14 @@ def finish_alternate_ending(
     if lineage is None:
         raise ValueError("The alternate-ending target was removed")
     try:
-        status = seed_memory(db, lineage["chat_id"], current.session) if seed_memory else "disabled"
+        status = (seed_memory or seed_local_session_memory)(db, lineage["chat_id"], current.session)
         if status not in {"disabled", "ready", "degraded"}:
             status = "degraded"
     except Exception as exc:
-        logging.warning("Alternate ending is usable; optional memory seeding failed: %s", type(exc).__name__)
+        logging.warning("Alternate ending local memory initialization failed: %s", type(exc).__name__)
         status = "degraded"
     with write_transaction(db):
+        _result(db, operation_id)  # A concurrently deleted target cannot complete initialization.
         if finish_scoped_operation(db, operation_id, token, time.time()):
             finish_branch_memory(db, operation_id, status)
             activate_branch_if_origin(

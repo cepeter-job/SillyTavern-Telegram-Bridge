@@ -47,7 +47,7 @@ def test_new_session_copies_only_checkpoint_prefix_and_keeps_original_closed(ses
     ending = load_ending_state(db, "chat", "s1")
     result = branch(session_db, cp)
     target = result.session["session_id"]
-    assert target != "s1" and result.applied and result.memory_status == "disabled"
+    assert target != "s1" and result.applied and result.memory_status == "ready"
     assert result.session["title"].endswith(" — Alternate Ending")
     rows = db.execute(
         "SELECT id,role,content,telegram_message_id,telegram_message_ids FROM messages WHERE session_id=? ORDER BY id",

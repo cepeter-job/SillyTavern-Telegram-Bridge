@@ -66,15 +66,8 @@ def reconcile_archival_attempts(
         ).fetchall()
         for token, document_id, owner_chat, owner_session, finished, kind in rows:
             if kind == "raw":
-                current = db.execute(
-                    "SELECT 1 FROM memory_segments g JOIN sessions s ON s.chat_id=g.chat_id AND "
-                    "s.session_id=g.session_id "
-                    "AND s.created_at=g.session_created_at JOIN memory_layer_state l ON l.chat_id=g.chat_id "
-                    "AND l.session_id=g.session_id AND l.session_created_at=g.session_created_at AND "
-                    "l.layer='hindsight' "
-                    "AND l.purge_epoch=g.purge_epoch WHERE g.document_id=? AND g.valid IN (1,2)",
-                    (document_id,),
-                ).fetchone()
+                # Surviving historical raw rows never authorize new remote indexing.
+                current = None
             else:
                 current = db.execute(
                     "SELECT 1 FROM memory_fact_index f JOIN sessions s ON s.chat_id=f.chat_id AND "

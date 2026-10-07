@@ -280,7 +280,7 @@ enabled.
 Natural action checks default to Utility preflight before eligible new turns. Use
 `/check mode auto|director|manual` per session; no new provider configuration or
 environment variable is required. Director mode selects the existing Director
-route, not an additional call. Migration 28 adds bounded, session-owned pending
+route, not an additional call. Migration 29 adds bounded, session-owned pending
 check receipts. User task state reuses the existing simulation tables and history.
 See [Natural action checks](user-guide.md#natural-action-checks) for cost, scope,
 retry semantics and the distinction between a roll and established consequences.

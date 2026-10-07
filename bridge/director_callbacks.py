@@ -77,7 +77,7 @@ def handle_director_callback(
                     + ". The original ending is unchanged."
                 )
                 if branch_result.memory_status == "degraded":
-                    notice += " External memory is unavailable; the copied transcript and local memories are ready."
+                    notice += " Local memory initialization was interrupted; the copied transcript is available."
             else:
                 notice = "This alternate-ending request already has a saved target and is finishing memory setup."
             send_text(token, chat_id, notice)

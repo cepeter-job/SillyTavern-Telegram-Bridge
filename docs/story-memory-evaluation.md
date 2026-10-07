@@ -299,8 +299,8 @@ the normal CI gates.
 
 Measurements use perf_counter_ns. Setup includes guard/service/database/session
 construction, ingestion includes production final assembly and acceptance of
-150 turns, and primary drain covers episode extraction plus Hindsight indexing/
-raw archival completion. Query samples use the full MemoryService.prompt_context
+150 turns, and primary drain covers complete local episode extraction plus
+native-fact Hindsight indexing. Query samples use the full MemoryService.prompt_context
 path: one excluded warm-up followed by the requested repetitions. Median is the
 sample median; p95 uses nearest rank. Default 10 samples remain a small offline
 observation, not a population latency estimate.
@@ -313,30 +313,34 @@ Stub counts and JSON UTF-8 payload bytes measure this fake adapter boundary,
 including metadata. They are not real wire billing/token usage.
 
 The report records fixture version/hash, git revision, Python/SQLite versions,
-synthetic settings, stable IDs, per-case assertions, counts and metrics.
+synthetic settings, stable IDs, per-case assertions, counts and metrics. Its
+source inventory hashes all three evaluator modules: evaluate_story_memory.py,
+story_memory_eval_support.py and story_memory_eval_checks.py. Bounded retained
+payload observations identify native summaries, document IDs and generation tags.
 Timings, heap and WAL sizes do not gate correctness; deterministic contracts
 and work/request bounds do. There is no fabricated old/new improvement score.
 
-The saved pre-checkpoint-3 observations and identity are in
-story-memory-evaluation-results.json. The facts-only evaluator uses report schema
-version 2; its replacement artifact will be measured from a frozen clean revision. See its measurement_identity and
-measurement_boundary fields before comparing runs. Development attempts that
+The saved facts-only observations and identity are in
+story-memory-evaluation-results.json, using report schema version 2. See its
+measurement_identity and measurement_boundary fields before comparing runs. Development attempts that
 failed are documented in the implementation report, not combined with the
 successful measured run.
 
-## Historical recorded run (before facts-only indexing)
+## Recorded run
 
 The saved standalone invocation used 10 measured queries and one excluded
 warm-up, launched directly from an unrelated empty working directory after the
-same-session worker fairness correction was committed. It passed **23 of 23
-executed cases and all 73 assertions**. The JSON records the clean measured
-source revision 24a21e68f1c4426550364177f042558803702ecc, an empty git status,
-and SHA-256 of both evaluator source files. The separate result/documentation
-commit records the measurement of that exact source revision. Earlier afaebaf
-and b19da007 measurements remain historical; source and tests stayed frozen
-during this refresh.
-Python was 3.11.16; SQLite was 3.53.1. Fixture SHA-256 was
+facts-only source was published. It passed **24 of 24 executed cases and all 82
+assertions**. The JSON records the clean measured source revision
+c5bf5ac7583b5139ed7be0b9b00b8d7f6b5089d7, an empty git status, and SHA-256 of
+all three evaluator source files. Its stdout and saved JSON were byte-for-byte
+equal. The separate result/documentation commit records the measurement of that
+exact source revision; production, tests and evaluator source stayed frozen
+throughout the invocation.
+Python was 3.12.14; SQLite was 3.53.1. Fixture SHA-256 was
 6bd668c68d946775991fdda3890a9c839a125c75a7139df3b92a7118ce810d6c.
+The local full pytest suite was running concurrently on this host, which is part
+of the conditions behind the observed timings.
 
 | Observation | Measured value |
 | --- | ---: |
@@ -344,28 +348,42 @@ Python was 3.11.16; SQLite was 3.53.1. Fixture SHA-256 was
 | Distinct accepted native episodes | 302 |
 | Messages later than the unique target | 295 |
 | Distinct episodes later than the unique target | 297 |
-| Setup | 2,714.069 ms |
-| Production turn ingestion | 16,024.291 ms |
-| Primary episode/index/archive drain | 57,127.064 ms |
-| Query median, 10 samples | 43.945 ms |
-| Query nearest-rank p95, 10 samples | 57.300 ms |
-| Peak traced Python heap, whole evaluation | 40,875,817 bytes |
-| SQLite pages before purge/deletion | 2,019,328 bytes |
+| Setup | 320.569 ms |
+| Production turn ingestion | 5,811.434 ms |
+| Primary local episode/native index drain | 1,733.267 ms |
+| Query median, 10 samples | 13.389 ms |
+| Query nearest-rank p95, 10 samples | 14.614 ms |
+| Peak traced Python heap, whole evaluation | 41,003,835 bytes |
+| SQLite pages before purge/deletion | 1,863,680 bytes |
 | SQLite WAL at that observation | 0 bytes |
-| Stub requests, all scenarios | 1,892 |
-| Largest serialized stub request | 164,799 bytes |
-| Provider / retain / recall / delete calls | 470 / 623 / 174 / 625 |
+| Stub requests, all scenarios | 1,567 |
+| Largest serialized stub request | 165,541 bytes |
+| Provider / retain / recall / delete calls | 470 / 307 / 174 / 616 |
+| Native-only retain payload observations | 307 |
 | Largest delivered extraction source part | 12,000 characters |
 | Largest observed worker external-call count | 8 |
 | Unexpected unconfigured I/O attempts | 0 |
 
-All 150,054 characters of the long source were covered by 13 contiguous
+All 307 retain attempts carried native-fact tags and exact summaries accepted
+locally for their document IDs. This includes retry attempts; the count does not
+mean 307 distinct successfully retained facts. No new raw source segment or raw
+mapping was created. The facts-only case also confirmed full local coverage,
+distant and alias recall, no pending native indexes and an idle extra drain.
+
+All 150,054 characters of the long source were covered by 13 contiguous local
 source parts. Its head, middle and tail facts were present. Later CLI scenarios
 also processed marker-free assistant sources and source parts without inventing
-facts. The historical injected control, recorded before the final integration
-fix, kept complete source coverage but removed the tail fact; its CLI exited 1
-with only coverage.complete-long-source failing. This artifact refresh did not
-rerun that control. The full CI regression executes the nonzero detector again.
+facts. The pytest gate on this same evaluator source ran the drop-tail
+control and confirmed CLI exit 1 with only coverage.complete-long-source failing.
+That fault-injected report is separate from the saved successful invocation.
+
+The historical artifact at source 24a21e68f1c4426550364177f042558803702ecc
+recorded 623 retain attempts and 1,892 total stub requests. The current counts
+are 307 and 1,567. These are observations at the scripted adapter boundary;
+changes to indexing and asynchronous cleanup affect the request mix. The source,
+report schema and Python environment differ, so the timing values do not support
+a baseline/candidate speedup claim. No real provider cost or semantic-quality
+change is measured.
 
 The mixed-secret historical memory channel excluded the phrase. A separately
 captured earlier ordinary generation request contained that phrase once in raw
@@ -376,10 +394,10 @@ secrecy for an independently supplied canonical transcript.
 This ordinary scripted workload does not measure the accumulating metadata or
 lifetime cleanup traffic of indefinite ambiguous/legacy watches. The separate
 pytest regressions exercise those recovery and ownership contracts; their
-assertions are not added to the CLI's 23-case score.
+assertions are not added to the CLI's 24-case score.
 
-Device disk waits varied between development attempts. These observations
-describe this run's synthetic workload and traced process. They are not a
+These observations describe this run's synthetic workload, host conditions and
+traced process. They are not a
 baseline/candidate speedup, a stable host capacity estimate, real provider
 latency, whole-process RSS or idle production resource measurements.
 

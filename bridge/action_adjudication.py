@@ -172,7 +172,9 @@ def prepare_action_turn(
             raise ValueError("This action is already committed; recover its saved reply instead.")
         cutoff = min(scope[1], max(0, through_rowid)) if through_rowid is not None else scope[1]
         # /check admits a user row and deliberately awaits the following narration.
-        for check in list_checks(db, chat_id, session_id, through_rowid=cutoff, limit=1):
+        for check in list_checks(
+            db, chat_id, session_id, through_rowid=context_cutoff(db, chat_id, session_id, cutoff), limit=1
+        ):
             if check["source_rowid"] == scope[1] and check["request_key"].startswith("check:"):
                 if source_identity(db, chat_id, session_id, scope[1])[1] == check["source_digest"]:
                     return ActionTurn(chat_id, session_id, scope=scope, receipt=dict(check, decision="check"))

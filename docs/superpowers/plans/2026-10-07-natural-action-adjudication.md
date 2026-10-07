@@ -53,3 +53,5 @@ No live deployment changes. No new runtime dependency or provider. One d20 per a
 ## Integration rulings
 
 Main acquired memory migrations 27 and 28 during implementation. Natural action receipts use migration 29, preserving both memory upgrades. Overlapping unmerged preflight prototypes were consolidated into one SQL-only reservation store and ActionTurn owner; no duplicate model calls or competing mode keys are shipped. Their tests are covered by the action runtime/generation suites. Production was not modified.
+
+Author review found that a queued manual receipt could survive a rewritten evidence prefix. A failing regression reproduced it; manual reuse now respects the same invalidation cutoff as historical locked-result reads. Routine pending backlog remains separate from invalidation. UI smoke now checks task fields, markup escaping and private-link omission.

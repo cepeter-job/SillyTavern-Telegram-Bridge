@@ -344,3 +344,31 @@ def test_manual_mode_allows_long_turn_without_automatic_input_limit(session_db):
         app_settings=settings,
     )
     assert turn.receipt is None
+
+
+def test_rewritten_prefix_cannot_reuse_a_pending_manual_receipt(session_db):
+    from bridge.simulation_checks import perform_check
+
+    _, db, _ = session_db
+    earlier = _assistant_row(db, "A guard waits beside the noisy door.")
+    with write_transaction(db):
+        source = db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) "
+            "VALUES('chat','s1','user','Manual check',1)"
+        ).lastrowid
+    perform_check(
+        db,
+        "chat",
+        "s1",
+        request_key="check:manual",
+        domain="stealth",
+        actor="user",
+        action="open",
+        dc=15,
+        roll=2,
+        source_rowid=source,
+    )
+    with write_transaction(db):
+        db.execute("UPDATE messages SET content='The guard has left.' WHERE id=?", (earlier,))
+    turn = prepare(session_db, lambda *a, **k: '{"schema_version":1,"decision":"no_check"}')
+    assert turn.receipt["decision"] == "no_check"

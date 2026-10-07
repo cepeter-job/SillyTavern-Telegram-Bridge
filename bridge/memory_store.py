@@ -214,11 +214,19 @@ def fail_job(
         return bool(
             db.execute(
                 "UPDATE memory_jobs SET lease_token='',lease_deadline=0,last_error=?,"
-                "next_attempt_at=? + CASE WHEN ?='configuration' THEN ? "
-                "ELSE MIN(300,5 * (1 << MIN(attempts,6))) END "
+                "next_attempt_at=CASE WHEN ? THEN ? WHEN ?='configuration' THEN ? "
+                "ELSE ? + MIN(300,5 * (1 << MIN(attempts,6))) END "
                 "WHERE chat_id=? AND session_id=? AND session_created_at=? AND layer=? "
                 "AND lease_token=? AND claimed_version=?",
-                (safe_error, now if not deferred else now - 9, safe_error, CONFIGURATION_RETRY_SECONDS, *_scope(claim)),
+                (
+                    safe_error,
+                    deferred,
+                    now,
+                    safe_error,
+                    CONFIGURATION_RETRY_SECONDS,
+                    now,
+                    *_scope(claim),
+                ),
             ).rowcount
         )
 

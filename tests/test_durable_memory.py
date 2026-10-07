@@ -92,6 +92,19 @@ def test_failed_attempt_preserves_pending_and_safe_error(db):
     assert len(claim_jobs(db, now=100, layers=("hindsight",))) == 1
 
 
+def test_deferred_attempt_is_immediately_claimable_without_failure_backoff(db):
+    from bridge.memory_store import claim_jobs, fail_job
+
+    append(db)
+    claim = claim_jobs(db, now=10, layers=("hindsight",))[0]
+    assert fail_job(db, claim, "deferred", now=10, deferred=True)
+    assert db.execute("SELECT last_error,next_attempt_at FROM memory_jobs WHERE layer='hindsight'").fetchone() == (
+        "deferred",
+        10,
+    )
+    assert len(claim_jobs(db, now=10, layers=("hindsight",))) == 1
+
+
 def test_segments_include_oldest_over_100_and_every_oversized_part(db):
     from bridge.memory_store import next_source_segment, source_is_valid, store_segment
 

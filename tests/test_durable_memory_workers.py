@@ -392,7 +392,8 @@ def test_direct_sql_npc_rewrite_recovers_fixed_suffix_and_preserves_prior_field(
                             }
                         ],
                     }
-                ]
+                ],
+                "simulation": {},
             }
         )
 
@@ -405,8 +406,7 @@ def test_direct_sql_npc_rewrite_recovers_fixed_suffix_and_preserves_prior_field(
     fields = load_npc_fields(db, entity.npc_id)
     assert fields["voice"].value == "soft"
     assert fields["appearance"].value == "red hair"
-    # Without a persisted complete-prefix checkpoint, replay from the source floor.
-    assert supplied == ["Maya speaks softly", "Maya has red hair"]
+    assert supplied == ["Maya speaks softly", "Maya has red hair"]  # Replay from the source floor.
 
 
 def test_durable_summary_coverage_uses_canonical_ids_with_backdated_append(session_db):

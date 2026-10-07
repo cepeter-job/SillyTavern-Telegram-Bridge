@@ -69,7 +69,8 @@ def output_for(layer, text):
                 }
             ]
             if found
-            else []
+            else [],
+            "simulation": {},
         }
     )
 

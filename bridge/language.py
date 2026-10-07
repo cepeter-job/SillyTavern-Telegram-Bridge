@@ -157,34 +157,3 @@ def set_response_language(
     )
     return language
 
-
-def handle_language_command(
-    db: sqlite3.Connection,
-    token: str,
-    chat_id: str,
-    session: dict[str, str],
-    command_text: str,
-    operation_id: int | str | None = None,
-    *,
-    delivery_port: DeliveryPort,
-    update_session: Callable[..., object],
-    request_context: RequestContext,
-) -> None:
-    parts = command_text.strip().split(None, 1)
-    if len(parts) == 1 or parts[1].strip().casefold() in {"list", "status"}:
-        send_language_menu(
-            token,
-            chat_id,
-            session.get("response_language") or "auto",
-            delivery_port=delivery_port,
-            request_context=request_context,
-        )
-        return
-    try:
-        language = set_response_language(
-            db, chat_id, session["session_id"], parts[1], operation_id=operation_id, update_session=update_session
-        )
-    except ValueError as exc:
-        delivery_port.send_text(token, chat_id, f"Invalid response language: {exc}")
-        return
-    delivery_port.send_text(token, chat_id, f"Model response language set to: {response_language_label(language)}.")

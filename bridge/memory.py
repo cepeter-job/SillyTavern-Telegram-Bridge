@@ -14,6 +14,7 @@ from bridge.extension_registry import run_post_retain_hooks as _run_post_retain_
 from bridge.extension_registry import run_summary_clear_hooks as _run_summary_clear_hooks
 from bridge.generation_settings import get_generation_settings
 from bridge.hindsight_integrity import HindsightStaleGuard as _HindsightStaleGuard
+from bridge.legacy_tracker_history import prompt_text
 from bridge.limits import (
     SUMMARY_MAX_CHARS,
     SUMMARY_MAX_OUTPUT_TOKENS,
@@ -292,7 +293,7 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
                 + f"\nSource role: {source.role}; message {source.start_id};"
                 + f" offsets {source.start_offset}:{source.end_offset}"
                 + "\n\nCanonical source part:\n"
-                + source.content
+                + prompt_text(source.role, source.content)
             ),
         },
     ]

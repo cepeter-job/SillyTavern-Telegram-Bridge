@@ -11,6 +11,7 @@ from bridge.card_content import build_world_info, card_fields_from_file, replace
 from bridge.director_contracts import bounded_arc_guidance
 from bridge.director_repository import director_group_files, director_npc_names, director_recent_story
 from bridge.ending_service import load_ending_state
+from bridge.legacy_tracker_history import prompt_text
 from bridge.narrative_arc_repository import list_arc_rows
 from bridge.narrative_repository import list_narrative_threads
 from bridge.narrative_values import NarrativeSettings, NarrativeState
@@ -140,6 +141,8 @@ def build_director_input(
             str(session.get("system_prompt") or ""), fields, user_name, app_settings=app_settings
         )[:3000],
         "author_note": str(session.get("author_note") or "")[:1500],
-        "recent_committed_story": [{"id": row[0], "role": row[1], "content": row[2]} for row in history],
+        "recent_committed_story": [
+            {"id": row[0], "role": row[1], "content": prompt_text(str(row[1]), str(row[2]))} for row in history
+        ],
     }
     return data, cast, users, {str(row["thread_id"]) for row in threads}

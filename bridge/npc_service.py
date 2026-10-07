@@ -9,6 +9,7 @@ from dataclasses import replace
 from typing import Any
 
 import bridge.limits as _limits
+from bridge.legacy_tracker_history import prompt_text
 from bridge.actor_visibility import normalize_known_by, npc_field_visible
 from bridge.memory_contracts import MemoryReadScope
 from bridge.memory_store import pending_memory_invalidation, request_source_cutoff
@@ -481,7 +482,7 @@ class NpcService:
             else:
                 ambiguous_query.update(npc_ids)
 
-        history_text = "\n".join(str(content) for _role, content in history_rows[-12:])
+        history_text = "\n".join(prompt_text(str(role), str(content)) for role, content in history_rows[-12:])
         unique_history: set[int] = set()
         for name, npc_ids in owners.items():
             if len(npc_ids) == 1 and _mentions_name(history_text, name):

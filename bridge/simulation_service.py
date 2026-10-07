@@ -11,7 +11,7 @@ from bridge.simulation_checks import actor_modifier, classify_check, perform_che
 from bridge.simulation_context import simulation_context_for_prompt
 from bridge.simulation_extraction import normalize_simulation_payload
 from bridge.simulation_mechanics import SimulationMechanics
-from bridge.simulation_narrative import validate_narrative_links
+from bridge.simulation_narrative import canonicalize_narrative_links
 from bridge.simulation_projection import canonicalize_tracker_npcs, project_simulation_state
 from bridge.simulation_repository import (
     bump_revision,
@@ -117,7 +117,7 @@ class SimulationService(SimulationMechanics):
                 primary_name=primary_name,
                 user_name=user_name,
             )
-            validate_narrative_links(db, chat_id, session_id, payload, source_rowid)
+            payload = canonicalize_narrative_links(db, chat_id, session_id, payload, source_rowid)
             self._relationship_updates(db, chat_id, session_id, payload, source_rowid, now, tick=role == "assistant")
             self._agenda_updates(db, chat_id, session_id, payload, source_rowid, now, tick=role == "assistant")
             self._actor_update(db, chat_id, session_id, payload, source_rowid, now)

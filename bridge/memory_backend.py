@@ -409,9 +409,7 @@ def cleanup_retired_memory_documents(
     except Exception:
         logging.warning("Raw archival recovery deferred for chat %s", chat_id, exc_info=True)
         return False
-    # Recurring uncertainty is serviced by retirement turns, not the ingestion
-    # prerequisite. Filter the batch as well as its remaining-debt check so
-    # watched failures or earlier IDs cannot consume finite cleanup work.
+    # Exclude recurring watches from ingestion prerequisites so they cannot consume the finite cleanup batch.
     rows = db.execute(
         "SELECT document_id FROM memory_retired_documents r WHERE chat_id=? AND session_id=? AND deleted=0 "
         "AND next_attempt_at<=? AND lease_token=? AND (NOT ? OR NOT EXISTS("
@@ -444,7 +442,9 @@ def cleanup_retired_memory_documents(
                             (time.time() + 900, chat_id, session_id, lease_token),
                         )
                 with hindsight_client_scope(app_settings=app_settings) as client:
-                    asyncio.run(_delete_retired_with_client(client, hindsight_bank_id(chat_id), [document_id]))
+                    asyncio.get_event_loop().run_until_complete(
+                        _delete_retired_with_client(client, hindsight_bank_id(chat_id), [document_id])
+                    )
                 succeeded = True
             except Exception:
                 logging.warning("Retired memory document cleanup deferred")

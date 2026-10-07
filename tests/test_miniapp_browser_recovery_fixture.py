@@ -77,6 +77,8 @@ def test_browser_fixture_runs_one_real_summary_handler_and_synthetic_provider():
             if result["state"] not in {"queued", "running"}:
                 break
             assert time.monotonic() < deadline, result
+            # Stay below the real authenticated route's 120-requests/minute cap.
+            time.sleep(0.1)
         assert result["state"] == "succeeded", result
         assert "Synthetic lighthouse continuity" in result["result"]["summary"]
         _, repeated = request(ready, "/api/v1/memory/summary/generate", body=values, authorized=True)

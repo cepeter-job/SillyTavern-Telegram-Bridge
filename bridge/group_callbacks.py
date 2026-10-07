@@ -36,8 +36,7 @@ def handle_group_panel_callback(
     message_id = message.get("message_id")
     if data == "group:new_session":
         input_flow_service.start_session_name(
-            db, token, chat_id, session, kind="group", message=message, group_service=group_service,
-        emit_success=False,
+            db, token, chat_id, session, kind="group", message=message, group_service=group_service
         )
     elif data == "group:menu":
         send_group_menu(
@@ -79,8 +78,14 @@ def handle_group_panel_callback(
         )
     elif data in {"group:on", "group:off", "group:next"}:
         handle_group_command(
-            db, token, chat_id, session, "/" + data.replace(":", " "), operation_id, group_service=group_service,
-        emit_success=False,
+            db,
+            token,
+            chat_id,
+            session,
+            "/" + data.replace(":", " "),
+            operation_id,
+            group_service=group_service,
+            emit_success=False,
         )
         send_group_menu(
             db, token, chat_id, session, message_id, group_service=group_service, request_context=request_context
@@ -95,8 +100,14 @@ def handle_group_panel_callback(
         state = group_service.state(db, chat_id, session["session_id"])
         if filename in state["members"]:
             handle_group_command(
-                db, token, chat_id, session, f"/group remove {filename}", operation_id, group_service=group_service,
-            emit_success=False,
+                db,
+                token,
+                chat_id,
+                session,
+                f"/group remove {filename}",
+                operation_id,
+                group_service=group_service,
+                emit_success=False,
             )
         send_group_menu(
             db, token, chat_id, session, message_id, group_service=group_service, request_context=request_context
@@ -132,8 +143,14 @@ def handle_group_panel_callback(
         )
         if filename:
             handle_group_command(
-                db, token, chat_id, session, f"/group {action} {filename}", operation_id, group_service=group_service,
-            emit_success=False,
+                db,
+                token,
+                chat_id,
+                session,
+                f"/group {action} {filename}",
+                operation_id,
+                group_service=group_service,
+                emit_success=False,
             )
         send_group_menu(
             db, token, chat_id, session, message_id, group_service=group_service, request_context=request_context
@@ -147,6 +164,7 @@ def handle_group_panel_callback(
             f"/group mode {data.split(':', 1)[1]}",
             operation_id,
             group_service=group_service,
+            emit_success=False,
         )
         send_group_mode_menu(
             db, token, chat_id, session, message_id, group_service=group_service, request_context=request_context

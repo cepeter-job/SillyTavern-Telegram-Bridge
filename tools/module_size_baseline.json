@@ -43,7 +43,7 @@
     "tests/test_provider_ingestion_safety.py": 538,
     "tests/test_provider_maintenance.py": 563,
     "tests/test_provider_reset_enhancements.py": 608,
-    "tests/test_repository_transactions.py": 652,
+    "tests/test_repository_transactions.py": 651,
     "tests/test_response_delivery.py": 579,
     "tests/test_sync_poll_safety.py": 697,
     "tests/test_transcript_delivery_recovery.py": 856,

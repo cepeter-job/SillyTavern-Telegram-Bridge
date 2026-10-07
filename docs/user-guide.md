@@ -111,10 +111,11 @@ confirmation apply to the new story.
 | Open action-check controls | `/check` |\n| Record a d20 result for an explicit action | `/check stealth 12 cross the courtyard` |
 | Find every command and its accepted arguments | `/help` |
 
-`/help` is the canonical command reference. Try `/help databank search` or
-`/help scene refresh` for one action. Some typed forms act directly, while
-others open a panel: for example, `/language English` sets a language, but
-`/stream on` still asks you to use the panel buttons.
+`/help` is the canonical command reference. Management commands such as
+`/language`, `/databank`, `/group`, `/scene`, `/memory curated`, `/prompt`, and
+`/check` open their canonical panels. Use the panel buttons for state changes;
+plain text is reserved for scoped free-form input, explicit manual checks, and
+error/recovery messages.
 
 ### Narration and dialogue
 
@@ -830,15 +831,16 @@ Manual turn ownership applies to text, message edits, photos, PNG documents and
 voice input before processing. PNG card uploads also pass that check. Recovery
 of an already-saved answer can finish even after ownership changes.
 
-`/group goal <objective>` sets the same persistent objective shown in Director
-Room, up to 4,000 characters. `/group goal status` reviews it and `/group goal clear`
-clears it. Every change is recorded as a manual Director revision, not as story
-dialogue. A forced group speaker remains an explicit choice; otherwise the group
-uses the canonical plan or safe round robin. Configured cast members are not
-automatically treated as physically present.
+`/group goal` opens the same persistent-objective panel used by Director Room.
+Set or clear the objective from that panel; text entry is requested only after
+you choose **Set objective**. Every change is recorded as a manual Director
+revision, not as story dialogue. A forced group speaker remains an explicit
+choice; otherwise the group uses the canonical plan or safe round robin.
+Configured cast members are not automatically treated as physically present.
 
 ### Scene state
 
-`/scene` shows structured location, weather, participants and continuity facts.
-`/scene refresh` rebuilds that state with Utility; `/scene clear` removes it.
-Scene state is optional, belongs to the session and leaves the transcript intact.
+`/scene` opens structured location, weather, participants and continuity facts.
+Use **Refresh** to rebuild that state with Utility and **Clear** to remove it.
+Typed scene subcommands reopen the same panel instead of running a second text
+surface. Scene state is optional, belongs to the session and leaves the transcript intact.

@@ -136,6 +136,7 @@ def handle_director_goal_command(
         request_context=request_context,
     )
 
+
 def _director_goal_command_route(
     db,
     token,

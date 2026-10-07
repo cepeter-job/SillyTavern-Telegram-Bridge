@@ -6,6 +6,7 @@ import sqlite3
 
 from bridge.action_adjudication import action_mode
 from bridge.cards import send_panel_message
+from bridge.request_types import RequestContext
 from bridge.simulation_repository import list_checks
 from bridge.simulation_values import text
 
@@ -28,7 +29,7 @@ def send_check_menu(
     session_id: str,
     message_id: int | None = None,
     *,
-    request_context,
+    request_context: RequestContext,
 ) -> None:
     current = action_mode(db, chat_id, session_id)
     label = _MODE_LABELS[current]
@@ -61,7 +62,7 @@ def send_manual_check_help(
     chat_id: str,
     message_id: int,
     *,
-    request_context,
+    request_context: RequestContext,
 ) -> None:
     send_panel_message(
         token,
@@ -90,7 +91,7 @@ def send_recent_checks(
     session_id: str,
     message_id: int,
     *,
-    request_context,
+    request_context: RequestContext,
 ) -> None:
     checks = list_checks(db, chat_id, session_id, limit=5)
     lines = ["🎲 Recent Checks"]

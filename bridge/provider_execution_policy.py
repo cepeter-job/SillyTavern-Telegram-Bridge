@@ -27,7 +27,17 @@ class ProviderExecutionPolicy:
     def candidates(self, model: str, purpose: str) -> tuple[str, ...]:
         route = self.model_router.route(model)
         choices = [f"{route.provider_id}::{route.model_id}"]
-        if purpose in {"summary", "memory", "scene", "rank", "optimizer", "choices", "npc", "adjudication"}:
+        if purpose in {
+            "summary",
+            "memory",
+            "scene",
+            "rank",
+            "optimizer",
+            "choices",
+            "npc",
+            "adjudication",
+            "image_prompt",
+        }:
             raw = route.spec.get("utility_fallbacks")
         elif route.spec.get("allow_story_fallback") is True:
             raw = route.spec.get("story_fallbacks")

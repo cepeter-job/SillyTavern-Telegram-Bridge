@@ -19,6 +19,7 @@ from bridge.image_panels import (
     send_imagine_options_menu,
     send_imagine_size_menu,
 )
+from bridge.image_prompt_provider import ImagePromptPreparationError, image_prompt_provider_error_message
 from bridge.image_routing import (
     reset_session_image_settings,
     session_image_settings,
@@ -87,6 +88,9 @@ def _imagine_scene(db, token, callback, answer_callback, chat_id, session, provi
             provider_port=provider_port,
             app_settings=request_context.app_settings,
         )
+    except ImagePromptPreparationError as exc:
+        logging.warning("Current-scene image prompt preparation failed: %s", exc.provider_error)
+        send_text(token, chat_id, image_prompt_provider_error_message(exc.provider_error))
     except ProviderRequestError as exc:
         logging.warning("Current-scene image provider request failed: %s", exc)
         send_text(token, chat_id, image_provider_error_message(exc))

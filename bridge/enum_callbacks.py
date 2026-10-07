@@ -403,8 +403,7 @@ def _handle_ragremove(db: sqlite3.Connection, token: str, chat_id: str, request_
 def _handle_rag_reindex(
     db: sqlite3.Connection, token: str, chat_id: str, request_context, rag_service: RagService, message_id
 ) -> None:
-    total, indexed = rag_service.reindex(db, chat_id)
-    send_text(token, chat_id, f"Data Bank reindex complete: {indexed}/{total} chunks indexed.")
+    rag_service.reindex(db, chat_id)
     send_databank_menu(token, chat_id, db, message_id, request_context=request_context)
 
 

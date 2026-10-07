@@ -19,7 +19,6 @@ from bridge.light_novel_panels import send_light_novel_menu
 from bridge.model_selection import task_model_for_session
 from bridge.narrative_panels import send_narrative_menu
 from bridge.npc_service import NpcService
-from bridge.prompt_diagnostics import prompt_diagnostics
 from bridge.prompt_panels import send_prompt_menu
 from bridge.provider_errors import ProviderRequestError
 from bridge.provider_panels import send_model_target_menu
@@ -261,7 +260,7 @@ def _handle_basic(
             )
             send_text(token, chat_id, _retry_failure_report(failed, exc))
         return True
-    if command == "/prompt":
+    if command == "/prompt" or command.startswith("/prompt "):
         send_prompt_menu(
             token,
             chat_id,
@@ -271,21 +270,6 @@ def _handle_basic(
             group_service=group_service,
             memory_service=memory_service,
             request_context=request_context,
-        )
-        return True
-    if command == "/prompt text":
-        send_text(
-            token,
-            chat_id,
-            prompt_diagnostics(
-                db,
-                chat_id,
-                session,
-                fields,
-                group_service=group_service,
-                memory_service=memory_service,
-                app_settings=request_context.app_settings,
-            ),
         )
         return True
     return False

@@ -100,7 +100,7 @@ def parse_director_proposal(raw: str) -> DirectorProposal:
     if not isinstance(raw, str) or len(raw) > MAX_DIRECTOR_OUTPUT:
         raise DirectorProposalError("size", "Director output exceeds the structured response limit")
     text = raw.strip()
-    fenced = re.fullmatch(r"```(?:json)?\\s*([\\s\\S]*?)\\s*```", text, re.IGNORECASE)
+    fenced = re.fullmatch(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE)
     if fenced is not None:
         text = fenced.group(1).strip()
     try:

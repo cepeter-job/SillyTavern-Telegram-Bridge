@@ -72,7 +72,10 @@ def test_npc_no_checkpoint_keeps_valid_prefix_during_failed_and_partial_replay(d
             ]
         # Intentionally never re-emit the already accepted voice.
         return json.dumps(
-            {"npcs": [{"name": "Maya", "aliases": [], "operations": operations}] if operations else [], "simulation": {}}
+            {
+                "npcs": [{"name": "Maya", "aliases": [], "operations": operations}] if operations else [],
+                "simulation": {},
+            }
         )
 
     port = make_test_provider_port(generate_backend=extract)

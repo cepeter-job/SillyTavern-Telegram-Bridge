@@ -1,6 +1,7 @@
 import sqlite3
 import time
 
+from bridge import simulation_schema as _simulation_schema
 from bridge.alternate_ending_schema import migrate_alternate_ending_lineage
 from bridge.closed_story_schema import migrate_closed_story_guards
 from bridge.conversation_schema import migrate_conversation_modes
@@ -20,9 +21,9 @@ from bridge.migrations import run_migrations as _run_migrations
 from bridge.narrative_arc_schema import migrate_narrative_arc_evidence
 from bridge.narrative_runtime_schema import migrate_narrative_history_revisions
 from bridge.narrative_schema import migrate_narrative_engine_foundation
-from bridge import simulation_schema as _simulation_schema
 from bridge.token_usage_schema import migrate_token_usage
 from bridge.transcript_schema import migrate_message_identity
+
 
 def _create_core_tables(db: sqlite3.Connection) -> None:
     """Create metadata, messages, sessions, and response variant tables."""

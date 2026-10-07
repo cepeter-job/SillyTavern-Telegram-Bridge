@@ -20,7 +20,11 @@ from bridge.migrations import run_migrations as _run_migrations
 from bridge.narrative_arc_schema import migrate_narrative_arc_evidence
 from bridge.narrative_runtime_schema import migrate_narrative_history_revisions
 from bridge.narrative_schema import migrate_narrative_engine_foundation
-from bridge.simulation_schema import migrate_simulation_trackers, retire_prompt_tracker_bootstrap
+from bridge.simulation_schema import (
+    migrate_retired_tracker_transcript_cleanup,
+    migrate_simulation_trackers,
+    retire_prompt_tracker_bootstrap,
+)
 from bridge.token_usage_schema import migrate_token_usage
 from bridge.transcript_schema import migrate_message_identity
 
@@ -514,6 +518,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(24, "raw_archival_attempts", migrate_archival_attempts),
     _Migration(25, "canonical_simulation_trackers", migrate_simulation_trackers),
     _Migration(26, "retire_prompt_tracker_bootstrap", retire_prompt_tracker_bootstrap),
+    _Migration(27, "retired_tracker_transcript_cleanup", migrate_retired_tracker_transcript_cleanup),
 )
 
 

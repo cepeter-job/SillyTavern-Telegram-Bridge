@@ -67,9 +67,7 @@ def publish_derived(db, chat_id, session_id, layer, payload, through):
                 primary_name=payload["primary_name"],
                 user_name=payload["user_name"],
             )
-        simulation = canonicalize_narrative_links(
-            db, chat_id, session_id, payload.get("simulation") or {}, through
-        )
+        simulation = canonicalize_narrative_links(db, chat_id, session_id, payload.get("simulation") or {}, through)
         SimulationService().apply_payload(
             db,
             chat_id,

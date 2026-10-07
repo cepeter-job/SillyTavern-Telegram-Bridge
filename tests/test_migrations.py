@@ -230,7 +230,6 @@ class ApplicationSchemaMigrationTests(SettingsTestCase):
                 (24, "raw_archival_attempts"),
                 (25, "canonical_simulation_trackers"),
                 (26, "retire_prompt_tracker_bootstrap"),
-                (27, "retired_tracker_transcript_cleanup"),
             ],
         )
 

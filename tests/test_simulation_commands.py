@@ -56,6 +56,7 @@ def invoke(case, command="/check stealth 10 cross the courtyard", operation_id=6
     )
 
 
+# Bare /check opens the mode panel; this table covers malformed explicit checks only.
 @pytest.mark.parametrize(
     "command",
     ["/check stealth x sneak", "/check stealth 0 sneak", "/check stealth 21 sneak", "/check stealth 10"],

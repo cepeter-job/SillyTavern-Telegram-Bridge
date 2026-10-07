@@ -1,0 +1,35 @@
+# Temporary read-only workspace export; remove before merging.
+name: Issue 410 review workspace
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  export:
+    if: github.repository == 'cepeter/SillyTavern-Telegram-Bridge' && github.actor == 'cepeter' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'fix/issue410-job-recovery'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+      - run: |
+          git bundle create /tmp/issue410.bundle --all
+          npm ci --prefix tests/miniapp-ui --include=dev --ignore-scripts --no-audit --no-fund
+          tar -czf /tmp/issue410-node.tar.gz -C tests/miniapp-ui node_modules
+          mkdir -p /tmp/issue410-wheels
+          python -m pip download --dest /tmp/issue410-wheels --only-binary=:all: hindsight-client==0.10.2 mypy==1.15.0
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: issue410-review-workspace
+          path: |
+            /tmp/issue410.bundle
+            /tmp/issue410-node.tar.gz
+            /tmp/issue410-wheels
+          retention-days: 2

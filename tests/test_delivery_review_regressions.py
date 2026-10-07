@@ -41,8 +41,8 @@ def case(tmp_path, monkeypatch):
     create_session(db, "chat", "model", session_id="s1", app_settings=config)
     mark_started(db, "chat", "s1", 0)
     set_meta(db, "stream_mode:chat", "off")
-    effects = []
-    notices = []
+    set_meta(db, "action_checks:chat:s1", "manual")
+    effects, notices = [], []
     offline = [True]
     import urllib.request
 

@@ -285,6 +285,7 @@ rolls NPC state back to the applicable revision before regeneration.
 | Humanizer | An additional prose rewrite using the reply's model. |
 | Summaries, memory/NPC/scene refresh, optimizer and ranking | Utility-model work. |
 | Story tracker extraction | Shares the existing NPC Utility call; upgrading older sessions can replay available history. |
+| Automatic action adjudication | One bounded Utility or Director request before an eligible new turn; the bridge itself generates the random number. |
 | `/check` | A local d20 roll and saved receipt, with no model request. |
 | Narrative continuity | A bounded Utility reconciliation after committed replies; older or edited history can need more than one batch. |
 | Current Scene image | Utility preparation of the visual prompt, then an image-provider request. |
@@ -330,6 +331,7 @@ facts become available once that work is accepted.
 | NPC agendas | Bounded objectives, steps and status. An active offscreen agenda advances once per accepted assistant turn unless that source supplies explicit progress. |
 | User inventory, skills and conditions | Established possessions, abilities and conditions, including domain-specific check modifiers. Proposed actions do not grant an item, skill or reward. |
 | Factions | Established goals, relationships, morale, conflict and private intelligence. |
+| User tasks | Multi-step objectives, current stage, progress, completed/pending steps, complications and established consequences. Dice alone never complete a task. |
 | Quests and foreshadowing | Progress and descriptive metadata linked to existing Narrative arcs or threads when available. Native Narrative state determines linked plot status. |
 
 NPC Bank retains identity, editable fields and field history. Automatic tracker
@@ -355,7 +357,7 @@ trimmed when the request needs space.
 
 Use `/trackers` in Telegram, or open **Manage → Story trackers** in the Mini App.
 The view shows saved relationships, visible agendas, inventory, skills,
-conditions, faction state, linked quests and recent d20 checks for the active
+conditions, faction state, linked quests, user tasks and recent d20 checks for the active
 session. **Last updated** identifies the latest story text included in the saved
 trackers. **Catching up** means newer story text is waiting for extraction. An
 empty view can mean no tracker facts have been established yet, or that
@@ -389,7 +391,54 @@ is at least 3. Otherwise Sparks decays by 1 unless that source added Sparks.
 Replaying the same source or processing a user message never advances these
 timers again.
 
-### Make a check
+### Natural action checks
+
+Ordinary in-world actions can now be assessed **before** the Story model writes
+its response. Type an action such as “I open the noisy door quietly before the
+guard returns.” Utility decides whether meaningful uncertainty and a consequence
+justify a check. It does not choose the die result. The bridge rolls one d20,
+computes modifiers from established inventory, skills and conditions, and locks
+the result before narration. Routine dialogue and feasible everyday actions
+should receive no roll. A successful roll never grants consent, chooses another
+character’s decisions or makes an impossible action possible.
+
+The default is **auto** (Utility). These session-scoped commands show or change it:
+
+```text
+/check mode
+/check mode auto
+/check mode director
+/check mode manual
+```
+
+Director mode uses the configured Director route instead of Utility; it does not
+add a second model call or turn Director plans into established evidence. Manual
+mode leaves rolls to explicit `/check` commands. A saved result survives a mode
+or Story-model switch; changing modes does not allow a failed attempt to reroll.
+
+Eligible new turns add **one bounded adjudication request**, including turns
+where the model decides no roll is needed. It uses up to six recent source rows,
+24 established trait descriptions, a 768-token output limit and a 30-second
+request budget. Narrator steering, Next Scene, initial greetings and group
+orchestration bypass automatic checks. Image-backed turns assess the written
+caption only, not objects inferred from image pixels. Long automatic inputs are
+limited to 12,000 UTF-8 bytes; manual mode avoids this extra preflight limit.
+
+A provider or validation failure stops that turn before Story generation instead
+of inventing success. Retry the turn, or switch to manual mode when no result has
+been rolled. Once a roll is saved, `/retry`, a new retry job and delivery recovery
+reuse it. Regeneration and continuation keep the original action’s result. Editing
+the user action creates a different attempt; rewriting the story, resetting or
+deleting the session invalidates affected work. A pending result cannot cross a
+session or alternate-ending checkpoint boundary.
+
+Tasks are extracted from **committed story evidence** after narration. They appear
+under Tasks in `/trackers` and Manage → Story trackers. A task can span several
+checks, with stage, progress, completed steps and still-pending steps; its latest
+check link is internal. Physical outcomes and progress are not granted merely
+because a check succeeded. Private NPC agendas remain in their existing owners.
+
+### Make a check manually
 
 Use an explicit domain, difficulty and attempted action:
 

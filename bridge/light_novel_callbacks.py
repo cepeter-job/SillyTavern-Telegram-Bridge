@@ -12,7 +12,7 @@ from bridge.closed_session_guard import guard_story_mutation
 from bridge.conversation_lifecycle import conversation_state
 from bridge.job_service import JobSubmission
 from bridge.light_novel_contracts import LightNovelRuntime
-from bridge.light_novel_format import validate_choices
+from bridge.light_novel_format import NEXT_SCENE_INSTRUCTION, validate_choices
 from bridge.light_novel_jobs import process_light_novel_choices_job
 from bridge.light_novel_repository import (
     consume_choice_set,
@@ -26,10 +26,6 @@ from bridge.narrative_context import narrative_choice_is_steering
 from bridge.narrative_values import NARRATIVE_STEERING_PREFIX
 from bridge.sqlite_store import write_transaction
 
-NEXT_SCENE_INSTRUCTION = (
-    "Advance to the next scene without speaking, deciding, or acting for the user character. "
-    "Continue the narrative until the user character can meaningfully participate again."
-)
 NEXT_SCENE_LABEL = "⏭ Next Scene"
 
 
@@ -103,6 +99,7 @@ def route_light_novel_callback(
                 payload: dict[str, object] = {
                     "text": selection,
                     "narrative_input": "steering" if steering else "in_world",
+                    "scene_transition": action == "lnnext",
                     "model": record.model_id,
                     "actor_id": actor_id,
                     "resolve_active": False,

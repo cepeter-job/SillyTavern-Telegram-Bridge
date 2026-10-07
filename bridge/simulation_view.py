@@ -24,7 +24,7 @@ from bridge.simulation_repository import (
 from bridge.simulation_values import integer, key, modifier_entry, relationship_tier, text
 
 _COLLECTIONS = ("inventory", "skills", "conditions")
-_SECTIONS = ("relationships", "agendas", *_COLLECTIONS, "factions", "quests", "checks")
+_SECTIONS = ("relationships", "agendas", *_COLLECTIONS, "factions", "quests", "tasks", "checks")
 
 
 @contextmanager
@@ -113,6 +113,15 @@ def _project(kind: str, name: str, value: dict) -> tuple[str, dict[str, Any]] | 
     if kind == "faction":
         # Intel, lies and relations belong to private narrator context.
         return "factions", _named(value, name, "goal", "morale", "conflict")
+    if kind == "task":
+        return "tasks", _named(value, name, "objective", "stage", "status", "consequence") | {
+            "progress_current": integer(value.get("progress_current"), 0, 20),
+            "progress_target": integer(value.get("progress_target"), 0, 20),
+            **{
+                field: [text(item, 240) for item in value.get(field, [])[:16]]
+                for field in ("completed_steps", "pending_steps", "complications")
+            },
+        }
     if kind == "quest":
         return "quests", _named(value, name, "kind", "status", "objective", "reward") | {
             "progress_current": integer(value.get("progress_current"), 0, 100000),

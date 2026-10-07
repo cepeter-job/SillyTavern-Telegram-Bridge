@@ -100,7 +100,7 @@ def list_states(
         rows = db.execute(
             "SELECT kind,entity_key,value_json,updated_rowid,updated_at FROM simulation_state "
             "WHERE chat_id=? AND session_id=? ORDER BY kind,entity_key LIMIT ?",
-            (chat_id, session_id, MAX_DOMAIN_RECORDS * 6),
+            (chat_id, session_id, MAX_DOMAIN_RECORDS * 7),
         ).fetchall()
     else:
         rows = db.execute(
@@ -194,7 +194,7 @@ def load_states_as_of(
         "GROUP BY kind,entity_key) AND after_json IS NOT NULL) "
         "SELECT kind,entity_key,after_json,after_rowid FROM live WHERE domain_rank<=? "
         "ORDER BY kind,entity_key LIMIT ?",
-        (chat_id, session_id, int(through_rowid), MAX_DOMAIN_RECORDS, MAX_DOMAIN_RECORDS * 6),
+        (chat_id, session_id, int(through_rowid), MAX_DOMAIN_RECORDS, MAX_DOMAIN_RECORDS * 7),
     ).fetchall()
     state: dict[tuple[str, str], tuple[dict[str, Any], int]] = {}
     for kind, key, after_json, after_rowid in rows:

@@ -15,6 +15,7 @@ from application_test_setup import (
 from settings_test_support import SettingsBuilder
 
 from bridge import edit_messages, response_delivery, schema, telegram
+from bridge.metadata import set_meta
 from bridge.migrations import run_migrations
 from bridge.npc_service import NpcService
 from bridge.response_variants import keep_swipe_variant, last_user_variants, save_response_variant
@@ -111,8 +112,7 @@ def test_acknowledged_chunks_survive_failure_and_recovery_without_duplicates(mon
     try:
         rowid = ns.turn(db, "assistant", "A" * 8100, 1)
         db.commit()
-        acknowledged = []
-        calls = []
+        acknowledged, calls = [], []
 
         def request(_token, method, payload):
             calls.append((method, payload))
@@ -323,6 +323,7 @@ def test_native_edit_committed_transport_failure_recovers_same_operation(
     config = make_test_settings(home=tmp_path, db_file=tmp_path / "native.sqlite3")
     db = db_connect(app_settings=config)
     create_session(db, "chat", "model", session_id="s1", app_settings=config)
+    set_meta(db, "action_checks:chat:s1", "manual")
     db.execute(
         "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_id,created_at) "
         "VALUES('chat','s1','user','original','77',1)"
@@ -361,9 +362,7 @@ def test_native_edit_committed_transport_failure_recovers_same_operation(
     )
     monkeypatch.setattr(edit_messages, "card_fields_from_file", lambda *a, **k: ns.fields())
     monkeypatch.setattr(edit_messages, "send_typing", lambda *a: None)
-    delivered = []
-    transport_calls = []
-    offline = [True]
+    delivered, transport_calls, offline = [], [], [True]
 
     def request(_t, method, payload):
         assert not db.in_transaction
@@ -736,6 +735,7 @@ def test_queued_edit_command_and_delivery_recovery_keep_enqueued_session(tmp_pat
     config = make_test_settings(home=tmp_path, db_file=tmp_path / "commands.sqlite3")
     db = db_connect(app_settings=config)
     create_session(db, "chat", "model", session_id="target", app_settings=config)
+    set_meta(db, "action_checks:chat:target", "manual")
     db.execute(
         "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat','target','user','original',1)"
     )

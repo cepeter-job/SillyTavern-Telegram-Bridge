@@ -6,6 +6,7 @@ import logging
 import sqlite3
 import time
 
+from bridge.action_turn import begin_action_for_job
 from bridge.card_content import card_fields_from_file
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.context_diagnostics import record_context_attempts
@@ -201,6 +202,18 @@ def regenerate_edited_turn(
         chat_id,
         session_id,
     )
+    action_turn = begin_action_for_job(
+        db,
+        chat_id,
+        session,
+        new_text,
+        operation_id,
+        provider_port=provider_port,
+        app_settings=app_settings,
+        actor_id=str(session.get("_actor_id") or ""),
+        through_rowid=int(user_rowid) - 1,
+    )
+    messages = action_turn.messages(messages)
     novel_turn = begin_novel_turn(db, chat_id, session, "edit", operation_id)
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
@@ -276,6 +289,7 @@ def regenerate_edited_turn(
     )
 
     def persist_edit():
+        action_turn.validate(db)
         prune_variants_from(db, chat_id, session_id, int(user_rowid))
         invalidate_episodic_memories_from_row(db, chat_id, session_id, int(user_rowid))
         npc_service.rollback_from_row(db, chat_id, session_id, int(user_rowid))
@@ -302,6 +316,7 @@ def regenerate_edited_turn(
                 time.time(),
             ),
         )
+        action_turn.bind(db, int(user_rowid))
         assistant_rowid = int(assistant_cursor.lastrowid)
         _COMMAND_OPERATION_RECOVERY.record_delivery_target(
             db, operation_id, assistant_rowid, reply, f"✏️ Edited message regenerated.\n\n{reply}"

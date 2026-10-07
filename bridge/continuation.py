@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
+from bridge.action_adjudication import locked_action_messages
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.delivery_port import DeliveryPort
 from bridge.delivery_repository import clear_progress
@@ -139,6 +140,8 @@ def continue_last(
         rag_context=rag_service.context_for_prompt(db, chat_id, instruction, rag_bundle),
         app_settings=app_settings,
     )
+    source_rowid = next((row[0] for row in reversed(rows) if row[1] == "user" and row[0] < assistant_row[0]), 0)
+    messages = locked_action_messages(db, chat_id, session_id, messages, source_rowid)
     novel_turn = begin_novel_turn(db, chat_id, session, "continue", operation_id)
     reply = _generation_generate_rendered_reply(
         db,

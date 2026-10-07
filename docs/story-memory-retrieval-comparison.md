@@ -393,3 +393,42 @@ The manifest retains `uncertain_creation`/`uncertain_ingestion` and
 `cleanup_pending=true`, and the command exits nonzero. Do not rerun it with that
 manifest or add unbounded retries. The saved sanitized ownership record is the
 remaining cleanup obligation for the operator to investigate.
+
+## Postmerge secret-scan verification
+
+The merged artifact commit `80569c9767bf1d9cd97fc8a2607096f4ec1cd9d6`
+exposed 136 `generic-api-key` findings in the five JSON artifacts containing
+`source_file_hashes`. Every finding was verified at its exact file and line against
+the frozen `caea8e7` Git blobs: 17 source-path/SHA256 pairs repeated eight times.
+All eight raw artifacts still match their original bytes and the artifact index.
+
+The PR scan used `--no-merges --first-parent` and skipped the merge commit that
+introduced the artifacts. The subsequent main scan used `--log-opts=-1` on the
+merged artifact commit and detected these source hashes. The correction in
+[.gitleaks.toml](../.gitleaks.toml) retains the default detectors and adds one
+`generic-api-key` allowlist requiring **both** an exact artifact path and an exact
+whole JSON entry. Its five paths and 17 bound path/digest pairs are anchored;
+the existing historical fingerprint exception is unchanged.
+
+Validation used the official **Gitleaks 8.24.3** Linux x64 release, checked against
+the [publisher's checksum list](https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_checksums.txt):
+
+- Release archive SHA256: `9991e0b2903da4c8f6122b5c3186448b927a5da4deef1fe45271c3793f4ee29c`.
+- Executed binary SHA256: `e18325d568268b6efb6cd0cc721f8bea5667f4cd1c8d03618ab61987f41269ad`.
+
+| Scan boundary | Defaults | With the exact-entry configuration |
+| --- | --- | --- |
+| Main artifact commit, `gitleaks git . --log-opts=-1` | 136 findings, exit 1; all original fingerprints matched | 0 findings, exit 0 |
+| Byte-identical copies of all eight raw artifacts, `gitleaks dir .` | 136 findings, exit 1 | 0 findings, exit 0 |
+| Synthetic directory, `gitleaks dir .` | 24 generic + 1 GitHub PAT findings, exit 1 | 7 generic + 1 GitHub PAT findings, exit 1 |
+| Fresh synthetic commit, `gitleaks git . --log-opts=-1` | 24 generic + 1 GitHub PAT findings, exit 1 | 7 generic + 1 GitHub PAT findings, exit 1 |
+
+Scans ran from each fixture's root with `--redact=100`; configured scans supplied
+`--config` pointing to the reviewed file. Both synthetic modes suppressed only
+the 17 approved reference entries. All seven positive cases remained detected:
+a non-hex value, an altered 64-digit hash, an unapproved source path, an approved
+key paired with another verified hash, an approved entry in another file, an
+additional secret-like field on the same line, and a freshly synthesized GitHub
+PAT-shaped value. These controls contain no credentials. The checks cover the
+named commit and isolated fixtures; they do not assert a full-repository directory
+scan. The eight raw artifact hashes were rechecked after validation.

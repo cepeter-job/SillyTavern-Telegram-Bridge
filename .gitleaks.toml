@@ -1,0 +1,39 @@
+# Preserve the default detectors; these are verified frozen-source SHA256 entries.
+# Measured revision: caea8e7fb05d60e98981c53c3e598798cf4559d4.
+# See docs/story-memory-retrieval-comparison.md for verification and scan boundaries.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Exact CP5 frozen-source path and SHA256 pairs in five immutable artifacts"
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '^docs/story\-memory\-retrieval\-comparison\-embeddings\.json$',
+  '^docs/story\-memory\-retrieval\-comparison\-live\-results\.json$',
+  '^docs/story\-memory\-retrieval\-comparison\-owned\-bank\.json$',
+  '^docs/story\-memory\-retrieval\-comparison\-replay\-results\.json$',
+  '^docs/story\-memory\-retrieval\-comparison\-results\.json$',
+]
+regexes = [
+  '^[[:space:]]*"bridge/callback_tokens\.py": "60aafc1ed7b08a4d49eb8d87b3483cab456db13f6b46ce86d097178f6ef2264d",[[:space:]]*$',
+  '^[[:space:]]*"bridge/codex_auth\.py": "282293050b1dbbf216ddaf60c327f102027bd0a6d84897d3e38a1aaa0608a2f5",[[:space:]]*$',
+  '^[[:space:]]*"bridge/miniapp_auth\.py": "a8400abf10754ec75e7fbf0f2079199fd6f86502e3f07b8824e56d934c83bf79",[[:space:]]*$',
+  '^[[:space:]]*"bridge/provider_panel_tokens\.py": "278cdb6213505926fe6de2b3d95dfdd8a8e9a63b12edac437b4755b46b556cd9",[[:space:]]*$',
+  '^[[:space:]]*"bridge/sillytavern_api\.py": "a2a9ecaad46f38053105fd79ed867d3f9e991623517d3f4212d971f95794dccc",[[:space:]]*$',
+  '^[[:space:]]*"bridge/sync_api\.py": "20aeec39b9c8328eda6b6ebee64a9a8058a323c185cc7e86eb1ab145742fa6a6",[[:space:]]*$',
+  '^[[:space:]]*"bridge/token_usage\.py": "b63c130ec53dc595f70132d47f1e48b104ee57dcefa1e68d3fb81c2d6e262899",[[:space:]]*$',
+  '^[[:space:]]*"bridge/token_usage_repository\.py": "2bb1a281f605023d90a818f517fb586df8324264992d2d680d3823578e803fda",[[:space:]]*$',
+  '^[[:space:]]*"bridge/token_usage_schema\.py": "69f63d023964b2e9df36c1fcf075c56e02c4d0abaedb35dfa877050fae230622",[[:space:]]*$',
+  '^[[:space:]]*"bridge/token_usage_values\.py": "9f96b6ea0ad1be23d0518293ad4288ba2592f2d2387ccd89293d3b7833d19b5f",[[:space:]]*$',
+  '^[[:space:]]*"tests/test_callback_token_read_purity\.py": "77e81d0ffc641bbf433158321dc925f7b23fde63b0c5fcd9cae10a3282e04dc8",[[:space:]]*$',
+  '^[[:space:]]*"tests/test_callback_token_security\.py": "5f62b34954213ded93eb9e616c462c37d7984cfb623be72fb05885449e5a8c47",[[:space:]]*$',
+  '^[[:space:]]*"tests/test_codex_auth\.py": "447c9dcfa20c78931622a250b201a7e581741cbf2a4f5f7ad01129712fd0e927",[[:space:]]*$',
+  '^[[:space:]]*"tests/test_miniapp_auth\.py": "4fb770813f70860e7c0c5fd10184c2df0a86bc4c63dabd15de61c9fe2c7168b0",[[:space:]]*$',
+  '^[[:space:]]*"tests/test_native_api_scene_boundary\.py": "f5286a7a0ea2e87f633e97ddfff33bea8640b8096789a87c98508bad9dedae24",[[:space:]]*$',
+  '^[[:space:]]*"tests/test_token_usage\.py": "1c3fbf8cf7b83496786639e4996b4413dae66aa7675da50c6390bd285812a85f",[[:space:]]*$',
+  '^[[:space:]]*"tests/test_token_usage_transport\.py": "3973e33afb150d53b8008a5b215d0805431f1465d9d8e575c8dae403467fa5fb",[[:space:]]*$',
+]

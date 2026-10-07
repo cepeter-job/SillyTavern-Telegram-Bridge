@@ -14,7 +14,8 @@ def _enqueue_sql(owner: str) -> str:
         COALESCE((SELECT MAX(id) FROM messages WHERE chat_id=s.chat_id AND session_id=s.session_id),0)
         FROM sessions s WHERE s.chat_id={owner}.chat_id AND s.session_id={owner}.session_id
         ON CONFLICT(chat_id,session_id,session_created_at,layer) DO UPDATE SET
-        dirty_version=memory_jobs.dirty_version+1,target_id=excluded.target_id,next_attempt_at=0;"""  # noqa: S608 -- fixed internal trigger identifiers
+        dirty_version=memory_jobs.dirty_version+1,target_id=excluded.target_id,
+        attempts=0,last_error='',next_attempt_at=0;"""  # noqa: S608 -- fixed internal trigger identifiers
         for layer in LAYERS
     )
 
@@ -140,3 +141,13 @@ def migrate_durable_memory(db: sqlite3.Connection) -> None:
                 "AND layer IN ('hindsight','curator')",
                 (chat_id, session_id),
             )
+
+
+def migrate_memory_retry_guard(db: sqlite3.Connection) -> None:
+    """Refresh enqueue triggers so new source activity reopens parked work."""
+    from bridge.memory_scope_schema import _repair_memory_mutation_triggers
+
+    db.execute("DROP TRIGGER IF EXISTS memory_message_insert")
+    db.execute(f"""CREATE TRIGGER memory_message_insert AFTER INSERT ON messages BEGIN
+        {_enqueue_sql("NEW")} END""")
+    _repair_memory_mutation_triggers(db)

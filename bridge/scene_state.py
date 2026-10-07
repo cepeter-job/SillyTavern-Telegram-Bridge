@@ -341,45 +341,15 @@ def handle_scene_command(
     delivery_port: DeliveryPort,
     request_context,
 ) -> None:
-    action = command.split(None, 1)[1].strip().casefold() if " " in command else "status"
-    if action in {"", "status"}:
-        send_scene_menu(
-            token,
-            chat_id,
-            db,
-            session,
-            delivery_port=delivery_port,
-            request_context=request_context,
-        )
-        return
-    if action == "clear":
-        clear_scene_state(db, chat_id, session["session_id"])
-        delivery_port.send_text(token, chat_id, "Scene state cleared.")
-        return
-    if action == "refresh":
-        delivery_port.send_typing(token, chat_id)
-        state = refresh_scene_state_now(
-            db,
-            api_key,
-            chat_id,
-            session,
-            str(fields.get("name") or "unknown"),
-            provider_port=provider_port,
-            app_settings=request_context.app_settings,
-        )
-        delivery_port.send_text(
-            token,
-            chat_id,
-            "Scene state refreshed:\n"
-            + (
-                json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2)
-                if state
-                else "No scene state could be extracted."
-            ),
-        )
-        return
-    delivery_port.send_text(token, chat_id, "Use /scene, /scene status, /scene refresh, or /scene clear.")
-
+    """Keep all Scene command aliases on the canonical panel surface."""
+    send_scene_menu(
+        token,
+        chat_id,
+        db,
+        session,
+        delivery_port=delivery_port,
+        request_context=request_context,
+    )
 
 def _scene_state_command_route(
     db,

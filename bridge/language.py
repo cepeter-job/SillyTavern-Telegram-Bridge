@@ -156,4 +156,3 @@ def set_response_language(
         db, chat_id, session_id, operation_id=operation_id, operation_kind="language_select", response_language=language
     )
     return language
-

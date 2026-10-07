@@ -20,3 +20,21 @@ test('An explicit operation ID is preserved instead of silently replaced',async(
     assert.equal(submitted[0].operation_id,'original-operation');
   } finally {page.close();}
 });
+
+test('Recovery remains reachable after a page replaces the operation target',async()=>{
+  let posts=0,lookup=0;
+  const page=await fixture(async(path,options={})=>{
+    if(options.method==='POST'){posts++;throw new Error('response lost');}
+    if(path.startsWith('/jobs/by-operation/')){lookup++;return {id:'saved-job',state:'succeeded',result:{value:42}};}
+    throw new Error('Unexpected request '+path);
+  });
+  try {
+    const target=page.document.createElement('section');page.document.body.append(target);
+    await assert.rejects(page.namespace.runJob('/director/reassess',{session_id:'story-a'},target));
+    target.replaceChildren(page.document.createTextNode('Draft retained'));
+    const resume=[...page.document.querySelectorAll('button')].find(n=>n.textContent==='Recover original operation');
+    assert.ok(resume,'Recovery lives outside the page-owned target');resume.click();
+    await until(()=>page.document.querySelector('.recovery-completed'));
+    assert.equal(posts,1);assert.equal(lookup,1);assert.match(target.textContent,/Draft retained/);
+  } finally {page.close();}
+});

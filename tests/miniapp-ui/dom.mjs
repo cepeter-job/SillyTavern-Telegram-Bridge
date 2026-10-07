@@ -10,6 +10,8 @@ export async function createPage(name,{api=async path=>{throw new Error('Unexpec
   const dom=new JSDOM(html,{url:'http://127.0.0.1/miniapp/',runScripts:'outside-only',pretendToBeVisual:true});
   const {window}=dom,document=window.document,pages={},navigations=[];
   window.Telegram={WebApp:telegram||{}};
+  window.TextEncoder=globalThis.TextEncoder;
+  Object.defineProperty(window.crypto,'subtle',{value:globalThis.crypto.subtle});
   window.URL.createObjectURL=()=> 'blob:isolated-fixture';
   window.URL.revokeObjectURL=()=>{};
   window.HTMLDialogElement.prototype.showModal=function(){this.setAttribute('open','');};

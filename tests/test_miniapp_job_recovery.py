@@ -60,7 +60,9 @@ def test_accepted_http_submission_is_recovered_with_one_worker_execution(tmp_pat
     monkeypatch.setattr(http, "api_routes", lambda: routes)
 
     async def run():
-        async with TestClient(TestServer(http.create_miniapp_app(services, load_miniapp_config(services.config)))) as client:
+        async with TestClient(
+            TestServer(http.create_miniapp_app(services, load_miniapp_config(services.config)))
+        ) as client:
             headers = {"Authorization": "tma " + signed_data()}
             values = {"operation_id": "accepted-once", "session_id": "default"}
             response = await client.post("/api/v1/test/recovery", headers=headers, json=values)

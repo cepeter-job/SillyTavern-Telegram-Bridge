@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import signal
 import socket
 import sys
 import tempfile
@@ -39,7 +40,8 @@ async def serve() -> None:
         db = services.db_factory()
         try:
             seed_character_rank(db, "Alice.png", "S", app_settings=services.config)
-            seed_trackers(db, who.chat_id, session["session_id"])
+            if os.environ.get("MINIAPP_FIXTURE_RECOVERY") != "1":
+                seed_trackers(db, who.chat_id, session["session_id"])
         finally:
             db.close()
         if os.environ.get("MINIAPP_FIXTURE_USAGE") == "1":
@@ -77,6 +79,11 @@ async def serve() -> None:
         )
         services.persona = make_native_test_persona_service(app_settings=services.config)
         services.telegram = SimpleNamespace(send_text=lambda *a: [], request=lambda *a: {})
+        recovery = None
+        if os.environ.get("MINIAPP_FIXTURE_RECOVERY") == "1":
+            from miniapp_recovery_support import SummaryRecoveryFixture
+
+            recovery = SummaryRecoveryFixture(services, who, session)
         system.latest_bridge_release = lambda: ("0.2.099", "Fixture release; no deployment runs in this test.")
         system.installed_bridge_version = lambda **kwargs: "0.2.099"
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -87,15 +94,26 @@ async def serve() -> None:
         # The real browser sends Origin on ES-module requests; the isolated
         # fixture must authorize its own loopback origin, not the example URL.
         config = replace(load_miniapp_config(services.config), public_url=f"http://127.0.0.1:{port}/miniapp/")
-        runner = web.AppRunner(create_miniapp_app(services, config), access_log=None)
+        app = create_miniapp_app(services, config)
+        if recovery is not None:
+            recovery.install(app)
+        runner = web.AppRunner(app, access_log=None)
         await runner.setup()
         site = web.SockSite(runner, sock)
         try:
             await site.start()
             port = site._server.sockets[0].getsockname()[1]
             print(json.dumps({"url": f"http://127.0.0.1:{port}", "initData": signed_data()}), flush=True)
-            await asyncio.Event().wait()
+            stopped = asyncio.Event()
+            loop = asyncio.get_running_loop()
+            loop.add_signal_handler(signal.SIGTERM, stopped.set)
+            await stopped.wait()
         finally:
+            if recovery is not None:
+                recovery.released.set()
+            from bridge.background import shutdown_background_executors
+
+            await asyncio.to_thread(shutdown_background_executors, 5.0)
             await runner.cleanup()
 
 

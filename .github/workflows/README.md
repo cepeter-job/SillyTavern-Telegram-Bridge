@@ -31,7 +31,7 @@ accepting a reduced gate.
 | Job | Scope | Retained evidence |
 | --- | --- | --- |
 | `python-tests` | Complete pytest discovery, at most four workers, resource warnings as errors, whole-application statement and branch coverage, security coverage floors | `application-coverage`: coverage JSON/XML, JUnit XML, pytest log with the 20 slowest tests |
-| `miniapp-smoke` | Focused DOM regressions for navigation, model roles and operation failures, plus integration against the local Python fixture for page loads, mutations and stale sessions | `miniapp-smoke`: focused test and integration logs |
+| `miniapp-smoke` | Focused DOM regressions and loopback integration, plus pinned Chromium and WebKit tests of accepted-response loss, polling recovery, native dialogs, focus and narrow viewports | `miniapp-smoke`: DOM, integration and browser logs, browser HTML report and failure traces/screenshots |
 | `secret-scan` | Repository history secret scan | Action result and logs |
 | `dependency-audit` | Both complete hash-locked runtime and development dependency sets | Action result and logs |
 | `static-analysis` | Dependency lock consistency, module-size ratchet, reference evidence, architecture policy, leak scan, Ruff, and mypy | `memory-leak-scan`: leak scan and module reference JSON |
@@ -41,7 +41,13 @@ Reports are uploaded even when their producing job fails, when the report exists
 and expire after 14 days. Bash runs with pipeline failure propagation so capturing
 a test log with `tee` cannot hide the test command's failure. Checkouts do not
 retain credentials. Actions remain pinned to complete commit SHAs; Python and DOM
-tooling continue to use the checked-in locks.
+tooling continue to use the checked-in locks. Browser tooling has a separate npm
+lock under `tests/miniapp-browser/`; its Playwright version pins engine revisions.
+Both engines run sequentially against a fresh isolated loopback fixture per test.
+Only the external provider response is synthetic; the summary handler, utility
+executor, API adapter and SQLite records are real. Browser emulation does not
+claim native Telegram Android/iOS acceptance. See
+[`docs/miniapp-browser-validation.md`](../../docs/miniapp-browser-validation.md).
 
 All jobs run on pull requests and pushes to `main`. A newer run cancels the older
 run for the same ref. The module-size ratchet compares with the pull-request base

@@ -33,7 +33,7 @@ export function createJobController({request,identity,now=Date.now,sleep=ms=>new
     records.set(record.id,record);return record;
   }
   function make(id,key) {
-    return {id,key,actor:actor(),created:now(),submitted:false,job:null,final:false,blocked:false,flight:null,observers:new Set()};
+    return {id,key,actor:actor(),created:now(),submitted:false,rejected:false,job:null,final:false,blocked:false,flight:null,observers:new Set()};
   }
   function accept(record,job) {
     check(record);
@@ -46,9 +46,9 @@ export function createJobController({request,identity,now=Date.now,sleep=ms=>new
     return job;
   }
   function annotate(record,error) {
-    const terminal=record.final||!record.job&&!transient(error)&&!record.submitted;
+    const terminal=record.final||record.rejected||!record.submitted;
     error.operationId=record.id;error.jobId=record.job?.id;
-    error.uncertain=!terminal&&(Boolean(record.job)||transient(error));
+    error.uncertain=!terminal;
     error.recoverable=error.uncertain&&transient(error)&&!record.protocolError&&now()-record.created<horizon;
     record.error={message:error.message,status:error.status,uncertain:error.uncertain,recoverable:error.recoverable};record.blocked=!error.recoverable;
     if(!error.uncertain)record.final=true;
@@ -72,7 +72,8 @@ export function createJobController({request,identity,now=Date.now,sleep=ms=>new
       const deadline=now()+maxWait;let response;
       if(!record.submitted) {
         record.submitted=true;emit(record,'submitting');
-        response=await request(path,{method:'POST',body:{...body,operation_id:record.id}});
+        try {response=await request(path,{method:'POST',body:{...body,operation_id:record.id}});}
+        catch(error){record.rejected=!transient(error);throw error;}
       } else {
         const lookup=record.job?'/jobs/'+encodeURIComponent(record.job.id):'/jobs/by-operation/'+encodeURIComponent(record.id);
         response=await read(record,lookup,deadline);

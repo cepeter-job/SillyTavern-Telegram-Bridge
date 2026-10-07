@@ -13,7 +13,8 @@ from bridge.greeting_media_schema import migrate_greeting_media_cleanup
 from bridge.memory_archival_schema import migrate_archival_attempts
 from bridge.memory_draft_schema import migrate_complete_memory_parts
 from bridge.memory_retirement_schema import migrate_local_first_memory_cleanup
-from bridge.memory_schema import migrate_durable_memory, migrate_memory_retry_guard
+from bridge.memory_retry_schema import migrate_memory_retry_guard
+from bridge.memory_schema import migrate_durable_memory
 from bridge.memory_scope_schema import migrate_memory_knowledge
 from bridge.memory_search_schema import migrate_memory_search
 from bridge.migrations import Migration as _Migration, run_migrations as _run_migrations

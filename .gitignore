@@ -32,3 +32,8 @@ htmlcov/
 
 # Locked development-only DOM tooling
 tests/miniapp-ui/node_modules/
+
+# Locked development-only browser tooling and generated reports
+tests/miniapp-browser/node_modules/
+tests/miniapp-browser/playwright-report/
+tests/miniapp-browser/test-results/

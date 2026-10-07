@@ -314,7 +314,7 @@ class SyncAuditHardeningTests(SettingsTestCase):
     def test_sync_has_no_migration_beyond_declared_application_features(self):
         self.assertEqual(
             tuple(migration.version for migration in _m_schema.SCHEMA_MIGRATIONS),
-            tuple(range(1, 31)),
+            tuple(range(1, 32)),
         )
 
 

@@ -1,7 +1,6 @@
 """Exercise recoverable workers with real synthetic databases; fake external I/O only."""
 
 import json
-import time
 from types import SimpleNamespace
 
 import pytest
@@ -19,7 +18,7 @@ from bridge.metadata import set_meta
 def add(db, text="A durable event"):
     db.execute(
         "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat','s1','user',?,?)",
-        (text, time.time()),
+        (text, memory_backend.time.time()),
     )
     db.commit()
 

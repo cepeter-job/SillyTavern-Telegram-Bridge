@@ -33,11 +33,13 @@ from bridge.memory_attempt_store import (
     resolve_archival_attempt as resolve_archival_attempt,
 )
 from bridge.memory_contracts import MemoryReadScope
+from bridge.memory_queue import AUTO_FAILURE_LIMIT as AUTO_FAILURE_LIMIT
+from bridge.memory_queue import AUTO_IDLE_SECONDS as AUTO_IDLE_SECONDS
+from bridge.memory_queue import CLAIM_SELECTION, queue_parameters
 from bridge.memory_retry import CONFIGURATION_RETRY_SECONDS, MEMORY_FAILURE_CODES
 from bridge.sqlite_store import write_transaction
 
 MAX_CLAIMS, LEASE_SECONDS, SEGMENT_CHARS = 1, 900, 12000
-AUTO_IDLE_SECONDS, AUTO_FAILURE_LIMIT = 86400, 8
 ARCHIVAL_PENDING = 2  # Accepted readers require 1; 2 reserves retryable raw work without granting coverage.
 
 
@@ -115,17 +117,7 @@ def claim_jobs(
         limit = min(limit, MAX_CLAIMS - active)
         if limit <= 0:
             return []
-        rows = db.execute(
-            "SELECT chat_id,session_id,session_created_at,layer,dirty_version,target_id FROM memory_jobs "
-            "WHERE dirty_version>completed_version AND lease_token='' AND next_attempt_at<=? "
-            "AND (?=0 OR layer='hindsight' OR EXISTS(SELECT 1 FROM messages m WHERE m.chat_id=memory_jobs.chat_id "
-            "AND m.session_id=memory_jobs.session_id AND m.created_at>=?)) "
-            "AND (?=0 OR layer='hindsight' OR NOT (attempts>=? AND last_error IN ('work_failed','retain_failed'))) "
-            "AND EXISTS(SELECT 1 FROM sessions s WHERE s.chat_id=memory_jobs.chat_id "
-            "AND s.session_id=memory_jobs.session_id AND s.created_at=memory_jobs.session_created_at) "
-            "ORDER BY next_attempt_at,attempts,chat_id,session_id,layer",
-            (now, int(autonomous), now - AUTO_IDLE_SECONDS, int(autonomous), AUTO_FAILURE_LIMIT),
-        )
+        rows = db.execute(CLAIM_SELECTION, queue_parameters(now, autonomous=autonomous))
         try:
             for row in rows:
                 if (chat_id is not None and row[0] != chat_id) or (session_id is not None and row[1] != session_id):

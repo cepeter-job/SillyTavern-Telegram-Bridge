@@ -16,7 +16,6 @@ from bridge.closed_session_guard import (
     guard_story_reset,
     story_mutation_message,
 )
-from bridge.context_compaction import context_history_candidate_limit
 from bridge.context_diagnostics import record_context_attempts
 from bridge.continuation import continue_last
 from bridge.conversation_lifecycle import (
@@ -61,11 +60,12 @@ from bridge.operations import (
     record_operation,
     set_operation_phase,
 )
-from bridge.performance import timed_call
+from bridge.performance import observed_operation, perf_span, timed_call
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
 from bridge.rag_service import RagService
 from bridge.regeneration import regenerate_last
+from bridge.reply_history import load_history_rows
 from bridge.request_types import PreparedMessage, RequestContext
 from bridge.reset_panel import reset_confirmation_request
 from bridge.response_delivery import (
@@ -138,6 +138,7 @@ def send_pending_input_message(
     set_meta(db, meta_key, json.dumps(state))
 
 
+@observed_operation
 def generate_and_store_reply(
     db: sqlite3.Connection,
     token: str,
@@ -167,59 +168,53 @@ def generate_and_store_reply(
     if not require_started(db, chat_id, session_id):
         send_text(token, chat_id, START_REQUIRED)
         return
-    history_rows = timed_call(
-        "history_load",
-        db.execute,
-        (
-            "SELECT role, content FROM messages WHERE chat_id=? AND session_id=? "
-            "ORDER BY created_at DESC, rowid DESC LIMIT ?"
-        ),
-        (chat_id, session_id, context_history_candidate_limit(app_settings=app_settings)),
-        app_settings=app_settings,
-    ).fetchall()
-    history_rows = list(reversed(history_rows))
-    rag_bundle = timed_call(
-        "rag_retrieval",
-        rag_service.bundle,
-        db,
-        chat_id,
-        text,
-        app_settings=app_settings,
-    )
-    memory_prompt = memory_service.prompt_context(db, chat_id, session, fields, text)
-    memory_context = memory_prompt.recall
-    episodic_context = memory_prompt.episodic
-    session_summary = memory_prompt.summary
-    npc_context = npc_service.context_for_prompt(
-        db,
-        chat_id,
-        session,
-        fields,
-        text,
-        history_rows,
-        through_rowid=memory_prompt.scope.through_rowid if memory_prompt.scope else None,
-        memory_scope=memory_prompt.scope,
-    )
-    messages = timed_call(
-        "prompt_assembly",
-        _partial(build_chat_messages, app_settings=app_settings),
-        session,
-        fields,
-        text,
-        history_rows,
-        memory_context=memory_context,
-        episodic_context=episodic_context,
-        npc_context=npc_context,
-        simulation_context=story_simulation_context(db, chat_id, session_id, memory_prompt.scope, through_rowid=None),
-        session_summary=session_summary,
-        scene_context=memory_prompt.scene,
-        rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
-        group_context=group_context,
-        narrative_context=narrative_context_for_session(db, chat_id, session_id, "story"),
-        persona_service=persona_service,
-        app_settings=app_settings,
-        defer_compaction=True,
-    )
+    with perf_span("context_assembly", app_settings=app_settings):
+        history_rows = load_history_rows(db, chat_id, session_id, app_settings=app_settings)
+        rag_bundle = timed_call(
+            "rag_retrieval",
+            rag_service.bundle,
+            db,
+            chat_id,
+            text,
+            app_settings=app_settings,
+        )
+        with perf_span("memory_context", app_settings=app_settings):
+            memory_prompt = memory_service.prompt_context(db, chat_id, session, fields, text)
+        memory_context = memory_prompt.recall
+        episodic_context = memory_prompt.episodic
+        session_summary = memory_prompt.summary
+        npc_context = npc_service.context_for_prompt(
+            db,
+            chat_id,
+            session,
+            fields,
+            text,
+            history_rows,
+            through_rowid=memory_prompt.scope.through_rowid if memory_prompt.scope else None,
+            memory_scope=memory_prompt.scope,
+        )
+        messages = timed_call(
+            "prompt_assembly",
+            _partial(build_chat_messages, app_settings=app_settings),
+            session,
+            fields,
+            text,
+            history_rows,
+            memory_context=memory_context,
+            episodic_context=episodic_context,
+            npc_context=npc_context,
+            simulation_context=story_simulation_context(
+                db, chat_id, session_id, memory_prompt.scope, through_rowid=None
+            ),
+            session_summary=session_summary,
+            scene_context=memory_prompt.scene,
+            rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
+            group_context=group_context,
+            narrative_context=narrative_context_for_session(db, chat_id, session_id, "story"),
+            persona_service=persona_service,
+            app_settings=app_settings,
+            defer_compaction=True,
+        )
     identity = (
         telegram_message_id
         if telegram_message_id is not None
@@ -293,7 +288,7 @@ def generate_and_store_reply(
     generation_session_id = f"telegram:{chat_id}:{session_id}"
     with record_context_attempts(db, chat_id, session_id) as observe_context:
         reply = timed_call(
-            "provider_generation",
+            "provider_stream",
             provider_port.with_context_observer(observe_context).generate,
             api_key,
             current_model,
@@ -366,7 +361,9 @@ def generate_and_store_reply(
     if telegram_message_id is not None:
         clear_failed_turn(db, chat_id, telegram_message_id)
     queue_user_quote_tts(token, chat_id, text, db, session_id, telegram_message_id, app_settings=app_settings)
-    send_reply(
+    timed_call(
+        "reply_delivery",
+        _partial(send_reply, app_settings=app_settings),
         token,
         chat_id,
         stored_reply,

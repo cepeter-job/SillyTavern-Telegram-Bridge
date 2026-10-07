@@ -333,11 +333,7 @@ def dispatch_memory_backlog(services, db, *, startup=False):
         discovery = _dispatch_legacy_discovery(services, db)
         if discovery is not None:
             return discovery
-    enabled = db.execute(
-        "SELECT DISTINCT layer FROM memory_jobs WHERE layer NOT IN ('hindsight','curator') OR "
-        "COALESCE((SELECT value FROM meta WHERE key='memory_mode:' || memory_jobs.chat_id),'on')='on'"
-    ).fetchall()
-    claims = claim_jobs(db, layers=tuple(row[0] for row in enabled), limit=MAX_ACTIVE_CLAIMS - active, autonomous=True)
+    claims = claim_jobs(db, limit=MAX_ACTIVE_CLAIMS - active, autonomous=True)
     if claims:
         with write_transaction(db):
             db.execute(

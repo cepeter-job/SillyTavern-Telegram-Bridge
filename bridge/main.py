@@ -30,6 +30,7 @@ from bridge.config_values import ConfigurationError
 from bridge.conversation_service import ConversationService as _ConversationService
 from bridge.database_backup import create_database_backup, restore_database_backup
 from bridge.delivery_port import DeliveryPort as _DeliveryPort
+from bridge.diagnostic_counters import memory_queue_counters
 from bridge.director_goals import director_goal_policy
 from bridge.embedding_port import EmbeddingPort
 from bridge.embedding_transport import embed_rag_batch, embed_rag_text
@@ -168,7 +169,7 @@ def _build_startup_services(
     *,
     model_router: _ModelRouter,
 ) -> _BridgeServices:
-    durable_worker_guard = _DurableWorkerGuard(_sqlite_store._lightweight_db_connect)
+    durable_worker_guard = _DurableWorkerGuard(_sqlite_store._lightweight_db_connect, app_settings=config)
     provider = _ProviderPort(
         generate_backend=_partial(generate_provider_text, model_router, app_settings=config),
         policy=ProviderExecutionPolicy(
@@ -379,6 +380,7 @@ def _build_startup_services(
             config.environ,
             safe_counters=background_observability_counters,
             provider_activity=active_provider_requests,
+            queue_counters=_partial(memory_queue_counters, config.db_file),
         ),
         jobs=jobs,
         delivery=delivery,
@@ -398,10 +400,7 @@ def run_check(services: _BridgeServices) -> int:
             _st_api.live_sync_client(app_settings=services.config).authenticate()
         except (_st_api.SillyTavernApiError, ValueError) as exc:
             raise SystemExit(f"Live Sync check failed: {exc}") from exc
-    me = services.telegram.request(
-        config.bot_token,
-        "getMe",
-    )
+    me = services.telegram.request(config.bot_token, "getMe")
     print(f"card={fields['name']}; telegram=@{me.get('username')}; model={config.default_model}; db={config.db_file}")
     print("check=ok")
     return 0

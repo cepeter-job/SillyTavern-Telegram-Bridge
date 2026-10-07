@@ -27,5 +27,29 @@ jobs:
           name: issue410-source
           path: /tmp/issue410-source.tar.gz
           retention-days: 2
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.13'
+      - name: Download selected hash-locked local verification tools
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          wanted = {'pytest-xdist', 'execnet', 'ruff'}
+          blocks = Path('requirements-dev.lock').read_text().splitlines()
+          selected = []
+          include = False
+          for line in blocks:
+              if line and not line[0].isspace() and not line.startswith('#'):
+                  include = line.split('==')[0] in wanted
+              if include:
+                  selected.append(line)
+          Path('/tmp/verification-tools.txt').write_text('\n'.join(selected)+'\n')
+          PY
+          python -m pip download --no-deps --require-hashes --only-binary=:all: -r /tmp/verification-tools.txt -d /tmp/verification-tools
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: issue410-verification-tools
+          path: /tmp/verification-tools
+          retention-days: 2
       - name: Test recovery contract
         run: node --experimental-vm-modules --test tests/miniapp-ui/recovery.test.mjs

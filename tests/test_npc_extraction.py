@@ -287,7 +287,7 @@ def test_existing_state_preserves_restricted_visibility_metadata_in_extractor_pr
             visibility="restricted",
             known_by=("Maya Torres",),
         ),
-        '{"npcs":[]}',
+        '{"npcs":[],"simulation":{}}',
     ]
 
     def generate(_key, _model, messages, **_kwargs):

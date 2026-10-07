@@ -355,6 +355,24 @@ def test_new_story_activity_resets_parked_retry_budget(db):
     db.commit()
 
     append(db, "fresh")
-    assert db.execute(
-        "SELECT attempts,last_error,next_attempt_at FROM memory_jobs WHERE layer='npc'"
-    ).fetchone() == (0, "", 0)
+    assert db.execute("SELECT attempts,last_error,next_attempt_at FROM memory_jobs WHERE layer='npc'").fetchone() == (
+        0,
+        "",
+        0,
+    )
+
+
+def test_retry_guard_migration_repairs_existing_insert_trigger(db):
+    from bridge.memory_schema import migrate_memory_retry_guard
+
+    append(db)
+    db.execute("UPDATE memory_jobs SET attempts=8,last_error='work_failed',next_attempt_at=999 WHERE layer='npc'")
+    db.execute("DROP TRIGGER memory_message_insert")
+    db.execute("""CREATE TRIGGER memory_message_insert AFTER INSERT ON messages BEGIN
+        UPDATE memory_jobs SET dirty_version=dirty_version+1,target_id=NEW.id,next_attempt_at=0
+        WHERE chat_id=NEW.chat_id AND session_id=NEW.session_id; END""")
+    db.commit()
+
+    migrate_memory_retry_guard(db)
+    append(db, "fresh after upgrade")
+    assert db.execute("SELECT attempts,last_error FROM memory_jobs WHERE layer='npc'").fetchone() == (0, "")

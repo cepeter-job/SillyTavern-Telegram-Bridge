@@ -20,16 +20,9 @@ from bridge.migrations import run_migrations as _run_migrations
 from bridge.narrative_arc_schema import migrate_narrative_arc_evidence
 from bridge.narrative_runtime_schema import migrate_narrative_history_revisions
 from bridge.narrative_schema import migrate_narrative_engine_foundation
-from bridge.simulation_schema import (
-    migrate_retired_tracker_transcript_cleanup,
-    migrate_simulation_trackers,
-    retire_prompt_tracker_bootstrap,
-)
+from bridge import simulation_schema as _simulation_schema
 from bridge.token_usage_schema import migrate_token_usage
 from bridge.transcript_schema import migrate_message_identity
-
-PROCESSED_UPDATE_RETENTION_SECONDS = 30 * 86400
-
 
 def _create_core_tables(db: sqlite3.Connection) -> None:
     """Create metadata, messages, sessions, and response variant tables."""
@@ -299,7 +292,7 @@ def _run_startup_database_cleanup(db: sqlite3.Connection) -> None:
     now = time.time()
     db.execute(
         "DELETE FROM processed_updates WHERE processed_at < ?",
-        (now - PROCESSED_UPDATE_RETENTION_SECONDS,),
+        (now - 30 * 86400,),
     )
     db.execute(
         "DELETE FROM rag_embedding_cache WHERE created_at < ?",
@@ -516,9 +509,9 @@ SCHEMA_MIGRATIONS = (
     _Migration(22, "indexed_memory_evidence", migrate_memory_search),
     _Migration(23, "complete_memory_parts", migrate_complete_memory_parts),
     _Migration(24, "raw_archival_attempts", migrate_archival_attempts),
-    _Migration(25, "canonical_simulation_trackers", migrate_simulation_trackers),
-    _Migration(26, "retire_prompt_tracker_bootstrap", retire_prompt_tracker_bootstrap),
-    _Migration(27, "retired_tracker_transcript_cleanup", migrate_retired_tracker_transcript_cleanup),
+    _Migration(25, "canonical_simulation_trackers", _simulation_schema.migrate_simulation_trackers),
+    _Migration(26, "retire_prompt_tracker_bootstrap", _simulation_schema.retire_prompt_tracker_bootstrap),
+    _Migration(27, "retired_tracker_transcript_cleanup", _simulation_schema.migrate_retired_tracker_transcript_cleanup),
 )
 
 

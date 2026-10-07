@@ -351,6 +351,7 @@ def handle_curated_memory_command(
         request_context=request_context,
     )
 
+
 def _memory_curator_command_route(
     db,
     token,

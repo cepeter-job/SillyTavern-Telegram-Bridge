@@ -30,6 +30,22 @@ def _name(value: Any, maximum: int = MAX_NAME) -> str:
     return name
 
 
+def _stable_id(value: str) -> str:
+    result: list[str] = []
+    separated = False
+    for char in value.casefold():
+        if char.isalnum():
+            result.append(char)
+            separated = False
+        elif result and not separated:
+            result.append("-")
+            separated = True
+    normalized = "".join(result).strip("-")
+    if not normalized:
+        raise ValueError("Simulation identity must contain a stable identifier")
+    return normalized
+
+
 def _modifier(value: Any) -> dict[str, Any]:
     item = {"name": value} if isinstance(value, str) else value
     if not isinstance(item, dict):
@@ -67,7 +83,7 @@ def _record(group: str, item: dict) -> dict:
     identifier = _IDENTIFIERS[group]
     name = _name(item.get(identifier), MAX_NAME if identifier != "id" else 100)
     if identifier == "id":
-        name = name.casefold().replace(" ", "-")
+        name = _stable_id(name)
     result: dict[str, Any] = {identifier: name}
     fields = {
         "agendas": {"objective": 500, "location": 300, "status": 20},

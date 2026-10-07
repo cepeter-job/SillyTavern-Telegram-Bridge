@@ -9,7 +9,8 @@ import uuid
 from typing import Any
 
 from bridge.action_adjudication import action_mode, set_action_mode
-from bridge.check_panels import send_check_menu\nfrom bridge.closed_session_guard import guard_story_mutation
+from bridge.check_panels import send_check_menu
+from bridge.closed_session_guard import guard_story_mutation
 from bridge.conversation_lifecycle import START_REQUIRED, require_started, split_command_text
 from bridge.delivery_port import DeliveryPort
 from bridge.delivery_progress import DeliveryFailure, DeliveryTargetExpired

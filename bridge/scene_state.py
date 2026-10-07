@@ -351,6 +351,7 @@ def handle_scene_command(
         request_context=request_context,
     )
 
+
 def _scene_state_command_route(
     db,
     token,

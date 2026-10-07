@@ -131,6 +131,28 @@ def test_repair_is_bounded_and_unsupported_versions_are_not_repaired(directed, r
     assert load_director_state(db, "chat", "s1")["inflight_token"] == ""
 
 
+
+def test_repair_prompt_is_specific_and_failure_log_stays_sanitized(directed, caplog):
+    _settings, db, _session = directed
+    invalid = response(db, direction={"PRIVATE_RAW": "secret"})
+    calls = []
+
+    def generate(_key, _model, messages, **_kwargs):
+        calls.append([dict(message) for message in messages])
+        return invalid
+
+    result = reassess(directed, generate)
+    assert result.result == "rejected"
+    assert len(calls) == 2
+    repair = calls[1][-1]["content"]
+    assert "field 'direction'" in repair
+    assert "Omit optional string fields instead of null" in repair
+    assert "Do not use Markdown or code fences" in repair
+    assert "field 'direction'" in caplog.text
+    assert "PRIVATE_RAW" not in caplog.text
+
+
+
 def test_one_repair_can_produce_one_valid_decision(directed):
     _settings, db, _session = directed
     responses = iter(['{"schema_version":1,"action":', response(db)])

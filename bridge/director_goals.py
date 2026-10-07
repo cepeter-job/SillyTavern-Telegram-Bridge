@@ -123,33 +123,17 @@ def handle_director_goal_command(
     delivery_port: DeliveryPort,
     request_context,
 ) -> None:
+    """Keep Group Director objective aliases on the canonical review panel."""
     if parse_topic_scope(chat_id)[1] is None:
         delivery_port.send_text(token, chat_id, "Director goals are available only inside a Telegram Forum Topic.")
         return
-
-    raw = str(command or "")
-    suffix = raw[len("/group goal") :].strip()
-    if not suffix or suffix.casefold() == "status":
-        send_director_goal_menu(
-            token,
-            chat_id,
-            db,
-            session,
-            delivery_port=delivery_port,
-            request_context=request_context,
-        )
-        return
-    if suffix.casefold() in {"clear", "off", "none"}:
-        set_director_goal(db, chat_id, session["session_id"], "")
-        delivery_port.send_text(token, chat_id, "Director scene objective cleared.")
-        return
-    value = set_director_goal(db, chat_id, session["session_id"], suffix)
-    delivery_port.send_text(
+    send_director_goal_menu(
         token,
         chat_id,
-        "Director scene objective set:\n"
-        + value
-        + "\nIt remains hidden from the transcript and is shared with Director Room.",
+        db,
+        session,
+        delivery_port=delivery_port,
+        request_context=request_context,
     )
 
 

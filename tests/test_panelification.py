@@ -224,21 +224,20 @@ class PanelificationTests(SettingsTestCase):
         self.assertTrue(self._route("/group goal", topic_id, topic_session))
         self.assertIn("goal:set", str(self.calls[-1]))
 
-    def test_typed_search_group_and_inline_text_forms_preserve_payloads(self):
+    def test_typed_search_group_and_inline_text_forms_preserve_boundaries(self):
         memory_calls = []
-        group_calls = []
         macro_calls = []
         old_memory = _command_panels.handle_memory_command
-        old_group = _command_panels.handle_group_command
         old_macro = text_action_input.handle_macro_command
         _command_panels.handle_memory_command = lambda *args, app_settings=None, **_kwargs: memory_calls.append(
             args[-1]
         )
-        _command_panels.handle_group_command = lambda *args, **_kwargs: group_calls.append(args[4])
         text_action_input.handle_macro_command = lambda *args, **_kwargs: macro_calls.append(args[-1])
         try:
             self.assertTrue(self._route("/memory search hidden fact"))
             self.assertEqual(memory_calls, ["/memory search hidden fact"])
+
+            self.calls.clear()
             self.assertTrue(
                 self._route(
                     "/group add Mira",
@@ -252,12 +251,13 @@ class PanelificationTests(SettingsTestCase):
                     ),
                 )
             )
-            self.assertEqual(group_calls, ["/group add Mira"])
+            self.assertNotIn("handle_group_command", dir(_command_panels))
+            self.assertIn("group:add", str(self.calls[-1]))
+
             self.assertTrue(self._route("/macro {{char}} waves"))
             self.assertEqual(macro_calls, ["/macro {{char}} waves"])
         finally:
             _command_panels.handle_memory_command = old_memory
-            _command_panels.handle_group_command = old_group
             text_action_input.handle_macro_command = old_macro
 
     def test_world_menu_keeps_bot_token_for_telegram_request(self):

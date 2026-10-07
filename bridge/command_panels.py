@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from bridge.databank_commands import handle_data_bank_command
 from bridge.databank_panels import send_databank_menu
 from bridge.expressions import send_expression_menu
 from bridge.feature_panels import send_summary_menu
-from bridge.group_commands import handle_group_command
 from bridge.group_panels import send_group_menu
 from bridge.image_panels import send_imagine_menu
-from bridge.language import handle_language_command, send_language_menu
+from bridge.language import send_language_menu
 from bridge.macro_commands import send_stscript_menu
 from bridge.memory import handle_memory_command
 from bridge.memory_panels import send_memory_menu
@@ -17,7 +15,6 @@ from bridge.note_panels import send_note_menu
 from bridge.npc_panels import send_npc_menu
 from bridge.preset_panels import send_preset_menu
 from bridge.rag_service import RagService
-from bridge.session_core import update_session
 from bridge.settings_panels import send_settings_menu, send_stream_menu
 from bridge.sync_panels import send_sync_menu
 from bridge.telegram import send_text
@@ -95,25 +92,12 @@ def _handle_generation_panels(
     if command == "/settings" or command == "/settings reasoning" or command.startswith("/settings "):
         send_settings_menu(token, chat_id, db, session_id, request_context=request_context)
         return True
-    if command == "/language" or command in {"/language list", "/language status"}:
+    if command == "/language" or command.startswith("/language "):
         send_language_menu(
             token,
             chat_id,
             session.get("response_language") or "auto",
             delivery_port=delivery_port,
-            request_context=request_context,
-        )
-        return True
-    if command.startswith("/language "):
-        handle_language_command(
-            db,
-            token,
-            chat_id,
-            session,
-            stripped,
-            operation_id=operation_id,
-            delivery_port=delivery_port,
-            update_session=update_session,
             request_context=request_context,
         )
         return True
@@ -205,46 +189,17 @@ def _handle_memory_media(
     if command == "/summarize":
         send_summary_menu(token, chat_id, db, session, request_context=request_context)
         return True
-    if command == "/databank" or command in {
-        "/databank on",
-        "/databank off",
-        "/databank status",
-        "/databank list",
-        "/databank remove",
-    }:
-        send_databank_menu(token, chat_id, db, request_context=request_context)
-        return True
-    if command in {"/databank search", "/databank versions", "/databank activate", "/databank reindex"}:
-        send_databank_menu(token, chat_id, db, request_context=request_context)
-        return True
-    if (
-        command.startswith("/databank search ")
-        or command.startswith("/databank versions ")
-        or command.startswith("/databank activate ")
-        or command.startswith("/databank reindex ")
-        or command.startswith("/databank remove ")
-    ):
-        handle_data_bank_command(
-            db, token, chat_id, stripped, app_settings=request_context.app_settings, rag_service=rag_service
-        )
-        return True
-    if command.startswith("/databank "):
+    if command == "/databank" or command.startswith("/databank "):
         send_databank_menu(token, chat_id, db, request_context=request_context)
         return True
     if command == "/sync":
         send_sync_menu(token, chat_id, db, session, sync_service=sync_service, request_context=request_context)
         return True
-    if command == "/group":
+    if command == "/group" or command.startswith("/group "):
         if parse_topic_scope(chat_id)[1] is None:
             send_text(token, chat_id, "Group sessions are available only inside a Telegram Forum Topic.")
         else:
             send_group_menu(db, token, chat_id, session, group_service=group_service, request_context=request_context)
-        return True
-    if command.startswith("/group "):
-        if parse_topic_scope(chat_id)[1] is None:
-            send_text(token, chat_id, "Group sessions are available only inside a Telegram Forum Topic.")
-        else:
-            handle_group_command(db, token, chat_id, session, stripped, operation_id, group_service=group_service)
         return True
 
     return False

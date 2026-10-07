@@ -14,7 +14,8 @@ def _enqueue_sql(owner: str) -> str:
         COALESCE((SELECT MAX(id) FROM messages WHERE chat_id=s.chat_id AND session_id=s.session_id),0)
         FROM sessions s WHERE s.chat_id={owner}.chat_id AND s.session_id={owner}.session_id
         ON CONFLICT(chat_id,session_id,session_created_at,layer) DO UPDATE SET
-        dirty_version=memory_jobs.dirty_version+1,target_id=excluded.target_id,next_attempt_at=0;"""  # noqa: S608 -- fixed internal trigger identifiers
+        dirty_version=memory_jobs.dirty_version+1,target_id=excluded.target_id,
+        attempts=0,last_error='',next_attempt_at=0;"""  # noqa: S608 -- fixed internal trigger identifiers
         for layer in LAYERS
     )
 

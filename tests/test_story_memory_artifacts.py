@@ -37,6 +37,7 @@ def service(recall=None):
         validate_blocks=validate_memory_blocks,
         summary_state=memory.get_session_summary,
         retain_session=lambda *a: None,
+        queue_session_cleanup=lambda *_args: None,
         purge_session_memory=lambda *a: 0,
     )
 

@@ -235,6 +235,10 @@ class RetainSessionMemory(Protocol):
     ) -> None: ...
 
 
+class QueueSessionMemoryCleanup(Protocol):
+    def __call__(self, db: sqlite3.Connection, chat_id: str, session_id: str) -> None: ...
+
+
 class PurgeSessionMemory(Protocol):
     def __call__(self, db: sqlite3.Connection, chat_id: str, session_id: str) -> int: ...
 

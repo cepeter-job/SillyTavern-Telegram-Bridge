@@ -219,13 +219,14 @@ def delete_session_data(
             return False, "session not found"
         if session_has_active_jobs(db, chat_id, target_session_id):
             return False, "session has active jobs"
-        try:
-            memory_service.purge_session(db, chat_id, target_session_id)
-        except RuntimeError:
-            return False, "Hindsight cleanup failed; session was preserved"
         with write_transaction(db):
             if not claim_operation(db, operation_id, "session_delete", time.time()):
                 return False, "already processed"
+            if load_session_row(db, chat_id, target_session_id) is None:
+                return False, "session not found"
+            if session_has_active_jobs(db, chat_id, target_session_id):
+                return False, "session has active jobs"
+            memory_service.queue_cleanup(db, chat_id, target_session_id)
             clear_curated_memory_state(db, chat_id, target_session_id)
             delete_session_rows(
                 db,

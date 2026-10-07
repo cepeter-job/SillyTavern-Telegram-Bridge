@@ -642,11 +642,12 @@ class AuditRegressionTests(SettingsTestCase):
             "• Delete this session's stored conversation, response variants, continuity summary, curated memory, "
             "episodic memory, NPC Bank state, narrative scenes, threads, arcs, "
             "Director state and ending checkpoints.\n"
-            "• Purge Hindsight documents for this active session.\n"
+            "• Queue deletion of Hindsight documents for this active session.\n"
             "• Attempt to delete this session's tracked Telegram user messages, assistant replies, and choice panels.\n"
             "• Keep Narrative Style, your personal defaults, chat-scoped RAG and this session identity.\n"
             "• Use /new when you need a completely new session.\n\n"
-            "If Hindsight cleanup fails, no local session data will be deleted.\n\n"
+            "Local reset completes immediately. Hindsight cleanup will retry in the background, "
+            "including while memory is off.\n\n"
             "This cannot be undone."
         )
         self.assertEqual(payload["text"], expected)
@@ -654,32 +655,22 @@ class AuditRegressionTests(SettingsTestCase):
         callbacks = {button["callback_data"] for row in markup for button in row}
         self.assertEqual(callbacks, {"reset:confirm", "reset:cancel"})
 
-    def test_reset_uses_session_scoped_purge_not_whole_bank(self):
+    def test_reset_uses_session_scoped_cleanup_queue(self):
         session = _owner_session_core.ensure_session(
             self.db, "chat", self.app_settings_builder.default_model, app_settings=self.app_settings_builder.build()
         )
         calls = []
-        original_purge = _m_memory.purge_hindsight_session
-        original_reply = _m_message_commands.send_text
-        _m_memory.purge_hindsight_session = lambda _db, chat_id, session_id, *, app_settings=None: calls.append(
-            (chat_id, session_id)
+        _owner_message_commands.reset_session(
+            self.db,
+            "token",
+            "chat",
+            session,
+            memory_service=make_test_memory_service(
+                queue_session_cleanup=lambda db, chat, sid: calls.append((chat, sid, db.in_transaction)),
+            ),
+            npc_service=make_test_npc_service(),
         )
-        _m_message_commands.send_text = lambda *_args, **_kwargs: None
-        try:
-            _owner_message_commands.reset_session(
-                self.db,
-                "token",
-                "chat",
-                session,
-                memory_service=make_test_memory_service(
-                    purge_session_memory=_m_memory.purge_hindsight_session,
-                ),
-                npc_service=make_test_npc_service(),
-            )
-        finally:
-            _m_memory.purge_hindsight_session = original_purge
-            _m_message_commands.send_text = original_reply
-        self.assertEqual(calls, [("chat", session["session_id"])])
+        self.assertEqual(calls, [("chat", session["session_id"], True)])
 
     def test_response_language_is_added_to_prompt(self):
         session = _owner_session_core.ensure_session(

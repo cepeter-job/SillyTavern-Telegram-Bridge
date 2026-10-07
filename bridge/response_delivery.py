@@ -202,6 +202,29 @@ def _send_reply_chunk(
     return send_text(token, chat_id, text)
 
 
+def collect_session_telegram_ids(db: sqlite3.Connection, chat_id: str, session_id: str) -> list[int]:
+    """Freeze tracked transcript IDs before an atomic local reset removes their rows."""
+    found = set()
+    for role, incoming, outgoing in db.execute(
+        "SELECT role,telegram_message_id,telegram_message_ids FROM messages WHERE chat_id=? AND session_id=?",
+        (chat_id, session_id),
+    ):
+        try:
+            values = [incoming] if role == "user" else json.loads(outgoing or "[]") if role == "assistant" else []
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(values, list):
+            continue
+        for value in values:
+            try:
+                message_id = int(value)
+                if message_id > 0:
+                    found.add(message_id)
+            except (ValueError, TypeError):
+                continue
+    return sorted(found)
+
+
 def delete_outgoing_messages(
     db: sqlite3.Connection, token: str, chat_id: str, session_id: str, after_rowid: int | None = None
 ) -> None:

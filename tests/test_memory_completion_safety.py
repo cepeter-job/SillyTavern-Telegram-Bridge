@@ -97,7 +97,7 @@ def test_curator_reset_discards_inflight_completion(session_db, monkeypatch, cha
 
     monkeypatch.setattr(memory_curator, "_retain_with_client", lambda *a, **k: retained.append(a))
     monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
-    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "delete_tracked_panel_messages", lambda *a, **k: None)
     thread = threading.Thread(target=worker)
     thread.start()
     try:
@@ -380,7 +380,7 @@ def test_summary_rejects_completion_after_source_changes(session_db, monkeypatch
     settings, db, session = session_db
     add_rows(db, 2, size=30)
     monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
-    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "delete_tracked_panel_messages", lambda *a, **k: None)
     expected = ("", 0)
 
     def generate(*_args, **_kwargs):
@@ -423,7 +423,7 @@ def test_summary_failure_after_reset_returns_no_old_fallback(session_db, monkeyp
     db.execute("INSERT INTO session_summaries VALUES(?,?,?,?,?)", ("chat", "s1", "Prior obsolete summary", 1, 1.0))
     db.commit()
     monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
-    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "delete_tracked_panel_messages", lambda *a, **k: None)
 
     def generate(*_args, **_kwargs):
         message_commands.reset_session(
@@ -452,7 +452,7 @@ def test_episodic_completion_after_invalidation_does_not_restore_old_facts(sessi
     settings, db, session = session_db
     add_rows(db, 2, size=30)
     monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
-    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "delete_tracked_panel_messages", lambda *a, **k: None)
 
     def generate(*_args, **_kwargs):
         assert not db.in_transaction
@@ -599,7 +599,7 @@ def test_summary_does_not_start_episodic_work_from_invalidated_segment(session_d
     add_rows(db, 32, size=30)
     calls = []
     monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
-    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "delete_tracked_panel_messages", lambda *a, **k: None)
 
     def generate(*_args, **kwargs):
         calls.append(kwargs.get("session_id"))

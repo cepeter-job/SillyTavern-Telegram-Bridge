@@ -72,6 +72,7 @@ class MemoryServiceTests(SettingsTestCase):
             validate_blocks=lambda db, scope, blocks: self.calls.append("validate") or blocks,
             summary_state=lambda *args: ("stored summary", 23),
             retain_session=lambda *args: None,
+            queue_session_cleanup=lambda *_args: None,
             purge_session_memory=lambda *args: 0,
         )
         values.update(overrides)
@@ -823,9 +824,8 @@ class MemoryServiceBoundaryTests(SettingsTestCase):
             calls = []
 
             class FakeMemory:
-                def purge_session(self, current_db, chat_id, session_id):
+                def queue_cleanup(self, current_db, chat_id, session_id):
                     calls.append((current_db, chat_id, session_id))
-                    return 1
 
             with (
                 patch.object(

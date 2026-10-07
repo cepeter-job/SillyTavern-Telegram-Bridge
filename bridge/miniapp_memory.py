@@ -16,7 +16,6 @@ from bridge.card_content import card_fields_from_file
 from bridge.limits import RAG_MAX_FILE_BYTES, RAG_SUPPORTED_SUFFIXES, SUMMARY_MAX_CHARS
 from bridge.memory import generate_session_summary_result, get_session_summary
 from bridge.memory_backend import (
-    _retain_with_client,
     hindsight_session_lock,
     memory_mode,
     memory_scope,
@@ -25,7 +24,6 @@ from bridge.memory_backend import (
 from bridge.memory_curator import (
     clear_curated_memory_state,
     curate_memory_now,
-    curated_memory_document_id,
     get_curated_memory_state,
     memory_curator_key,
 )
@@ -184,32 +182,23 @@ def regenerate_curated(services: Any, who: MiniAppIdentity, values: dict) -> dic
 
 def sync_curated(services: Any, who: MiniAppIdentity, values: dict) -> dict:
     require_confirmation(values)
-    with session_scope(services, who, values, write=True) as scope:
-        items, _covered = get_curated_memory_state(scope.db, scope.chat_id, scope.session["session_id"])
-        content = "Curated durable memories:\n" + (
-            "\n".join(f"- [{item['kind']}:{item['key']}] {item['text']}" for item in items) if items else "(none)"
+    with session_scope(services, who, values, write=True):
+        raise MiniAppError(
+            "Legacy curated export is no longer supported. Accepted native facts are indexed automatically; "
+            "local curated editing remains available.",
+            status=410,
         )
-        synced = _retain_with_client(
-            scope.chat_id,
-            scope.session["session_id"],
-            curated_memory_document_id(scope.session["session_id"]),
-            _character(services, scope),
-            content,
-            "User-reviewed curated memory",
-            "curated",
-            "Mini App Hindsight retain unavailable for %s",
-            app_settings=services.config,
-        )
-        if not synced:
-            raise MiniAppError("Local memory is saved, but Hindsight synchronization failed. Check its configuration.")
-        return {"synced": True}
 
 
 def purge_remote(services: Any, who: MiniAppIdentity, values: dict) -> dict:
     require_confirmation(values)
-    with session_scope(services, who, values, write=True) as scope:
-        count = services.memory.purge_session(scope.db, scope.chat_id, scope.session["session_id"])
-        return {"purged": count}
+    with (
+        session_scope(services, who, values, write=True) as scope,
+        hindsight_session_lock(scope.chat_id, scope.session["session_id"]),
+        write_transaction(scope.db),
+    ):
+        services.memory.queue_cleanup(scope.db, scope.chat_id, scope.session["session_id"])
+        return {"queued": True}
 
 
 def recall_remote(services: Any, who: MiniAppIdentity, values: dict) -> dict:

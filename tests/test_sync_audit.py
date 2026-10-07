@@ -226,7 +226,7 @@ class SyncAuditHardeningTests(SettingsTestCase):
             inactive["session_id"],
             active["session_id"],
             operation_id=991,
-            memory_service=SimpleNamespace(purge_session=lambda *_args: 0),
+            memory_service=SimpleNamespace(queue_cleanup=lambda *_args: 0),
         )
 
         self.assertTrue(deleted, reason)

@@ -106,7 +106,13 @@ class ResetBehaviorTests(SettingsTestCase):
             npc_service=make_test_npc_service(),
         )
         self.assertTrue(handled)
-        self.assertEqual(sent, ["Reset complete. The active session was cleared."])
+        self.assertEqual(
+            sent,
+            [
+                "Reset complete. The active session was cleared. Hindsight cleanup is queued and will "
+                "retry in the background."
+            ],
+        )
         self.assertEqual(removed, [callback])
 
     def test_reset_clears_episodic_memories(self):
@@ -146,10 +152,22 @@ class ResetBehaviorTests(SettingsTestCase):
             curator_key,
             json.dumps({"items": [{"key": "stable", "text": "durable fact"}], "through_rowid": 2}),
         )
+        from unittest.mock import patch
+
+        self.db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_ids,created_at) "
+            "VALUES(?,?,'assistant','old reply','[41,42]',1)",
+            ("chat", self.session["session_id"]),
+        )
+        self.db.commit()
         deleted = []
-        original_delete = _m_message_commands.delete_outgoing_messages
-        _m_message_commands.delete_outgoing_messages = lambda *args, **kwargs: deleted.append((args, kwargs))
-        try:
+
+        def delete(token, method, payload):
+            self.assertEqual(self.db.execute("SELECT count(*) FROM messages").fetchone()[0], 0)
+            self.assertFalse(self.db.in_transaction)
+            deleted.append(payload["message_id"])
+
+        with patch.object(_m_message_commands, "telegram_request", side_effect=delete):
             _m_message_commands.reset_session(
                 self.db,
                 "token",
@@ -158,12 +176,8 @@ class ResetBehaviorTests(SettingsTestCase):
                 memory_service=make_test_memory_service(),
                 npc_service=make_test_npc_service(),
             )
-        finally:
-            _m_message_commands.delete_outgoing_messages = original_delete
-
         self.assertEqual(_m_session_naming.get_meta(self.db, curator_key, ""), "")
-        self.assertEqual(len(deleted), 1)
-        self.assertEqual(deleted[0][0][2:4], ("chat", self.session["session_id"]))
+        self.assertEqual(deleted, [41, 42])
 
 
 class NarrativeResetTests(SettingsTestCase):
@@ -180,13 +194,15 @@ class NarrativeResetTests(SettingsTestCase):
 
         seed_narrative_story(self.db, "chat", "story")
 
-    def _reset(self, purge=None):
+    def _reset(self, queue=None):
         from types import SimpleNamespace
         from unittest.mock import patch
 
+        from bridge.memory_retirement_store import queue_session_memory_cleanup
+
         with (
             patch.object(_m_message_commands, "delete_outgoing_messages"),
-            patch.object(_m_message_commands, "delete_incoming_messages"),
+            patch.object(_m_message_commands, "delete_tracked_panel_messages"),
             patch.object(_m_message_commands, "telegram_request", return_value={}),
         ):
             _m_message_commands.reset_session(
@@ -194,7 +210,7 @@ class NarrativeResetTests(SettingsTestCase):
                 "token",
                 "chat",
                 self.session,
-                memory_service=SimpleNamespace(purge_session=purge or (lambda *a: 0)),
+                memory_service=SimpleNamespace(queue_cleanup=queue or queue_session_memory_cleanup),
                 npc_service=make_test_npc_service(),
             )
 
@@ -206,7 +222,7 @@ class NarrativeResetTests(SettingsTestCase):
         before = self.db.execute("SELECT * FROM narrative_settings").fetchall()
 
         def purge(db, chat_id, session_id):
-            self.assertFalse(db.in_transaction)
+            self.assertTrue(db.in_transaction)
             self.assertEqual((chat_id, session_id), ("chat", "story"))
             self.assertGreater(db.execute("SELECT COUNT(*) FROM messages").fetchone()[0], 0)
             return 0
@@ -220,15 +236,18 @@ class NarrativeResetTests(SettingsTestCase):
         self.assertEqual(load_user_narrative_default(self.db, "owner").preset, "world_driven")
         self.assertIsNotNone(self.db.execute("SELECT 1 FROM sessions WHERE session_id='story'").fetchone())
 
-    def test_failed_external_cleanup_preserves_narrative_and_transcript(self):
-        before = "\n".join(self.db.iterdump())
+    def test_reset_commits_without_hindsight_and_queues_cleanup(self):
+        from unittest.mock import patch
 
-        def fail(*args):
-            raise RuntimeError("memory unavailable")
+        from bridge import memory_backend
 
-        with self.assertRaisesRegex(RuntimeError, "memory unavailable"):
-            self._reset(fail)
-        self.assertEqual("\n".join(self.db.iterdump()), before)
+        with patch.object(memory_backend, "hindsight_client", side_effect=AssertionError("unexpected provider")):
+            self._reset()
+        self.assertEqual(self.db.execute("SELECT count(*) FROM messages").fetchone(), (0,))
+        self.assertEqual(self.db.execute("SELECT count(*) FROM memory_cleanup_discovery").fetchone(), (1,))
+        self.assertEqual(
+            self.db.execute("SELECT value FROM meta WHERE key='hindsight_epoch:chat:story'").fetchone(), ("1",)
+        )
 
     def test_local_reset_failure_rolls_back_transcript_summary_and_narrative(self):
         from unittest.mock import patch
@@ -246,7 +265,7 @@ class NarrativeResetTests(SettingsTestCase):
         self.assertEqual(self.db.execute("SELECT * FROM session_summaries").fetchall(), before_summary)
         self.assertEqual(self.db.execute("SELECT * FROM narrative_state").fetchall(), before_state)
 
-    def test_reset_rejects_existing_transaction_before_external_cleanup(self):
+    def test_reset_rejects_existing_transaction_before_queue(self):
         self.db.execute("BEGIN")
         calls = []
         try:

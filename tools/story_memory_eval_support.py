@@ -114,7 +114,7 @@ class OfflineTransport:
 
     async def list_documents(self, *, bank_id, limit, offset, tags=None, q=None, **kwargs):
         values = [
-            {"id": doc}
+            {"id": doc, "tags": list(value["tags"])}
             for doc, value in self.documents_by_id.items()
             if value["bank_id"] == bank_id
             and (not tags or set(tags).intersection(value["tags"]))
@@ -233,7 +233,10 @@ class EvaluationRuntime:
             context_limit=4000,
         )
         self.npc = NpcService()
+        from bridge.memory_retirement_store import queue_session_memory_cleanup
+
         self.memory = MemoryService(
+            queue_session_cleanup=queue_session_memory_cleanup,
             resolve_scope=partial(
                 memory_scope_runtime.resolve_session_memory_scope,
                 app_settings=self.settings,

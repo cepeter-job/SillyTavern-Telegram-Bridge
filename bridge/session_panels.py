@@ -44,7 +44,7 @@ def send_session_delete_menu(
         f"""{current_page + 1}"""
         "/"
         f"""{total_pages}"""
-        "). Session-scoped Hindsight documents are deleted; memories from other "
+        "). Session-scoped Hindsight cleanup is queued; memories from other "
         "sessions remain."
     )
     method, payload = panel_message_request(
@@ -71,10 +71,9 @@ def send_session_delete_confirm(
             "Delete session '"
             f"""{panel_label(title)}"""
             "'?\n\nThis removes its SQLite transcript, variants, summary, generation "
-            "settings, group state, failed turns, session record, and session-scoped "
-            "Hindsight documents. Memories from other sessions remain. The active "
-            "session cannot be deleted. Cleanup fails closed if Hindsight is "
-            "unavailable. This cannot be undone."
+            "settings, group state, failed turns and session record. Hindsight cleanup is queued "
+            "and will retry in the background, including while memory is off. Memories from "
+            "other sessions remain. The active session cannot be deleted. This cannot be undone."
         ),
         "reply_markup": {
             "inline_keyboard": [

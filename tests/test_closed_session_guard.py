@@ -55,7 +55,7 @@ def test_reset_cannot_purge_memory_or_reopen_a_completed_story(closed_case, monk
             "token",
             "chat",
             session,
-            memory_service=SimpleNamespace(purge_session=lambda *a: pytest.fail("Purged closed memory")),
+            memory_service=SimpleNamespace(queue_cleanup=lambda *a: pytest.fail("Purged closed memory")),
             npc_service=SimpleNamespace(purge_session=lambda *a: pytest.fail("Purged closed NPC state")),
         )
     assert load_ending_state(db, "chat", "s1").lifecycle == "closed"
@@ -191,14 +191,16 @@ def test_reset_during_finale_is_rejected_before_deleting_telegram_or_external_me
     monkeypatch.setattr(
         message_commands, "delete_outgoing_messages", lambda *a, **k: pytest.fail("Deleted finale output")
     )
-    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: pytest.fail("Deleted user input"))
+    monkeypatch.setattr(
+        message_commands, "delete_tracked_panel_messages", lambda *a, **k: pytest.fail("Deleted user input")
+    )
     with pytest.raises(ValueError, match="finale"):
         message_commands.reset_session(
             db,
             "token",
             "chat",
             session,
-            memory_service=SimpleNamespace(purge_session=lambda *a: pytest.fail("Purged finale memory")),
+            memory_service=SimpleNamespace(queue_cleanup=lambda *a: pytest.fail("Purged finale memory")),
             npc_service=SimpleNamespace(purge_session=lambda *a: pytest.fail("Purged finale NPCs")),
         )
     assert load_ending_state(db, "chat", "s1").lifecycle == "finale"

@@ -13,6 +13,19 @@ from bridge.simulation_projection import is_managed_field
 from bridge.simulation_service import SimulationService
 
 
+def publish_simulation(db, chat_id, session_id, payload, through, *, primary_name="", user_name=""):
+    simulation = canonicalize_narrative_links(db, chat_id, session_id, payload or {}, through)
+    SimulationService().apply_payload(
+        db,
+        chat_id,
+        session_id,
+        simulation,
+        source_rowid=through,
+        primary_name=primary_name,
+        user_name=user_name,
+    )
+
+
 def publish_derived(db, chat_id, session_id, layer, payload, through):
     if layer == "summary":
         text = "\n".join(block["text"] for block in payload["blocks"])
@@ -67,13 +80,12 @@ def publish_derived(db, chat_id, session_id, layer, payload, through):
                 primary_name=payload["primary_name"],
                 user_name=payload["user_name"],
             )
-        simulation = canonicalize_narrative_links(db, chat_id, session_id, payload.get("simulation") or {}, through)
-        SimulationService().apply_payload(
+        publish_simulation(
             db,
             chat_id,
             session_id,
-            simulation,
-            source_rowid=through,
+            payload.get("simulation") or {},
+            through,
             primary_name=payload.get("primary_name", ""),
             user_name=payload.get("user_name", ""),
         )

@@ -174,8 +174,7 @@ def _transcript_fingerprint(db: sqlite3.Connection, chat_id: str, session_id: st
     digest = hashlib.sha256()
     count = 0
     rows = db.execute(
-        "SELECT id,role,content,created_at FROM messages "
-        "WHERE chat_id=? AND session_id=? AND id<=? ORDER BY id",
+        "SELECT id,role,content,created_at FROM messages WHERE chat_id=? AND session_id=? AND id<=? ORDER BY id",
         (chat_id, session_id, int(through_rowid)),
     )
     try:
@@ -292,13 +291,11 @@ def migrate_retired_tracker_transcript_cleanup(db: sqlite3.Connection) -> None:
             db.execute("UPDATE messages SET content=? WHERE id=?", (cleaned, row_id))
             digest = hashlib.sha256(("assistant\0" + cleaned).encode()).hexdigest()
             db.execute(
-                "UPDATE simulation_sources SET source_digest=? "
-                "WHERE chat_id=? AND session_id=? AND source_rowid=?",
+                "UPDATE simulation_sources SET source_digest=? WHERE chat_id=? AND session_id=? AND source_rowid=?",
                 (digest, chat_id, session_id, row_id),
             )
             db.execute(
-                "UPDATE simulation_checks SET source_digest=? "
-                "WHERE chat_id=? AND session_id=? AND source_rowid=?",
+                "UPDATE simulation_checks SET source_digest=? WHERE chat_id=? AND session_id=? AND source_rowid=?",
                 (digest, chat_id, session_id, row_id),
             )
         for (chat_id, session_id), earliest in affected.items():

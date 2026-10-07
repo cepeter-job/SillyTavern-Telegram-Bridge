@@ -278,9 +278,8 @@ enabled.
 #### Canonical story trackers
 
 Natural action checks default to Utility preflight before eligible new turns. Open
-the `/check` panel per session, or use `/check mode auto|director|manual` directly;
-no new provider configuration or
-environment variable is required. Director mode selects the existing Director
+the `/check` panel per session to choose Auto, Director, or Manual. Mode changes
+are panel-only; no new provider configuration or environment variable is required. Director mode selects the existing Director
 route, not an additional call. Migration 29 adds bounded, session-owned pending
 check receipts. User task state reuses the existing simulation tables and history.
 See [Natural action checks](user-guide.md#natural-action-checks) for cost, scope,

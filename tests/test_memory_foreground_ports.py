@@ -106,8 +106,9 @@ def test_unavailable_semantic_recall_preserves_local_prompt_context(db, unavaila
     row, _document = retained_fact(db)
     write_artifacts(db, row)
     baseline = service().prompt_context(db, "c", {"session_id": "s"}, {"name": "Bob"}, "silver key")
-    gate = Gate(resistant=True)
-    client = Client(lambda _kwargs: gate.wait())
+    queries = ("0", "1") if unavailable == "saturation" else ("silver key",)
+    gates = {query: Gate(resistant=True) for query in queries}
+    client = Client(lambda kwargs: gates[kwargs["query"]].wait())
     runtime = runtime_for(client, timeout_seconds=0.08 if unavailable in {"timeout", "circuit"} else 1)
     if unavailable == "startup failure":
         from bridge.hindsight_recall_runtime import HindsightRecallRuntime
@@ -124,14 +125,11 @@ def test_unavailable_semantic_recall_preserves_local_prompt_context(db, unavaila
             if unavailable == "circuit":
                 assert recall(runtime) == ()
             if unavailable == "saturation":
-                futures = [callers.submit(recall, runtime, str(index)) for index in range(2)]
-                assert gate.entered.wait(0.5)
-                # Barrier on the owner loop ensures both reserved requests reach the fake.
-                import threading
-
-                installed = threading.Event()
-                gate.loop.call_soon_threadsafe(installed.set)
-                assert installed.wait(0.5)
+                futures = [callers.submit(recall, runtime, query) for query in queries]
+                # Each admitted waiter owns its release event. A queued callback
+                # cannot prove another caller has entered the fake on this loop.
+                assert all(gate.entered.wait(0.5) for gate in gates.values())
+                assert sorted(call["query"] for call in client.calls) == ["0", "1"]
             memory = service(
                 partial(
                     memory_backend.recall_scoped_memory, app_settings=make_test_settings(), remote_recall=runtime.recall
@@ -145,9 +143,12 @@ def test_unavailable_semantic_recall_preserves_local_prompt_context(db, unavaila
             )
             assert "silver key" in context.episodic and context.summary and context.scene
             assert context.recall == ""
+            if unavailable == "saturation":
+                assert sorted(call["query"] for call in client.calls) == ["0", "1"]
         finally:
             runtime.begin_shutdown()
-            gate.release()
+            for gate in gates.values():
+                gate.release()
             assert runtime.close(timeout=1)
             assert all(future.result(timeout=0.2) == () for future in futures)
 

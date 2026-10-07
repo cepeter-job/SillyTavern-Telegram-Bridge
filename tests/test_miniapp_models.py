@@ -46,6 +46,24 @@ def test_story_and_utility_selection_are_session_scoped(tmp_path):
         select_model(s, w, {**p, "session_id": "foreign", "target": "story", "model": "test::model"})
 
 
+def test_catalog_distinguishes_inherited_and_explicit_role_selections(tmp_path):
+    from bridge.miniapp_models import model_catalog, select_model
+
+    services, who, body = setup(tmp_path)
+    initial = model_catalog(services, who, {})
+    assert initial["configured"] == {"story": "test::model", "utility": "", "director": ""}
+    assert initial["utility"] == initial["director"] == initial["story"]
+    select_model(services, who, body | {"target": "utility", "model": "test::model"})
+    explicit = model_catalog(services, who, {"q": "no-match"})
+    assert explicit["models"] == []
+    assert explicit["configured"]["utility"] == "test::model"
+    assert explicit["configured"]["director"] == ""
+    select_model(services, who, body | {"target": "utility", "model": ""})
+    assert model_catalog(services, who, {})["configured"]["utility"] == ""
+    other = model_catalog(services, identity("67890"), {})
+    assert other["configured"]["utility"] == other["configured"]["director"] == ""
+
+
 @pytest.mark.parametrize(
     "setting,value",
     [

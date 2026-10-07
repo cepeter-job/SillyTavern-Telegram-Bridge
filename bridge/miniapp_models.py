@@ -17,12 +17,13 @@ from bridge.generation_settings import (
     update_generation_settings,
 )
 from bridge.generation_settings_values import parse_generation_setting
+from bridge.metadata import get_meta
 from bridge.miniapp_auth import MiniAppIdentity
 from bridge.miniapp_context import require_confirmation, session_scope, text
 from bridge.miniapp_errors import MiniAppError
 from bridge.miniapp_types import ApiRoute
 from bridge.model_router import ModelRoutingError
-from bridge.model_selection import set_task_model, task_model_for_session
+from bridge.model_selection import set_task_model, task_model_for_session, task_model_key
 
 
 def model_catalog(services: Any, who: MiniAppIdentity, values: dict) -> dict:
@@ -59,6 +60,13 @@ def model_catalog(services: Any, who: MiniAppIdentity, values: dict) -> dict:
             "director": task_model_for_session(
                 scope.db, scope.chat_id, scope.session, "director", app_settings=services.config
             ),
+            "configured": {
+                "story": scope.session.get("model_id") or "",
+                "utility": get_meta(scope.db, task_model_key(scope.chat_id, scope.session["session_id"]), ""),
+                "director": get_meta(
+                    scope.db, task_model_key(scope.chat_id, scope.session["session_id"], "director"), ""
+                ),
+            },
             "session": scope.session,
             "limit": 500,
         }

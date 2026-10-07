@@ -3,7 +3,7 @@
 [Back to README](../README.md) · [Mini App](miniapp.md) ·
 [Model calls explained](user-guide.md#model-calls-and-token-use)
 
-Open **Manage → Advanced settings → Usage** in the Mini App. Choose **Last
+Open **Settings → Usage** in the Mini App. Choose **Last
 24 hours**, **Last 7 days**, or **Last 30 days**, and **Current session** or
 **All my sessions**. Refresh after a request completes to see new activity.
 

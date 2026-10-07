@@ -1,4 +1,4 @@
-import {el,card,button,notice} from './ui.js';
+import {el,card,button,notice,feedback} from './ui.js';
 import {icon} from './icons.js';
 import {setupNative,selectionFeedback} from './native.js';
 const telegram = window.Telegram?.WebApp;
@@ -28,27 +28,35 @@ export function createSessionScope() {
   };
 }
 export function sessionBody(extra={}) { if (!state.session) throw new Error('Open or create a session first.'); return {session_id:state.session.session_id,...extra}; }
+export function openChat() {
+  if(typeof telegram?.close==='function')telegram.close();
+  else notice('Continue in your Telegram bot chat.');
+}
 
 const pageInfo = {
-  dashboard:{label:'Home',module:'system',hint:'YOUR STORY',description:'Continue where you left off.'},
-  characters:{label:'Characters',module:'characters',hint:'YOUR CAST',description:'Find a character. Start something new.'},
-  sessions:{label:'Sessions',module:'management',hint:'CONVERSATIONS',description:'Pick up where you left off.'},
-  manage:{label:'Manage',module:'manage',hint:'YOUR WORKSPACE',description:'Shape the story around you.'},
-  system:{label:'System',module:'system',hint:'BRIDGE HEALTH',description:'Status, operations and verified updates.'},
-  models:{label:'Models',module:'models',hint:'GENERATION',description:'The right model for every task.'},
-  personas:{label:'Personas',module:'management',hint:'YOUR IDENTITY',description:'Choose who you are in each story.'},
-  worlds:{label:'Worlds',module:'management',hint:'LORE & CONTEXT',description:'Give your conversation a setting.'},
-  director:{label:'Director Room',module:'director',hint:'STORY DIRECTION',description:'Review hidden plans and steer the next scene.'},
-  memory:{label:'Memory',module:'memory',hint:'CONTINUITY',description:'Keep the details that matter.'},
-  npcs:{label:'NPC Bank',module:'npcs',hint:'SUPPORTING CAST',description:'Review persistent supporting-character state.'},
-  trackers:{label:'Story trackers',module:'trackers',hint:'STORY STATE',description:'Follow saved relationships, goals and checks.'},
-  databank:{label:'Data Bank',module:'memory',hint:'REFERENCE LIBRARY',description:'Ground replies in your documents.'},
-  advanced:{label:'Advanced settings',module:'manage',hint:'FINE TUNE',description:'Usage and workspace diagnostics.'},
-  usage:{label:'Usage',module:'usage',hint:'TOKEN INSIGHTS',description:'Know where your tokens go.'},
+  dashboard:{label:'Home',title:'Your story',module:'system',hint:'STORY DECK',description:'Pick up where you left off.'},
+  characters:{label:'Characters',module:'characters',parent:'dashboard',hint:'YOUR CAST',description:'Choose a character for a new story.'},
+  sessions:{label:'Sessions',module:'management',parent:'dashboard',hint:'YOUR STORIES',description:'Switch stories or create a new session.'},
+  tools:{label:'Tools',module:'manage',parent:'dashboard',hint:'STORY WORKSPACE',description:'Direction, saved knowledge and creative tools.'},
+  settings:{label:'Settings',module:'manage',parent:'dashboard',hint:'YOUR BRIDGE',description:'Model roles, generation and system controls.'},
+  manage:{label:'Tools',module:'manage',parent:'tools',hint:'STORY WORKSPACE',description:'Direction, saved knowledge and creative tools.'},
+  system:{label:'System',module:'system',parent:'settings',hint:'BRIDGE HEALTH',description:'Status, operations and verified updates.'},
+  models:{label:'Models',module:'models',parent:'settings',hint:'MODEL ROLES',description:'See which model each task uses.'},
+  personas:{label:'Personas',module:'management',parent:'tools',hint:'YOUR IDENTITY',description:'Choose who you are in each story.'},
+  worlds:{label:'Worlds',module:'management',parent:'tools',hint:'LORE & CONTEXT',description:'Give your conversation a setting.'},
+  director:{label:'Director Room',module:'director',parent:'dashboard',hint:'PRIVATE PLANNING',description:'Review decisions and guide the next scene.'},
+  memory:{label:'Memory',module:'memory',parent:'tools',hint:'CONTINUITY',description:'Keep the details that matter.'},
+  npcs:{label:'NPC Bank',module:'npcs',parent:'tools',hint:'SUPPORTING CAST',description:'Review persistent supporting-character state.'},
+  trackers:{label:'Story trackers',module:'trackers',parent:'dashboard',hint:'READ-ONLY SNAPSHOT',description:'Saved relationships, goals and checks.'},
+  check:{label:'Check',module:'manage',parent:'tools',hint:'TELEGRAM TOOL',description:'Resolve an action in the Telegram check panel.'},
+  imagine:{label:'Imagine',module:'manage',parent:'tools',hint:'TELEGRAM TOOL',description:'Create a scene image from your bot chat.'},
+  databank:{label:'Data Bank',module:'memory',parent:'tools',hint:'REFERENCE LIBRARY',description:'Ground replies in your documents.'},
+  advanced:{label:'Advanced settings',module:'manage',parent:'settings',hint:'FINE TUNE',description:'Usage and workspace diagnostics.'},
+  usage:{label:'Usage',module:'usage',parent:'settings',hint:'TOKEN INSIGHTS',description:'Know where your tokens go.'},
 };
 const pages = {};
-const primaryPages = [['dashboard','Home'],['characters','Characters'],['sessions','Sessions'],['manage','Manage'],['system','System']];
-const managedPages = new Set(['manage','models','personas','worlds','memory','npcs','trackers','databank','advanced','usage','director']);
+const primaryPages = [['dashboard','Home'],['characters','Characters'],['tools','Tools'],['settings','Settings']];
+const primaryKeys=new Set(primaryPages.map(([key])=>key));
 const loadedModules = new Map();
 async function loadPage(key) {
   const name=pageInfo[key].module;
@@ -59,22 +67,27 @@ export function registerPage(key, label, render) { pages[key] = {label,render}; 
 let current='dashboard', generation=0;
 
 function goBack() {
-  if(managedPages.has(current)&&current!=='manage')return navigate('manage');
-  return navigate('dashboard');
+  return navigate(pageInfo[current].parent||'dashboard');
 }
 function renderNavigation() {
+  let group=current;
+  while(!primaryKeys.has(group))group=pageInfo[group].parent||'dashboard';
   const controls=primaryPages.map(([key,label])=>{
     const control=button(label,()=>navigate(key),'nav-button');control.prepend(icon(key));control.setAttribute('data-page',key);
-    if(key===current||(key==='manage'&&managedPages.has(current)))control.setAttribute('aria-current','page');return control;
+    if(key===group)control.setAttribute('aria-current','page');return control;
   });
   document.getElementById('navigation').replaceChildren(...controls);
 }
 function updateShell(key) {
   const page=pageInfo[key];
   document.body.dataset.page=key;
-  document.getElementById('page-title').textContent=page?.label||'Home';
+  document.getElementById('page-title').textContent=page.title||page.label;
   document.getElementById('page-kicker').textContent=page?.hint||'YOUR WORKSPACE';
   document.getElementById('page-description').textContent=page?.description||'';
+  document.getElementById('page-actions').replaceChildren();
+  const back=document.getElementById('page-back');
+  back.hidden=primaryKeys.has(key);
+  back.replaceChildren(icon('back'),document.createTextNode('Back to '+(pageInfo[page.parent]?.label||'Home')));
 }
 function loadingView() {
   return el('section',{class:'skeleton-shell','aria-label':'Loading page'},
@@ -92,7 +105,12 @@ export async function navigate(key=current) {
     await loadPage(key);
     if(seq!==generation)return;
     const view=await pages[key].render();
-    if(seq===generation){content.replaceChildren(view);if(changed){window.scrollTo(0,0);document.getElementById('page-title').focus({preventScroll:true});}}
+    if(seq===generation){
+      const actions=key==='dashboard'?view.querySelector('.dashboard-toolbar'):null;
+      if(actions)document.getElementById('page-actions').replaceChildren(actions);
+      content.replaceChildren(view);
+      if(changed){window.scrollTo(0,0);document.getElementById('page-title').focus({preventScroll:true});}
+    }
   } catch(error) {
     if(seq===generation)content.replaceChildren(card('Could not load this page',el('p',{},error.message),button('Retry',()=>navigate(key))));
   } finally {
@@ -107,6 +125,7 @@ async function start() {
   document.getElementById('refresh').replaceChildren(icon('refresh'));
   try { telegram?.ready(); telegram?.expand(); telegram?.BackButton?.onClick(goBack); } catch {}
   document.getElementById('refresh').addEventListener('click',()=>navigate());
+  document.getElementById('page-back').addEventListener('click',goBack);
   try {
     const data=await api('/me'); state.user=data.user;
     document.getElementById('identity').textContent=data.user.name+' · Private bot chat';
@@ -118,24 +137,37 @@ async function start() {
     document.getElementById('connection-label').textContent='Auth required';
     document.querySelector('.connection-dot')?.classList.add('error');
     document.getElementById('content').replaceChildren(card('Open from Telegram',el('p',{},error.message)));
-    notice(error.message);
+    notice(error.message,'error');
   }
 }
 start();
 
 export async function runJob(path, body, target) {
-  const pending = await api(path,{method:'POST',body:{...body,operation_id:crypto.randomUUID()}});
-  let job=pending;
-  const progress=card('Operation',el('p',{},'Working through the bridge’s bounded queue…'),el('progress',{}));
+  const operationId=crypto.randomUUID();let job;
+  const label=el('span',{class:'badge'},'Pending'),message=el('p',{},'Submitting the operation…');
+  const progress=card('Operation',label,message,el('progress',{'aria-label':'Operation in progress'}));
+  progress.classList.add('operation-status');progress.setAttribute('role','status');
   if(target)target.replaceChildren(progress);
-  const deadline=Date.now()+600000;
-  while(['queued','running'].includes(job.state)) {
-    if(Date.now()>deadline)throw new Error('Operation is still running. Its result is available in System → Operations.');
-    await new Promise(resolve=>setTimeout(resolve,1500));
-    if(document.hidden)continue;
-    job=await api('/jobs/'+encodeURIComponent(job.id));
-    progress.querySelector('p').textContent=job.state==='queued'?'Queued; waiting for a worker.':'Running. You may leave this page; the operation continues on the bridge.';
+  try {
+    job=await api(path,{method:'POST',body:{...body,operation_id:operationId}});
+    const deadline=Date.now()+600000;
+    while(['queued','running'].includes(job.state)) {
+      label.textContent=job.state==='queued'?'Queued':'Running';
+      message.textContent=job.state==='queued'?'Waiting for a worker.':'You may leave this page; work continues on the bridge.';
+      if(!job.id||Date.now()>deadline)throw new Error('The operation has not reported a final result.');
+      await new Promise(resolve=>setTimeout(resolve,1500));
+      if(document.hidden)continue;
+      job=await api('/jobs/'+encodeURIComponent(job.id));
+    }
+    if(job.state!=='succeeded')throw new Error(job.error||'Operation did not complete.');
+    label.textContent='Completed';message.textContent='The operation completed.';progress.querySelector('progress')?.remove();
+    return job.result;
+  } catch(error) {
+    error.operationId=operationId;error.jobId=job?.id;
+    error.uncertain=Boolean(job&&['queued','running'].includes(job.state)||!job&&(!error.status||error.status>=500));
+    const summary=error.uncertain?'Status unavailable. Unable to confirm whether the operation finished. Check Operations before starting it again.':error.message;
+    progress.replaceChildren(el('h2',{},error.uncertain?'Status unavailable':'Operation failed'),feedback(summary),
+      button('Open operations',()=>navigate('system'),'secondary'));
+    throw error;
   }
-  if(job.state!=='succeeded')throw new Error(job.error||'Operation did not complete.');
-  return job.result;
 }

@@ -162,11 +162,14 @@ and the project test environment active:
 
 ```bash
 npm ci --prefix tests/miniapp-ui --include=dev --ignore-scripts --no-audit --no-fund
+npm test --prefix tests/miniapp-ui
 MINIAPP_JSDOM_ROOT=tests/miniapp-ui PYTHON=python \
   node --experimental-vm-modules tools/miniapp_ui_smoke.mjs
 ```
 
-The DOM harness uses a temporary authenticated loopback fixture to exercise page
+Focused DOM tests cover model inheritance, draft preservation, uncertain operations
+and navigation using explicit mocked API boundaries. The integration DOM harness
+uses a temporary authenticated loopback fixture to exercise page
 navigation, session/model mutations, optimizer previews and usage states. CI runs
 it automatically. Deployment still needs checking in actual Telegram clients.
 

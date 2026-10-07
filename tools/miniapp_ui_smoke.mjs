@@ -119,15 +119,16 @@ async function until(predicate,label) {
 }
 try {
   const app=await moduleFor('app.js');await app.link(linker);await app.evaluate();
-  await until(()=>dom.window.document.querySelectorAll('#navigation button').length===5,'five primary navigation actions');
+  await until(()=>dom.window.document.querySelectorAll('#navigation button').length===4,'four primary navigation actions');
   const shellDocument=dom.window.document;
-  assert.deepEqual([...shellDocument.querySelectorAll('#navigation button')].map(n=>n.textContent.trim()),['Home','Characters','Sessions','Manage','System']);
-  assert.equal(shellDocument.querySelectorAll('#navigation svg').length,5,'Every primary destination has a local SVG icon');
+  assert.deepEqual([...shellDocument.querySelectorAll('#navigation button')].map(n=>n.textContent.trim()),['Home','Characters','Tools','Settings']);
+  assert.equal(shellDocument.querySelectorAll('#navigation svg').length,4,'Every primary destination has a local SVG icon');
   assert.ok(shellDocument.querySelector('.skip-link'),'Keyboard users can skip navigation');
-  const sessionsTab=[...shellDocument.querySelectorAll('#navigation button')].find(n=>n.textContent.trim()==='Sessions');
-  assert.ok(sessionsTab,'Sessions navigation button exists');sessionsTab.click();
+  await until(()=>shellDocument.querySelector('.dashboard-session'),'Current story opens on launch');
+  const sessionsTab=[...shellDocument.querySelectorAll('#page-actions button')].find(n=>n.textContent.trim()==='Switch session');
+  assert.ok(sessionsTab,'Home exposes session switching');sessionsTab.click();
   await until(()=>shellDocument.getElementById('page-title').textContent==='Sessions'&&shellDocument.querySelector('main').textContent.includes('Create session'),'Sessions tab click renders Sessions');
-  for(const page of ['dashboard','characters','sessions','manage','advanced','usage','models','personas','worlds','memory','director','npcs','trackers','databank','system']) {
+  for(const page of ['dashboard','characters','sessions','tools','settings','check','imagine','manage','advanced','usage','models','personas','worlds','memory','director','npcs','trackers','databank','system']) {
     await app.namespace.navigate(page);
     assert.ok(shellDocument.getElementById('page-title').textContent.trim().length>0,page+' updates the compact page title');
     const body=dom.window.document.querySelector('main').textContent;
@@ -141,11 +142,11 @@ try {
       await until(()=>sessionPortrait.getAttribute('src')==='blob:test-fixture','dashboard portrait loaded');
       sessionPortrait.dispatchEvent(new dom.window.Event('load'));
       assert.equal(sessionPortrait.closest('.session-portrait-frame').hidden,false,'Dashboard portrait appears only after loading');
-      assert.equal(dom.window.getComputedStyle(sessionPortrait).objectFit,'contain','Dashboard portrait preserves the full image');
+      assert.equal(dom.window.getComputedStyle(sessionPortrait).objectFit,'cover','Home uses the approved cinematic story portrait');
       assert.equal(shellDocument.querySelectorAll('.story-status-item').length,3,'Home summarizes persona, world and memory state');
       const statusCopy=shellDocument.querySelector('.story-status-item>span');
       assert.equal(dom.window.getComputedStyle(statusCopy).minWidth,'0px','Status copy may shrink so long values cannot overlap adjacent columns');
-      assert.equal(shellDocument.querySelectorAll('.dashboard-shortcuts button').length,4,'Dashboard exposes four quick actions');
+      assert.deepEqual([...shellDocument.querySelectorAll('.dashboard-session-tools button,.dashboard-quick-actions button')].map(n=>n.dataset.page),['trackers','director','check','imagine'],'Home exposes saved facts, private plans and Telegram tools');
       assert.ok(shellDocument.querySelector('.recent-stories'),'Home includes recent stories');
       assert.deepEqual([...shellDocument.querySelectorAll('.dashboard-health [data-health-icon]')].map(node=>node.dataset.healthIcon),['system','telegram','database','models','memory'],'Dashboard Bridge health labels all five status cards with local icons');
       assert.ok(shellDocument.querySelector('.dashboard-health').textContent.includes('Context'),'Home Bridge health includes context diagnostics');
@@ -155,18 +156,18 @@ try {
       portraitMode='empty';
     }
     if(page==='manage') {
-      assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['models','director','personas','worlds','generation','memory','npcs','trackers','databank','advanced'],'Manage exposes unique design destinations in order');
-      assert.deepEqual([...shellDocument.querySelectorAll('.manage-section-title')].map(node=>node.textContent.trim()),['Story setup','Knowledge','Advanced']);
+      assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['director','trackers','check','imagine','personas','worlds','sessions','memory','npcs','databank'],'The legacy Manage destination opens the current Tools hub');
+      assert.deepEqual([...shellDocument.querySelectorAll('.manage-section-title')].map(node=>node.textContent.trim()),['Story controls','Story setup','Knowledge']);
       const trackers=shellDocument.querySelector('.manage-link[data-page="trackers"]');
       trackers.click();
       await until(()=>shellDocument.querySelector('.story-trackers-page'),'Manage opens saved Story trackers');
-      await app.namespace.navigate('manage');
+      await app.namespace.navigate('settings');
       const generation=[...shellDocument.querySelectorAll('.manage-link')].find(node=>node.textContent.includes('Generation'));
       generation.click();
       await until(()=>shellDocument.getElementById('page-title').textContent==='Models','Generation opens the existing generation controls');
     }
     if(page==='advanced') {
-      assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['usage'],'Advanced settings keeps Usage reachable');
+      assert.deepEqual([...shellDocument.querySelectorAll('.manage-link')].map(node=>node.dataset.page),['usage','system'],'Advanced settings keeps Usage and System reachable');
     }
     if(page==='director') {
       assert.ok(shellDocument.querySelector('.director-room-page'),'Director Room renders its own private page');
@@ -279,7 +280,7 @@ try {
   const directorSession=app.namespace.state.session.session_id;
   app.namespace.state.session={...app.namespace.state.session,session_id:'other-view-cannot-retarget-director'};
   const saveObjective=[...shellDocument.querySelectorAll('main button')].find(node=>node.textContent==='Save objective');
-  saveObjective.click();await until(()=>!saveObjective.disabled,'Director objective saved');
+  saveObjective.click();await until(()=>!saveObjective.isConnected||!saveObjective.disabled,'Director objective saved');
   const savedDirector=await app.namespace.api('/director');
   assert.equal(savedDirector.session.session_id,directorSession,'Director mutation keeps the rendered session scope');
   assert.equal(savedDirector.objective,objective.value,'Director objective uses the shared canonical service');
@@ -295,7 +296,7 @@ try {
     shellDocument.getElementById(finaleLabel.htmlFor).value=confirmation;
     app.namespace.state.session={...app.namespace.state.session,session_id:'different-view-must-not-retarget-ending'};
     const saveEnding=[...shellDocument.querySelectorAll('main button')].find(node=>node.textContent==='Save ending settings');
-    saveEnding.click();await until(()=>!saveEnding.disabled,'Ending preference saved');
+    saveEnding.click();await until(()=>!saveEnding.isConnected||!saveEnding.disabled,'Ending preference saved');
     const savedEnding=await app.namespace.api('/director');
     assert.equal(savedEnding.session.session_id,directorSession,'Ending preferences stay with the rendered session');
     assert.equal(savedEnding.ending.mode,mode);
@@ -303,6 +304,9 @@ try {
     assert.equal(shellDocument.getElementById('notice').textContent,'Ending settings saved for this story.');
   }
   console.log('ending-controls=mode,confirmation,rendered-session-scope passed');
+  // Home now also reads the saved tracker summary; reserve this read-heavy phase
+  // before starting API timeout clocks, rather than delaying individual fetches.
+  await reserveFixtureCapacity(95);
   await app.namespace.navigate('dashboard');
   await until(()=>shellDocument.querySelector('.dashboard-session .session-portrait-frame')?.hidden===true,'dashboard missing portrait fallback');
   assert.ok(shellDocument.querySelector('.dashboard-session').textContent.includes('Default session'),'Dashboard text remains when its portrait is unavailable');
@@ -415,6 +419,7 @@ try {
     await app.namespace.navigate('memory');
     const memoryDocument=dom.window.document;
     const summaryLabel=[...memoryDocument.querySelectorAll('label')].find(n=>n.textContent==='Summary');
+    assert.ok(summaryLabel,'Summary page loaded: '+memoryDocument.querySelector('main').textContent+' | '+errors.map(e=>e.message).join('; '));
     assert.equal(memoryDocument.getElementById(summaryLabel.htmlFor).value,scenario.before);
     memoryDocument.getElementById('notice').textContent='';memoryDocument.getElementById('notice').hidden=true;
     // A different view's state cannot retarget the already-rendered summary action.
@@ -498,13 +503,13 @@ try {
   assert.ok(defaultCard,'Inactive Default session card is present');
   const defaultOpen=[...defaultCard.querySelectorAll('button')].find(n=>n.textContent==='Open');
   assert.ok(defaultOpen,'Inactive session exposes Open');defaultOpen.click();
-  await until(()=>document.getElementById('page-title').textContent==='Home'&&document.querySelector('main .story-card')?.textContent.includes('Default session'),'Opening inactive session returns Home');
+  await until(()=>document.body.dataset.page==='dashboard'&&document.querySelector('main .story-card')?.textContent.includes('Default session'),'Opening inactive session returns Home');
   let opened=await app.namespace.api('/sessions');assert.equal(opened.session.title,'Default session','Open switches the backend active session');
   await app.namespace.navigate('sessions');
   const activeDefaultCard=[...document.querySelectorAll('main .card')].find(node=>node.querySelector('h2')?.textContent==='Default session');
   const activeOpen=[...activeDefaultCard.querySelectorAll('button')].find(n=>n.textContent==='Open');
   activeOpen.click();
-  await until(()=>document.getElementById('page-title').textContent==='Home'&&document.querySelector('main .story-card')?.textContent.includes('Default session'),'Opening active session still returns Home');
+  await until(()=>document.body.dataset.page==='dashboard'&&document.querySelector('main .story-card')?.textContent.includes('Default session'),'Opening active session still returns Home');
   opened=await app.namespace.api('/sessions');assert.equal(opened.session.title,'Default session');
   const info=await app.namespace.api('/characters/Alice.png');
   const optimization=await app.namespace.runJob(
@@ -541,7 +546,7 @@ try {
   const newView=document.createElement('div');newView.textContent='Current view';finishNew(newView);await newNavigation;
   assert.equal(document.querySelector('main').textContent,'Current view','Only the latest page is committed');
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
-  console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=15 passed; browser-errors=0');
+  console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=19 passed; browser-errors=0');
 } finally {
   dom.window.close();lines.close();child.kill('SIGTERM');
 }

@@ -13,11 +13,10 @@ from bridge.greeting_media_schema import migrate_greeting_media_cleanup
 from bridge.memory_archival_schema import migrate_archival_attempts
 from bridge.memory_draft_schema import migrate_complete_memory_parts
 from bridge.memory_retirement_schema import migrate_local_first_memory_cleanup
-from bridge.memory_schema import migrate_durable_memory
+from bridge.memory_schema import migrate_durable_memory, migrate_memory_retry_guard
 from bridge.memory_scope_schema import migrate_memory_knowledge
 from bridge.memory_search_schema import migrate_memory_search
-from bridge.migrations import Migration as _Migration
-from bridge.migrations import run_migrations as _run_migrations
+from bridge.migrations import Migration as _Migration, run_migrations as _run_migrations
 from bridge.narrative_arc_schema import migrate_narrative_arc_evidence
 from bridge.narrative_runtime_schema import migrate_narrative_history_revisions
 from bridge.narrative_schema import migrate_narrative_engine_foundation
@@ -514,6 +513,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(25, "canonical_simulation_trackers", migrate_simulation_trackers),
     _Migration(26, "retire_prompt_tracker_bootstrap", retire_prompt_tracker_bootstrap),
     _Migration(27, "local_first_memory_cleanup", migrate_local_first_memory_cleanup),
+    _Migration(28, "autonomous_memory_backlog_guard", migrate_memory_retry_guard),
 )
 
 

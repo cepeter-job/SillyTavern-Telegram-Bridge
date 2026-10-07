@@ -51,11 +51,11 @@ def _open_panel(db, settings, session, monkeypatch):
 
 
 def _button_map(payload):
-    return {
-        button["callback_data"]: button["text"]
-        for row in payload["reply_markup"]["inline_keyboard"]
-        for button in row
-    }
+    buttons = {}
+    for row in payload["reply_markup"]["inline_keyboard"]:
+        for button in row:
+            buttons[button["callback_data"]] = button["text"]
+    return buttons
 
 
 def test_check_without_arguments_opens_inline_mode_panel(session_db, monkeypatch):

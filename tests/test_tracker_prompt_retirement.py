@@ -278,3 +278,61 @@ def test_retirement_rolls_back_a_rewritten_suffix_after_a_valid_native_prefix(mo
         assert get_npc_extraction_coverage(db, "chat", "s1") == later
     finally:
         db.close()
+
+
+@pytest.mark.parametrize("marker", ["🎬", "🎽", "🎯", "*🎬", "*🎽"])
+def test_migration_27_cleans_retired_tracker_wrapper_without_losing_native_state(monkeypatch, marker):
+    from bridge.memory_store import pending_memory_invalidation
+    from bridge.simulation_repository import source_identity
+
+    db = _database_at(monkeypatch, 26)
+    try:
+        story = '*Alex enters the room.*\n\n"Hello."'
+        retired = (
+            f"\n\n<tg-spoiler>\n{marker} INTERNAL STATES (Turn: 7)\n"
+            "NPC AGENDAS\n- Alex | Buy groceries | (Step 2/5)\n"
+            "NPC LOCATIONS\n- Alex | Store\n"
+            "BONDS\n- Alex ↔ User | BOND: 9 | Sparks: 1 | Grudge: 0\n"
+            "QUESTS\n- Main: Active — Shopping\n"
+            "INV & SKILLS\n- Inv: Phone\n"
+            "PHYSICS\n- Room\n"
+            "</tg-spoiler>"
+        )
+        source = _assistant_row(db, story + retired)
+        _native_checkpoint(db, source)
+        SimulationService().apply_payload(
+            db,
+            "chat",
+            "s1",
+            {"actor": {"inventory_add": ["Brass key"]}},
+            source_rowid=source,
+        )
+        old_digest = db.execute(
+            "SELECT source_digest FROM simulation_sources WHERE chat_id='chat' AND session_id='s1' AND source_rowid=?",
+            (source,),
+        ).fetchone()[0]
+
+        schema.initialize_database_schema(db)
+
+        assert db.execute("SELECT content FROM messages WHERE id=?", (source,)).fetchone()[0] == story
+        assert SimulationService().state(db, "chat", "s1", "actor", "user")["inventory"][0]["name"] == "Brass key"
+        assert pending_memory_invalidation(db, "chat", "s1", "npc") is None
+        _, new_digest = source_identity(db, "chat", "s1", source)
+        assert new_digest != old_digest
+        assert db.execute(
+            "SELECT source_digest FROM simulation_sources WHERE chat_id='chat' AND session_id='s1' AND source_rowid=?",
+            (source,),
+        ).fetchone()[0] == new_digest
+    finally:
+        db.close()
+
+
+def test_migration_27_keeps_unrelated_internal_states_prose(monkeypatch):
+    db = _database_at(monkeypatch, 26)
+    try:
+        content = "<tg-spoiler>A character reflects on internal states without a tracker ledger.</tg-spoiler>"
+        source = _assistant_row(db, content)
+        schema.initialize_database_schema(db)
+        assert db.execute("SELECT content FROM messages WHERE id=?", (source,)).fetchone()[0] == content
+    finally:
+        db.close()

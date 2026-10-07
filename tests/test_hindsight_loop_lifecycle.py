@@ -21,10 +21,15 @@ def test_retirement_closes_sdk_on_request_loop(monkeypatch, unavailable):
     db.commit()
     client = Hindsight(base_url="http://127.0.0.1:8888")
     observed = []
+    transports = []
     original_close = client._api_client.close
 
     async def delete_document(**kwargs):
         observed.append(("request", asyncio.get_running_loop()))
+        client._api_client.rest_client._ensure_session()
+        session = client._api_client.rest_client._pool_manager
+        transports.append((session, session.connector))
+        assert session._loop is asyncio.get_running_loop()
         if unavailable:
             raise RuntimeError("synthetic offline Hindsight")
 
@@ -42,6 +47,8 @@ def test_retirement_closes_sdk_on_request_loop(monkeypatch, unavailable):
         request_loop, close_loop = (loop for _event, loop in observed)
         assert request_loop is close_loop
         assert request_loop.is_closed()
+        assert len(transports) == 1
+        assert all(session.closed and connector.closed for session, connector in transports)
         assert db.execute("SELECT deleted FROM memory_retired_documents").fetchone() == (int(not unavailable),)
     finally:
         for loop in {loop for _event, loop in observed}:

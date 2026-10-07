@@ -27,10 +27,10 @@
 ### Task 1: Own the retirement request and close loop
 **Files:** bridge/memory_backend.py; tests/test_hindsight_loop_lifecycle.py.
 **Interfaces:** Preserve hindsight_client_scope and cleanup_retired_memory_documents signatures.
-- [ ] Add parameterized success/failure regression using the installed SDK wrapper with only external document I/O replaced. Observe request/close loops and prove every observed loop closes.
-- [ ] Run the test against the old implementation and record the expected loop mismatch/unclosed-loop failure.
-- [ ] Run retired deletion on the loop owned by hindsight_client_scope; avoid nested asyncio.run.
-- [ ] Run focused lifecycle/retirement/session-cleanup tests, lint and format. Full required CI verifies the submitted commit.
+- [x] Add parameterized success/failure regression using the installed SDK wrapper with only external document I/O replaced. Observe request/close loops and prove every observed loop closes.
+- [x] Run the test against the old implementation and record the expected loop mismatch/unclosed-loop failure.
+- [x] Run retired deletion on the loop owned by hindsight_client_scope; avoid nested asyncio.run.
+- [x] Run focused lifecycle/retirement/session-cleanup tests, lint and format. Full required CI verifies the submitted commit.
 - [ ] Commit code, test and approved design/plan. Create PR, obtain read-only review, resolve material findings, wait for required checks, merge.
 
 ### Task 2: Commit reset locally and retain cleanup obligations
@@ -80,3 +80,6 @@
 
 - Regression reproduced with the installed hindsight-client 0.10.2: both success and failure used different loops for deletion and transport closure.
 - The full local baseline run was deliberately interrupted because of low VPS throughput; no full-suite pass is claimed. Focused local regressions and the full required GitHub CI on each submitted commit are the merge gates.
+
+- Focused retirement/session lifecycle tests passed: 14 tests, with ResourceWarning treated as an error. Independent review requested actual lazy transport coverage; the strengthened SDK regression creates a real aiohttp session/connector without HTTP, and both success/failure tests pass with session, connector and loop closure asserted.
+- PR: https://github.com/cepeter/SillyTavern-Telegram-Bridge/pull/398 (required checks pending).

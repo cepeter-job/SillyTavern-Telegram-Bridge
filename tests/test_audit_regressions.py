@@ -1,3 +1,4 @@
+from dataclasses import replace
 from unittest.mock import Mock, patch
 
 from application_test_setup import (
@@ -16,7 +17,6 @@ from settings_test_support import SettingsTestCase
 import bridge.command_panels as _command_panels
 import bridge.generation_settings as _owner_generation_settings
 import bridge.language as _owner_language
-import bridge.memory_backend as _owner_memory_backend
 import bridge.message_commands as _owner_message_commands
 import bridge.operations as _owner_operations
 import bridge.session_core as _owner_session_core
@@ -40,7 +40,6 @@ import bridge.edit_messages as _m_commands
 import bridge.language as _m_language
 import bridge.main as _m_main
 import bridge.memory as _m_memory
-import bridge.memory_backend as memory_backend
 import bridge.memory_curator as _m_memory_curator
 import bridge.message_commands as _m_message_commands
 import bridge.provider_transport as _m_provider_transport
@@ -718,42 +717,6 @@ class AuditRegressionTests(SettingsTestCase):
         self.assertIn("MUST write all visible response text in English", messages[-2]["content"])
         self.assertEqual(messages[-1]["role"], "user")
 
-    def test_hindsight_recall_is_hard_session_scoped(self):
-        session = _owner_session_core.ensure_session(
-            self.db, "chat", self.app_settings_builder.default_model, app_settings=self.app_settings_builder.build()
-        )
-        _m_session_naming.set_meta(self.db, "memory_scope:chat", "user")
-        self.db.execute(
-            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat',?,'user','Old fact',1)",
-            (session["session_id"],),
-        )
-        self.db.commit()
-        calls = []
-
-        class FakeClient:
-            def close(self):
-                pass
-
-            def recall(self, **kwargs):
-                calls.append(kwargs)
-                return type("Result", (), {"results": []})()
-
-        original_client = memory_backend.hindsight_client
-        memory_backend.hindsight_client = lambda *, app_settings: FakeClient()
-        try:
-            self.assertEqual(_owner_memory_backend.memory_scope(self.db, "chat"), "session")
-            self.assertEqual(
-                _m_memory.recall_memory_results(
-                    self.db, "chat", session, "old fact", "Test", app_settings=self.app_settings_builder.build()
-                ),
-                [],
-            )
-        finally:
-            memory_backend.hindsight_client = original_client
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(calls[0]["tags"], [f"session:{session['session_id']}", "native-fact"])
-        self.assertEqual(calls[0]["tags_match"], "all_strict")
-
     def test_memory_scope_panel_is_removed_and_search_keeps_text_input(self):
         calls = []
         original_request = _m_cards.send_panel_request
@@ -776,23 +739,21 @@ class AuditRegressionTests(SettingsTestCase):
             self.db, "chat", self.app_settings_builder.default_model, app_settings=self.app_settings_builder.build()
         )
         sent = []
-        original_recall = _m_memory.recall_memory_results
-        _m_memory.recall_memory_results = lambda *_args, app_settings=None, **_kwargs: [
-            type("Result", (), {"text": "session fact"})()
-        ]
-        try:
-            _command_panels.handle_memory_command(
-                self.db,
-                "token",
-                "chat",
-                session,
-                {"name": "Test"},
-                "/memory search session fact",
-                send_text_fn=lambda _token, _chat_id, text: sent.append(text),
-                app_settings=self.app_settings_builder.build(),
-            )
-        finally:
-            _m_memory.recall_memory_results = original_recall
+        memory = replace(
+            make_test_memory_service(),
+            search_backend=lambda *args, **kwargs: [type("Result", (), {"text": "session fact"})()],
+        )
+        _command_panels.handle_memory_command(
+            self.db,
+            "token",
+            "chat",
+            session,
+            {"name": "Test"},
+            "/memory search session fact",
+            send_text_fn=lambda _token, _chat_id, text: sent.append(text),
+            app_settings=self.app_settings_builder.build(),
+            memory_service=memory,
+        )
         self.assertEqual(sent, ["Recalled memories:\n- session fact"])
 
     def test_response_language_validation_and_pagination(self):

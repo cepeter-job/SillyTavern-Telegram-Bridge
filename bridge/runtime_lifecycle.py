@@ -10,6 +10,7 @@ import threading
 import time
 import urllib.error
 from contextlib import ExitStack
+from functools import partial
 
 from bridge.alternate_ending_runtime import queue_alternate_ending_recovery
 from bridge.background import shutdown_background_executors
@@ -76,16 +77,47 @@ def restore_poll_offset(db: sqlite3.Connection, fallback: int) -> int:
         return int(fallback)
 
 
+def _begin_runtime_shutdown(services: BridgeServices) -> None:
+    try:
+        services.background.begin_shutdown()
+    finally:
+        recall = getattr(services, "hindsight_recall", None)
+        if recall is not None:
+            recall.begin_shutdown()
+
+
 def _shutdown_runtime(services: BridgeServices, db: sqlite3.Connection | None, *, allow_maintenance: bool) -> None:
     """Unwind all owned resources, including partial startup and failed cleanup."""
     drained = False
+    recall_closed = True
+    watchdog_armed = False
+
+    def arm_watchdog() -> None:
+        nonlocal watchdog_armed
+        if not watchdog_armed:
+            watchdog_armed = True
+            _arm_forced_exit_watchdog()
+
+    def stop_recall() -> None:
+        nonlocal recall_closed
+        recall = getattr(services, "hindsight_recall", None)
+        if recall is not None:
+            try:
+                recall_closed = recall.close(timeout=3.0)
+            except Exception:
+                recall_closed = False
+            if not recall_closed:
+                logging.warning(
+                    "Recall shutdown deadline or cleanup failed; skipping maintenance and arming forced exit"
+                )
+                arm_watchdog()
 
     def stop_background() -> None:
         nonlocal drained
         drained = shutdown_background_executors(timeout=20.0)
         if not drained:
             logging.warning("Background shutdown deadline exceeded; skipping maintenance and arming forced exit")
-            _arm_forced_exit_watchdog()
+            arm_watchdog()
 
     def stop_sync() -> None:
         if not stop_live_sync_worker(timeout=5.0):
@@ -102,14 +134,15 @@ def _shutdown_runtime(services: BridgeServices, db: sqlite3.Connection | None, *
     with ExitStack() as cleanup:
         if db is not None:
             cleanup.callback(db.close)
+        cleanup.callback(stop_recall)
         cleanup.callback(stop_background)
         cleanup.callback(stop_sync)
         cleanup.callback(stop_diagnostics)
         health = getattr(services, "health", None)
         if health is not None:
             cleanup.callback(health.stopping)
-        request_bridge_shutdown(services.background.begin_shutdown)
-    if db is not None and drained and allow_maintenance:
+        request_bridge_shutdown(partial(_begin_runtime_shutdown, services))
+    if db is not None and drained and recall_closed and allow_maintenance:
         # Only a clean runtime exit may run maintenance, after all handles close.
         run_database_maintenance(app_settings=services.config)
 
@@ -130,6 +163,12 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
     db: sqlite3.Connection | None = None
     finished = False
     try:
+        recall = getattr(services, "hindsight_recall", None)
+        if recall is not None:
+            try:
+                recall.start()
+            except Exception:
+                logging.warning("Optional Hindsight recall startup failed; local memory remains active")
         memory_diagnostics = getattr(services, "memory_diagnostics", None)
         if memory_diagnostics is not None:
             try:
@@ -147,7 +186,7 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
         ack_retry_delay = _ACK_RETRY_INITIAL_SECONDS
         first_poll = True
         _SHUTDOWN_EVENT.clear()
-        install_bridge_signal_handlers(services.background.begin_shutdown)
+        install_bridge_signal_handlers(partial(_begin_runtime_shutdown, services))
         db = services.db_factory()
         dispatch_memory_backlog(services, db, startup=True)
         start_live_sync_worker(sync_service=services.sync, app_settings=services.config)
@@ -233,7 +272,7 @@ def run_bridge_runtime(services: BridgeServices, fields: dict) -> int:
                 logging.error("Telegram HTTP error: %s", exc.code)
                 _SHUTDOWN_EVENT.wait(10)
             except KeyboardInterrupt:
-                request_bridge_shutdown(services.background.begin_shutdown)
+                request_bridge_shutdown(partial(_begin_runtime_shutdown, services))
                 break
             except Exception as exc:
                 if health is not None:

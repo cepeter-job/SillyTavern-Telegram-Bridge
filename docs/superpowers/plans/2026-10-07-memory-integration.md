@@ -75,7 +75,9 @@
 - Approved design captured from the 2026-10-07 audit and explicit implementation approval.
 - Base: caedf3f5a1be5314ed22f18d536c9339c5708e79, cepeter/SillyTavern-Telegram-Bridge.
 - Task1 complete: PR398 merged as bfb71bfbd1b175274db4154a426565244143857d after independent review and all required checks.
-- Task2 in progress in an isolated local checkout after vm148 RPC outage; basefac918a includes PR399 tracker payload fix.
+- Task2 complete: PR401 merged as e379214 after independent review and all required checks.
+- Task3 complete: PR404 merged as 2a049fd2aee4d37c712e0c8142a228f9eedbb270 after independent specification/code review and all required checks.
+- Task4 in progress: bounded foreground recall implementation; independent review, required CI, and merge remain pending.
 
 ### Checkpoint 1 verification
 

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from bridge.memory_contracts import MemoryPromptContext as MemoryPromptContext
-from bridge.memory_contracts import expand_memory_query
+from bridge.memory_contracts import MemorySearchResult, expand_memory_query
 from bridge.port_contracts import (
     PurgeSessionMemory,
     QueueSessionMemoryCleanup,
@@ -16,6 +16,7 @@ from bridge.port_contracts import (
     RetainSessionMemory,
     ScopedRead,
     ScopedRecall,
+    SearchMemory,
     ValidateMemoryBlocks,
 )
 
@@ -34,6 +35,22 @@ class MemoryService:
     retain_session: RetainSessionMemory
     purge_session_memory: PurgeSessionMemory
     queue_session_cleanup: QueueSessionMemoryCleanup
+    search_backend: SearchMemory | None = None
+
+    def search(
+        self,
+        db: sqlite3.Connection,
+        chat_id: str,
+        session: dict[str, str],
+        query: str,
+        character_name: str = "",
+        max_tokens: int | None = None,
+    ) -> list[MemorySearchResult]:
+        if self.search_backend is None:
+            return []
+        if max_tokens is None:
+            return self.search_backend(db, chat_id, session, query, character_name)
+        return self.search_backend(db, chat_id, session, query, character_name, max_tokens)
 
     def prompt_context(
         self,

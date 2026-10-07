@@ -326,7 +326,14 @@ measurement_identity and measurement_boundary fields before comparing runs. Deve
 failed are documented in the implementation report, not combined with the
 successful measured run.
 
-## Recorded run
+## Recorded run (previous checkpoint source)
+
+The saved JSON remains the checkpoint 3 measurement of source c5bf5ac7583b5139ed7be0b9b00b8d7f6b5089d7.
+Checkpoint 4 changes foreground transport ownership and explicitly injects the
+evaluator's synthetic identity adapter. The saved source hashes and timings do
+not describe checkpoint 4; no new performance or semantic-quality measurement
+is claimed here. Reproduce the evaluator on a clean selected revision for a new
+comparison. The original artifact and its measurement identity are preserved.
 
 The saved standalone invocation used 10 measured queries and one excluded
 warm-up, launched directly from an unrelated empty working directory after the
@@ -378,7 +385,7 @@ control and confirmed CLI exit 1 with only coverage.complete-long-source failing
 That fault-injected report is separate from the saved successful invocation.
 
 The historical artifact at source 24a21e68f1c4426550364177f042558803702ecc
-recorded 623 retain attempts and 1,892 total stub requests. The current counts
+recorded 623 retain attempts and 1,892 total stub requests. The checkpoint 3 counts
 are 307 and 1,567. These are observations at the scripted adapter boundary;
 changes to indexing and asynchronous cleanup affect the request mix. The source,
 report schema and Python environment differ, so the timing values do not support

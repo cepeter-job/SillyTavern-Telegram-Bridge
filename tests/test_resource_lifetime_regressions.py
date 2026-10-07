@@ -242,7 +242,7 @@ def test_miniapp_fixture_bootstraps_imports_without_pytest_paths(tmp_path):
 
 @pytest.mark.parametrize("operation", ["recall", "retain"])
 @pytest.mark.parametrize("fails", [False, True])
-def test_hindsight_sync_operations_close_owned_event_loops(monkeypatch, tmp_path, operation, fails):
+def test_hindsight_operations_close_owned_event_loops(monkeypatch, tmp_path, operation, fails):
     import asyncio
     from concurrent.futures import ThreadPoolExecutor
 
@@ -250,6 +250,7 @@ def test_hindsight_sync_operations_close_owned_event_loops(monkeypatch, tmp_path
     from settings_test_support import make_test_settings
 
     from bridge import memory_backend
+    from bridge.hindsight_recall_runtime import HindsightRecallRuntime
 
     loops = []
     original_init = asyncio.BaseEventLoop.__init__
@@ -267,6 +268,16 @@ def test_hindsight_sync_operations_close_owned_event_loops(monkeypatch, tmp_path
     monkeypatch.setattr(Hindsight, operation, response)
     monkeypatch.setattr(memory_backend, "memory_mode", lambda *args: "on")
     settings = make_test_settings(home=tmp_path, environ={"HINDSIGHT_API_URL": "http://127.0.0.1:8890"})
+
+    runtime = None
+    if operation == "recall":
+
+        async def async_response(self, **kwargs):
+            return response(self, **kwargs)
+
+        monkeypatch.setattr(Hindsight, "arecall", async_response)
+        runtime = HindsightRecallRuntime(base_url="http://127.0.0.1:8890", api_key=None)
+        runtime.start()
 
     def exercise():
         if operation == "recall":
@@ -287,7 +298,13 @@ def test_hindsight_sync_operations_close_owned_event_loops(monkeypatch, tmp_path
                 )
                 db.commit()
                 return memory_backend.recall_memory_results(
-                    db, "chat", {"session_id": "session"}, "query", "Character", app_settings=settings
+                    db,
+                    "chat",
+                    {"session_id": "session"},
+                    "query",
+                    "Character",
+                    app_settings=settings,
+                    remote_recall=runtime.recall,
                 )
             finally:
                 db.close()
@@ -307,9 +324,13 @@ def test_hindsight_sync_operations_close_owned_event_loops(monkeypatch, tmp_path
         with ThreadPoolExecutor(max_workers=1) as executor:
             for _ in range(3):
                 executor.submit(exercise).result(timeout=10)
+        if runtime is not None:
+            assert runtime.close()
         assert loops, "The real SDK close path must exercise event-loop ownership"
         assert all(loop.is_closed() for loop in loops)
     finally:
+        if runtime is not None:
+            assert runtime.close()
         for loop in loops:
             if not loop.is_closed():
                 loop.close()

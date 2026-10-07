@@ -1,0 +1,3 @@
+# Exact historical false positive: SQL assignment of excluded.lease_token, not a credential.
+# The SQL value is a column reference; the actual runtime lease is generated with uuid.uuid4().hex.
+23548fec70a94ca3da6aef5aeea21f51b5805d2c:bridge/action_repository.py:generic-api-key:104

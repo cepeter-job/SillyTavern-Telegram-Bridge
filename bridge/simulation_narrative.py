@@ -38,7 +38,9 @@ def canonicalize_narrative_links(
     return result
 
 
-def _task_check_exists(db, chat_id, session_id, item, source_rowid):
+def _task_check_exists(
+    db: sqlite3.Connection, chat_id: str, session_id: str, item: dict[str, Any], source_rowid: int
+) -> bool:
     check = load_check(db, chat_id, session_id, item["last_check_key"])
     if check is None or check["source_rowid"] > source_rowid or check["actor"] != "user":
         return False

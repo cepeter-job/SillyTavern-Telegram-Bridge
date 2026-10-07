@@ -231,7 +231,8 @@ def _invalidate_non_npc_memory(
         ).fetchone()[0]
     )
     db.execute(
-        "UPDATE memory_segments SET valid=0 WHERE chat_id=? AND session_id=? AND end_id>=?",
+        "UPDATE memory_segments SET valid=0 "
+        "WHERE chat_id=? AND session_id=? AND layer<>'npc' AND end_id>=?",
         (chat_id, session_id, int(earliest)),
     )
     db.execute(

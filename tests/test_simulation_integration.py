@@ -48,6 +48,14 @@ def test_malformed_simulation_does_not_advance_coverage(session_db):
     assert db.execute("SELECT COUNT(*) FROM simulation_sources").fetchone()[0] == 0
 
 
+def test_missing_simulation_does_not_advance_coverage(session_db):
+    _, db, _ = session_db
+    _assistant_row(db)
+    refresh(session_db, lambda *a, **k: '{"npcs":[]}')
+    assert get_npc_extraction_coverage(db, "chat", "s1") == 0
+    assert db.execute("SELECT COUNT(*) FROM simulation_sources").fetchone()[0] == 0
+
+
 def test_invalid_optional_narrative_link_does_not_block_tracker_publication(session_db):
     _, db, _ = session_db
     source = _assistant_row(db, "The user receives a brass key while opening the gate.")

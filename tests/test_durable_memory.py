@@ -349,9 +349,7 @@ def test_autonomous_claim_keeps_hindsight_recovery_eligible_after_repeated_retai
     from bridge.memory_store import claim_jobs
 
     append(db, "old archival source")
-    db.execute(
-        "UPDATE memory_jobs SET attempts=8,last_error='retain_failed',next_attempt_at=0 WHERE layer='hindsight'"
-    )
+    db.execute("UPDATE memory_jobs SET attempts=8,last_error='retain_failed',next_attempt_at=0 WHERE layer='hindsight'")
     db.commit()
     assert len(claim_jobs(db, now=2 * 86400, layers=("hindsight",), autonomous=True)) == 1
 

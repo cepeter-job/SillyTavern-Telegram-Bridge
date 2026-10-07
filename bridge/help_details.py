@@ -48,7 +48,6 @@ HELP_CATEGORY_INTROS = {
 
 
 HELP_ALIASES = {
-    "/check": "/check <domain> <DC> <action>",
     "/stream on": "/stream",
     "/stream off": "/stream",
     "/preset list": "/preset",

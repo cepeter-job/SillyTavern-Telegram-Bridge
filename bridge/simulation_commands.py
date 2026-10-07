@@ -9,6 +9,7 @@ import uuid
 from typing import Any
 
 from bridge.action_adjudication import action_mode, set_action_mode
+from bridge.check_panels import send_check_menu
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.conversation_lifecycle import START_REQUIRED, require_started, split_command_text
 from bridge.delivery_port import DeliveryPort
@@ -258,6 +259,15 @@ def _simulation_command_route(
         return True
     if command != "/check" and not command.startswith("/check "):
         return False
+    if command == "/check":
+        send_check_menu(
+            token,
+            chat_id,
+            db,
+            session_id,
+            request_context=request_context,
+        )
+        return True
     root, arguments = split_command_text(stripped)
     handle_check_command(
         db, token, chat_id, session_id, root + " " + arguments, request_context.actor_id, operation_id, delivery_port

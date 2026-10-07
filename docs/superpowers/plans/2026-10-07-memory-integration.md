@@ -31,7 +31,7 @@
 - [x] Run the test against the old implementation and record the expected loop mismatch/unclosed-loop failure.
 - [x] Run retired deletion on the loop owned by hindsight_client_scope; avoid nested asyncio.run.
 - [x] Run focused lifecycle/retirement/session-cleanup tests, lint and format. Full required CI verifies the submitted commit.
-- [ ] Commit code, test and approved design/plan. Create PR, obtain read-only review, resolve material findings, wait for required checks, merge.
+- [x] Commit code, test and approved design/plan. Create PR, obtain read-only review, resolve material findings, wait for required checks, merge.
 
 ### Task 2: Commit reset locally and retain cleanup obligations
 **Files:** bridge/memory_backend.py; bridge/memory_store.py; bridge/memory_workers.py; bridge/memory_archival_schema.py; bridge/schema.py and its migration registry; bridge/memory.py; bridge/hindsight_integrity.py; bridge/message_commands.py; bridge/session_core.py; relevant reset/session UI and tests.
@@ -74,7 +74,8 @@
 ## Progress
 - Approved design captured from the 2026-10-07 audit and explicit implementation approval.
 - Base: caedf3f5a1be5314ed22f18d536c9339c5708e79, cepeter/SillyTavern-Telegram-Bridge.
-- Task 1 in progress; focused local checks and the full required GitHub CI are the merge gates.
+- Task1 complete: PR398 merged as bfb71bfbd1b175274db4154a426565244143857d after independent review and all required checks.
+- Task2 in progress in an isolated local checkout after vm148 RPC outage; basefac918a includes PR399 tracker payload fix.
 
 ### Checkpoint 1 verification
 
@@ -82,4 +83,4 @@
 - The full local baseline run was deliberately interrupted because of low VPS throughput; no full-suite pass is claimed. Focused local regressions and the full required GitHub CI on each submitted commit are the merge gates.
 
 - Focused retirement/session lifecycle tests passed: 14 tests, with ResourceWarning treated as an error. Independent review requested actual lazy transport coverage; the strengthened SDK regression creates a real aiohttp session/connector without HTTP, and both success/failure tests pass with session, connector and loop closure asserted.
-- PR: https://github.com/cepeter/SillyTavern-Telegram-Bridge/pull/398 (required checks pending).
+- PR: https://github.com/cepeter/SillyTavern-Telegram-Bridge/pull/398 (merged; all required checks passed).

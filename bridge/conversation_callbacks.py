@@ -56,14 +56,17 @@ def handle_reset_callback(
             )
         except Exception:
             logging.error("Reset failed for chat %s/session %s", chat_id, session_id, exc_info=True)
-            answer_callback(token, str(callback.get("id", "")), "Reset failed; memory and session were preserved")
-            send_text(
-                token, chat_id, "Reset cancelled because Hindsight memory purge failed. No session data was deleted."
-            )
+            answer_callback(token, str(callback.get("id", "")), "Local reset failed")
+            send_text(token, chat_id, "The local reset could not complete. Please retry.")
             return True
         answer_callback(token, str(callback.get("id", "")), "Reset complete")
         remove_inline_keyboard(db, token, callback)
-        send_text(token, chat_id, "Reset complete. The active session was cleared.")
+        send_text(
+            token,
+            chat_id,
+            "Reset complete. The active session was cleared. "
+            "Hindsight cleanup is queued and will retry in the background.",
+        )
         return True
     return False
 

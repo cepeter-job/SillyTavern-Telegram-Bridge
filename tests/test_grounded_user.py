@@ -223,7 +223,7 @@ def test_session_deletion_removes_grounded_user_metadata(context):
     assert get_meta(db, grounded_user_key("chat", target["session_id"]), "") == "on"
 
     class _Memory:
-        def purge_session(self, *_args, **_kwargs):
+        def queue_cleanup(self, *_args, **_kwargs):
             return 0
 
     deleted, reason = delete_session_data(

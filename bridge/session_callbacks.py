@@ -43,7 +43,11 @@ def _handle_delete_confirm(
     if not deleted:
         answer_callback(token, str(callback.get("id", "")), f"Deletion refused: {reason}")
         return True
-    answer_callback(token, str(callback.get("id", "")), "Session deleted")
+    answer_callback(
+        token,
+        str(callback.get("id", "")),
+        "Session deleted. Hindsight cleanup is queued and will retry in the background.",
+    )
     remove_inline_keyboard(db, token, callback)
     send_session_menu(
         token,

@@ -68,8 +68,7 @@ from bridge.regeneration import regenerate_last
 from bridge.request_types import PreparedMessage, RequestContext
 from bridge.reset_panel import reset_confirmation_request
 from bridge.response_delivery import (
-    delete_incoming_messages,
-    delete_outgoing_messages,
+    collect_session_telegram_ids,
     delete_tracked_panel_messages,
     queue_user_quote_tts,
     send_reply,
@@ -100,41 +99,31 @@ def reset_session(
 ) -> None:
     guard_story_reset(db, chat_id, session["session_id"])
     if db.in_transaction:
-        raise RuntimeError("Reset cannot perform external cleanup inside a caller transaction")
-    with hindsight_session_lock(chat_id, session["session_id"]):
-        if operation_id is not None:
-            if operation_was_applied(db, operation_id) or not begin_operation(db, operation_id, "reset"):
-                return
-        phase = operation_phase(db, operation_id) if operation_id is not None else ""
-        if phase == "local_committed":
-            if operation_id is not None:
-                record_operation(db, operation_id, "reset")
-                db.commit()
+        raise RuntimeError("Reset cannot join a caller transaction")
+    with hindsight_session_lock(chat_id, session["session_id"]), write_transaction(db):
+        if operation_was_applied(db, operation_id) or not begin_operation(db, operation_id, "reset"):
             return
-        if phase != "memory_purged":
-            memory_service.purge_session(db, chat_id, session["session_id"])
-            if operation_id is not None:
-                set_operation_phase(db, operation_id, "reset", "memory_purged")
-            db.commit()
-        delete_outgoing_messages(db, token, chat_id, session["session_id"])
-        delete_incoming_messages(db, token, chat_id, session["session_id"])
-        with write_transaction(db):
-            npc_service.purge_session(db, chat_id, session["session_id"])
-            SimulationService().purge_session(db, chat_id, session["session_id"])
-            delete_reset_turn_rows(db, chat_id, session["session_id"])
-            clear_session_summary(db, chat_id, session["session_id"])
-            purge_episodic_memories(db, chat_id, session["session_id"])
-            clear_curated_memory_state(db, chat_id, session["session_id"])
-            _repo_delete_scene_state(db, chat_id, session["session_id"])
-            clear_narrative_story_state(db, chat_id, session["session_id"])
-            old_choice_panels = reset_conversation(db, chat_id, session["session_id"])
-            if operation_id is not None:
-                set_operation_phase(db, operation_id, "reset", "local_committed")
-        delete_tracked_panel_messages(token, chat_id, old_choice_panels, request=telegram_request)
-        if operation_id is not None:
+        if operation_phase(db, operation_id) == "local_committed":
             record_operation(db, operation_id, "reset")
-            db.commit()
-        optimize_database(db)
+            return
+        guard_story_reset(db, chat_id, session["session_id"])
+        telegram_ids = collect_session_telegram_ids(db, chat_id, session["session_id"])
+        memory_service.queue_cleanup(db, chat_id, session["session_id"])
+        npc_service.purge_session(db, chat_id, session["session_id"])
+        SimulationService().purge_session(db, chat_id, session["session_id"])
+        delete_reset_turn_rows(db, chat_id, session["session_id"])
+        clear_session_summary(db, chat_id, session["session_id"])
+        purge_episodic_memories(db, chat_id, session["session_id"])
+        clear_curated_memory_state(db, chat_id, session["session_id"])
+        _repo_delete_scene_state(db, chat_id, session["session_id"])
+        clear_narrative_story_state(db, chat_id, session["session_id"])
+        old_choice_panels = reset_conversation(db, chat_id, session["session_id"])
+        set_operation_phase(db, operation_id, "reset", "local_committed")
+    delete_tracked_panel_messages(
+        token, chat_id, sorted(set(telegram_ids + old_choice_panels)), request=telegram_request
+    )
+    record_operation(db, operation_id, "reset")
+    optimize_database(db)
 
 
 def send_pending_input_message(

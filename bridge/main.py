@@ -71,6 +71,7 @@ from bridge.memory import (
 from bridge.memory_artifact_store import read_scene_block, read_summary_block
 from bridge.memory_backend import recall_scoped_memory
 from bridge.memory_diagnostics import MemoryDiagnostics
+from bridge.memory_retirement_store import queue_session_memory_cleanup
 from bridge.memory_scope_runtime import resolve_session_memory_scope
 from bridge.memory_scope_store import read_episodic_block, validate_memory_blocks
 from bridge.memory_service import MemoryService as _MemoryService
@@ -245,6 +246,7 @@ def _build_startup_services(
                 delivery_port=delivery,
             )
         ),
+        queue_session_cleanup=queue_session_memory_cleanup,
         purge_session_memory=_partial(purge_hindsight_session, app_settings=config),
     )
     npc = _NpcService()
@@ -526,10 +528,7 @@ def _main() -> int:
     enforce_runtime_permissions(app_settings=config)
     configure_logging(app_settings=config)
 
-    services = _build_startup_services(
-        config,
-        model_router=model_router,
-    )
+    services = _build_startup_services(config, model_router=model_router)
     _initialize_extensions()
     token = config.bot_token
     if args.check:

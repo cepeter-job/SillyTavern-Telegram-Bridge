@@ -104,7 +104,7 @@ def make_test_provider_port(*, generate_backend=None) -> ProviderPort:
     return ProviderPort(generate_backend=generate_backend or (lambda *_args, **_kwargs: "test provider response"))
 
 
-def make_test_memory_service(*, purge_session_memory=None) -> MemoryService:
+def make_test_memory_service(*, purge_session_memory=None, queue_session_cleanup=None) -> MemoryService:
     """Return an explicit MemoryService for tests that do not compose startup."""
     return MemoryService(
         resolve_scope=lambda *_args, **_kwargs: None,
@@ -115,9 +115,8 @@ def make_test_memory_service(*, purge_session_memory=None) -> MemoryService:
         validate_blocks=lambda _db, _scope, blocks: blocks,
         summary_state=lambda *_args, **_kwargs: ("", 0),
         retain_session=lambda *_args, **_kwargs: None,
-        purge_session_memory=(
-            purge_session_memory if purge_session_memory is not None else (lambda *_args, **_kwargs: 0)
-        ),
+        purge_session_memory=purge_session_memory or (lambda *_args, **_kwargs: 0),
+        queue_session_cleanup=queue_session_cleanup or (lambda *_args, **_kwargs: None),
     )
 
 

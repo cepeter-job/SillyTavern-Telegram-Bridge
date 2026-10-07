@@ -226,7 +226,7 @@ class SyncAuditHardeningTests(SettingsTestCase):
             inactive["session_id"],
             active["session_id"],
             operation_id=991,
-            memory_service=SimpleNamespace(purge_session=lambda *_args: 0),
+            memory_service=SimpleNamespace(queue_cleanup=lambda *_args: 0),
         )
 
         self.assertTrue(deleted, reason)
@@ -314,7 +314,7 @@ class SyncAuditHardeningTests(SettingsTestCase):
     def test_sync_has_no_migration_beyond_declared_application_features(self):
         self.assertEqual(
             tuple(migration.version for migration in _m_schema.SCHEMA_MIGRATIONS),
-            (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26),
+            tuple(range(1, 28)),
         )
 
 

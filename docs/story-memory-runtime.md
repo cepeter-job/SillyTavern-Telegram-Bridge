@@ -114,3 +114,78 @@ fallback, recovery, normalization, or continuation changes the request.
 
 This change does not deploy the worktree, change live configuration or story
 data, or restart production services.
+# Local-first reset and deletion (migration 27)
+
+Reset and session deletion commit their canonical SQLite changes together with
+durable Hindsight cleanup obligations. Neither operation constructs a Hindsight
+client, calls the provider, nor waits for an in-flight provider response. A local
+SQLite failure rolls back both the content changes and cleanup queue. Successful
+completion means the local operation committed and remote erasure was queued.
+
+The application binds `QueueSessionMemoryCleanup` through
+`MemoryService.queue_cleanup(db, chat_id, session_id)`. This SQL-only port requires
+an active caller transaction and queues exact recorded raw/native/mapped document
+IDs, known legacy IDs, dispatch uncertainty and old-generation discovery. Operation
+deduplication happens before advancing the epoch. A replay of `local_committed`
+does not reset again; the older `memory_purged` phase continues through the new
+transactional queue. The epoch survives deletion and visible session-key reuse.
+
+The standard Mini App purge route also uses this queue and returns `queued: true`.
+It preserves the local transcript and accepted facts while revoking their old
+external index authority. The integer-returning synchronous `purge_session`
+compatibility helper remains synchronous and serialized for explicit compatibility
+callers; reset, session deletion and the Mini App do not use it.
+
+## Provider races and uncertainty
+
+Raw and native fact retain calls commit a unique attempt token before dispatch.
+Client construction, HTTP and closure run outside session lifecycle locks. Known
+completion is recorded separately; a short acknowledgment transaction then checks
+the live incarnation, source/fact validity, external epoch, mode and owned claim.
+A late result cannot restore old prompt authority. A successful retry resolves
+only its own completed token. A timeout or deadline never expires an older unknown
+request. Migration 27 conservatively records uncertainty for old native index rows,
+including pending rows whose dispatch cannot be established; these inferred watches
+have no known start time.
+
+Exact deletion also releases the lifecycle lock across the provider call. Its
+acknowledgment checks the owned lease and captured retirement revision. Reopening
+debt increments the revision without stealing the active lease, so an older DELETE
+cannot mark the new obligation complete or postpone it. A dispatch outstanding at
+the start of DELETE prevents terminal acknowledgment even if it finishes before
+the DELETE response. Repeated invalidation of an already-invalid raw source does
+not by itself reopen a settled retirement.
+
+## Legacy discovery and scheduling
+
+New raw/native documents carry `st-memory-v2` and a hash of the chat, session,
+incarnation and external epoch. Background discovery accepts only the exact old
+generation or unmarked legacy documents with proven session-tag/prefix ownership.
+Missing provenance is deferred. Discovery never invokes broad session deletion;
+every selected object goes through the exact-ID outbox and current-source guard.
+
+A worker performs at most two list calls of 1,000 items each, 16 exact deletes per
+deletion batch, or 16 due dispatch reconciliations. One claimed memory operation is
+admitted at a time. An enumerate pass pauses deletion for that scope and persists
+its pagination cursor. Cleanup then runs, and verification starts from offset zero
+until a complete pass finds no old objects or known pending obligations. Deferred
+discovery resets its cursor and allows deletion of known IDs. Recurring discovery
+and unresolved watches alternate with ordinary memory work so they cannot starve
+new native ingestion. Executor rejection and process restart preserve the debt.
+
+`/memory off` disables indexing and recall, while exact erasure and discovery
+continue. Remote erasure is eventually retried when workers run and the provider
+works. Recorded ambiguous calls remain pending indefinitely without upstream proof
+of completion; an arbitrarily late unrecorded historical dispatch cannot be
+reconstructed or conclusively erased by a finite scan. Cleanup rows do not contain
+transcript/fact text. Their destination is the existing deterministic chat bank;
+changing provider settings is not a supported migration of outstanding debt.
+
+The unused unversioned curated remote export has been retired because it bypassed
+durable dispatch tracking. Its Mini App action is removed, and stale API clients
+receive HTTP 410 with guidance about automatic native fact indexing. Local curator
+editing, saved reviewed items and native accepted facts remain available.
+
+Tracked Telegram message and panel IDs are captured before reset removes local
+rows, then deleted best-effort after the local commit. Telegram failures do not
+restore a session; durable Telegram deletion retries are outside this checkpoint.

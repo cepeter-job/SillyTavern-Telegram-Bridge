@@ -72,7 +72,7 @@ def test_deleted_session_cleanup_retries_without_ghost_transcript_jobs(tmp_path,
         db.close()
 
 
-def test_cleanup_never_deletes_recreated_current_source_and_honors_disabled_mode(tmp_path, monkeypatch):
+def test_cleanup_never_deletes_recreated_current_source_even_when_memory_is_off(tmp_path, monkeypatch):
     from bridge.memory_store import next_source_segment, store_segment
 
     path = tmp_path / "recreated.sqlite"
@@ -99,9 +99,6 @@ def test_cleanup_never_deletes_recreated_current_source_and_honors_disabled_mode
         background=SimpleNamespace(submit=lambda *args: submitted.append(args) or True),
     )
     try:
-        assert dispatch_memory_backlog(services, db) == 0
-        db.execute("UPDATE meta SET value='on' WHERE key='memory_mode:c'")
-        db.commit()
         assert dispatch_memory_backlog(services, db) == 1
         _, function, *args = submitted.pop()
         function(*args)

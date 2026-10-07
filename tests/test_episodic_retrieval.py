@@ -122,6 +122,7 @@ def test_memory_service_keeps_episodic_context_separate():
         validate_blocks=lambda _db, _scope, blocks: blocks,
         summary_state=lambda *_args: ("continuity", 8),
         retain_session=lambda *_args: None,
+        queue_session_cleanup=lambda *_args: None,
         purge_session_memory=lambda *_args: 0,
     )
     db = _db()

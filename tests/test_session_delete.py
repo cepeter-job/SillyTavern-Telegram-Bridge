@@ -80,7 +80,7 @@ class SessionDeletionTests(SettingsTestCase):
             active["session_id"],
             operation_id=701,
             memory_service=SimpleNamespace(
-                purge_session=lambda _db, chat_id, session_id: self.purged.append((chat_id, session_id)) or 0
+                queue_cleanup=lambda _db, chat_id, session_id: self.purged.append((chat_id, session_id)) or 0
             ),
         )
 
@@ -117,7 +117,9 @@ class SessionDeletionTests(SettingsTestCase):
         )
         self.assertEqual(self.purged, [("chat", "inactive")])
 
-    def test_hindsight_cleanup_failure_preserves_local_session(self):
+    def test_session_delete_commits_and_queues_when_hindsight_is_unavailable(self):
+        from bridge.memory_retirement_store import queue_session_memory_cleanup
+
         active = _owner_session_core.ensure_session(
             self.db, "chat", self.app_settings_builder.default_model, app_settings=self.app_settings_builder.build()
         )
@@ -138,19 +140,17 @@ class SessionDeletionTests(SettingsTestCase):
             "chat",
             inactive["session_id"],
             active["session_id"],
-            memory_service=SimpleNamespace(purge_session=lambda *_args: (_ for _ in ()).throw(RuntimeError("offline"))),
+            memory_service=make_test_memory_service(queue_session_cleanup=queue_session_memory_cleanup),
         )
 
-        self.assertFalse(deleted)
-        self.assertIn("Hindsight cleanup failed", reason)
-        self.assertIsNotNone(
+        self.assertTrue(deleted, reason)
+        self.assertIsNone(
             self.db.execute("SELECT 1 FROM sessions WHERE chat_id='chat' AND session_id='preserved'").fetchone()
         )
+        self.assertEqual(self.db.execute("SELECT count(*) FROM messages WHERE session_id='preserved'").fetchone(), (0,))
         self.assertEqual(
-            self.db.execute("SELECT COUNT(*) FROM messages WHERE chat_id='chat' AND session_id='preserved'").fetchone()[
-                0
-            ],
-            1,
+            self.db.execute("SELECT count(*) FROM memory_cleanup_discovery WHERE session_id='preserved'").fetchone(),
+            (1,),
         )
 
     def test_active_session_and_busy_session_are_protected(self):
@@ -317,7 +317,7 @@ def test_session_deletion_cascades_all_narrative_rows_but_not_personal_defaults(
         create_session(db, "chat", "fixture::model", session_id="active", app_settings=builder.build())
         seed_narrative_story(db, "chat", "story")
         result = delete_session_data(
-            db, "chat", "story", "active", memory_service=SimpleNamespace(purge_session=lambda *a: 0)
+            db, "chat", "story", "active", memory_service=SimpleNamespace(queue_cleanup=lambda *a: None)
         )
         assert result == (True, "deleted")
         for table in (*NARRATIVE_DERIVED_TABLES, "narrative_settings"):

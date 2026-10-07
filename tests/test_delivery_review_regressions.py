@@ -1031,7 +1031,7 @@ def test_callback_worker_committed_reset_stays_with_reset_owner(case, monkeypatc
     c.services.delivery = make_test_delivery_port()
     c.services.sync = make_test_sync_service()
     c.services.input_flow = make_test_input_flow_service(app_settings=c.config)
-    c.services.memory = make_test_memory_service(purge_session_memory=lambda *a: pytest.fail("reset replayed purge"))
+    c.services.memory = make_test_memory_service(queue_session_cleanup=lambda *a: pytest.fail("reset replayed queue"))
     set_meta(c.db, "active_session:chat", "s1")
     set_meta(c.db, lifecycle_key("started", "chat", "s1"), "0")
     bind_panel_session(c.db, "chat", 88, "s1", "100")
@@ -1045,9 +1045,8 @@ def test_callback_worker_committed_reset_stays_with_reset_owner(case, monkeypatc
         "_queued": True,
     }
     jid = job_store.enqueue_job(c.db, 1, "chat", "s1", 88, "callback", {"actor_id": "100"})
-    # This is reset's valid durable crash boundary after clearing its transcript.
     begin_operation(c.db, jid, "reset")
-    set_operation_phase(c.db, jid, "reset", "local_committed")
+    set_operation_phase(c.db, jid, "reset", "local_committed")  # Crash after local reset.
     c.db.execute("UPDATE jobs SET state=?,attempts=?", ("running" if restart else "queued", attempts))
     c.db.commit()
     if restart:
@@ -1059,7 +1058,8 @@ def test_callback_worker_committed_reset_stays_with_reset_owner(case, monkeypatc
     assert c.db.execute("SELECT COUNT(*) FROM messages").fetchone() == (0,)
     assert c.db.execute("SELECT COUNT(*) FROM assistant_delivery_progress").fetchone() == (0,)
     assert c.effects == []
-    assert c.notices == ["Reset complete. The active session was cleared."]
+    assert len(c.notices) == 1
+    assert c.notices[0].startswith("Reset complete.") and "Hindsight cleanup is queued" in c.notices[0]
 
 
 def test_callback_worker_fresh_greeting_still_commits_and_delivers(case, monkeypatch):

@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "description": "Index of byte-for-byte copies of the immutable measurement artifacts; this index is derived and is not itself a measurement.",
+  "measured_source_revision": "caea8e7fb05d60e98981c53c3e598798cf4559d4",
+  "measured_source_tree": "440d5df930fac336a39a0186aa3e612e1f7db32d",
+  "artifacts": [
+    {
+      "path": "docs/story-memory-retrieval-comparison-results.json",
+      "original_filename": "offline-20261007-caea8e7.json",
+      "bytes": 1061322,
+      "sha256": "5bed29a73aab2a26ee9fd66f5b71a8509306f7f5e8c0bdd09e6eaa26ceebddf4"
+    },
+    {
+      "path": "docs/story-memory-retrieval-comparison-live-results.json",
+      "original_filename": "live-results.json",
+      "bytes": 1825646,
+      "sha256": "545593c4cde58a2879163ac1cf26796b501b44ca13568df4f4be1d60d52c4dbb"
+    },
+    {
+      "path": "docs/story-memory-retrieval-comparison-embeddings.json",
+      "original_filename": "genuine-embeddings.json",
+      "bytes": 869964,
+      "sha256": "732173d9d49c04d76028b8810a34b12a1895783e6c2a2a5b3607b95cbb1fc52b"
+    },
+    {
+      "path": "docs/story-memory-retrieval-comparison-replay-results.json",
+      "original_filename": "replay-20261007-caea8e7.json",
+      "bytes": 1664208,
+      "sha256": "beaab0c9fbef9153e57cf838060f322691ae50af07580947bc5bff6a958d9b10"
+    },
+    {
+      "path": "docs/story-memory-retrieval-comparison-owned-bank.json",
+      "original_filename": "owned-bank.json",
+      "bytes": 88064,
+      "sha256": "6aacfe38241609879e7aa0bc0889811fc29e5cfd2e8030d57371576b871cb658"
+    },
+    {
+      "path": "docs/story-memory-retrieval-comparison-live-invocation.json",
+      "original_filename": "invocation.json",
+      "bytes": 1278,
+      "sha256": "f339d807877c9471056376fd17428ac6d356f10eca13fe94dabeffbddb759a38"
+    },
+    {
+      "path": "docs/story-memory-retrieval-comparison-live-completion.json",
+      "original_filename": "completion.json",
+      "bytes": 709,
+      "sha256": "b2937c50464b778de3196134bae1306790da069608cf6c5fa03cabd96e72b08e"
+    },
+    {
+      "path": "docs/story-memory-retrieval-comparison-live-process.log",
+      "original_filename": "process.log",
+      "bytes": 258,
+      "sha256": "e0b7087533d87b6322e896ad4df4443c22d2fd40900048340bfbfc4164cd880d"
+    }
+  ]
+}

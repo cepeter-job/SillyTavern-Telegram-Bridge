@@ -8,21 +8,163 @@ backend, deploy a service, or read an existing story database.
 
 ## Checkpoint status
 
-The source, fixtures, transport contracts and report schema are implemented.
-The source is under review in
+Task 5 implementation and measured artifacts are complete. Integration and
+required checks are tracked in
 [PR409](https://github.com/cepeter/SillyTavern-Telegram-Bridge/pull/409).
-**Frozen empirical results are pending corrected-source review and CI.**
-Test-server responses and hand-authored vectors are contract fixtures; they are not
-evidence of model retrieval quality. The follow-up measured artifact
-will be `docs/story-memory-retrieval-comparison-results.json`, with its exact
-measured commit and source hashes. Genuine cache and live results will be retained
-if the authorized bounded study produces them. A skipped or failed optional run
-will remain visible.
+
+The measurements below used clean source
+[`caea8e7fb05d60e98981c53c3e598798cf4559d4`](https://github.com/cepeter/SillyTavern-Telegram-Bridge/commit/caea8e7fb05d60e98981c53c3e598798cf4559d4),
+tree `440d5df930fac336a39a0186aa3e612e1f7db32d`. Their source SHA256 is
+`1e7bf65f878ab8cc97719b55949966eff7a76ca9f2884f704e2b6558decfe6e4`.
+A later documentation or merge commit is not the measured revision.
 
 CP4 merged in PR406 as `b9b11ebca5a0e7fc162ce3e4f5a0844df22a9b05`.
 Production continues to use facts-only Hindsight as a semantic supplement to FTS.
 See [the architecture and contract evaluation](story-memory-evaluation.md) for
-runtime operation; this comparison adds retrieval observations, not answer generation.
+runtime operation. This checkpoint introduces no production backend migration.
+Related [issue410](https://github.com/cepeter/SillyTavern-Telegram-Bridge/issues/410)
+item 4 tracks this retrieval work through PR409. Answer quality from real generation
+and Telegram Android/iOS acceptance remain outside this study.
+
+## Observed results: 7 October 2026
+
+The default offline baseline completed with zero HTTP. One explicitly bounded
+live study acquired all genuine embeddings, then failed during Hindsight's first
+retain attempt. A subsequent offline replay completed with zero HTTP using that
+saved embedding cache. All three reports preserve their own status and authority
+bindings.
+
+### Preserved artifacts
+
+Every measurement artifact below is a byte-for-byte copy of the original file.
+The derived [artifact index](story-memory-retrieval-comparison-artifact-index.json)
+records the archive mapping, byte lengths and SHA256 hashes. Original paths,
+source identity, timestamps and historical receipt fields remain intact.
+
+| Artifact | Contents |
+| --- | --- |
+| [Offline baseline](story-memory-retrieval-comparison-results.json) | Completed default run; zero HTTP; FTS results and contract-vector checks. |
+| [Live results](story-memory-retrieval-comparison-live-results.json) | Failed overall study; available FTS/genuine BLOB results and explicit Hindsight failures. |
+| [Genuine embedding cache](story-memory-retrieval-comparison-embeddings.json) | All 66 ordered inputs, 2048-dimensional vectors, profile, hashes and acquisition provenance. |
+| [Offline cache replay](story-memory-retrieval-comparison-replay-results.json) | Completed zero-HTTP reproduction against fresh local authority. |
+| [Owned-bank manifest](story-memory-retrieval-comparison-owned-bank.json) | Actual generated bank identity, attempted mutation and unresolved cleanup obligation. |
+| [Live invocation](story-memory-retrieval-comparison-live-invocation.json) | Exact arguments and pre-dispatch source/configuration identity; credential variable name only. |
+| [Live completion](story-memory-retrieval-comparison-live-completion.json) | Exit 1, 218.259s process interval and original output hashes. |
+| [Live process log](story-memory-retrieval-comparison-live-process.log) | Sanitized terminal study status. |
+
+The invocation's `status=running` records the start snapshot. The completion
+record supplies the terminal `study_failed` status; the measurement processes
+have finished. Successful cache replay does not change the live result or its
+cleanup obligation.
+
+### Retrieval quality and candidate policy
+
+FTS and genuine BLOB each completed all 24 cases: 22 positive cases and two
+no-answer cases. The live and replay runs have identical ordered canonical
+candidate/admitted lists, selected sets, quality, category summaries and
+denominators. FTS quality also matches the baseline.
+
+| Component | Macro Recall@1 | Macro Recall@3 | Macro Recall@6 | MRR | No-answer cases returning candidates |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Production FTS | 56.818% | 72.727% | 72.727% | 0.696970 | 0/2 |
+| Genuine cached BLOB | 88.636% | 100% | 100% | 1.000000 | 2/2 |
+
+BLOB reaches the panel's 88.636% Recall@1 ceiling because five positive cases
+require two facts. On jointly successful cases, its gains over FTS are
+31.818 percentage points at Recall@1, 27.273 points at Recall@3/6, and 0.303030
+MRR. The production-selected FTS-only set has Recall@6=72.727%; FTS+BLOB has
+Recall@6=100%, a 27.273-point gain. Selected sets have no global MRR.
+
+FTS retrieves all six direct lexical cases. Its six fixed paraphrases Q07–Q12
+produce zero candidates; BLOB places a relevant fact first for all six. Both
+paths have full Recall@3/6 on the other ten positive scope/branch cases. On Q16,
+the relevant fact moves from FTS rank 3 to BLOB rank 1. Full declared categories,
+including failures and expected/successful denominators, remain in the reports.
+
+Across one observation of each of the 24 cases, FTS has 34 raw/candidate/admitted
+occurrences and BLOB has 456; repeated appearances across queries are counted
+separately. Neither path has late invalidations or postfilter-starved cases.
+FTS has zero raw candidates on Q07–Q12 and the two no-answer cases.
+BLOB scores the entire eligible pool of 13–21 facts for every case.
+
+The BLOB adapter has no abstention threshold. It admits 20 and 19 eligible
+candidates on the two no-answer cases; production selection retains six in each.
+That is a measured candidate-return tradeoff, not an answer-generation or
+hallucination result. The small panel, repeated texts, uniform importance and
+narrow alternate-branch coverage limit generalization. These results do not
+establish a production migration decision.
+
+All reports pass the authority invariants: zero forbidden admissions, no missing
+or stale vectors, at most six production-selected facts and unchanged measured
+source. Hand-authored contract vectors continue to omit semantic-quality
+aggregates at both overall and category levels.
+
+### Local timing and embedding acquisition
+
+These are local component or selected-pipeline timings with tracing active,
+one excluded warm-up per query and ten measured repetitions: 240 samples per
+path. Values are milliseconds; p95 uses the nearest-rank definition. Cached
+BLOB measurements exclude the earlier embedding inference.
+
+| Local path | Live-run median / p95 | Offline-replay median / p95 |
+| --- | ---: | ---: |
+| FTS component, including final validation | 5.993 / 13.928 | 5.839 / 14.016 |
+| Genuine BLOB component, including final validation | 142.395 / 156.354 | 148.309 / 159.101 |
+| FTS-only production selection | 6.664 / 13.214 | 6.457 / 12.666 |
+| FTS+BLOB cached production pipeline | 156.309 / 173.384 | 162.857 / 178.190 |
+
+The baseline FTS component median/p95 is 5.416/14.442ms; its FTS-only selected
+pipeline is 6.375/13.295ms. Repeated cases from one fixed panel are not independent
+service-load observations or an SLA estimate.
+
+Genuine acquisition completed 66/66 inputs in five batches of 16/16/16/16/2.
+Its separately recorded acquisition interval was 15.264131548s, including local
+handling. Individual HTTP attempts ranged from 2.602s to 3.241s. Batch three mixes
+facts and queries. No isolated uncached query latency, provider cost estimate or
+1.5-second foreground projection can be derived by amortizing those batches.
+
+The profile is `yuyu-embedding`, 2048 dimensions, with operator-assigned revision
+`vm148-config-20261007`; the relay endpoint is
+`http://127.0.0.1:8891/v1/embeddings`. This is external-provider inference.
+The complete cache SHA256 is
+`732173d9d49c04d76028b8810a34b12a1895783e6c2a2a5b3607b95cbb1fc52b`.
+Replay reuses those same vectors while rebuilding all 42 fact bindings to fresh session
+incarnations and evidence from production lifecycle operations. It verifies local
+determinism and fresh-authority rebinding; it is not a second model replication.
+The cache's old acquisition receipts remain provenance, while replay records
+`embedding_acquisition={}` and zero new HTTP calls.
+
+Measured runtime: CPython 3.11.16, SQLite 3.53.1, aiohttp 3.14.3, Linux x86_64.
+The installed Hindsight SDK was 0.10.0 and unused; the study targets the verified
+public HTTP 0.10.2 contract. The live report records 344,400 vector payload bytes
+(344,064 genuine document-vector bytes plus 336 contract bytes), 389,120 logical
+temporary-SQLite page bytes and a 35,717,167-byte traced Python peak. Those scopes
+are distinct from RSS and running Hindsight service memory.
+
+### Hindsight failure and remaining cleanup
+
+The single live run made 11 HTTP attempts: five successful embedding calls and
+six Hindsight calls. For Hindsight, the sequence was absence GET 404, explicit
+creation PUT 200, configuration GET 200 verifying observations disabled, first
+retain POST timeout, cleanup DELETE 200, and cleanup verification GET 404.
+
+The manifest binds 42 planned canonical documents. Only the first 12-document
+batch was attempted; it timed out after an observed 10.015255122s under the
+configured 10-second deadline. There are zero acknowledged retained batches and
+zero recall attempts. All 24 Hindsight cases are failed
+`ingestion_or_setup_incomplete` cases with `attempted=false`: 22 positive and
+two no-answer cases, with zero successful cases. Hindsight quality and service
+recall latency are unmeasured. The report's tiny failed-row
+`canonical_finalize`/`observed_component_total` samples time local empty
+finalization; they are not Hindsight recall performance.
+
+Creation was confirmed, but retain outcome remains uncertain. DELETE 200 followed
+by one GET 404 cannot prove that the timed-out synchronous retain has finished.
+The archived manifest therefore retains `uncertain_ingestion=true` and
+`cleanup_pending=true`, and the live process exited 1. The generated bank identity
+in that manifest remains the concrete cleanup obligation for operator
+investigation. No further live calls or retries were made. Offline replay skips
+Hindsight and cannot resolve that obligation.
 
 ## Fixed corpus and judgments
 
@@ -168,7 +310,7 @@ Replay a previously acquired complete cache without HTTP:
 ```bash
 MYPY_CACHE_DIR=/dev/null .venv/bin/python -X dev -W error::ResourceWarning \
   tools/compare_story_memory_retrieval.py \
-  --embedding-artifact /tmp/story-memory-retrieval-embeddings.json \
+  --embedding-artifact docs/story-memory-retrieval-comparison-embeddings.json \
   --require-backends fts,blob \
   --output /tmp/story-memory-retrieval-cached.json
 ```

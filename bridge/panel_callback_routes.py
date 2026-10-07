@@ -5,6 +5,7 @@ from __future__ import annotations
 from bridge.character_callbacks import handle_character_callback
 from bridge.character_optimizer_callbacks import handle_character_optimizer_callback
 from bridge.character_proposal_callbacks import handle_character_proposal_callback
+from bridge.check_callbacks import handle_check_panel_callback
 from bridge.conversation_callbacks import handle_greeting_callback, handle_reset_callback, handle_swipe_callback
 from bridge.delivery_port import DeliveryPort
 from bridge.director_callbacks import handle_director_callback
@@ -52,6 +53,18 @@ def handle_primary_panel_callback(
     """Dispatch System Prompt, Note, language, reset, help, swipe, and expression callbacks."""
     if data.startswith("update:"):
         return handle_update_callback(db, token, callback, data, chat_id, app_settings=request_context.app_settings)
+    if handle_check_panel_callback(
+        db,
+        token,
+        callback,
+        answer_callback,
+        data,
+        chat_id,
+        message,
+        session_id,
+        request_context=request_context,
+    ):
+        return True
     if handle_greeting_callback(
         db,
         token,

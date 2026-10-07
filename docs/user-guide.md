@@ -108,7 +108,7 @@ confirmation apply to the new story.
 | Change the reply language or save generation settings | `/language` or `/preset` |
 | Change the Persona, lorebooks, prompt or Author's Note | `/persona`, `/world`, `/systemprompt`, `/note` |
 | Inspect the assembled prompt and context budget | `/prompt` |
-| Record a d20 result for an explicit action | `/check stealth 12 cross the courtyard` |
+| Open action-check controls | `/check` |\n| Record a d20 result for an explicit action | `/check stealth 12 cross the courtyard` |
 | Find every command and its accepted arguments | `/help` |
 
 `/help` is the canonical command reference. Try `/help databank search` or
@@ -286,7 +286,7 @@ rolls NPC state back to the applicable revision before regeneration.
 | Summaries, memory/NPC/scene refresh, optimizer and ranking | Utility-model work. |
 | Story tracker extraction | Shares the existing NPC Utility call; upgrading older sessions can replay available history. |
 | Automatic action adjudication | One bounded Utility or Director request before an eligible new turn; the bridge itself generates the random number. |
-| `/check` | A local d20 roll and saved receipt, with no model request. |
+| `/check` panel | Changes Auto/Director/Manual locally and reads recent saved checks without a model request. |\n| Explicit `/check <domain> <DC> <action>` | A local d20 roll and saved receipt, with no model request. |
 | Narrative continuity | A bounded Utility reconciliation after committed replies; older or edited history can need more than one batch. |
 | Current Scene image | Utility preparation of the visual prompt, then an image-provider request. |
 | AI Director | One planning call on an event or cadence threshold, with at most one repair for malformed version-1 output. Groups reuse the accepted plan without another planning call. |

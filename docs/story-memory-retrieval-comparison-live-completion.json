@@ -1,0 +1,15 @@
+{
+  "artifact_sha256": {
+    "genuine-embeddings.json": "732173d9d49c04d76028b8810a34b12a1895783e6c2a2a5b3607b95cbb1fc52b",
+    "live-results.json": "545593c4cde58a2879163ac1cf26796b501b44ca13568df4f4be1d60d52c4dbb",
+    "owned-bank.json": "6aacfe38241609879e7aa0bc0889811fc29e5cfd2e8030d57371576b871cb658",
+    "process.log": "e0b7087533d87b6322e896ad4df4443c22d2fd40900048340bfbfc4164cd880d"
+  },
+  "elapsed_seconds": 218.259,
+  "exit_code": 1,
+  "finished_utc": "2026-10-07T07:58:38.559145+00:00",
+  "source_revision": "caea8e7fb05d60e98981c53c3e598798cf4559d4",
+  "source_tree": "440d5df930fac336a39a0186aa3e612e1f7db32d",
+  "started_utc": "2026-10-07T07:55:00.299797+00:00",
+  "status": "study_failed"
+}

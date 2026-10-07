@@ -1,6 +1,6 @@
 """Inline /check mode panel behavior."""
 
-from application_test_setup import make_test_application_services, make_test_delivery_port, make_test_provider_port
+from application_test_setup import (\n    make_test_application_services,\n    make_test_delivery_port,\n    make_test_provider_port,\n)
 from test_memory_completion_safety import session_db as session_db
 
 from bridge.action_adjudication import action_mode

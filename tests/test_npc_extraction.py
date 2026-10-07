@@ -94,7 +94,8 @@ def _payload(
                         }
                     ],
                 }
-            ]
+            ],
+            "simulation": {},
         }
     )
 

@@ -109,7 +109,7 @@ def test_known_fields_are_strictly_typed_and_bounded(changes):
 
 
 def test_provider_json_fence_is_accepted_when_it_contains_only_one_object():
-    proposal = parse_director_proposal("```json\\n" + payload() + "\\n```")
+    proposal = parse_director_proposal("```json\n" + payload() + "\n```")
     validate(proposal)
     assert proposal.direction == "Keep the gate tense."
 
@@ -136,7 +136,7 @@ def test_null_optional_text_fields_are_treated_as_omitted():
 
 
 def test_text_outside_a_json_fence_remains_rejected():
-    fenced = "prefix\\n```json\\n" + payload() + "\\n```"
+    fenced = "prefix\n```json\n" + payload() + "\n```"
     with pytest.raises(DirectorProposalError):
         parse_director_proposal(fenced)
 

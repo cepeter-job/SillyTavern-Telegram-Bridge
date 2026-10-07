@@ -45,6 +45,14 @@ function quest(item) {
     detail('Reward',item.reward));
 }
 
+function task(item) {
+  return entry(label(item.name.replaceAll('-',' ')),detail('Objective',item.objective),
+    el('p',{class:'row'},badge(label(item.status)),badge(item.progress_current+' / '+item.progress_target)),
+    detail('Stage',item.stage),detail('Completed',(item.completed_steps||[]).join(' · ')),
+    detail('Pending',(item.pending_steps||[]).join(' · ')),
+    detail('Complications',(item.complications||[]).join(' · ')),detail('Established consequence',item.consequence));
+}
+
 function check(item) {
   return entry(item.action,
     el('p',{class:'muted'},(item.actor==='user'?'You':item.actor)+' · '+label(item.domain)),
@@ -82,13 +90,14 @@ async function renderTrackers() {
     ['conditions','Conditions',modifier],
     ['factions','Factions',faction],
     ['quests','Quests',quest,'Linked quests follow the story’s narrative status.'],
+    ['tasks','Tasks',task,'Progress comes from the saved story, not the dice alone.'],
     ['checks','Recent checks',check,'Recorded rolls and their outcomes.'],
   ];
-  if(!sections.some(([key])=>data[key].length)) {
+  if(!sections.some(([key])=>(data[key]||[]).length)) {
     root.append(card('No saved trackers yet',empty('Details will appear here as your story progresses.')));
     return root;
   }
-  for(const [key,title,render,description] of sections)root.append(section(key,title,data[key],render,description));
+  for(const [key,title,render,description] of sections)root.append(section(key,title,data[key]||[],render,description));
   return root;
 }
 

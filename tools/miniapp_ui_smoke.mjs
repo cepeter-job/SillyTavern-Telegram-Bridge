@@ -242,6 +242,15 @@ try {
   const readsBefore=trackerReads;trackerRefresh.click();
   await until(()=>trackerReads>readsBefore&&!shellDocument.querySelector('main').hasAttribute('aria-busy'),'tracker refresh finishes');
   assert.ok(shellDocument.querySelector('main').textContent.includes('Maya <guide>'),'Refresh retains saved tracker values');
+  trackerScenario={...savedTrackers,tasks:[{name:'quiet-entry',objective:'Enter <script>quietly</script>',
+    status:'active',stage:'Door bypass',progress_current:1,progress_target:3,completed_steps:['Reach door'],
+    pending_steps:['Open latch'],complications:['Returning guard'],consequence:'Key fits',last_check_key:'private-check-key'}]};
+  await app.namespace.navigate('trackers');
+  const taskText=shellDocument.getElementById('tracker-tasks').closest('section').textContent;
+  for(const value of ['Enter <script>quietly</script>','Door bypass','1 / 3','Reach door','Open latch','Returning guard','Key fits'])
+    assert.ok(taskText.includes(value),'Task retains saved '+value);
+  assert.ok(!taskText.includes('private-check-key'),'Internal task check links remain private');
+  assert.equal(shellDocument.querySelector('main script'),null,'Task evidence never becomes markup');
   trackerScenario={...savedTrackers,pending:true,last_source_rowid:987654321,last_updated_at:1791244800,
     quests:savedTrackers.quests.map(item=>item.narrative_linked?{...item,status:'native=unavailable'}:item)};
   await app.namespace.navigate('trackers');

@@ -48,8 +48,18 @@ def restore_checkpoint_state(
     set_utility_reasoning(db, chat_id, target, config["utility_reasoning"])
     set_director_reasoning(db, chat_id, target, config["director_reasoning"])
     for name, value in config["preferences"].items():
-        if name not in {"humanizer", "grounded_user", "expression_mode", "image_model", "image_size", "image_style"}:
+        if name not in {
+            "humanizer",
+            "grounded_user",
+            "expression_mode",
+            "image_model",
+            "image_size",
+            "image_style",
+            "action_checks",
+        }:
             raise ValueError("Unexpected checkpoint preference")
+        if name == "action_checks" and value not in {"", "auto", "director", "manual"}:
+            raise ValueError("Unexpected action-check preference")
         if value:
             store_meta_value(db, f"{name}:{chat_id}:{target}", str(value))
     initialize_conversation(db, chat_id, target)

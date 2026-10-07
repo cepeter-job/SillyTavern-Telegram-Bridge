@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 import time
 
+from bridge.action_adjudication import locked_action_messages
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.delivery_port import DeliveryPort
 from bridge.generation import _generation_generate_rendered_reply, build_chat_messages
@@ -155,6 +156,7 @@ def regenerate_last(
         rag_context=rag_service.context_for_prompt(db, chat_id, user_text, rag_bundle),
         app_settings=app_settings,
     )
+    messages = locked_action_messages(db, chat_id, session_id, messages, last_user_rowid)
     novel_turn = begin_novel_turn(db, chat_id, session, "regen", operation_id)
     reply = _generation_generate_rendered_reply(
         db,

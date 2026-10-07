@@ -194,6 +194,7 @@ def test_choice_recovery_executes_the_normal_conversation_pipeline_exactly_once(
     (settings.character_dir / "Alice.png").write_bytes(_card_png("Alice", "A rainy afternoon"))
     update_session(db, "chat", "story", character_file="Alice.png")
     set_meta(db, "stream_mode:chat", "off")
+    set_meta(db, "action_checks:chat:story", "manual")
     calls = []
 
     def generate(*args, **kwargs):

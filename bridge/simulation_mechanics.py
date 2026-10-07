@@ -262,7 +262,7 @@ class SimulationMechanics:
                         }
                     else:
                         value[field] = {}
-                elif field == "lies":
+                elif field in {"lies", "completed_steps", "pending_steps", "complications"}:
                     value[field] = (
                         [_text(v, 240) for v in raw_value[:32] if _text(v, 240)] if isinstance(raw_value, list) else []
                     )

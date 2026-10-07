@@ -1,6 +1,7 @@
 import sqlite3
 import time
 
+from bridge.action_schema import migrate_action_adjudication
 from bridge.alternate_ending_schema import migrate_alternate_ending_lineage
 from bridge.closed_story_schema import migrate_closed_story_guards
 from bridge.conversation_schema import migrate_conversation_modes
@@ -30,7 +31,6 @@ PROCESSED_UPDATE_RETENTION_SECONDS = 30 * 86400
 
 
 def _create_core_tables(db: sqlite3.Connection) -> None:
-    """Create metadata, messages, sessions, and response variant tables."""
     db.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
     db.execute("""CREATE TABLE IF NOT EXISTS messages (
         chat_id TEXT NOT NULL,
@@ -82,7 +82,6 @@ def _create_core_tables(db: sqlite3.Connection) -> None:
 
 
 def _create_generation_tables(db: sqlite3.Connection) -> None:
-    """Create generation settings, presets, and summary tables."""
     db.execute("""CREATE TABLE IF NOT EXISTS generation_settings (
         chat_id TEXT NOT NULL,
         session_id TEXT NOT NULL,
@@ -514,6 +513,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(26, "retire_prompt_tracker_bootstrap", retire_prompt_tracker_bootstrap),
     _Migration(27, "local_first_memory_cleanup", migrate_local_first_memory_cleanup),
     _Migration(28, "facts_only_hindsight", migrate_facts_only_hindsight),
+    _Migration(29, "natural_action_adjudication", migrate_action_adjudication),
 )
 
 

@@ -278,3 +278,9 @@ def add_inline_contract(messages: list[dict], count: int, language: str, *, narr
     else:
         result.insert(0, {"role": "system", "content": instruction})
     return result
+
+
+NEXT_SCENE_INSTRUCTION = (
+    "Advance to the next scene without speaking, deciding, or acting for the user character. "
+    "Continue the narrative until the user character can meaningfully participate again."
+)

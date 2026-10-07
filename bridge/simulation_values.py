@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-KINDS = frozenset({"relationship", "agenda", "actor", "faction", "quest", "foreshadowing"})
+KINDS = frozenset({"relationship", "agenda", "actor", "faction", "quest", "foreshadowing", "task"})
 MAX_ITEMS = 64
 MAX_NAME = 160
 

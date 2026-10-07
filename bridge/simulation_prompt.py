@@ -5,6 +5,7 @@ import sqlite3
 from bridge.narrative_arc_repository import list_arc_rows
 from bridge.narrative_repository import list_narrative_threads
 from bridge.simulation_context import simulation_context_for_prompt
+from bridge.simulation_repository import list_checks
 
 SIMULATION_OUTPUT_POLICY = (
     "## Canonical story state\n"
@@ -28,6 +29,13 @@ SIMULATION_EXTRACTION_POLICY = (
     "quests:[{id,kind:main|side,status:active|paused|completed|failed,objective,progress_current,"
     "progress_target,reward,arc_id}], foreshadowing:[{id,status:planted|developing|resolved|abandoned,"
     "seed,payoff,thread_id,arc_id}]. Use at most 32 updates per group/part and bounded short text. "
+    "tasks:[{id,actor:user,objective,stage,status:active|paused|completed|failed,progress_current:0..20,"
+    "progress_target:0..20,completed_steps:[text],pending_steps:[text],complications:[text],"
+    "consequence,last_check_key}]. "
+    "Tasks describe established user activity, not private NPC activity or a second plot engine. "
+    "Only record progress/steps/consequences established in committed narration; a roll alone proves no progress. "
+    "Keep each step list within 16 entries, reuse an existing task ID, and omit optional unproven check links. "
+    "An idle or routine turn needs no new task. Remove resolved temporary conditions only when prose establishes it. "
     "Only supporting NPCs receive relationships/agendas; user inventory belongs only to the named user. "
     "Reuse canonical NPC names/aliases and listed existing Narrative IDs; omit links not yet established. "
     "Never duplicate Scene physical state or decide plot outcomes independently of Narrative. "
@@ -47,4 +55,6 @@ def extraction_tracker_context(db: sqlite3.Connection, chat_id: str, session_id:
     for row in list_narrative_threads(db, chat_id, session_id, limit=16):
         if row["source_revision"] <= through_rowid:
             lines.append(f"Narrative thread ID {row['thread_id']}: {row['title'][:100]}")
+    for check in list_checks(db, chat_id, session_id, through_rowid=through_rowid, limit=3):
+        lines.append(f"Existing check key {check['request_key']}: {check['action']} ({check['outcome']})")
     return "\n".join(lines)[:8000]

@@ -126,7 +126,7 @@ def test_locked_result_survives_ordinary_prompt_budget(session_db):
     assert "Locked action result" in str(result) and '"roll": 7' in str(result)
 
 
-def test_check_mode_control_is_session_scoped_and_non_generating(session_db):
+def test_check_mode_text_adapter_is_retired_from_explicit_check_handler(session_db):
     from application_test_setup import make_test_delivery_port
 
     from bridge.action_adjudication import action_mode
@@ -136,8 +136,8 @@ def test_check_mode_control_is_session_scoped_and_non_generating(session_db):
     delivered = []
     delivery = make_test_delivery_port(send_text=lambda *a, **k: delivered.append(a[-1]))
     handle_check_command(db, "", "chat", "s1", "/check mode director", "actor", None, delivery)
-    assert action_mode(db, "chat", "s1") == "director"
-    assert "Director" in delivered[-1]
+    assert action_mode(db, "chat", "s1") == "auto"
+    assert delivered == ["Use /check <domain> <DC> <action>. DC must be an integer from 1 to 20."]
     assert db.execute("SELECT COUNT(*) FROM messages").fetchone()[0] == 0
 
 

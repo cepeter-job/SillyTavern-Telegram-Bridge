@@ -71,6 +71,8 @@ def _record_failure(
     revision: int,
     category: str,
     expected_ending: EndingState | None = None,
+    *,
+    detail: str = "",
 ) -> DirectorDecision:
     message = f"Director could not update ({category}). The saved story and accepted direction are unchanged."
     decision_id = None
@@ -102,7 +104,10 @@ def _record_failure(
                     reason=message,
                     created_at=time.time(),
                 )
-    logging.warning("Director update not published: %s", category)
+    if detail:
+        logging.warning("Director update not published: %s (%s)", category, detail)
+    else:
+        logging.warning("Director update not published: %s", category)
     return DirectorDecision(decision_id, revision, "ai", "rejected", message)
 
 
@@ -248,8 +253,17 @@ class DirectorService:
                         {"role": "assistant", "content": raw[:16384]},
                         {
                             "role": "user",
-                            "content": "Repair once: return a valid schema_version 1 JSON proposal "
-                            "using the original expected_revision and allowed references. " + str(exc),
+                            "content": (
+                                "Repair once. Return exactly one JSON object and nothing else. "
+                                "Do not use Markdown or code fences. Use schema_version 1 and copy the original "
+                                "expected_revision exactly. Omit optional string fields instead of null. "
+                                "Use only allowed references from the original request. "
+                                "Allowed action: continue|transition_scene; transition_type: "
+                                "continue|cut|pov_switch|time_jump|thread_switch; pov: "
+                                "first_person|third_person_user|third_person_rotating|omniscient|cinematic; "
+                                "story_phase: setup|development|escalation|climax|resolution. "
+                                f"Validation error: {exc}"
+                            ),
                         },
                     ]
             if proposal is None:
@@ -321,7 +335,18 @@ class DirectorService:
             return DirectorDecision(decision_id, revision, "ai", "accepted", "Direction updated.", proposal)
         except (ValueError, RuntimeError) as exc:
             category = exc.category if isinstance(exc, (DirectorProposalError, ProviderRequestError)) else "unavailable"
-            return _record_failure(db, chat_id, session_id, token, source, revision, category, ending_before)
+            detail = str(exc) if isinstance(exc, DirectorProposalError) else ""
+            return _record_failure(
+                db,
+                chat_id,
+                session_id,
+                token,
+                source,
+                revision,
+                category,
+                ending_before,
+                detail=detail,
+            )
         finally:
             with write_transaction(db):
                 release_director_run(db, chat_id, session_id, token)

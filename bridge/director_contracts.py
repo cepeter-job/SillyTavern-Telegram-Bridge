@@ -70,9 +70,7 @@ def _text(data: dict, field: str, maximum: int, *, identifier: bool = False, req
     if not isinstance(value, str):
         raise DirectorProposalError("parse", f"Director field {field!r} must be text or omitted", repairable=True)
     if len(value) > maximum:
-        raise DirectorProposalError(
-            "parse", f"Director field {field!r} exceeds {maximum} characters", repairable=True
-        )
+        raise DirectorProposalError("parse", f"Director field {field!r} exceeds {maximum} characters", repairable=True)
     value = value.strip()
     if required and not value:
         raise DirectorProposalError("parse", f"Director field {field!r} is required", repairable=True)

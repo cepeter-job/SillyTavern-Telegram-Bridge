@@ -75,7 +75,7 @@ jobs:
 
   miniapp-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -102,7 +102,9 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-          cache-dependency-path: tests/miniapp-ui/package-lock.json
+          cache-dependency-path: |
+            tests/miniapp-ui/package-lock.json
+            tests/miniapp-browser/package-lock.json
       - name: Install locked DOM test tooling
         run: npm ci --prefix tests/miniapp-ui --include=dev --ignore-scripts --no-audit --no-fund
       - name: Exercise Mini App pages and session safety
@@ -113,12 +115,27 @@ jobs:
           npm test --prefix tests/miniapp-ui 2>&1 | tee miniapp-ui-unit.log
           node --experimental-vm-modules tools/miniapp_ui_smoke.mjs 2>&1 | tee miniapp-ui.log
 
+      - name: Install locked development-only real browser tooling
+        run: npm ci --prefix tests/miniapp-browser --include=dev --ignore-scripts --no-audit --no-fund
+
+      - name: Install pinned Chromium and WebKit engines and system dependencies
+        run: node tests/miniapp-browser/node_modules/@playwright/test/cli.js install --with-deps chromium webkit
+
+      - name: Exercise real browser recovery and mobile interaction
+        env:
+          PYTHON: python
+        run: npm test --prefix tests/miniapp-browser 2>&1 | tee miniapp-browser.log
+
       - name: Publish Mini App smoke log
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: miniapp-smoke
-          path: miniapp-ui*.log
+          path: |
+            miniapp-ui*.log
+            miniapp-browser.log
+            tests/miniapp-browser/playwright-report/
+            tests/miniapp-browser/test-results/
           if-no-files-found: warn
           retention-days: 14
 

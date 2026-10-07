@@ -24,6 +24,7 @@ from bridge.migrations import run_migrations as _run_migrations
 from bridge.narrative_arc_schema import migrate_narrative_arc_evidence
 from bridge.narrative_runtime_schema import migrate_narrative_history_revisions
 from bridge.narrative_schema import migrate_narrative_engine_foundation
+from bridge.queue_timestamp_schema import migrate_queue_timestamps
 from bridge.simulation_schema import migrate_simulation_trackers, retire_prompt_tracker_bootstrap
 from bridge.token_usage_schema import migrate_token_usage
 from bridge.transcript_schema import migrate_message_identity
@@ -311,10 +312,7 @@ def _run_startup_database_cleanup(db: sqlite3.Connection) -> None:
         "DELETE FROM failed_turns WHERE updated_at < ?",
         (now - 90 * 86400,),
     )
-    db.execute(
-        "DELETE FROM callback_tokens WHERE expires_at < ?",
-        (now,),
-    )
+    db.execute("DELETE FROM callback_tokens WHERE expires_at < ?", (now,))
     db.execute(
         "DELETE FROM panel_sessions WHERE expires_at < ?",
         (now,),
@@ -514,6 +512,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(28, "facts_only_hindsight", migrate_facts_only_hindsight),
     _Migration(29, "natural_action_adjudication", migrate_action_adjudication),
     _Migration(30, "autonomous_memory_backlog_guard", migrate_memory_retry_guard),
+    _Migration(31, "memory_pending_job_origin", migrate_queue_timestamps),
 )
 
 

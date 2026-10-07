@@ -14,6 +14,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path, PureWindowsPath
 
+from bridge.diagnostic_counters import safe_counter_values
+
 SAMPLE_INTERVAL_SECONDS = 20
 WARNING_THRESHOLD_KIB = 256 * 1024
 TRACING_THRESHOLD_KIB = 320 * 1024
@@ -222,10 +224,12 @@ class MemoryDiagnostics:
         environ: Mapping[str, str],
         safe_counters: Callable[[], Mapping[str, object]] | None = None,
         provider_activity: Callable[[], Sequence[Mapping[str, object]]] | None = None,
+        queue_counters: Callable[[], Mapping[str, object]] | None = None,
     ) -> None:
         self.bridge_home = Path(bridge_home)
         self.environ = environ
         self.safe_counters = safe_counters
+        self.queue_counters = queue_counters
         self.provider_activity = provider_activity
         self._enabled = environ.get("SILLYTAVERN_MEMORY_DIAGNOSTICS") == "1"
         self._state = DiagnosticState.ARMED if self._enabled else DiagnosticState.DISABLED
@@ -450,26 +454,7 @@ class MemoryDiagnostics:
             self._owns_tracemalloc = False
 
     def _safe_counter_values(self) -> dict[str, bool | int]:
-        if self.safe_counters is None:
-            return {}
-        try:
-            values = self.safe_counters()
-        except Exception:
-            logging.warning("Memory diagnostics safe counters unavailable")
-            return {}
-        if not isinstance(values, Mapping):
-            return {}
-        result: dict[str, bool | int] = {}
-        for key, value in values.items():
-            if len(result) >= 32:
-                break
-            if not isinstance(key, str) or re.fullmatch(r"[A-Za-z0-9_.:-]{1,64}", key) is None:
-                continue
-            if type(value) is bool:
-                result[key] = value
-            elif type(value) is int and -(2**63) <= value <= 2**63 - 1:
-                result[key] = value
-        return result
+        return safe_counter_values(self.queue_counters, self.safe_counters)
 
     @staticmethod
     def _safe_provider_activity(raw: object) -> list[dict[str, object]]:

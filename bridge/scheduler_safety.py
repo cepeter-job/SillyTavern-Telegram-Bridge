@@ -11,6 +11,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Generic, TypeVar
 
+from bridge.performance import operation_scope, perf_span, performance_enabled
+from bridge.settings import AppSettings
+
 T = TypeVar("T")
 
 
@@ -53,10 +56,12 @@ class DurableWorkerGuard:
         *,
         sleep: Callable[[float], object] = time.sleep,
         delays: tuple[float, ...] = (0.0, 0.25, 1.0),
+        app_settings: AppSettings | None = None,
     ) -> None:
         self._open_requeue_connection = open_requeue_connection
         self._sleep = sleep
         self._delays = tuple(delays)
+        self._app_settings = app_settings
 
     @staticmethod
     def _transient(exc: BaseException) -> bool:
@@ -127,10 +132,27 @@ class DurableWorkerGuard:
         worker: Callable[..., T],
     ) -> Callable[..., T]:
         database_path = self._database_path(db)
+        app_settings = self._app_settings
+        observed = app_settings is not None and performance_enabled(app_settings=app_settings)
+        queued_at = None
+        if observed:
+            try:
+                row = db.execute(
+                    "SELECT CASE WHEN attempts=0 THEN created_at ELSE updated_at END FROM jobs WHERE job_id=?",
+                    (int(job_id),),
+                ).fetchone()
+                queued_at = float(row[0]) if row else None
+            except sqlite3.Error:
+                # Optional telemetry must not prevent otherwise valid dispatch.
+                pass
 
         @functools.wraps(worker)
         def guarded_worker(*worker_args: Any) -> T:
             try:
+                if app_settings is not None and observed:
+                    with operation_scope(int(job_id), app_settings=app_settings, queued_at=queued_at):
+                        with perf_span("operation_execution", app_settings=app_settings):
+                            return worker(*worker_args)
                 return worker(*worker_args)
             except BaseException as exc:
                 self._requeue(

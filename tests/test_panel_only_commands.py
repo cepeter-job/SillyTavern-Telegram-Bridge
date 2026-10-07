@@ -303,11 +303,7 @@ def test_databank_remove_confirm_mutates_directly_then_rerenders_without_legacy_
     import bridge.enum_callbacks as callbacks
 
     removed, rendered = [], []
-    monkeypatch.setattr(
-        callbacks,
-        "handle_data_bank_command",
-        lambda *a, **k: pytest.fail("Data Bank callback must not invoke legacy text executor"),
-    )
+    assert not hasattr(callbacks, "handle_data_bank_command")
     monkeypatch.setattr(callbacks, "resolve_dynamic_callback_token", lambda *a, **k: "notes.pdf")
     monkeypatch.setattr(callbacks, "send_databank_menu", lambda *a, **k: rendered.append(True))
     callbacks._handle_ragremoveconfirm(

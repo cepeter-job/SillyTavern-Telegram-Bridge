@@ -108,6 +108,39 @@ def test_known_fields_are_strictly_typed_and_bounded(changes):
         parse_director_proposal(payload(**changes))
 
 
+def test_provider_json_fence_is_accepted_when_it_contains_only_one_object():
+    proposal = parse_director_proposal("```json\n" + payload() + "\n```")
+    validate(proposal)
+    assert proposal.direction == "Keep the gate tense."
+
+
+def test_null_optional_text_fields_are_treated_as_omitted():
+    values = json.loads(payload())
+    values.update(
+        viewpoint=None,
+        pov=None,
+        purpose=None,
+        transition_type=None,
+        location=None,
+        time_scope=None,
+        speaker=None,
+        story_phase=None,
+        ending_goal_reason=None,
+        finale_reason=None,
+    )
+    proposal = parse_director_proposal(json.dumps(values))
+    validate(proposal)
+    assert proposal.viewpoint == ""
+    assert proposal.pov == ""
+    assert proposal.transition_type == "continue"
+
+
+def test_text_outside_a_json_fence_remains_rejected():
+    fenced = "prefix\n```json\n" + payload() + "\n```"
+    with pytest.raises(DirectorProposalError):
+        parse_director_proposal(fenced)
+
+
 def test_oversized_raw_output_is_rejected_before_parsing():
     with pytest.raises(DirectorProposalError) as exc:
         parse_director_proposal(" " * 20000 + payload())

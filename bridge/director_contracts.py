@@ -65,13 +65,19 @@ class DirectorProposal:
 
 def _text(data: dict, field: str, maximum: int, *, identifier: bool = False, required: bool = False) -> str:
     value = data.get(field, "")
-    if not isinstance(value, str) or len(value) > maximum:
-        raise DirectorProposalError("parse", "Director text field is invalid or oversized", repairable=True)
+    if value is None and not required:
+        return ""
+    if not isinstance(value, str):
+        raise DirectorProposalError("parse", f"Director field {field!r} must be text or omitted", repairable=True)
+    if len(value) > maximum:
+        raise DirectorProposalError("parse", f"Director field {field!r} exceeds {maximum} characters", repairable=True)
     value = value.strip()
     if required and not value:
-        raise DirectorProposalError("parse", "Director required text field is missing", repairable=True)
+        raise DirectorProposalError("parse", f"Director field {field!r} is required", repairable=True)
     if identifier and value and not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", value):
-        raise DirectorProposalError("parse", "Director identifier is invalid", repairable=True)
+        raise DirectorProposalError(
+            "parse", f"Director field {field!r} contains an invalid identifier", repairable=True
+        )
     return value
 
 
@@ -91,8 +97,12 @@ def _reject_constant(_value: str) -> None:
 def parse_director_proposal(raw: str) -> DirectorProposal:
     if not isinstance(raw, str) or len(raw) > MAX_DIRECTOR_OUTPUT:
         raise DirectorProposalError("size", "Director output exceeds the structured response limit")
+    text = raw.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE)
+    if fenced is not None:
+        text = fenced.group(1).strip()
     try:
-        data = json.loads(raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
+        data = json.loads(text, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
     except (json.JSONDecodeError, RecursionError) as exc:
         raise DirectorProposalError("parse", "Director returned malformed JSON", repairable=True) from exc
     if not isinstance(data, dict):

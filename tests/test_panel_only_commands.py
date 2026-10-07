@@ -281,3 +281,55 @@ def test_databank_reindex_callback_rerenders_without_extra_text(monkeypatch):
         77,
     )
     assert rendered == [True]
+
+
+def test_language_callback_updates_and_rerenders_same_panel_without_success_text(monkeypatch):
+    import bridge.settings_callbacks as callbacks
+
+    rerendered = []
+    monkeypatch.setattr(callbacks, "set_response_language", lambda *a, **k: "id")
+    monkeypatch.setattr(callbacks, "send_text", lambda *a, **k: pytest.fail("language selection must stay in panel"))
+    monkeypatch.setattr(callbacks, "remove_inline_keyboard", lambda *a, **k: pytest.fail("panel should be rerendered"))
+    monkeypatch.setattr(callbacks, "send_language_menu", lambda *a, **k: rerendered.append((a, k)))
+    answers = []
+    handled = callbacks.handle_language_callback(
+        object(),
+        "token",
+        {"id": "cb"},
+        lambda _token, _id, text: answers.append(text),
+        "language:id",
+        "chat",
+        {"message_id": 77},
+        {"response_language": "auto"},
+        "s1",
+        9,
+        delivery_port=make_test_delivery_port(),
+        request_context=SimpleNamespace(app_settings=object()),
+    )
+    assert handled is True
+    assert answers == ["Language selected"]
+    assert rerendered and rerendered[-1][0][3] == 77
+
+
+def test_databank_remove_confirm_mutates_directly_then_rerenders_without_legacy_text(monkeypatch):
+    import bridge.enum_callbacks as callbacks
+
+    removed, rendered = [], []
+    monkeypatch.setattr(
+        callbacks,
+        "handle_data_bank_command",
+        lambda *a, **k: pytest.fail("Data Bank callback must not invoke legacy text executor"),
+    )
+    monkeypatch.setattr(callbacks, "resolve_dynamic_callback_token", lambda *a, **k: "notes.pdf")
+    monkeypatch.setattr(callbacks, "send_databank_menu", lambda *a, **k: rendered.append(True))
+    callbacks._handle_ragremoveconfirm(
+        object(),
+        "token",
+        "chat",
+        SimpleNamespace(db=object()),
+        SimpleNamespace(remove=lambda _db, _chat, filename: removed.append(filename) or 1),
+        77,
+        ["enum", "ragremoveconfirm", "token"],
+    )
+    assert removed == ["notes.pdf"]
+    assert rendered == [True]

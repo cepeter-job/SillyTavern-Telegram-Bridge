@@ -93,6 +93,13 @@ def test_privileged_pull_request_target_workflows_never_checkout_pull_request_co
         assert "tools/pr_size_label.py" in workflow_text(name), name
 
 
+def test_pr_size_labeler_can_write_labels_on_pull_requests():
+    permissions = workflow_documents()["pr-size-labeler.yml"]["jobs"]["size-label"]["permissions"]
+    assert permissions["contents"] == "read"
+    assert permissions["issues"] == "write"
+    assert permissions["pull-requests"] == "write"
+
+
 def test_module_size_ratchet_prefers_a_base_revision_that_carries_the_baseline():
     workflow = job_text("static-analysis")
     assert "github.event.pull_request.base.sha" in workflow

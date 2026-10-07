@@ -171,7 +171,7 @@ def parse_simulation_payload(raw: str) -> tuple[dict[str, Any], bool]:
         if not isinstance(decoded, dict):
             return {}, False
         if "simulation" not in decoded:
-            return {}, True
+            return {}, False
         return normalize_simulation_payload(decoded["simulation"], limit=32), True
     except (TypeError, ValueError, OverflowError):
         return {}, False

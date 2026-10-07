@@ -321,3 +321,40 @@ def test_external_purge_retires_all_mappings_atomically_without_losing_cleanup_i
         set() if rollback else {("explicit-old", 0), ("source-old", 0), ("curated-old", 0)}
     )
     assert external_memory_boundary(db, "c", "s")["purge_epoch"] == (0 if rollback else 1)
+
+
+def test_autonomous_claim_parks_stale_session_until_new_activity(db):
+    from bridge.memory_store import claim_jobs
+
+    append(db, "old")
+    now = 2 * 86400
+    assert claim_jobs(db, now=now, layers=("npc",), autonomous=True) == []
+
+    db.execute(
+        "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('c','s','user','fresh',?)",
+        (now,),
+    )
+    db.commit()
+    assert len(claim_jobs(db, now=now, layers=("npc",), autonomous=True)) == 1
+
+
+def test_autonomous_claim_parks_repeated_provider_failures_but_manual_recovery_remains_available(db):
+    from bridge.memory_store import claim_jobs
+
+    append(db)
+    db.execute("UPDATE memory_jobs SET attempts=8,last_error='work_failed',next_attempt_at=0 WHERE layer='npc'")
+    db.commit()
+
+    assert claim_jobs(db, now=10, layers=("npc",), autonomous=True) == []
+    assert len(claim_jobs(db, now=10, layers=("npc",))) == 1
+
+
+def test_new_story_activity_resets_parked_retry_budget(db):
+    append(db)
+    db.execute("UPDATE memory_jobs SET attempts=8,last_error='work_failed',next_attempt_at=999 WHERE layer='npc'")
+    db.commit()
+
+    append(db, "fresh")
+    assert db.execute(
+        "SELECT attempts,last_error,next_attempt_at FROM memory_jobs WHERE layer='npc'"
+    ).fetchone() == (0, "", 0)

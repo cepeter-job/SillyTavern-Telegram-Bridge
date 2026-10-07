@@ -5,6 +5,7 @@ import {createPage,until} from './dom.mjs';
 const session={session_id:'story-a',title:'The Night Archive',character_file:'Alice.png',model_id:'test::story',mode:'normal'};
 const settings={temperature:0.7,top_p:0.9,max_tokens:2048,frequency_penalty:0,presence_penalty:0,reasoning_budget:0,stop_sequences:''};
 const models=[{id:'test::story',provider:'test',name:'story'},{id:'test::utility',provider:'test',name:'utility'}];
+const restoreUndoMessage='Character backup restored. The previous installed card is now the available backup; restoring again will undo this change.';
 function modelApi({configured={story:'test::story',utility:'',director:''},effective={},mutate=async()=>({saved:true}),catalogModels=models}={}) {
   return async(path,options={})=>{
     if(options.method&&options.method!=='GET')return mutate(path,options);
@@ -217,7 +218,7 @@ for(const scenario of [
       writes.push({path,...options});completed=true;
       if(scenario.newStory)active={...session,session_id:'story-b',title:'Alice chat'};
       if(path.endsWith('/select'))return {session:active,message:'New session selected. Use /start in Telegram to begin.'};
-      if(path.endsWith('/restore'))return {session:active,message:'Character backup restored.',restored:true,filename:'Alice.png'};
+      if(path.endsWith('/restore'))return {session:active,message:restoreUndoMessage,restored:true,filename:'Alice.png'};
       if(path.endsWith('/apply'))return {message:'Character changes applied.',filename:'Alice.png',rank:'S'};
       if(path.endsWith('/discard'))return {discarded:true};
       if(path==='/characters')return {installed:true,filename:'Alice.png',fields:{name:'Alice'}};
@@ -248,6 +249,11 @@ for(const scenario of [
   assert.equal(writes.length,1);assert.equal(writes[0].path,scenario.path);assert.equal(writes[0].body.session_id,'story-a');
   const message=page.document.querySelector('.characters-page [role="alert"]');assert.ok(message,'Completed outcome survives the list refresh error');
   assert.match(message.textContent,scenario.outcome);assert.match(message.textContent,/refresh.*review/i);
+  if(scenario.backups) {
+    assert.ok(message.textContent.includes(restoreUndoMessage),'The complete returned undo message survives the failed refresh');
+    assert.ok(page.document.getElementById('notice').textContent.includes(restoreUndoMessage));
+    assert.deepEqual(JSON.parse(JSON.stringify(writes[0].body)),{digest:'a'.repeat(64),backup_digest:'b'.repeat(64),confirm:true,session_id:'story-a'});
+  }
   assert.equal(action.disabled,true,'The completed action cannot be repeated from the stale view');
   action.dispatchEvent(new page.window.MouseEvent('click',{bubbles:true}));
   assert.equal(writes.length,1);
@@ -255,6 +261,53 @@ for(const scenario of [
   allowRefresh=true;await press(page.document,'Refresh and review');
   assert.equal(writes.length,1,'Recovery reads the current state without replaying the mutation');
   assert.equal(namedButton(page.document,'Start new story').disabled,false);
+});
+
+test('identical character backups expose no usable restore action while a different backup remains restorable',async t=>{
+  const writes=[];
+  const page=await createPage('characters.js',{api:async(path,options={})=>{
+    if(options.method) {writes.push({path,...options});return {};}
+    if(path.startsWith('/characters?'))return {session,total:2,offset:0,characters:[
+      {filename:'Alice.png',name:'Alice',rank:'S',active:true,digest:'a'.repeat(64)},
+      {filename:'Bob.png',name:'Bob',rank:'A',active:false,digest:'b'.repeat(64)},
+    ]};
+    if(path.endsWith('/portrait'))return null;
+    if(path==='/character-backups')return {session,backups:[
+      {filename:'Alice.png',name:'Alice',installed:true,digest:'a'.repeat(64),backup_digest:'a'.repeat(64),matches_installed:true},
+      {filename:'Bob.png',name:'Bob',installed:true,digest:'b'.repeat(64),backup_digest:'c'.repeat(64),matches_installed:false},
+    ]};
+    throw new Error('Unexpected API: '+path);
+  }});t.after(page.close);
+  page.document.getElementById('content').append(await page.pages.characters());await press(page.document,'Restore backups');
+  const backup=name=>[...page.document.querySelectorAll('.card')].find(node=>node.querySelector('h2')?.textContent===name);
+  const identical=backup('Alice'),different=backup('Bob');assert.ok(identical);assert.ok(different);
+  assert.match(identical.textContent,/already matches this backup/i);
+  const identicalActions=[...identical.querySelectorAll('button')].filter(node=>node.textContent==='Restore backup');
+  assert.ok(identicalActions.every(control=>control.disabled||control.getAttribute('aria-disabled')==='true'),'An identical backup has no usable Restore action');
+  identicalActions.forEach(control=>control.click());assert.equal(writes.length,0);assert.equal(page.document.querySelector('dialog[open]'),null);
+  assert.equal(namedButton(different,'Restore backup').disabled,false,'A different backup can still be restored');
+});
+
+test('a successful character restore shows the complete returned undo message after refreshing the catalog',async t=>{
+  const writes=[],state={session};let catalogReads=0;
+  const page=await createPage('characters.js',{state,api:async(path,options={})=>{
+    if(path==='/character-backups/Alice.png/restore'&&options.method==='POST') {
+      writes.push(options);return {session,message:restoreUndoMessage,restored:true,filename:'Alice.png'};
+    }
+    if(path.startsWith('/characters?')) {
+      catalogReads++;return {session,total:1,offset:0,characters:[{filename:'Alice.png',name:'Alice',rank:'S',active:true,digest:'a'.repeat(64)}]};
+    }
+    if(path.endsWith('/portrait'))return null;
+    if(path==='/character-backups')return {session,backups:[{filename:'Alice.png',name:'Alice',installed:true,digest:'a'.repeat(64),backup_digest:'b'.repeat(64),matches_installed:false}]};
+    throw new Error('Unexpected API: '+path);
+  }});t.after(page.close);
+  page.document.getElementById('content').append(await page.pages.characters());await press(page.document,'Restore backups');
+  const restore=namedButton(page.document,'Restore backup');restore.click();await until(()=>page.document.querySelector('dialog[open]'),'restore confirmation');
+  assert.equal(writes.length,0,'Restore waits for confirmation');state.session={...session,session_id:'another-view',title:'Another story'};namedButton(page.document,'Confirm').click();
+  await until(()=>restore.getAttribute('aria-busy')!=='true','restore and catalog refresh finished');
+  assert.equal(catalogReads,2);assert.ok(page.document.querySelector('.character-page-header'));
+  assert.equal(writes.length,1);assert.deepEqual(JSON.parse(JSON.stringify(writes[0].body)),{digest:'a'.repeat(64),backup_digest:'b'.repeat(64),confirm:true,session_id:'story-a'});
+  const notice=page.document.getElementById('notice');assert.equal(notice.hidden,false);assert.equal(notice.textContent,restoreUndoMessage,'The exact server undo message remains visible after refresh');
 });
 
 test('a character confirmation cannot retarget a story returned by a pending search',async t=>{

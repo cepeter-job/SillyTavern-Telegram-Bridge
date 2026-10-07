@@ -376,13 +376,6 @@ def test_character_restore_rejects_backup_identical_to_installed_card(tmp_path):
     assert target.read_bytes() == raw
 
 
-def test_character_restore_ui_disables_identical_backup_and_surfaces_undo_message():
-    source = (Path(__file__).parents[1] / "bridge/miniapp_assets/characters.js").read_text(encoding="utf-8")
-    assert "item.matches_installed" in source
-    assert "backup_digest:item.backup_digest" in source
-    assert "notice(result.message)" in source
-
-
 @pytest.mark.parametrize("preset", ["observer", "custom"])
 def test_miniapp_character_setup_preserves_personal_style_prefill_only_for_new_session(tmp_path, preset):
     from bridge.miniapp_characters import select_character

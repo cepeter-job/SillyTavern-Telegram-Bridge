@@ -120,7 +120,7 @@ def claim_jobs(
             "WHERE dirty_version>completed_version AND lease_token='' AND next_attempt_at<=? "
             "AND (?=0 OR layer='hindsight' OR EXISTS(SELECT 1 FROM messages m WHERE m.chat_id=memory_jobs.chat_id "
             "AND m.session_id=memory_jobs.session_id AND m.created_at>=?)) "
-            "AND (?=0 OR NOT (attempts>=? AND last_error IN ('work_failed','retain_failed'))) "
+            "AND (?=0 OR layer='hindsight' OR NOT (attempts>=? AND last_error IN ('work_failed','retain_failed'))) "
             "AND EXISTS(SELECT 1 FROM sessions s WHERE s.chat_id=memory_jobs.chat_id "
             "AND s.session_id=memory_jobs.session_id AND s.created_at=memory_jobs.session_created_at) "
             "ORDER BY next_attempt_at,attempts,chat_id,session_id,layer",

@@ -4,7 +4,7 @@
   "exceptions": {
     "bridge/character_callbacks.py": 590,
     "bridge/command_routes.py": 564,
-    "bridge/enum_callbacks.py": 554,
+    "bridge/enum_callbacks.py": 552,
     "bridge/image_generation.py": 578,
     "bridge/install_support.py": 753,
     "bridge/main.py": 539,

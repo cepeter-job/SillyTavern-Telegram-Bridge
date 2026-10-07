@@ -77,7 +77,8 @@
 - Task1 complete: PR398 merged as bfb71bfbd1b175274db4154a426565244143857d after independent review and all required checks.
 - Task2 complete: PR401 merged as e379214 after independent review and all required checks.
 - Task3 complete: PR404 merged as 2a049fd2aee4d37c712e0c8142a228f9eedbb270 after independent specification/code review and all required checks.
-- Task4 in progress: bounded foreground recall implementation; independent review, required CI, and merge remain pending.
+- Task4 complete: PR406 merged as b9b11ebca5a0e7fc162ce3e4f5a0844df22a9b05 after independent source/integration review and all required CI (3,979 tests plus 814 subtests; 82.85% coverage).
+- Task5 source implementation in progress: fixed production corpus, retrieval adapters, isolated live contracts and report schema. Source publication/review/CI, frozen measurements, result artifact and checkpoint merge remain pending.
 
 ### Checkpoint 1 verification
 

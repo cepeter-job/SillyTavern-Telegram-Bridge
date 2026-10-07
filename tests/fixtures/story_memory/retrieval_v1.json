@@ -1,0 +1,1829 @@
+{
+  "schema_version": 1,
+  "study_label": "curated_synthetic",
+  "judgment_origin": "predeclared_fixture_author_not_independent_human_annotation",
+  "limits": {
+    "expected_document_count": 42,
+    "max_document_count": 48,
+    "expected_query_count": 24,
+    "expected_raw_embedding_input_count": 66,
+    "max_raw_embedding_input_count": 72,
+    "max_document_summary_chars": 1000,
+    "max_document_summary_total_chars": 48000,
+    "max_embedding_input_total_chars": 72000
+  },
+  "sessions": [
+    {
+      "key": "main",
+      "identity": "temporary_original_session"
+    },
+    {
+      "key": "alternate",
+      "identity": "result.session.session_id_returned_by_production_create_alternate_ending",
+      "origin_session_key": "main",
+      "checkpoint_key": "prefinale"
+    }
+  ],
+  "facts": [
+    {
+      "key": "M01",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The brass compass is beneath the northern observatory staircase.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M02",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The signal lamp burns blue whale oil.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M03",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The harbor bell rings after three white flashes.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M04",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "Courier Tessa follows the slate footpath to the eastern orchard.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M05",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "Mara develops a rash when she eats cinnamon.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M06",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The ferry is called Glass Finch.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M07",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The watchkeeper orders everyone out when cracks spread across the vaulted corridor.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M08",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "Captain Neri tears up the warrant and lets the prisoner leave unharmed.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M09",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The patched skiff carries all six stranded passengers across the channel.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M10",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The visitor proves that he knows the guard by naming the guard's wife and their childhood village.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M11",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The medic revives the exhausted runner with cold water and a quiet place to rest.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M12",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The council postpones the vote because too few members are present to decide.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M13",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The iron safe's access code is orchid-27.",
+      "visibility": "restricted",
+      "known_by": [
+        "Rowan"
+      ],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M14",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The hidden dispatch uses the recognition phrase night heron.",
+      "visibility": "restricted",
+      "known_by": [
+        "Mira"
+      ],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M15",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "Rowan and Mira jointly owe six thousand silver coins to the harbor guild.",
+      "visibility": "restricted",
+      "known_by": [
+        "Rowan",
+        "Mira"
+      ],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M16",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The iron safe stands beside a green ivy pot in the archive.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M17",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "In the original ending, Glass Finch docks at the eastern quay.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M18",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "In the original ending, harbor clerk Ana signs the bridge permit.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M19",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "A porcelain compass ornament sits on the southern staircase.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M20",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The archive's decorative lamp burns amber resin.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M21",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "Mira hides a bronze orchard token in her boot.",
+      "visibility": "restricted",
+      "known_by": [
+        "Mira"
+      ],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "M22",
+      "session_key": "main",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The guild buys a painted skiff that remains on dry land.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "A01",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The brass compass is beneath the northern observatory staircase.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": "M01",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A02",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The signal lamp burns blue whale oil.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": "M02",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A03",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The harbor bell rings after three white flashes.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": "M03",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A04",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "Courier Tessa follows the slate footpath to the eastern orchard.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": "M04",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A05",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "Mara develops a rash when she eats cinnamon.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": "M05",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A06",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The ferry is called Glass Finch.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": "M06",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A07",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The watchkeeper orders everyone out when cracks spread across the vaulted corridor.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": "M07",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A08",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "Captain Neri tears up the warrant and lets the prisoner leave unharmed.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": "M08",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A09",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The patched skiff carries all six stranded passengers across the channel.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": "M09",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A10",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The visitor proves that he knows the guard by naming the guard's wife and their childhood village.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": "M10",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A11",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The medic revives the exhausted runner with cold water and a quiet place to rest.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": "M11",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A12",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The council postpones the vote because too few members are present to decide.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": "M12",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A13",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The iron safe's access code is orchid-27.",
+      "visibility": "restricted",
+      "known_by": [
+        "Rowan"
+      ],
+      "origin_fact_key": "M13",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A14",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The hidden dispatch uses the recognition phrase night heron.",
+      "visibility": "restricted",
+      "known_by": [
+        "Mira"
+      ],
+      "origin_fact_key": "M14",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A15",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "Rowan and Mira jointly owe six thousand silver coins to the harbor guild.",
+      "visibility": "restricted",
+      "known_by": [
+        "Rowan",
+        "Mira"
+      ],
+      "origin_fact_key": "M15",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A16",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "The iron safe stands beside a green ivy pot in the archive.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": "M16",
+      "creation": "checkpoint_clone"
+    },
+    {
+      "key": "A23",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "In the alternate ending, Glass Finch docks at the western quay.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "A24",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "In the alternate ending, two violet flashes summon the harbor bell keeper.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "A25",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "In the alternate ending, harbor clerk Ivo signs the bridge permit.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    },
+    {
+      "key": "A26",
+      "session_key": "alternate",
+      "kind": "fact",
+      "importance": 0.9,
+      "summary": "A red anchor is painted on the alternate ending's bridge permit.",
+      "visibility": "shared",
+      "known_by": [],
+      "origin_fact_key": null,
+      "creation": "accepted_user_marker"
+    }
+  ],
+  "document_order": [
+    "M01",
+    "M02",
+    "M03",
+    "M04",
+    "M05",
+    "M06",
+    "M07",
+    "M08",
+    "M09",
+    "M10",
+    "M11",
+    "M12",
+    "M13",
+    "M14",
+    "M15",
+    "M16",
+    "M17",
+    "M18",
+    "M19",
+    "M20",
+    "M21",
+    "M22",
+    "A01",
+    "A02",
+    "A03",
+    "A04",
+    "A05",
+    "A06",
+    "A07",
+    "A08",
+    "A09",
+    "A10",
+    "A11",
+    "A12",
+    "A13",
+    "A14",
+    "A15",
+    "A16",
+    "A23",
+    "A24",
+    "A25",
+    "A26"
+  ],
+  "clone_mapping": [
+    {
+      "origin_fact_key": "M01",
+      "clone_fact_key": "A01",
+      "target_source_marker_key": "M01",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M02",
+      "clone_fact_key": "A02",
+      "target_source_marker_key": "M02",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M03",
+      "clone_fact_key": "A03",
+      "target_source_marker_key": "M03",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M04",
+      "clone_fact_key": "A04",
+      "target_source_marker_key": "M04",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M05",
+      "clone_fact_key": "A05",
+      "target_source_marker_key": "M05",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M06",
+      "clone_fact_key": "A06",
+      "target_source_marker_key": "M06",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M07",
+      "clone_fact_key": "A07",
+      "target_source_marker_key": "M07",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M08",
+      "clone_fact_key": "A08",
+      "target_source_marker_key": "M08",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M09",
+      "clone_fact_key": "A09",
+      "target_source_marker_key": "M09",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M10",
+      "clone_fact_key": "A10",
+      "target_source_marker_key": "M10",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M11",
+      "clone_fact_key": "A11",
+      "target_source_marker_key": "M11",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M12",
+      "clone_fact_key": "A12",
+      "target_source_marker_key": "M12",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M13",
+      "clone_fact_key": "A13",
+      "target_source_marker_key": "M13",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M14",
+      "clone_fact_key": "A14",
+      "target_source_marker_key": "M14",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M15",
+      "clone_fact_key": "A15",
+      "target_source_marker_key": "M15",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    },
+    {
+      "origin_fact_key": "M16",
+      "clone_fact_key": "A16",
+      "target_source_marker_key": "M16",
+      "require_fresh_memory_id": true,
+      "require_target_incarnation_and_remapped_provenance": true
+    }
+  ],
+  "queries": [
+    {
+      "query_id": "Q01",
+      "category": "direct lexical",
+      "text": "Where is the brass compass?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M01"
+        ],
+        "named_forbidden_fact_keys": [
+          "A01"
+        ],
+        "source_named_forbidden_expression": "A01",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q02",
+      "category": "direct lexical",
+      "text": "What fuel does the signal lamp burn?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M02"
+        ],
+        "named_forbidden_fact_keys": [
+          "A02"
+        ],
+        "source_named_forbidden_expression": "A02",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q03",
+      "category": "direct lexical",
+      "text": "How many white flashes come before the harbor bell rings?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M03"
+        ],
+        "named_forbidden_fact_keys": [
+          "A03",
+          "A24"
+        ],
+        "source_named_forbidden_expression": "A03,A24",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q04",
+      "category": "direct lexical",
+      "text": "Which path does courier Tessa take to the eastern orchard?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M04"
+        ],
+        "named_forbidden_fact_keys": [
+          "A04",
+          "M21"
+        ],
+        "source_named_forbidden_expression": "A04,M21",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q05",
+      "category": "direct lexical",
+      "text": "What happens when Mara eats cinnamon?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M05"
+        ],
+        "named_forbidden_fact_keys": [
+          "A05"
+        ],
+        "source_named_forbidden_expression": "A05",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q06",
+      "category": "direct lexical",
+      "text": "What is the ferry called?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M06"
+        ],
+        "named_forbidden_fact_keys": [
+          "A06"
+        ],
+        "source_named_forbidden_expression": "A06",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q07",
+      "category": "paraphrase",
+      "text": "What warning makes the sentry evacuate the passage before the roof falls?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M07"
+        ],
+        "named_forbidden_fact_keys": [
+          "A07"
+        ],
+        "source_named_forbidden_expression": "A07",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q08",
+      "category": "paraphrase",
+      "text": "Who grants mercy instead of enforcing the arrest order?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M08"
+        ],
+        "named_forbidden_fact_keys": [
+          "A08"
+        ],
+        "source_named_forbidden_expression": "A08",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q09",
+      "category": "paraphrase",
+      "text": "How are the marooned travelers rescued from the opposite bank?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M09"
+        ],
+        "named_forbidden_fact_keys": [
+          "A09"
+        ],
+        "source_named_forbidden_expression": "A09",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q10",
+      "category": "paraphrase",
+      "text": "How does the newcomer establish a personal connection with the soldier at the entrance?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M10"
+        ],
+        "named_forbidden_fact_keys": [
+          "A10"
+        ],
+        "source_named_forbidden_expression": "A10",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q11",
+      "category": "paraphrase",
+      "text": "What treatment helps the fatigued messenger recover?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M11"
+        ],
+        "named_forbidden_fact_keys": [
+          "A11"
+        ],
+        "source_named_forbidden_expression": "A11",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q12",
+      "category": "paraphrase",
+      "text": "Why is the committee unable to reach a decision today?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M12"
+        ],
+        "named_forbidden_fact_keys": [
+          "A12"
+        ],
+        "source_named_forbidden_expression": "A12",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q13",
+      "category": "audience, positive",
+      "text": "Where is the iron safe and what is its access code?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M16",
+          "M13"
+        ],
+        "named_forbidden_fact_keys": [
+          "A16",
+          "A13"
+        ],
+        "source_named_forbidden_expression": "A16,A13",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q14",
+      "category": "audience, restricted exclusion",
+      "text": "Where is the iron safe and what is its access code?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Mira",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M16"
+        ],
+        "named_forbidden_fact_keys": [
+          "M13",
+          "A16",
+          "A13"
+        ],
+        "source_named_forbidden_expression": "M13,A16,A13",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q15",
+      "category": "audience, positive",
+      "text": "What recognition phrase identifies the hidden dispatch?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Mira",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M14"
+        ],
+        "named_forbidden_fact_keys": [
+          "A14"
+        ],
+        "source_named_forbidden_expression": "A14",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q16",
+      "category": "audience, restricted exclusion",
+      "text": "What are the archive's known safe location and the hidden dispatch recognition phrase?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M16"
+        ],
+        "named_forbidden_fact_keys": [
+          "M14",
+          "A14",
+          "A16"
+        ],
+        "source_named_forbidden_expression": "M14,A14,A16",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q17",
+      "category": "history before code",
+      "text": "Where is the iron safe and what is its access code?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": true,
+        "boundary_key": "after16",
+        "through_rowid_resolution": {
+          "session_key": "main",
+          "after_fact_key": "M16",
+          "accepted_message_role": "assistant"
+        }
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M16"
+        ],
+        "named_forbidden_fact_keys": [
+          "M13",
+          "M14",
+          "M15",
+          "M17",
+          "M18",
+          "A13",
+          "A16"
+        ],
+        "source_named_forbidden_expression": "M13,M14,M15,M17,M18,A13,A16",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q18",
+      "category": "history after code",
+      "text": "Where is the iron safe and what is its access code?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": true,
+        "boundary_key": "after13",
+        "through_rowid_resolution": {
+          "session_key": "main",
+          "after_fact_key": "M13",
+          "accepted_message_role": "assistant"
+        }
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M16",
+          "M13"
+        ],
+        "named_forbidden_fact_keys": [
+          "M14",
+          "M15",
+          "M17",
+          "M18",
+          "A13",
+          "A16"
+        ],
+        "source_named_forbidden_expression": "M14,M15,M17,M18,A13,A16",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q19",
+      "category": "history before joint debt",
+      "text": "What are Mira's known dispatch phrase and joint harbor guild debt?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Mira",
+        "consumer": "character",
+        "historical": true,
+        "boundary_key": "after14",
+        "through_rowid_resolution": {
+          "session_key": "main",
+          "after_fact_key": "M14",
+          "accepted_message_role": "assistant"
+        }
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M14"
+        ],
+        "named_forbidden_fact_keys": [
+          "M15",
+          "M17",
+          "M18",
+          "A14",
+          "A15"
+        ],
+        "source_named_forbidden_expression": "M15,M17,M18,A14,A15",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q20",
+      "category": "history after joint debt",
+      "text": "What are Mira's known dispatch phrase and joint harbor guild debt?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Mira",
+        "consumer": "character",
+        "historical": true,
+        "boundary_key": "after15",
+        "through_rowid_resolution": {
+          "session_key": "main",
+          "after_fact_key": "M15",
+          "accepted_message_role": "assistant"
+        }
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M14",
+          "M15"
+        ],
+        "named_forbidden_fact_keys": [
+          "M17",
+          "M18",
+          "M21",
+          "A14",
+          "A15"
+        ],
+        "source_named_forbidden_expression": "M17,M18,M21,A14,A15",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q21",
+      "category": "branch isolation",
+      "text": "In the original ending, where does Glass Finch dock and who signs the bridge permit?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "M17",
+          "M18"
+        ],
+        "named_forbidden_fact_keys": [
+          "A23",
+          "A25",
+          "A26"
+        ],
+        "source_named_forbidden_expression": "A23,A25,A26",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q22",
+      "category": "branch isolation",
+      "text": "In the alternate ending, where does Glass Finch dock and who signs the bridge permit?",
+      "scope": {
+        "session_key": "alternate",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [
+          "A23",
+          "A25"
+        ],
+        "named_forbidden_fact_keys": [
+          "M17",
+          "M18",
+          "M19",
+          "M20",
+          "M21",
+          "M22"
+        ],
+        "source_named_forbidden_expression": "M17,M18,M19,M20,M21,M22",
+        "named_forbidden_session_groups": [],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q23",
+      "category": "no answer",
+      "text": "Who forged the treaty with the desert emperor?",
+      "scope": {
+        "session_key": "main",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [],
+        "named_forbidden_fact_keys": [
+          "A01",
+          "A02",
+          "A03",
+          "A04",
+          "A05",
+          "A06",
+          "A07",
+          "A08",
+          "A09",
+          "A10",
+          "A11",
+          "A12",
+          "A13",
+          "A14",
+          "A15",
+          "A16",
+          "A23",
+          "A24",
+          "A25",
+          "A26",
+          "M14",
+          "M21"
+        ],
+        "source_named_forbidden_expression": "all alternate IDs,M14,M21",
+        "named_forbidden_session_groups": [
+          "alternate"
+        ],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    },
+    {
+      "query_id": "Q24",
+      "category": "no answer",
+      "text": "Which medicine cured the sea dragon's fever?",
+      "scope": {
+        "session_key": "alternate",
+        "reader": "Rowan",
+        "consumer": "character",
+        "historical": false,
+        "boundary_key": "latest",
+        "through_rowid_resolution": null
+      },
+      "judgments": {
+        "relevant_fact_keys": [],
+        "named_forbidden_fact_keys": [
+          "M01",
+          "M02",
+          "M03",
+          "M04",
+          "M05",
+          "M06",
+          "M07",
+          "M08",
+          "M09",
+          "M10",
+          "M11",
+          "M12",
+          "M13",
+          "M14",
+          "M15",
+          "M16",
+          "M17",
+          "M18",
+          "M19",
+          "M20",
+          "M21",
+          "M22",
+          "A14"
+        ],
+        "source_named_forbidden_expression": "all main IDs,A14",
+        "named_forbidden_session_groups": [
+          "main"
+        ],
+        "full_forbidden_rule": "projected_fact_keys_minus_production_scope_eligible_fact_keys",
+        "require_relevance_unchanged_by_canonical_eligibility": true
+      }
+    }
+  ],
+  "embedding_input_plan": {
+    "order": "document_order_then_Q01_through_Q24",
+    "deduplicate_exact_text": false,
+    "raw_input_count": 66,
+    "batch_sizes": [
+      16,
+      16,
+      16,
+      16,
+      2
+    ],
+    "inputs": [
+      {
+        "index": 0,
+        "kind": "fact",
+        "input_key": "M01",
+        "text": "The brass compass is beneath the northern observatory staircase."
+      },
+      {
+        "index": 1,
+        "kind": "fact",
+        "input_key": "M02",
+        "text": "The signal lamp burns blue whale oil."
+      },
+      {
+        "index": 2,
+        "kind": "fact",
+        "input_key": "M03",
+        "text": "The harbor bell rings after three white flashes."
+      },
+      {
+        "index": 3,
+        "kind": "fact",
+        "input_key": "M04",
+        "text": "Courier Tessa follows the slate footpath to the eastern orchard."
+      },
+      {
+        "index": 4,
+        "kind": "fact",
+        "input_key": "M05",
+        "text": "Mara develops a rash when she eats cinnamon."
+      },
+      {
+        "index": 5,
+        "kind": "fact",
+        "input_key": "M06",
+        "text": "The ferry is called Glass Finch."
+      },
+      {
+        "index": 6,
+        "kind": "fact",
+        "input_key": "M07",
+        "text": "The watchkeeper orders everyone out when cracks spread across the vaulted corridor."
+      },
+      {
+        "index": 7,
+        "kind": "fact",
+        "input_key": "M08",
+        "text": "Captain Neri tears up the warrant and lets the prisoner leave unharmed."
+      },
+      {
+        "index": 8,
+        "kind": "fact",
+        "input_key": "M09",
+        "text": "The patched skiff carries all six stranded passengers across the channel."
+      },
+      {
+        "index": 9,
+        "kind": "fact",
+        "input_key": "M10",
+        "text": "The visitor proves that he knows the guard by naming the guard's wife and their childhood village."
+      },
+      {
+        "index": 10,
+        "kind": "fact",
+        "input_key": "M11",
+        "text": "The medic revives the exhausted runner with cold water and a quiet place to rest."
+      },
+      {
+        "index": 11,
+        "kind": "fact",
+        "input_key": "M12",
+        "text": "The council postpones the vote because too few members are present to decide."
+      },
+      {
+        "index": 12,
+        "kind": "fact",
+        "input_key": "M13",
+        "text": "The iron safe's access code is orchid-27."
+      },
+      {
+        "index": 13,
+        "kind": "fact",
+        "input_key": "M14",
+        "text": "The hidden dispatch uses the recognition phrase night heron."
+      },
+      {
+        "index": 14,
+        "kind": "fact",
+        "input_key": "M15",
+        "text": "Rowan and Mira jointly owe six thousand silver coins to the harbor guild."
+      },
+      {
+        "index": 15,
+        "kind": "fact",
+        "input_key": "M16",
+        "text": "The iron safe stands beside a green ivy pot in the archive."
+      },
+      {
+        "index": 16,
+        "kind": "fact",
+        "input_key": "M17",
+        "text": "In the original ending, Glass Finch docks at the eastern quay."
+      },
+      {
+        "index": 17,
+        "kind": "fact",
+        "input_key": "M18",
+        "text": "In the original ending, harbor clerk Ana signs the bridge permit."
+      },
+      {
+        "index": 18,
+        "kind": "fact",
+        "input_key": "M19",
+        "text": "A porcelain compass ornament sits on the southern staircase."
+      },
+      {
+        "index": 19,
+        "kind": "fact",
+        "input_key": "M20",
+        "text": "The archive's decorative lamp burns amber resin."
+      },
+      {
+        "index": 20,
+        "kind": "fact",
+        "input_key": "M21",
+        "text": "Mira hides a bronze orchard token in her boot."
+      },
+      {
+        "index": 21,
+        "kind": "fact",
+        "input_key": "M22",
+        "text": "The guild buys a painted skiff that remains on dry land."
+      },
+      {
+        "index": 22,
+        "kind": "fact",
+        "input_key": "A01",
+        "text": "The brass compass is beneath the northern observatory staircase."
+      },
+      {
+        "index": 23,
+        "kind": "fact",
+        "input_key": "A02",
+        "text": "The signal lamp burns blue whale oil."
+      },
+      {
+        "index": 24,
+        "kind": "fact",
+        "input_key": "A03",
+        "text": "The harbor bell rings after three white flashes."
+      },
+      {
+        "index": 25,
+        "kind": "fact",
+        "input_key": "A04",
+        "text": "Courier Tessa follows the slate footpath to the eastern orchard."
+      },
+      {
+        "index": 26,
+        "kind": "fact",
+        "input_key": "A05",
+        "text": "Mara develops a rash when she eats cinnamon."
+      },
+      {
+        "index": 27,
+        "kind": "fact",
+        "input_key": "A06",
+        "text": "The ferry is called Glass Finch."
+      },
+      {
+        "index": 28,
+        "kind": "fact",
+        "input_key": "A07",
+        "text": "The watchkeeper orders everyone out when cracks spread across the vaulted corridor."
+      },
+      {
+        "index": 29,
+        "kind": "fact",
+        "input_key": "A08",
+        "text": "Captain Neri tears up the warrant and lets the prisoner leave unharmed."
+      },
+      {
+        "index": 30,
+        "kind": "fact",
+        "input_key": "A09",
+        "text": "The patched skiff carries all six stranded passengers across the channel."
+      },
+      {
+        "index": 31,
+        "kind": "fact",
+        "input_key": "A10",
+        "text": "The visitor proves that he knows the guard by naming the guard's wife and their childhood village."
+      },
+      {
+        "index": 32,
+        "kind": "fact",
+        "input_key": "A11",
+        "text": "The medic revives the exhausted runner with cold water and a quiet place to rest."
+      },
+      {
+        "index": 33,
+        "kind": "fact",
+        "input_key": "A12",
+        "text": "The council postpones the vote because too few members are present to decide."
+      },
+      {
+        "index": 34,
+        "kind": "fact",
+        "input_key": "A13",
+        "text": "The iron safe's access code is orchid-27."
+      },
+      {
+        "index": 35,
+        "kind": "fact",
+        "input_key": "A14",
+        "text": "The hidden dispatch uses the recognition phrase night heron."
+      },
+      {
+        "index": 36,
+        "kind": "fact",
+        "input_key": "A15",
+        "text": "Rowan and Mira jointly owe six thousand silver coins to the harbor guild."
+      },
+      {
+        "index": 37,
+        "kind": "fact",
+        "input_key": "A16",
+        "text": "The iron safe stands beside a green ivy pot in the archive."
+      },
+      {
+        "index": 38,
+        "kind": "fact",
+        "input_key": "A23",
+        "text": "In the alternate ending, Glass Finch docks at the western quay."
+      },
+      {
+        "index": 39,
+        "kind": "fact",
+        "input_key": "A24",
+        "text": "In the alternate ending, two violet flashes summon the harbor bell keeper."
+      },
+      {
+        "index": 40,
+        "kind": "fact",
+        "input_key": "A25",
+        "text": "In the alternate ending, harbor clerk Ivo signs the bridge permit."
+      },
+      {
+        "index": 41,
+        "kind": "fact",
+        "input_key": "A26",
+        "text": "A red anchor is painted on the alternate ending's bridge permit."
+      },
+      {
+        "index": 42,
+        "kind": "query",
+        "input_key": "Q01",
+        "text": "Where is the brass compass?"
+      },
+      {
+        "index": 43,
+        "kind": "query",
+        "input_key": "Q02",
+        "text": "What fuel does the signal lamp burn?"
+      },
+      {
+        "index": 44,
+        "kind": "query",
+        "input_key": "Q03",
+        "text": "How many white flashes come before the harbor bell rings?"
+      },
+      {
+        "index": 45,
+        "kind": "query",
+        "input_key": "Q04",
+        "text": "Which path does courier Tessa take to the eastern orchard?"
+      },
+      {
+        "index": 46,
+        "kind": "query",
+        "input_key": "Q05",
+        "text": "What happens when Mara eats cinnamon?"
+      },
+      {
+        "index": 47,
+        "kind": "query",
+        "input_key": "Q06",
+        "text": "What is the ferry called?"
+      },
+      {
+        "index": 48,
+        "kind": "query",
+        "input_key": "Q07",
+        "text": "What warning makes the sentry evacuate the passage before the roof falls?"
+      },
+      {
+        "index": 49,
+        "kind": "query",
+        "input_key": "Q08",
+        "text": "Who grants mercy instead of enforcing the arrest order?"
+      },
+      {
+        "index": 50,
+        "kind": "query",
+        "input_key": "Q09",
+        "text": "How are the marooned travelers rescued from the opposite bank?"
+      },
+      {
+        "index": 51,
+        "kind": "query",
+        "input_key": "Q10",
+        "text": "How does the newcomer establish a personal connection with the soldier at the entrance?"
+      },
+      {
+        "index": 52,
+        "kind": "query",
+        "input_key": "Q11",
+        "text": "What treatment helps the fatigued messenger recover?"
+      },
+      {
+        "index": 53,
+        "kind": "query",
+        "input_key": "Q12",
+        "text": "Why is the committee unable to reach a decision today?"
+      },
+      {
+        "index": 54,
+        "kind": "query",
+        "input_key": "Q13",
+        "text": "Where is the iron safe and what is its access code?"
+      },
+      {
+        "index": 55,
+        "kind": "query",
+        "input_key": "Q14",
+        "text": "Where is the iron safe and what is its access code?"
+      },
+      {
+        "index": 56,
+        "kind": "query",
+        "input_key": "Q15",
+        "text": "What recognition phrase identifies the hidden dispatch?"
+      },
+      {
+        "index": 57,
+        "kind": "query",
+        "input_key": "Q16",
+        "text": "What are the archive's known safe location and the hidden dispatch recognition phrase?"
+      },
+      {
+        "index": 58,
+        "kind": "query",
+        "input_key": "Q17",
+        "text": "Where is the iron safe and what is its access code?"
+      },
+      {
+        "index": 59,
+        "kind": "query",
+        "input_key": "Q18",
+        "text": "Where is the iron safe and what is its access code?"
+      },
+      {
+        "index": 60,
+        "kind": "query",
+        "input_key": "Q19",
+        "text": "What are Mira's known dispatch phrase and joint harbor guild debt?"
+      },
+      {
+        "index": 61,
+        "kind": "query",
+        "input_key": "Q20",
+        "text": "What are Mira's known dispatch phrase and joint harbor guild debt?"
+      },
+      {
+        "index": 62,
+        "kind": "query",
+        "input_key": "Q21",
+        "text": "In the original ending, where does Glass Finch dock and who signs the bridge permit?"
+      },
+      {
+        "index": 63,
+        "kind": "query",
+        "input_key": "Q22",
+        "text": "In the alternate ending, where does Glass Finch dock and who signs the bridge permit?"
+      },
+      {
+        "index": 64,
+        "kind": "query",
+        "input_key": "Q23",
+        "text": "Who forged the treaty with the desert emperor?"
+      },
+      {
+        "index": 65,
+        "kind": "query",
+        "input_key": "Q24",
+        "text": "Which medicine cured the sea dragon's fever?"
+      }
+    ],
+    "includes_actual_embeddings": false
+  },
+  "methodology": {
+    "no_network_or_providers_in_preparation": true,
+    "no_embeddings_or_quality_results": true,
+    "default_offline": true,
+    "hand_vectors_evidence_kind": "contract_only",
+    "full_forbidden_sets_resolved_by_production_canonical_eligibility": true,
+    "clone_id_mapping_resolved_after_production_restore": true,
+    "no_answer_returned_candidates_not_hallucination_or_hard_failure": true,
+    "query_inputs_are_already_fixed_no_runtime_expansion": true,
+    "production_block_order": [
+      "recall_or_local_embedding",
+      "episodic",
+      "summary",
+      "scene"
+    ],
+    "foreground_timeout_seconds": 1.5
+  },
+  "execution": {
+    "prefix_order": [
+      "M01",
+      "M02",
+      "M03",
+      "M04",
+      "M05",
+      "M06",
+      "M07",
+      "M08",
+      "M09",
+      "M10",
+      "M11",
+      "M12",
+      "M16",
+      "M13",
+      "M14",
+      "M15"
+    ],
+    "main_post_order": [
+      "M17",
+      "M18",
+      "M19",
+      "M20",
+      "M21",
+      "M22"
+    ],
+    "alternate_post_order": [
+      "A23",
+      "A24",
+      "A25",
+      "A26"
+    ],
+    "acknowledgment": "Rowan records the observation.",
+    "branch_memory_status": "ready",
+    "closure": "scripted_branch_lifecycle"
+  }
+}

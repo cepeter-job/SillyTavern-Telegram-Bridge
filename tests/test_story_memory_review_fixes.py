@@ -340,7 +340,8 @@ def test_npc_history_and_journal_bound_share_one_local_snapshot(db, tmp_path, mo
                                 }
                             ],
                         }
-                    ]
+                    ],
+                    "simulation": {},
                 }
             )
         )

@@ -73,6 +73,36 @@ def test_parse_simulation_payload_bounds_and_normalizes_model_json():
     assert payload["agendas"][0]["objective"] == "Study the archive"
 
 
+def test_quest_ids_canonicalize_punctuation_variants_to_one_record():
+    raw = json.dumps(
+        {
+            "npcs": [],
+            "simulation": {
+                "quests": [
+                    {
+                        "id": "Derek's Keys Disposal",
+                        "kind": "side",
+                        "status": "active",
+                        "objective": "Dispose of Derek's keys",
+                    },
+                    {
+                        "id": "derek-s-keys-disposal",
+                        "kind": "side",
+                        "status": "completed",
+                        "objective": "Dispose of Derek's keys",
+                    },
+                ]
+            },
+        }
+    )
+
+    payload, valid = parse_simulation_payload(raw)
+
+    assert valid is True
+    assert [item["id"] for item in payload["quests"]] == ["derek-s-keys-disposal"]
+    assert payload["quests"][0]["status"] == "completed"
+
+
 def test_merge_simulation_payload_accumulates_source_parts_without_losing_actor_updates():
     first = {
         "relationships": [{"npc": "Maya", "sparks_delta": 1}],

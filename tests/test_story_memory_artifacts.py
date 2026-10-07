@@ -268,7 +268,6 @@ def test_populated_migration_twenty_replays_opaque_derived_coverage_from_canonic
         connection.close()
 
 
-
 @pytest.mark.parametrize("kind", ["summary", "scene"])
 def test_final_validation_rejects_changed_classification_with_identical_parent_payload(db, kind):
     from bridge.memory_artifact_store import store_artifact_visibility

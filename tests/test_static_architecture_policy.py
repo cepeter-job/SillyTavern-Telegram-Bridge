@@ -458,6 +458,7 @@ def test_operations_docs_describe_generated_typed_surface_not_stale_fixed_count(
     assert "24 explicitly listed source files" not in text
     assert "--print-type-target-count" in text
 
+
 def test_retired_tracker_and_memory_compatibility_surfaces_are_gone():
     assert not (BRIDGE / "legacy_tracker_history.py").exists()
     assert not (BRIDGE / "memory_relevance.py").exists()

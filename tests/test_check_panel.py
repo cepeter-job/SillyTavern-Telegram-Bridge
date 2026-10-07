@@ -1,14 +1,18 @@
 """Inline /check mode panel behavior."""
 
-from application_test_setup import (\n    make_test_application_services,\n    make_test_delivery_port,\n    make_test_provider_port,\n)
+from application_test_setup import (
+    make_test_application_services,
+    make_test_delivery_port,
+    make_test_provider_port,
+)
 from test_memory_completion_safety import session_db as session_db
 
 from bridge.action_adjudication import action_mode
 from bridge.callback_dispatch import process_callback
 from bridge.callbacks import is_session_scoped_panel_callback
 from bridge.request_types import RequestContext
-from bridge.simulation_commands import _simulation_command_route
 from bridge.simulation_checks import perform_check
+from bridge.simulation_commands import _simulation_command_route
 from bridge.sqlite_store import write_transaction
 
 
@@ -63,9 +67,14 @@ def test_check_without_arguments_opens_inline_mode_panel(session_db, monkeypatch
     assert "Current mode: Auto" in payload["text"]
     buttons = _button_map(payload)
     assert buttons["checkmode:auto"].startswith("✅")
-    assert {"checkmode:director", "checkmode:manual", "checkmode:manual_help", "checkmode:recent", "checkmode:close"} <= set(
-        buttons
-    )
+    expected = {
+        "checkmode:director",
+        "checkmode:manual",
+        "checkmode:manual_help",
+        "checkmode:recent",
+        "checkmode:close",
+    }
+    assert expected <= set(buttons)
 
 
 def test_check_mode_callback_updates_session_and_rerenders_same_panel(session_db, monkeypatch):
@@ -105,7 +114,8 @@ def test_check_panel_recent_view_uses_saved_checks_without_model_call(session_db
     calls = _open_panel(db, settings, session, monkeypatch)
     with write_transaction(db):
         rowid = db.execute(
-            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat','s1','user','Open door',1)"
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) "
+            "VALUES('chat','s1','user','Open door',1)"
         ).lastrowid
     perform_check(
         db,

@@ -108,7 +108,6 @@ def test_known_fields_are_strictly_typed_and_bounded(changes):
         parse_director_proposal(payload(**changes))
 
 
-
 def test_provider_json_fence_is_accepted_when_it_contains_only_one_object():
     proposal = parse_director_proposal("```json\\n" + payload() + "\\n```")
     validate(proposal)

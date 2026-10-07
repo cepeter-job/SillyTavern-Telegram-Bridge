@@ -17,11 +17,7 @@ def test_language_argument_opens_panel_without_direct_mutation(session_db, monke
     settings, db, session = session_db
     opened = []
     monkeypatch.setattr(panels, "send_language_menu", lambda *a, **k: opened.append(a))
-    monkeypatch.setattr(
-        panels,
-        "handle_language_command",
-        lambda *a, **k: pytest.fail("language argument must not bypass the panel"),
-    )
+    assert not hasattr(panels, "handle_language_command")
     assert panels._handle_generation_panels(
         db,
         "token",
@@ -116,7 +112,7 @@ def test_check_mode_alias_opens_panel_without_direct_mode_mutation(session_db, m
     settings, db, session = session_db
     opened = []
     monkeypatch.setattr(checks, "send_check_menu", lambda *a, **k: opened.append(True))
-    monkeypatch.setattr(checks, "set_action_mode", lambda *a, **k: pytest.fail("check mode must use panel"))
+    assert not hasattr(checks, "set_action_mode")
     handled = checks._simulation_command_route(
         db,
         "token",
@@ -144,11 +140,7 @@ def test_group_typed_alias_opens_panel_without_legacy_text_executor(session_db, 
     settings, db, session = session_db
     opened = []
     monkeypatch.setattr(panels, "send_group_menu", lambda *a, **k: opened.append(True))
-    monkeypatch.setattr(
-        panels,
-        "handle_group_command",
-        lambda *a, **k: pytest.fail("typed group alias must not mutate outside panel"),
-    )
+    assert not hasattr(panels, "handle_group_command")
     assert panels._handle_memory_media(
         db,
         "token",
@@ -178,11 +170,7 @@ def test_databank_typed_alias_opens_panel_without_legacy_text_executor(session_d
     settings, db, session = session_db
     opened = []
     monkeypatch.setattr(panels, "send_databank_menu", lambda *a, **k: opened.append(True))
-    monkeypatch.setattr(
-        panels,
-        "handle_data_bank_command",
-        lambda *a, **k: pytest.fail("typed Data Bank alias must not bypass panel"),
-    )
+    assert not hasattr(panels, "handle_data_bank_command")
     assert panels._handle_memory_media(
         db,
         "token",
@@ -212,7 +200,7 @@ def test_prompt_text_alias_opens_prompt_panel_without_plain_text_diagnostic(sess
     settings, db, session = session_db
     opened = []
     monkeypatch.setattr(routes, "send_prompt_menu", lambda *a, **k: opened.append(True))
-    monkeypatch.setattr(routes, "prompt_diagnostics", lambda *a, **k: pytest.fail("prompt text fallback retired"))
+    assert not hasattr(routes, "prompt_diagnostics")
     monkeypatch.setattr(routes, "send_text", lambda *a, **k: pytest.fail("prompt inspector must stay panel-only"))
     assert routes._handle_basic(
         db,

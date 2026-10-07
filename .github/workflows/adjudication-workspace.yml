@@ -12,10 +12,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Archive tracked source only
-        run: git archive --format=zip --output=source-snapshot.zip HEAD
+      - name: Select hash-locked offline test tools
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path('requirements-dev.lock').read_text()
+          names = ('ruff', 'pytest', 'pytest-xdist', 'execnet', 'mypy', 'mypy-extensions', 'librt', 'pathspec')
+          blocks = [re.search(r'(?m)^' + re.escape(name) + r'==[^\n]*(?:\n[ \t]+[^\n]*)*', text).group() for name in names]
+          Path('/tmp/adjudication-tools.lock').write_text('\n'.join(blocks) + '\n')
+          PY
+          python -m pip download --require-hashes --no-deps --only-binary=:all: --python-version 313 -r /tmp/adjudication-tools.lock --dest wheelhouse
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: adjudication-source-snapshot
-          path: source-snapshot.zip
+          name: adjudication-offline-tools
+          path: wheelhouse/
           retention-days: 1

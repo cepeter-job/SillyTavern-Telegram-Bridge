@@ -27,7 +27,6 @@
     "tests/test_composition.py": 2176,
     "tests/test_delivery_review_regressions.py": 1072,
     "tests/test_generation_continuation.py": 755,
-    "tests/test_help_drilldown.py": 508,
     "tests/test_image_generation.py": 1525,
     "tests/test_job_service_workers.py": 691,
     "tests/test_light_novel_flow.py": 743,

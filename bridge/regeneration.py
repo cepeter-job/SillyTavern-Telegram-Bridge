@@ -5,6 +5,8 @@ from __future__ import annotations
 import sqlite3
 import time
 
+from bridge.action_adjudication import append_action_context
+from bridge.action_repository import committed_action_context
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.delivery_port import DeliveryPort
 from bridge.generation import _generation_generate_rendered_reply, build_chat_messages
@@ -156,6 +158,7 @@ def regenerate_last(
         app_settings=app_settings,
     )
     novel_turn = begin_novel_turn(db, chat_id, session, "regen", operation_id)
+    append_action_context(messages, committed_action_context(db, chat_id, session_id, last_user_rowid))
     reply = _generation_generate_rendered_reply(
         db,
         token,

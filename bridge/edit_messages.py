@@ -6,9 +6,12 @@ import logging
 import sqlite3
 import time
 
+from bridge.action_adjudication import action_request_key, prepare_action_context
+from bridge.action_repository import bind_action, validate_action
 from bridge.card_content import card_fields_from_file
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.context_diagnostics import record_context_attempts
+from bridge.conversation_lifecycle import is_group_conversation
 from bridge.delivery_progress import DeliveryTargetExpired
 from bridge.episodic_memory import invalidate_episodic_memories_from_row
 from bridge.generation import build_chat_messages, finalize_generation_messages, render_session_response
@@ -201,6 +204,20 @@ def regenerate_edited_turn(
         chat_id,
         session_id,
     )
+    action_ticket = prepare_action_context(
+        db,
+        chat_id,
+        session,
+        fields,
+        new_text,
+        messages,
+        request_key=action_request_key("edit", operation_id, new_text + f":{user_rowid}"),
+        actor_id=str(session.get("_actor_id") or ""),
+        provider_port=provider_port,
+        app_settings=app_settings,
+        through_rowid=max(0, int(user_rowid) - 1),
+        group=is_group_conversation(db, chat_id, session_id),
+    )
     novel_turn = begin_novel_turn(db, chat_id, session, "edit", operation_id)
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
@@ -276,6 +293,7 @@ def regenerate_edited_turn(
     )
 
     def persist_edit():
+        validate_action(db, action_ticket)
         prune_variants_from(db, chat_id, session_id, int(user_rowid))
         invalidate_episodic_memories_from_row(db, chat_id, session_id, int(user_rowid))
         npc_service.rollback_from_row(db, chat_id, session_id, int(user_rowid))
@@ -302,6 +320,7 @@ def regenerate_edited_turn(
                 time.time(),
             ),
         )
+        bind_action(db, action_ticket, int(user_rowid))
         assistant_rowid = int(assistant_cursor.lastrowid)
         _COMMAND_OPERATION_RECOVERY.record_delivery_target(
             db, operation_id, assistant_rowid, reply, f"✏️ Edited message regenerated.\n\n{reply}"

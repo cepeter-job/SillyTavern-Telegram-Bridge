@@ -6,6 +6,8 @@ import base64
 import sqlite3
 import time
 
+from bridge.action_adjudication import action_request_key, prepare_action_context
+from bridge.action_repository import bind_action, validate_action
 from bridge.card_content import card_fields_from_file
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.context_diagnostics import record_context_attempts
@@ -117,6 +119,22 @@ def process_image_message(
     novel_turn = begin_novel_turn(db, chat_id, session, "image", telegram_message_id)
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
+    stored_action = f"[Image input] {caption}"
+    action_ticket = prepare_action_context(
+        db,
+        chat_id,
+        session,
+        fields,
+        stored_action,
+        messages,
+        request_key=action_request_key(
+            "image", telegram_message_id if telegram_message_id is not None else operation_id, stored_action
+        ),
+        actor_id=str(session.get("_actor_id") or ""),
+        provider_port=provider_port,
+        app_settings=app_settings,
+        group=bool(group_turn),
+    )
     generation_settings = get_generation_settings(db, chat_id, session["session_id"])
     messages = finalize_generation_messages(
         db,
@@ -158,6 +176,7 @@ def process_image_message(
     )
     stored_text = f"[Image input] {caption}"
     with write_transaction(db):
+        validate_action(db, action_ticket)
         user_cursor = db.execute(
             "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_id,created_at) VALUES(?,?,?,?,?,?)",
             (
@@ -174,6 +193,7 @@ def process_image_message(
             (chat_id, session["session_id"], "assistant", stored_reply, time.time()),
         )
         assistant_rowid = assistant_cursor.lastrowid
+        bind_action(db, action_ticket, int(user_cursor.lastrowid))
         bind_committed_turn(db, operation_id, int(user_cursor.lastrowid), int(assistant_rowid), stored_reply)
         if novel_turn:
             novel_turn.commit(db, int(assistant_rowid), stored_reply)

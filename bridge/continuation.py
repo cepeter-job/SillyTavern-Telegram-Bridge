@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import sqlite3
 
+from bridge.action_adjudication import append_action_context
+from bridge.action_repository import committed_action_context
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.delivery_port import DeliveryPort
 from bridge.delivery_repository import clear_progress
@@ -140,6 +142,7 @@ def continue_last(
         app_settings=app_settings,
     )
     novel_turn = begin_novel_turn(db, chat_id, session, "continue", operation_id)
+    append_action_context(messages, committed_action_context(db, chat_id, session_id, int(assistant_row[0])))
     reply = _generation_generate_rendered_reply(
         db,
         token,

@@ -6,6 +6,8 @@ import sqlite3
 import time
 from functools import partial as _partial
 
+from bridge.action_adjudication import action_request_key, prepare_action_context
+from bridge.action_repository import bind_action, validate_action
 from bridge.card_content import card_fields_from_file
 from bridge.cards import send_session_menu
 from bridge.character_identity import reconcile_session_character
@@ -231,6 +233,19 @@ def generate_and_store_reply(
         else (operation_id if operation_id is not None else time.time_ns())
     )
     actor_id = str(session.get("_actor_id") or job_actor_id(db, operation_id))
+    action_ticket = prepare_action_context(
+        db,
+        chat_id,
+        session,
+        fields,
+        text,
+        messages,
+        request_key=action_request_key("message", identity, text),
+        actor_id=actor_id,
+        provider_port=provider_port,
+        app_settings=app_settings,
+        group=bool(group_turn),
+    )
     choice_record = prepare_turn(db, chat_id, session, f"message:{identity}", actor_id)
     novel_turn = (
         NovelTurn(choice_record, choice_policy=narrative_context_for_session(db, chat_id, session_id, "choices"))
@@ -322,6 +337,7 @@ def generate_and_store_reply(
 
     def persist_turn():
         with write_transaction(db):
+            validate_action(db, action_ticket)
             now = time.time()
             user_cursor = db.execute(
                 (
@@ -342,6 +358,7 @@ def generate_and_store_reply(
                 (chat_id, session_id, "assistant", stored_reply, now + 0.001),
             )
             assistant_rowid = assistant_cursor.lastrowid
+            bind_action(db, action_ticket, int(user_cursor.lastrowid))
             bind_committed_turn(db, operation_id, int(user_cursor.lastrowid), int(assistant_rowid), stored_reply)
             if novel_turn:
                 novel_turn.commit(db, int(assistant_rowid), stored_reply)

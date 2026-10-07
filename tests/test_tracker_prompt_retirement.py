@@ -311,12 +311,26 @@ def test_migration_27_cleans_retired_tracker_wrapper_without_losing_native_state
             "SELECT source_digest FROM simulation_sources WHERE chat_id='chat' AND session_id='s1' AND source_rowid=?",
             (source,),
         ).fetchone()[0]
+        created = db.execute(
+            "SELECT created_at FROM sessions WHERE chat_id='chat' AND session_id='s1'"
+        ).fetchone()[0]
+        db.execute(
+            "INSERT INTO memory_segments("
+            "document_id,chat_id,session_id,session_created_at,layer,start_id,end_id,"
+            "start_offset,end_offset,source_digest,rewrite_identity,purge_epoch,valid,created_at"
+            ") VALUES('npc-proof','chat','s1',?,'npc',?,?,0,1,'proof',0,0,1,1)",
+            (created, source, source),
+        )
+        db.commit()
 
         schema.initialize_database_schema(db)
 
         assert db.execute("SELECT content FROM messages WHERE id=?", (source,)).fetchone()[0] == story
         assert SimulationService().state(db, "chat", "s1", "actor", "user")["inventory"][0]["name"] == "Brass key"
         assert pending_memory_invalidation(db, "chat", "s1", "npc") is None
+        assert db.execute(
+            "SELECT valid FROM memory_segments WHERE document_id='npc-proof'"
+        ).fetchone()[0] == 1
         _, new_digest = source_identity(db, "chat", "s1", source)
         assert new_digest != old_digest
         assert (

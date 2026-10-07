@@ -19,19 +19,18 @@ async function renderMemory() {
       view.append(button('Remove from draft',()=>{entry.removed=true;view.remove();},'danger'));memoryCards.append(view);
     }
     data.curated.forEach(addItem);
-    const curator=card('Curated memory',el('p',{class:'muted'},'Edit the local list, then Save. Hindsight is a separate store: use Sync reviewed list to publish these changes. Clearing this list alone does not erase past Hindsight recall.'),memoryCards,
+    const curator=card('Curated memory',el('p',{class:'muted'},'Edit and save the local reviewed list. Accepted native story facts are indexed automatically when memory is on. Clearing this list alone does not erase past Hindsight recall.'),memoryCards,
       el('div',{class:'actions'},button('Add memory',()=>{if(editors.filter(x=>!x.removed).length>=24)throw new Error('The list supports 24 memories.');addItem();},'secondary'),button('Save local list',async()=>{
         const items=editors.filter(x=>!x.removed).map(x=>({key:x.key.value,kind:x.kind.value,text:x.text.value,confidence:Number(x.confidence.value)}));
         await api('/memory/curated',{method:'PATCH',body:sessionBody({items,digest:data.curated_digest})});await load();notice('Local curated memory saved.');
-      }),button('Curate new messages',async()=>{if(!await confirmAction('Use the Utility model to curate new transcript messages?'))return;await runJob('/memory/curated/generate',sessionBody(),root);await load();},'secondary'),
-      button('Sync reviewed list',async()=>{if(!await confirmAction('Send the currently saved curated list to Hindsight? Unsaved edits are not included.'))return;await runJob('/memory/curated/sync',sessionBody({confirm:true}),root);await load();notice('Hindsight synchronization completed.');},'secondary')));
+      }),button('Curate new messages',async()=>{if(!await confirmAction('Use the Utility model to curate new transcript messages?'))return;await runJob('/memory/curated/generate',sessionBody(),root);await load();},'secondary')));
     const query=el('input',{maxlength:2000,placeholder:'Recall a person, promise, or event'}),results=el('div');
-    root.replaceChildren(card('Memory',el('p',{class:'muted'},'Session: '+state.session.title+' · Recall scope: '+data.scope),field('Automatic memory',mode),button('Save memory mode',async()=>{await api('/memory/settings',{method:'PATCH',body:sessionBody({mode:mode.value})});notice('Memory mode saved.');})),
+    root.replaceChildren(card('Memory',el('p',{class:'muted'},'Session: '+state.session.title+' · Recall scope: '+data.scope+' · Turning memory off pauses indexing and recall; queued erasure continues.'),field('Automatic memory',mode),button('Save memory mode',async()=>{await api('/memory/settings',{method:'PATCH',body:sessionBody({mode:mode.value})});notice('Memory mode saved.');})),
       card('Continuity summary',el('p',{class:'muted'},'A manual summary represents the current conversation. An empty value clears the local summary.'),field('Summary',summary),el('div',{class:'actions'},button('Save summary',async()=>{
         await api('/memory/summary',{method:'PATCH',body:sessionBody({summary:summary.value,digest:data.summary_digest})});await load();notice('Summary saved.');
       }),button('Regenerate with Utility',async()=>{if(!await confirmAction('Regenerate the continuity summary using the Utility model?'))return;const result=await runJob('/memory/summary/generate',sessionBody(),root);await load();if(result.complete===false)notice('Summary regeneration is incomplete. The displayed summary was preserved or covers only completed work.');},'secondary'))),curator,
       card('Hindsight recall',field('Search session memories',query),button('Search',async()=>{const data=await runJob('/memory/search',sessionBody({query:query.value}),results);results.replaceChildren(...(data.results.length?data.results.map(x=>el('p',{},x)):[empty('No matching memories, or recall is unavailable.')]));}),results,
-        button('Clear session Hindsight memory',async()=>{if(!await confirmAction('Permanently purge this session’s external Hindsight memory? The conversation transcript stays in the bridge.'))return;await runJob('/memory/purge',sessionBody({confirm:true}),root);await load();notice('Session memory purge completed.');},'danger')));
+        button('Clear session Hindsight memory',async()=>{if(!await confirmAction('Queue deletion of this session’s external Hindsight memory? The local transcript and accepted facts stay in the bridge.'))return;await runJob('/memory/purge',sessionBody({confirm:true}),root);await load();notice('Hindsight cleanup is queued and will retry in the background.');},'danger')));
   }
   await load();return root;
 }

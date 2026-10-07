@@ -5,6 +5,57 @@ import pytest
 from miniapp_test_support import identity, make_services
 
 
+def test_legacy_curated_export_is_unsupported_without_remote_io(tmp_path, monkeypatch):
+    from bridge import memory_backend
+    from bridge.miniapp_errors import MiniAppError
+    from bridge.miniapp_memory import memory_status, save_curated, sync_curated
+
+    services, who, values = setup(tmp_path)
+    before = memory_status(services, who, values)
+    item = {"key": "kept", "text": "Local reviewed fact", "kind": "fact", "confidence": 1.0}
+    save_curated(services, who, {**values, "items": [item], "digest": before["curated_digest"]})
+    monkeypatch.setattr(memory_backend, "hindsight_client", lambda **kwargs: pytest.fail("remote client constructed"))
+    with pytest.raises(MiniAppError) as failure:
+        sync_curated(services, who, {**values, "confirm": True})
+    assert failure.value.status == 410
+    assert "native fact" in str(failure.value).lower()
+    assert memory_status(services, who, values)["curated"] == [item]
+
+
+def test_standard_purge_queues_without_provider_and_keeps_local_fact(tmp_path, monkeypatch):
+    from application_test_setup import make_test_memory_service
+
+    from bridge import memory_backend
+    from bridge.memory_fact_store import remember_local_fact
+    from bridge.memory_retirement_store import queue_session_memory_cleanup
+    from bridge.miniapp_memory import memory_settings, purge_remote
+
+    services, who, values = setup(tmp_path)
+    services.memory = make_test_memory_service(
+        purge_session_memory=lambda *args: pytest.fail("synchronous purge"),
+        queue_session_cleanup=queue_session_memory_cleanup,
+    )
+    db = services.db_factory()
+    try:
+        db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,'user','kept',1)",
+            (who.chat_id, values["session_id"]),
+        )
+        db.commit()
+        remember_local_fact(db, who.chat_id, values["session_id"], "Mira", "A local fact")
+        memory_settings(services, who, {**values, "mode": "off"})
+        monkeypatch.setattr(
+            memory_backend, "hindsight_client", lambda **kwargs: pytest.fail("remote client constructed")
+        )
+        assert purge_remote(services, who, {**values, "confirm": True}) == {"queued": True}
+        assert db.execute("SELECT content FROM messages").fetchone() == ("kept",)
+        assert db.execute("SELECT count(*) FROM episodic_memories").fetchone() == (1,)
+        assert db.execute("SELECT state FROM memory_fact_index").fetchone() == ("retired",)
+        assert db.execute("SELECT count(*) FROM memory_cleanup_discovery").fetchone() == (1,)
+    finally:
+        db.close()
+
+
 def setup(tmp_path):
     from bridge.embedding_port import EmbeddingPort
     from bridge.miniapp_context import current_session

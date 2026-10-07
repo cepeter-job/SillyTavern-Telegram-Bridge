@@ -72,12 +72,19 @@ def app_settings_builder():
 @pytest.fixture(autouse=True)
 def reject_external_test_connections(monkeypatch):
     """External calls must be mocked, even if application code catches failures."""
+    import http.client
     import socket
 
-    from network_test_support import guard_connect
+    import httpx
+    from network_test_support import guard_connect, guard_http_request, guard_httpx_send
 
     attempts = []
     monkeypatch.setattr(socket.socket, "connect", guard_connect(socket.socket.connect, attempts))
     monkeypatch.setattr(socket.socket, "connect_ex", guard_connect(socket.socket.connect_ex, attempts))
+    monkeypatch.setattr(
+        http.client.HTTPConnection, "putrequest", guard_http_request(http.client.HTTPConnection.putrequest, attempts)
+    )
+    monkeypatch.setattr(httpx.Client, "send", guard_httpx_send(httpx.Client.send, attempts))
+    monkeypatch.setattr(httpx.AsyncClient, "send", guard_httpx_send(httpx.AsyncClient.send, attempts))
     yield
     assert not attempts, "Unexpected external socket attempt during test; provide an explicit transport mock"

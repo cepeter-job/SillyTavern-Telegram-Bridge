@@ -1,5 +1,3 @@
-from functools import partial
-
 from application_test_setup import ensure_application_extensions, make_test_memory_service
 from settings_test_support import SettingsTestCase
 
@@ -103,7 +101,7 @@ class HindsightSessionCleanupTests(SettingsTestCase):
         self.assertTrue(first.endswith("-conversation"))
         self.assertTrue(explicit.startswith(first.removesuffix("-conversation") + "-explicit-"))
 
-    def test_local_remember_is_mapped_after_synchronous_worker_and_conversation_retain(self):
+    def test_local_remember_is_mapped_and_unversioned_conversation_export_is_disabled(self):
         from bridge.memory_store import claim_jobs
         from bridge.memory_workers import run_memory_claim
 
@@ -147,7 +145,7 @@ class HindsightSessionCleanupTests(SettingsTestCase):
             "chat", session, "Alisha", "conversation", app_settings=self.app_settings_builder.build()
         )
 
-        self.assertEqual(len(fake.retained), 2)
+        self.assertEqual(len(fake.retained), 1)
         self.assertTrue(all(item["retain_async"] is False for item in fake.retained))
         self.assertTrue(fake.documents.closed)
         rows = self.db.execute(
@@ -156,11 +154,13 @@ class HindsightSessionCleanupTests(SettingsTestCase):
                 "AND session_id='memory-session' ORDER BY kind"
             )
         ).fetchall()
-        self.assertEqual([kind for _document_id, kind in rows], ["conversation", "native_fact"])
-        self.assertTrue(rows[0][0].startswith(_m_memory_curator.hindsight_session_prefix("memory-session")))
-        self.assertTrue(rows[1][0].startswith("session:memory-session:fact:"))
+        self.assertEqual([kind for _document_id, kind in rows], ["native_fact"])
+        self.assertTrue(rows[0][0].startswith("session:memory-session:fact:"))
 
     def test_delete_removes_mapped_tagged_prefixed_and_legacy_documents_only(self):
+        from bridge.memory_retirement_store import queue_session_memory_cleanup
+        from bridge.memory_workers import dispatch_memory_backlog
+
         active = _owner_session_core.ensure_session(
             self.db, "chat", self.app_settings_builder.default_model, app_settings=self.app_settings_builder.build()
         )
@@ -206,13 +206,23 @@ class HindsightSessionCleanupTests(SettingsTestCase):
             target["session_id"],
             active["session_id"],
             memory_service=make_test_memory_service(
-                purge_session_memory=partial(
-                    _m_memory.purge_hindsight_session, app_settings=self.app_settings_builder.build()
-                ),
+                queue_session_cleanup=queue_session_memory_cleanup,
             ),
         )
 
         self.assertTrue(deleted, reason)
+        self.assertEqual(fake.documents.deleted, [])
+        submitted = []
+        services = SimpleNamespace(
+            config=self.app_settings_builder.build(),
+            db_factory=lambda: _m_memory_curator.db_connect(app_settings=self.app_settings_builder.build()),
+            background=SimpleNamespace(submit=lambda *args: submitted.append(args) or True),
+        )
+        for _ in range(10):
+            if not dispatch_memory_backlog(services, self.db):
+                break
+            _, function, *args = submitted.pop()
+            function(*args)
         self.assertEqual(set(fake.documents.deleted), {mapped_id, tagged_id, prefixed_id, legacy_id})
         self.assertTrue(fake.documents.closed)
         self.assertIn(other_id, fake.documents.documents)

@@ -317,8 +317,7 @@ def test_late_physical_scene_refresh_cannot_recreate_reset_story_facts(session_d
 
     settings, db, session = session_db
     rowid = add_story(db, "Mara waits at an old gate.")
-    monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
-    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "delete_tracked_panel_messages", lambda *a, **k: None)
 
     def generate(*args, **kwargs):
         message_commands.reset_session(
@@ -326,7 +325,7 @@ def test_late_physical_scene_refresh_cannot_recreate_reset_story_facts(session_d
             "token",
             "chat",
             session,
-            memory_service=SimpleNamespace(purge_session=lambda *a: 0),
+            memory_service=SimpleNamespace(queue_cleanup=lambda *a: 0),
             npc_service=SimpleNamespace(purge_session=lambda *a: 0),
         )
         return '{"location":"OBSOLETE_GATE","time":"night","environment":[],"characters":{},"objects":{}}'
@@ -356,14 +355,13 @@ def test_reset_clears_physical_state_without_optional_extension_hooks(session_db
     with write_transaction(db):
         db.execute("INSERT INTO scene_states VALUES(?,?,?,?,?)", ("chat", "s1", '{"location":"Old gate"}', rowid, 1))
     monkeypatch.setattr(memory, "_run_summary_clear_hooks", lambda *a: None)
-    monkeypatch.setattr(message_commands, "delete_outgoing_messages", lambda *a, **k: None)
-    monkeypatch.setattr(message_commands, "delete_incoming_messages", lambda *a, **k: None)
+    monkeypatch.setattr(message_commands, "delete_tracked_panel_messages", lambda *a, **k: None)
     message_commands.reset_session(
         db,
         "token",
         "chat",
         session,
-        memory_service=SimpleNamespace(purge_session=lambda *a: 0),
+        memory_service=SimpleNamespace(queue_cleanup=lambda *a: 0),
         npc_service=SimpleNamespace(purge_session=lambda *a: 0),
     )
     assert db.execute("SELECT * FROM scene_states").fetchall() == []

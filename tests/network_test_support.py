@@ -6,6 +6,7 @@ import ipaddress
 import socket
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import urlsplit
 
 
 def is_local_destination(family: int, address: object) -> bool:
@@ -32,3 +33,28 @@ def guard_connect(original: Callable[[Any, Any], Any], attempts: list[str]) -> C
         return original(sock, address)
 
     return connect
+
+
+def _check_http_host(host: str | None, attempts: list[str]) -> None:
+    # A local proxy's socket is not proof that the requested HTTP destination is local.
+    if host == "localhost" or is_local_destination(socket.AF_INET, (host, 0)):
+        return
+    attempts.append("external HTTP request")
+    raise AssertionError("Test attempted external HTTP; mock the external transport before request construction")
+
+
+def guard_http_request(original: Callable[..., Any], attempts: list[str]) -> Callable[..., Any]:
+    def putrequest(connection: Any, method: str, url: str, *args: Any, **kwargs: Any) -> Any:
+        host = urlsplit(url).hostname or getattr(connection, "_tunnel_host", None) or connection.host
+        _check_http_host(host, attempts)
+        return original(connection, method, url, *args, **kwargs)
+
+    return putrequest
+
+
+def guard_httpx_send(original: Callable[..., Any], attempts: list[str]) -> Callable[..., Any]:
+    def send(client: Any, request: Any, *args: Any, **kwargs: Any) -> Any:
+        _check_http_host(urlsplit(str(request.url)).hostname, attempts)
+        return original(client, request, *args, **kwargs)
+
+    return send

@@ -173,7 +173,7 @@ def handle_memory_command(
                 "\nBank: "
                 f"""{hindsight_bank_id(chat_id)}"""
                 "\nRecall is hard-filtered to the active session; character tags are "
-                "provenance only."
+                "provenance only. Turning memory off pauses indexing and recall; queued erasure continues."
             ),
         )
         return

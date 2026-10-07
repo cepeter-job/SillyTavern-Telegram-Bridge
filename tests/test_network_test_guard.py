@@ -66,3 +66,34 @@ def test_allowed_loopback_connection_forwards_exact_socket_address_and_return():
     assert guarded(sock, address) == 17
     assert calls == [(sock, address)]
     assert attempts == []
+
+
+@pytest.mark.parametrize(
+    "tunnel,url",
+    [("api.telegram.org", "/bot-fixture/sendMessage"), (None, "https://api.telegram.org/bot-fixture/sendMessage")],
+)
+def test_loopback_proxy_cannot_forward_an_external_http_request(tunnel, url):
+    attempts, calls = [], []
+    connection = SimpleNamespace(host="127.0.0.1", _tunnel_host=tunnel)
+    guarded = helper().guard_http_request(lambda *args, **kwargs: calls.append(args), attempts)
+    with pytest.raises(AssertionError, match="external HTTP"):
+        guarded(connection, "POST", url)
+    assert not calls
+    assert attempts == ["external HTTP request"]
+
+
+def test_http_guard_allows_explicit_loopback_test_server():
+    attempts, calls = [], []
+    connection = SimpleNamespace(host="::1", _tunnel_host=None)
+    guarded = helper().guard_http_request(lambda *args, **kwargs: calls.append(args) or 7, attempts)
+    assert guarded(connection, "GET", "/fixture", skip_host=True) == 7
+    assert calls == [(connection, "GET", "/fixture")]
+    assert not attempts
+
+
+def test_httpx_guard_rejects_external_url_before_send():
+    attempts, calls = [], []
+    guarded = helper().guard_httpx_send(lambda *args, **kwargs: calls.append(args), attempts)
+    with pytest.raises(AssertionError, match="external HTTP"):
+        guarded(object(), SimpleNamespace(url="https://api.telegram.org/bot-fixture/sendMessage"))
+    assert not calls and attempts == ["external HTTP request"]

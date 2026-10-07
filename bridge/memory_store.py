@@ -14,6 +14,27 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TypedDict
 
+from bridge.memory_attempt_store import (
+    ARCHIVAL_RECOVERY_BATCH as ARCHIVAL_RECOVERY_BATCH,
+)
+from bridge.memory_attempt_store import (
+    ARCHIVAL_WATCH_SECONDS as ARCHIVAL_WATCH_SECONDS,
+)
+from bridge.memory_attempt_store import (
+    archival_attempts_outstanding as archival_attempts_outstanding,
+)
+from bridge.memory_attempt_store import (
+    begin_external_memory_attempt as begin_external_memory_attempt,
+)
+from bridge.memory_attempt_store import (
+    finish_archival_attempt as finish_archival_attempt,
+)
+from bridge.memory_attempt_store import (
+    reconcile_archival_attempts as reconcile_archival_attempts,
+)
+from bridge.memory_attempt_store import (
+    resolve_archival_attempt as resolve_archival_attempt,
+)
 from bridge.memory_contracts import MemoryReadScope
 from bridge.memory_retry import CONFIGURATION_RETRY_SECONDS, MEMORY_FAILURE_CODES
 from bridge.sqlite_store import write_transaction
@@ -409,7 +430,8 @@ def retire_archival_source(db: sqlite3.Connection, source: MemorySource) -> None
         db.execute("UPDATE memory_segments SET valid=0 WHERE document_id=?", (source.document_id,))
         db.execute(
             "INSERT INTO memory_retired_documents(chat_id,session_id,document_id) VALUES(?,?,?) "
-            "ON CONFLICT(chat_id,session_id,document_id) DO UPDATE SET deleted=0,next_attempt_at=0",
+            "ON CONFLICT(chat_id,session_id,document_id) DO UPDATE SET deleted=0,next_attempt_at=0,"
+            "retirement_revision=memory_retired_documents.retirement_revision+1",
             (source.chat_id, source.session_id, source.document_id),
         )
 
@@ -490,7 +512,8 @@ def purge_external_memory(db: sqlite3.Connection, chat_id: str, session_id: str,
         db.execute(
             "INSERT INTO memory_retired_documents(chat_id,session_id,document_id) "
             "SELECT chat_id,session_id,document_id FROM hindsight_documents WHERE chat_id=? AND session_id=? "
-            "ON CONFLICT(chat_id,session_id,document_id) DO UPDATE SET deleted=0",
+            "ON CONFLICT(chat_id,session_id,document_id) DO UPDATE SET deleted=0,next_attempt_at=0,"
+            "retirement_revision=memory_retired_documents.retirement_revision+1",
             (chat_id, session_id),
         )
         db.execute(
@@ -544,81 +567,13 @@ def request_source_cutoff(db: sqlite3.Connection, scope: MemoryReadScope) -> int
     return min(scope.through_rowid, max(0, int(row[0]) - 1)) if row and row[0] is not None else scope.through_rowid
 
 
-# Uncertain transport results have no safe expiry without upstream proof.
-ARCHIVAL_WATCH_SECONDS = 300
-ARCHIVAL_RECOVERY_BATCH = 16
-
-
 def begin_archival_attempt(db: sqlite3.Connection, source: MemorySource) -> str:
-    """Caller commits this identity together with the pre-dispatch reservation."""
-    token = uuid.uuid4().hex
-    db.execute(
-        "INSERT INTO memory_archival_attempts"
-        "(attempt_token,document_id,chat_id,session_id,session_created_at,started_at) VALUES(?,?,?,?,?,?)",
-        (token, source.document_id, source.chat_id, source.session_id, source.session_created_at, time.time()),
+    """Caller commits this raw token together with the source reservation."""
+    return begin_external_memory_attempt(
+        db,
+        document_id=source.document_id,
+        chat_id=source.chat_id,
+        session_id=source.session_id,
+        session_created_at=source.session_created_at,
+        kind="raw",
     )
-    return token
-
-
-def finish_archival_attempt(db: sqlite3.Connection, token: str) -> None:
-    """Persist a known synchronous completion separately from source acceptance."""
-    with write_transaction(db):
-        db.execute("UPDATE memory_archival_attempts SET finished=1,next_check_at=0 WHERE attempt_token=?", (token,))
-
-
-def resolve_archival_attempt(db: sqlite3.Connection, token: str) -> None:
-    """Caller atomically preserves current source or queues its stale retirement."""
-    db.execute("DELETE FROM memory_archival_attempts WHERE attempt_token=? AND finished=1", (token,))
-
-
-def archival_attempts_outstanding(db: sqlite3.Connection, document_id: str) -> bool:
-    return bool(
-        db.execute("SELECT 1 FROM memory_archival_attempts WHERE document_id=? LIMIT 1", (document_id,)).fetchone()
-    )
-
-
-def reconcile_archival_attempts(
-    db: sqlite3.Connection,
-    *,
-    chat_id: str | None = None,
-    session_id: str | None = None,
-    now: float | None = None,
-) -> int:
-    """Bounded recovery needs neither a live session nor a still-pending source."""
-    now = time.time() if now is None else now
-    with write_transaction(db):
-        if chat_id is None:
-            rows = db.execute(
-                "SELECT attempt_token,document_id,chat_id,session_id,finished FROM memory_archival_attempts "
-                "WHERE next_check_at<=? ORDER BY next_check_at,attempt_token LIMIT ?",
-                (now, ARCHIVAL_RECOVERY_BATCH),
-            ).fetchall()
-        else:
-            rows = db.execute(
-                "SELECT attempt_token,document_id,chat_id,session_id,finished FROM memory_archival_attempts "
-                "WHERE chat_id=? AND session_id=? AND next_check_at<=? "
-                "ORDER BY next_check_at,attempt_token LIMIT ?",
-                (chat_id, session_id, now, ARCHIVAL_RECOVERY_BATCH),
-            ).fetchall()
-        for token, document_id, owner_chat, owner_session, finished in rows:
-            current = db.execute(
-                "SELECT 1 FROM memory_segments g JOIN sessions s ON s.chat_id=g.chat_id "
-                "AND s.session_id=g.session_id AND s.created_at=g.session_created_at "
-                "WHERE g.document_id=? AND g.valid IN (1,?)",
-                (document_id, ARCHIVAL_PENDING),
-            ).fetchone()
-            if not current:
-                db.execute(
-                    "INSERT INTO memory_retired_documents(chat_id,session_id,document_id) VALUES(?,?,?) "
-                    "ON CONFLICT(chat_id,session_id,document_id) DO UPDATE SET deleted=0,next_attempt_at=0 "
-                    "WHERE memory_retired_documents.deleted=1 OR ?",
-                    (owner_chat, owner_session, document_id, bool(finished)),
-                )
-            if finished:
-                resolve_archival_attempt(db, token)
-            else:
-                db.execute(
-                    "UPDATE memory_archival_attempts SET next_check_at=? WHERE attempt_token=?",
-                    (now + ARCHIVAL_WATCH_SECONDS, token),
-                )
-    return len(rows)

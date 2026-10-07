@@ -40,7 +40,6 @@ def test_target_tags_and_document_ids_are_distinct_and_deterministic(session_db,
         yield SimpleNamespace(retain=lambda **kw: observed.append(kw))
 
     monkeypatch.setattr(memory_backend, "hindsight_client_scope", client_scope)
-    monkeypatch.setattr(memory_backend, "_record_hindsight_document", lambda *a, **k: None)
     assert seed_alternate_ending_memory(db, "chat", target, app_settings=config) == "ready"
     assert seed_alternate_ending_memory(db, "chat", target, app_settings=config) == "ready"
     assert observed[0]["bank_id"] == memory_backend.hindsight_bank_id("chat")

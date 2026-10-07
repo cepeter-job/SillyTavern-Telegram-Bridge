@@ -29,11 +29,12 @@ def test_reset_panel_module_is_pure_and_builds_exact_send_payload():
             "• Delete this session's stored conversation, response variants, continuity summary, curated memory, "
             "episodic memory, NPC Bank state, narrative scenes, threads, arcs, "
             "Director state and ending checkpoints.\n"
-            "• Purge Hindsight documents for this active session.\n"
+            "• Queue deletion of Hindsight documents for this active session.\n"
             "• Attempt to delete this session's tracked Telegram user messages, assistant replies, and choice panels.\n"
             "• Keep Narrative Style, your personal defaults, chat-scoped RAG and this session identity.\n"
             "• Use /new when you need a completely new session.\n\n"
-            "If Hindsight cleanup fails, no local session data will be deleted.\n\n"
+            "Local reset completes immediately. Hindsight cleanup will retry in the background, "
+            "including while memory is off.\n\n"
             "This cannot be undone."
         ),
         "reply_markup": {

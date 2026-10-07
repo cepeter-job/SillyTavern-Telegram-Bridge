@@ -10,6 +10,7 @@ from bridge.memory_contracts import MemoryPromptContext as MemoryPromptContext
 from bridge.memory_contracts import expand_memory_query
 from bridge.port_contracts import (
     PurgeSessionMemory,
+    QueueSessionMemoryCleanup,
     ReadSummaryState,
     ResolveMemoryScope,
     RetainSessionMemory,
@@ -32,6 +33,7 @@ class MemoryService:
     summary_state: ReadSummaryState
     retain_session: RetainSessionMemory
     purge_session_memory: PurgeSessionMemory
+    queue_session_cleanup: QueueSessionMemoryCleanup
 
     def prompt_context(
         self,
@@ -108,3 +110,7 @@ class MemoryService:
     ) -> int:
         result = self.purge_session_memory(db, chat_id, session_id)
         return 0 if result is None else int(result)
+
+    def queue_cleanup(self, db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
+        """Join the caller's lifecycle transaction without external side effects."""
+        self.queue_session_cleanup(db, chat_id, session_id)

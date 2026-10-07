@@ -279,31 +279,28 @@ class HelpDrilldownTests(SettingsTestCase):
     def test_director_goal_and_scene_commands_are_documented(self):
         commands = {command for entries in _m_help_details.HELP_CATEGORIES.values() for command, _summary in entries}
         self.assertIn("/group goal", commands)
-        self.assertIn("/group goal <objective>", commands)
+        self.assertNotIn("/group goal <objective>", commands)
         self.assertIn("/scene", commands)
-        self.assertIn("/scene refresh", commands)
-        self.assertIn("1,200 characters", _m_help_details.command_detail("/group goal", ""))
-        self.assertIn("utility model", _m_help_details.command_detail("/scene refresh", ""))
+        self.assertNotIn("/scene refresh", commands)
+        self.assertIn("panel", _m_help_details.command_detail("/group goal", "").lower())
+        self.assertIn("refresh", _m_help_details.command_detail("/scene", "").lower())
 
-    def test_memory_search_and_scene_clear_are_first_class_help_commands(self):
+    def test_memory_search_stays_direct_while_scene_actions_use_panel(self):
         commands = {command for entries in _m_help_details.HELP_CATEGORIES.values() for command, _summary in entries}
         self.assertIn("/memory search <query>", commands)
-        self.assertIn("/scene clear", commands)
+        self.assertNotIn("/scene clear", commands)
 
-        memory_detail = _m_help_details.command_detail(
-            "/memory search <query>",
-            "",
-        )
+        memory_detail = _m_help_details.command_detail("/memory search <query>", "")
         self.assertIn("active session", memory_detail.lower())
         self.assertIn("query", memory_detail.lower())
 
-        scene_detail = _m_help_details.command_detail("/scene clear", "")
-        self.assertIn("structured scene state", scene_detail.lower())
-        self.assertIn("transcript", scene_detail.lower())
+        target = _m_help_details._help_command_target("scene clear")
+        self.assertIsNotNone(target)
+        category, index = target
+        self.assertEqual(_m_help_details.HELP_CATEGORIES[category][index][0], "/scene")
 
         readme = (Path(__file__).parents[1] / "README.md").read_text(encoding="utf-8")
         self.assertIn("canonical command reference", readme)
-        self.assertIn("/help scene refresh", readme)
 
     def test_help_details_exactly_cover_public_catalog(self):
         public_commands = {
@@ -312,18 +309,22 @@ class HelpDrilldownTests(SettingsTestCase):
         self.assertEqual(set(_m_help_details.COMMAND_DETAILS), public_commands)
         self.assertTrue(all(_m_help_details.COMMAND_DETAILS[command].strip() for command in public_commands))
 
-    def test_direct_command_forms_are_documented_without_fake_toggles(self):
+    def test_only_free_form_or_explicit_actions_remain_direct_help_commands(self):
         public_commands = {
             command for entries in _m_help_details.HELP_CATEGORIES.values() for command, _summary in entries
         }
         expected_direct = {
-            "/language <language>",
             "/macro <text>",
             "/edit <text>",
-            "/prompt text",
             "/memory search <query>",
-            "/memory curated refresh",
             "/remember <fact>",
+            "/check <domain> <DC> <action>",
+        }
+        self.assertTrue(expected_direct <= public_commands)
+        for retired in {
+            "/language <language>",
+            "/prompt text",
+            "/memory curated refresh",
             "/databank search <query>",
             "/databank versions <filename>",
             "/databank activate <filename> <version>",
@@ -331,51 +332,42 @@ class HelpDrilldownTests(SettingsTestCase):
             "/databank remove <filename> confirm",
             "/group status",
             "/group add <character>",
-            "/group remove <character>",
-            "/group speak <character>",
             "/group mode <mode>",
-            "/group on|off",
-            "/group next",
             "/group goal <objective>",
             "/group goal clear",
             "/scene refresh",
             "/scene clear",
-        }
-        self.assertTrue(expected_direct <= public_commands)
-        self.assertNotIn("/stream on|off", public_commands)
-        self.assertNotIn("/voice on|off", public_commands)
-        self.assertNotIn("/voice_input on|off", public_commands)
-        self.assertIn("/stream", public_commands)
-        self.assertIn("/voice", public_commands)
-        self.assertIn("/voice_input", public_commands)
+            "/check mode",
+        }:
+            self.assertNotIn(retired, public_commands)
 
-    def test_help_lookup_matches_parameterized_direct_forms(self):
+    def test_help_lookup_routes_retired_shortcuts_to_panels(self):
         cases = {
-            "group add": "/group add <character>",
-            "group add Karen": "/group add <character>",
-            "group on": "/group on|off",
-            "group off": "/group on|off",
-            "databank reindex": "/databank reindex [filename]",
-            "databank reindex notes.pdf": "/databank reindex [filename]",
-            "databank activate notes.pdf 2": "/databank activate <filename> <version>",
+            "group add": "/group",
+            "group add Karen": "/group",
+            "group on": "/group",
+            "group off": "/group",
+            "databank reindex": "/databank",
+            "databank reindex notes.pdf": "/databank",
+            "databank activate notes.pdf 2": "/databank",
             "remember this is important": "/remember <fact>",
-            "group list": "/group status",
+            "group list": "/group",
             "group goal status": "/group goal",
-            "group goal off": "/group goal clear",
+            "group goal off": "/group goal",
             "scene status": "/scene",
+            "scene refresh": "/scene",
             "language status": "/language",
             "voice on": "/voice",
             "databank list": "/databank",
+            "prompt text": "/prompt",
+            "check mode": "/check",
         }
         for requested, expected_command in cases.items():
             with self.subTest(requested=requested):
                 target = _m_help_details._help_command_target(requested)
                 self.assertIsNotNone(target)
                 category, index = target
-                self.assertEqual(
-                    _m_help_details.HELP_CATEGORIES[category][index][0],
-                    expected_command,
-                )
+                self.assertEqual(_m_help_details.HELP_CATEGORIES[category][index][0], expected_command)
 
     def test_help_command_fast_path_always_renders_panel(self):
         calls = []
@@ -397,7 +389,7 @@ class HelpDrilldownTests(SettingsTestCase):
                 )
             )
             expected_index = [command for command, _summary in _m_help_details.HELP_CATEGORIES["voice_group"]].index(
-                "/scene refresh"
+                "/scene"
             )
             self.assertEqual(calls[-1][0], ("token", "chat", "voice_group", None, expected_index))
             self.assertTrue(

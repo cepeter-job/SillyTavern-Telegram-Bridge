@@ -9,7 +9,6 @@ from bridge.cards import send_panel_message
 from bridge.simulation_repository import list_checks
 from bridge.simulation_values import text
 
-
 _MODE_LABELS = {
     "auto": "Auto",
     "director": "Director",

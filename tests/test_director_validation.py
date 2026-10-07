@@ -137,10 +137,9 @@ def test_null_optional_text_fields_are_treated_as_omitted():
 
 
 def test_text_outside_a_json_fence_remains_rejected():
-    fenced = "prefix\n" + String.fromCharCode(96).repeat(3) + "json\n" + payload() + "\n" + String.fromCharCode(96).repeat(3)
+    fenced = "prefix\\n```json\\n" + payload() + "\\n```"
     with pytest.raises(DirectorProposalError):
         parse_director_proposal(fenced)
-
 
 
 def test_oversized_raw_output_is_rejected_before_parsing():

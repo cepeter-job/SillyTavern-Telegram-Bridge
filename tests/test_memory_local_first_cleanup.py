@@ -97,6 +97,14 @@ def test_local_lifecycle_completes_while_retain_is_held(cleanup_runtime, kind, a
     rt = cleanup_runtime
     source = append(rt)
     doc = fact(rt) if kind == "native_fact" else source.document_id
+    if kind == "raw":
+        from bridge.memory_store import begin_archival_attempt, reserve_archival_source
+        from bridge.sqlite_store import write_transaction
+
+        # Historical dispatch captured by an older runtime; the current worker never sends raw text.
+        assert reserve_archival_source(rt.db, source)
+        with write_transaction(rt.db):
+            historical_token = begin_archival_attempt(rt.db, source)
     claim = claim_jobs(rt.db, layers=("hindsight",))[0]
     entered, release = threading.Event(), threading.Event()
 
@@ -108,7 +116,13 @@ def test_local_lifecycle_completes_while_retain_is_held(cleanup_runtime, kind, a
 
     def retain(db):
         if kind == "raw":
-            return memory_backend.retain_archival_source(db, source, "Mira", "old", app_settings=rt.config, claim=claim)
+            from bridge.memory_store import finish_archival_attempt, reconcile_archival_attempts
+
+            hold({})
+            rt.archive.objects[doc] = ["session:s"]  # Synthetic late historical completion.
+            finish_archival_attempt(db, historical_token)
+            reconcile_archival_attempts(db)
+            return "stale_source"
         return run_memory_claim(db, claim, rt.session, {"name": "Mira"}, app_settings=rt.config)
 
     thread, done, values, errors = start_call(rt, retain)

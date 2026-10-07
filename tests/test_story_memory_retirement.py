@@ -84,7 +84,7 @@ def test_cleanup_never_deletes_recreated_current_source_even_when_memory_is_off(
     )
     db.execute("INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('c','s','user','new',100)")
     db.commit()
-    source = next_source_segment(db, "c", "s", "hindsight")
+    source = next_source_segment(db, "c", "s", "episodes")
     store_segment(db, source)
     db.execute(
         "INSERT INTO memory_retired_documents(chat_id,session_id,document_id) VALUES('c','s',?)", (source.document_id,)

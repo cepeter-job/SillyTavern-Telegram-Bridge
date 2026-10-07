@@ -6,11 +6,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import platform
 import shutil
 import sqlite3
-import statistics
 import subprocess
 import sys
 import tempfile
@@ -25,6 +23,12 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from story_memory_eval_checks import (  # noqa: E402
+    drain_cleanup,
+    facts_only_boundary,
+    measurement_metrics,
+    purge_and_drain,
+)
 from story_memory_eval_support import CHAT, MARKER, EvaluationRuntime, marker_facts  # noqa: E402
 
 
@@ -366,6 +370,7 @@ def _evaluate(fixture_path, repeats=10, fault=""):
                 },
                 injected_state="synthetic lease ownership loss after successful external retain",
             )
+            facts_only_boundary(runtime, score)
             # Capture a real source, append harmlessly, then mutate only the narrow source.
             runtime.accept_turn("A narrow mutation fixture.")
             captured = next_source_segment(db, CHAT, "main", "episodes")
@@ -435,8 +440,8 @@ def _evaluate(fixture_path, repeats=10, fault=""):
                 dict(zip(["layer", "dirty_version", "completed_version"], row, strict=True))
                 for row in db.execute("SELECT layer,dirty_version,completed_version FROM memory_jobs")
             ]
-            # Real composed purge: remove external documents, keep native authorized facts.
-            purged = runtime.memory.purge_session(db, CHAT, "main")
+            # Commit local authority revocation, then execute the queued cleanup workers.
+            purged, local_denied = purge_and_drain(runtime)
             retain_calls_before = sum(x["kind"] == "retain" for x in runtime.transport.calls)
             runtime.drain("hindsight")
             fresh = runtime.context("amber compass")
@@ -444,6 +449,7 @@ def _evaluate(fixture_path, repeats=10, fault=""):
                 "purge.floor",
                 "purge",
                 {
+                    "local_authority_denied_before_cleanup": local_denied,
                     "external_documents_deleted": purged > 0 and not runtime.transport.documents_by_id,
                     "old_sources_not_automatically_retained": sum(
                         x["kind"] == "retain" for x in runtime.transport.calls
@@ -459,6 +465,7 @@ def _evaluate(fixture_path, repeats=10, fault=""):
             old_scope = fresh.scope
             create_session(db, CHAT, "offline::fixture", session_id="other", app_settings=runtime.settings)
             deleted, reason = delete_session_data(db, CHAT, "main", "other", memory_service=runtime.memory)
+            drain_cleanup(runtime)
             recreated = create_session(db, CHAT, "offline::fixture", session_id="main", app_settings=runtime.settings)
             score.case(
                 "incarnation.delete-recreate",
@@ -485,18 +492,22 @@ def _evaluate(fixture_path, repeats=10, fault=""):
             )
             _, heap_peak = tracemalloc.get_traced_memory()
             report = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "fixture_version": fixture["fixture_version"],
                 "fixture_sha256": hashlib.sha256(raw).hexdigest(),
                 "git_revision": git_revision(),
                 "measurement_identity": {
                     "source_sha256": {
                         name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
-                        for name in ["tools/evaluate_story_memory.py", "tools/story_memory_eval_support.py"]
+                        for name in [
+                            "tools/evaluate_story_memory.py",
+                            "tools/story_memory_eval_support.py",
+                            "tools/story_memory_eval_checks.py",
+                        ]
                     },
                     "git_status_short": git_command("status", "--short").stdout.splitlines(),
                 },
-                "measurement_boundary": "Synthetic SQLite; one accepted story and scripted mutation cases.",
+                "measurement_boundary": "Synthetic SQLite; native summaries and scripted mutation cases.",
                 "python_version": platform.python_version(),
                 "sqlite_version": sqlite3.sqlite_version,
                 "synthetic_settings": {
@@ -511,25 +522,10 @@ def _evaluate(fixture_path, repeats=10, fault=""):
                 "fact_mapping": facts,
                 "layer_outcomes": {"episodes": episode_outcomes, "hindsight": hindsight_outcomes},
                 "pending_layers_at_observation": pending_layers,
-                "metrics": {
-                    "setup_elapsed_ms": setup_ns / 1_000_000,
-                    "ingest_elapsed_ms": ingest_ns / 1_000_000,
-                    "drain_elapsed_ms": drain_ns / 1_000_000,
-                    "query_elapsed_ms_median": statistics.median(samples),
-                    "query_elapsed_ms_p95": sorted(samples)[math.ceil(0.95 * len(samples)) - 1],
-                    "query_sample_count": repeats,
-                    "query_warmups": 1,
-                    "python_tracemalloc_peak_bytes": heap_peak,
-                    "process_rss_bytes": None,
-                    "sqlite_page_bytes": page_bytes,
-                    "sqlite_wal_bytes": wal_bytes,
-                    "stub_request_count": len(runtime.transport.calls),
-                    "stub_request_max_bytes": max(x["bytes"] for x in runtime.transport.calls),
-                    "stub_calls_by_kind": {
-                        kind: sum(x["kind"] == kind for x in runtime.transport.calls)
-                        for kind in ["provider", "retain", "recall", "delete"]
-                    },
-                },
+                "metrics": measurement_metrics(
+                    runtime, repeats, samples, setup_ns, ingest_ns, drain_ns, heap_peak, page_bytes, wal_bytes
+                ),
+                "retained_payload_observations": runtime.transport.native_payloads,
                 "exposure_inventory": {
                     "memory_channel_forbidden_span_count": text_of(closure).count(restricted_phrase),
                     "raw_history_forbidden_span_count": raw_history_inputs.count(restricted_phrase),
@@ -580,7 +576,7 @@ def main(argv=None):
         report = evaluate(args.fixture, args.repeats, args.inject_failure)
     except Exception as exc:
         report = {
-            "schema_version": 1,
+            "schema_version": 2,
             "failed_case_count": 1,
             "fatal_error": {"type": type(exc).__name__, "message": str(exc)},
         }

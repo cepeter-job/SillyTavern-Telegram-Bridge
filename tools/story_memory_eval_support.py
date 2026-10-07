@@ -50,6 +50,8 @@ class OfflineTransport:
         self.extraction_sources = []
         self.story_payloads = []
         self.fail_retain = False
+        self.native_summary = lambda document: None
+        self.native_payloads = []
         self.after_retain = None
         self.extra_candidates = []
 
@@ -81,6 +83,20 @@ class OfflineTransport:
         return self.reply
 
     def retain(self, **kwargs):
+        if "native-fact" not in kwargs.get("tags", []):
+            raise AssertionError("Only native-fact remote retains are supported")
+        accepted = self.native_summary(kwargs["document_id"])
+        if accepted is None or accepted != kwargs["content"]:
+            raise AssertionError("Retained content must be the exact locally accepted summary")
+        self.native_payloads.append(
+            {
+                "category": "native_fact",
+                "document_id": kwargs["document_id"][:256],
+                "summary": kwargs["content"][:4000],
+                "tags": [tag[:200] for tag in kwargs["tags"][:16]],
+                "locally_accepted": True,
+            }
+        )
         self.record("retain", kwargs)
         if self.fail_retain:
             raise RuntimeError("Synthetic retain outage")
@@ -257,6 +273,7 @@ class EvaluationRuntime:
             purge_session_memory=partial(memory.purge_hindsight_session, app_settings=self.settings),
         )
         self.db = db_connect(app_settings=self.settings)
+        self.transport.native_summary = self.native_summary
         self.session = session_core.create_session(
             self.db, CHAT, "offline::fixture", session_id="main", app_settings=self.settings
         )
@@ -326,6 +343,12 @@ class EvaluationRuntime:
         # Synthetic scheduler clock control only; never derived-answer seeding.
         self.db.execute("UPDATE memory_jobs SET next_attempt_at=0 WHERE layer=?", (layer,))
         self.db.commit()
+
+    def native_summary(self, document_id):
+        from bridge.memory_fact_store import index_fact_is_current
+
+        stored = index_fact_is_current(self.db, document_id)
+        return stored.fact.summary if stored else None
 
     def run_one(self, layer):
         from bridge.memory_store import claim_jobs

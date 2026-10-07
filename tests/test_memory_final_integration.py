@@ -1,4 +1,4 @@
-"""Final integration regressions at real archival and classified extraction boundaries."""
+"""Historical raw retirement and current classified extraction boundaries."""
 
 import json
 import sqlite3
@@ -11,13 +11,24 @@ from settings_test_support import make_test_settings
 
 from bridge import memory, memory_backend
 from bridge.memory_artifact_store import read_scene_block
+from bridge.memory_contracts import MemoryFact
 from bridge.memory_curator import get_curated_memory_state
-from bridge.memory_fact_store import load_source
+from bridge.memory_fact_store import accept_source_facts, load_source, remember_local_fact
 from bridge.memory_scope_store import resolve_memory_scope
-from bridge.memory_store import claim_jobs, next_source_segment, purge_external_memory
+from bridge.memory_store import (
+    begin_archival_attempt,
+    claim_jobs,
+    finish_archival_attempt,
+    next_source_segment,
+    purge_external_memory,
+    reconcile_archival_attempts,
+    reserve_archival_source,
+)
 from bridge.memory_workers import run_memory_claim
+from bridge.migrations import run_migrations
 from bridge.scene_state import get_scene_state, scene_state_text
-from bridge.sqlite_store import db_connect
+from bridge.schema import SCHEMA_MIGRATIONS, initialize_database_schema
+from bridge.sqlite_store import db_connect, write_transaction
 
 SESSION = {"session_id": "s", "model_id": "m", "persona_id": "", "system_prompt": ""}
 FIELDS = {"name": "Bob"}
@@ -32,6 +43,7 @@ class Archive:
         self.on_retain = None
 
     def retain(self, **kwargs):
+        assert "native-fact" in kwargs["tags"], "Production must never dispatch raw/conversation memory"
         self.retained.append(kwargs)
         if self.on_retain:
             self.on_retain(kwargs)
@@ -44,7 +56,7 @@ class Archive:
                 continue
             if kwargs.get("q") and kwargs["q"] not in document_id:
                 continue
-            items.append({"id": document_id})
+            items.append({"id": document_id, "tags": payload.get("tags", [])})
         offset = kwargs.get("offset", 0)
         return SimpleNamespace(items=items[offset : offset + kwargs["limit"]], total=len(items))
 
@@ -89,10 +101,37 @@ def run(db, settings, layer="hindsight", provider=None):
     return run_memory_claim(db, claim, SESSION, FIELDS, provider_port=provider, app_settings=settings)
 
 
-def seed_or_worker(route, db, settings):
-    if route == "seed":
-        return memory_backend.seed_session_memory_now(db, "c", SESSION, app_settings=settings)
-    return run(db, settings)
+@pytest.fixture
+def legacy_runtime(tmp_path, monkeypatch, isolated_memory_runtime):
+    """A real pre-28 database containing captured historical request state."""
+    settings = make_test_settings(home=tmp_path, db_file=tmp_path / "legacy.sqlite")
+    archive = Archive()
+    monkeypatch.setattr(memory_backend, "hindsight_client", lambda **kwargs: archive)
+    db = sqlite3.connect(settings.db_file)
+    run_migrations(db, tuple(m for m in SCHEMA_MIGRATIONS if m.version <= 27))
+    db.execute(
+        "INSERT INTO sessions(chat_id,session_id,title,character_file,model_id,persona_id,"
+        "world_file,created_at,updated_at) VALUES('c','s','Story','','m','','',1,1)"
+    )
+    db.commit()
+    yield settings, db, archive
+    db.close()
+
+
+def capture_historical_raw(db):
+    """Capture a pre-upgrade request, without sending through the production client."""
+    source = next_source_segment(db, "c", "s", "hindsight")
+    assert source is not None and reserve_archival_source(db, source)
+    with write_transaction(db):
+        token = begin_archival_attempt(db, source)
+    payload = {
+        "document_id": source.document_id,
+        "content": source.content,
+        "tags": ["session:s"],
+        "bank_id": memory_backend.hindsight_bank_id("c"),
+        "historical_fixture": True,
+    }
+    return source, token, payload
 
 
 def cleanup(db, settings):
@@ -115,110 +154,82 @@ def change_source(db, row, change):
     db.commit()
 
 
-@pytest.mark.parametrize("route", ["worker", "seed"])
+@pytest.mark.parametrize("known_completion", [False, True])
 @pytest.mark.parametrize("change", ["rewrite", "delete", "recreate", "purge"])
-def test_raw_late_completion_is_retired_without_stale_mapping(runtime, route, change):
-    settings, db, archive = runtime
+def test_historical_raw_late_completion_is_retired_without_stale_mapping(legacy_runtime, change, known_completion):
+    settings, db, archive = legacy_runtime
     row = append(db, "Old canonical source")
-
-    def late(kwargs):
-        other = sqlite3.connect(settings.db_file)
-        try:
-            change_source(other, row, change)
-        finally:
-            other.close()
-
-    archive.on_retain = late
-    assert seed_or_worker(route, db, settings) == ("degraded" if route == "seed" else "stale_source")
-    old_id = archive.retained[0]["document_id"]
-    assert db.execute("SELECT 1 FROM hindsight_documents WHERE document_id=?", (old_id,)).fetchone() is None
-    assert db.execute("SELECT deleted FROM memory_retired_documents WHERE document_id=?", (old_id,)).fetchone() == (0,)
-    assert load_source(db, old_id) is None
-    if change == "delete":
-        assert db.execute("SELECT count(*) FROM memory_jobs").fetchone() == (0,)
-    archive.on_retain = None
+    source, token, payload = capture_historical_raw(db)
+    initialize_database_schema(db)
+    change_source(db, row, change)
+    archive.remote[source.document_id] = payload  # Synthetic historical upstream completion.
+    if known_completion:
+        finish_archival_attempt(db, token)
+    reconcile_archival_attempts(db)
     cleanup(db, settings)
-    assert old_id not in archive.remote
+    assert source.document_id not in archive.remote
+    assert archive.retained == []
+    assert load_source(db, source.document_id) is None
+    assert db.execute("SELECT 1 FROM hindsight_documents WHERE document_id=?", (source.document_id,)).fetchone() is None
+    assert db.execute("SELECT finished FROM memory_archival_attempts WHERE attempt_token=?", (token,)).fetchone() == (
+        None if known_completion else (0,)
+    )
     if change == "recreate":
+        remember_local_fact(db, "c", "s", "Bob", "Current incarnation fact.")
         assert run(db, settings) == "complete"
         new_id = archive.retained[-1]["document_id"]
-        assert new_id != old_id and new_id in archive.remote
-        assert memory_backend._retirement_would_delete_current_source(db, new_id)
+        assert new_id != source.document_id and memory_backend._retirement_would_delete_current_source(db, new_id)
 
 
-@pytest.mark.parametrize("route", ["worker", "seed"])
-def test_raw_late_completion_reopens_already_cleaned_retirement(runtime, route):
-    settings, db, archive = runtime
-    row = append(db, "Old canonical source")
-    observations = []
-
-    def late(kwargs):
-        change_source(db, row, "rewrite")
-        cleanup(db, settings)
-        observations.append(
-            db.execute(
-                "SELECT deleted FROM memory_retired_documents WHERE document_id=?", (kwargs["document_id"],)
-            ).fetchone()
-        )
-
-    archive.on_retain = late
-    assert seed_or_worker(route, db, settings) == ("degraded" if route == "seed" else "stale_source")
-    assert observations == [(0,)]  # A successful deletion cannot finish an outstanding request.
-    old_id = archive.retained[0]["document_id"]
-    assert old_id in archive.remote
-    assert db.execute(
-        "SELECT deleted,next_attempt_at FROM memory_retired_documents WHERE document_id=?", (old_id,)
-    ).fetchone() == (0, 0)
-    archive.on_retain = None
+def test_historical_completion_reopens_after_successful_delete(legacy_runtime):
+    settings, db, archive = legacy_runtime
+    append(db, "Delayed historical source")
+    source, token, payload = capture_historical_raw(db)
+    initialize_database_schema(db)
     cleanup(db, settings)
-    assert old_id not in archive.remote
+    assert db.execute("SELECT deleted FROM memory_retired_documents").fetchone() == (0,)
+    archive.remote[source.document_id] = payload
+    finish_archival_attempt(db, token)
+    reconcile_archival_attempts(db)
+    assert db.execute("SELECT deleted,next_attempt_at FROM memory_retired_documents").fetchone() == (0, 0)
+    cleanup(db, settings)
+    assert source.document_id not in archive.remote
+    assert db.execute("SELECT deleted FROM memory_retired_documents").fetchone() == (1,)
+    assert archive.retained == []
 
 
-@pytest.mark.parametrize("route", ["worker", "seed"])
-def test_pending_raw_attempt_is_not_accepted_and_retries_after_restart(runtime, route):
-    settings, db, archive = runtime
-    row = append(db, "A complete source")
-
-    observations = []
-
-    def uncertain(kwargs):
-        document_id = kwargs["document_id"]
-        observations.append(
-            (
-                db.in_transaction,
-                load_source(db, document_id),
-                memory_backend.memory_document_is_current(db, "c", "s", document_id),
-                next_source_segment(db, "c", "s", "hindsight").document_id,
-                db.execute("SELECT covered_id FROM memory_layer_state WHERE layer='hindsight'").fetchone(),
-                memory_backend._retirement_would_delete_current_source(db, document_id),
-            )
-        )
-        archive.remote[document_id] = kwargs
-        raise RuntimeError("Uncertain remote success")
-
-    archive.on_retain = uncertain
-    assert seed_or_worker(route, db, settings) == ("degraded" if route == "seed" else "retain_failed")
-    assert observations == [(False, None, False, archive.retained[0]["document_id"], (0,), True)]
-    old_id = archive.retained[0]["document_id"]
-    archive.on_retain = None
+def test_pending_historical_attempt_is_retired_after_restart_without_resending(legacy_runtime, monkeypatch):
+    settings, db, archive = legacy_runtime
+    append(db, "Uncertain historical request")
+    source, token, payload = capture_historical_raw(db)
+    initialize_database_schema(db)
+    cleanup(db, settings)
+    archive.remote[source.document_id] = payload
+    later = memory_backend.time.time() + 1000
+    monkeypatch.setattr(memory_backend.time, "time", lambda: later)
     reopened = db_connect(app_settings=settings)
     try:
-        assert seed_or_worker(route, reopened, settings) == ("ready" if route == "seed" else "complete")
-        assert archive.retained[-1]["document_id"] == old_id
-        assert reopened.execute("SELECT covered_id FROM memory_layer_state WHERE layer='hindsight'").fetchone() == (
-            row,
-        )
-        assert load_source(reopened, old_id) is not None
-        assert reopened.execute("SELECT kind FROM hindsight_documents WHERE document_id=?", (old_id,)).fetchone() == (
-            "source_segment",
-        )
+        cleanup(reopened, settings)
+        assert source.document_id not in archive.remote
+        assert load_source(reopened, source.document_id) is None
+        assert reopened.execute(
+            "SELECT finished FROM memory_archival_attempts WHERE attempt_token=?", (token,)
+        ).fetchone() == (0,)
+        assert reopened.execute("SELECT covered_id FROM memory_layer_state WHERE layer='hindsight'").fetchone() == (0,)
+        assert claim_jobs(reopened, layers=("hindsight",)) == []
+        assert archive.retained == []
     finally:
         reopened.close()
 
 
-def test_failed_pending_prefix_reuses_identity_after_unrelated_suffix_rewrite(runtime):
+def test_pending_native_prefix_reuses_identity_after_unrelated_suffix_rewrite(runtime):
     settings, db, archive = runtime
-    first = append(db, "Prefix")
+    append(db, "Prefix")
+    accept_source_facts(
+        db,
+        next_source_segment(db, "c", "s", "episodes"),
+        [MemoryFact("fact", 0.9, "Accepted prefix summary.", "shared", ())],
+    )
     suffix = append(db, "Suffix")
 
     def fail(kwargs):
@@ -229,39 +240,18 @@ def test_failed_pending_prefix_reuses_identity_after_unrelated_suffix_rewrite(ru
     old_id = archive.retained[0]["document_id"]
     db.execute("UPDATE messages SET content='Replacement suffix' WHERE id=?", (suffix,))
     db.commit()
-    assert next_source_segment(db, "c", "s", "hindsight").document_id == old_id
     archive.on_retain = None
     assert run(db, settings) == "complete"
     assert archive.retained[1]["document_id"] == old_id
-    assert [item["content"] for item in archive.retained[1:]] == ["Prefix", "Replacement suffix"]
-    assert db.execute(
-        "SELECT count(*) FROM memory_segments WHERE layer='hindsight' AND start_id=?", (first,)
-    ).fetchone() == (1,)
-
-
-@pytest.mark.parametrize("route", ["worker", "seed"])
-def test_uncertain_raw_write_after_mutation_still_retires(runtime, route):
-    settings, db, archive = runtime
-    row = append(db, "Obsolete")
-
-    def uncertain(kwargs):
-        archive.remote[kwargs["document_id"]] = kwargs
-        change_source(db, row, "rewrite")
-        raise RuntimeError("Remote succeeded before transport failure")
-
-    archive.on_retain = uncertain
-    assert seed_or_worker(route, db, settings) == ("degraded" if route == "seed" else "stale_source")
-    old_id = archive.retained[0]["document_id"]
-    assert db.execute("SELECT deleted FROM memory_retired_documents WHERE document_id=?", (old_id,)).fetchone() == (0,)
-    archive.on_retain = None
-    cleanup(db, settings)
-    assert old_id not in archive.remote
+    assert [item["content"] for item in archive.retained] == ["Accepted prefix summary."] * 2
+    assert db.execute("SELECT count(*) FROM memory_segments WHERE layer='hindsight'").fetchone() == (0,)
 
 
 @pytest.mark.parametrize("change", ["lease", "mode"])
-def test_raw_interruption_keeps_current_attempt_and_replacement_ownership(runtime, change):
+def test_native_interruption_keeps_current_index_and_replacement_ownership(runtime, change):
     settings, db, archive = runtime
     append(db, "Current source")
+    remember_local_fact(db, "c", "s", "Bob", "Current local fact.")
 
     def interrupt(kwargs):
         if change == "lease":
@@ -275,9 +265,10 @@ def test_raw_interruption_keeps_current_attempt_and_replacement_ownership(runtim
     archive.on_retain = interrupt
     assert run(db, settings) == ("stale_source" if change == "lease" else "disabled")
     document_id = archive.retained[0]["document_id"]
-    assert load_source(db, document_id) is None
+    assert db.execute("SELECT state FROM memory_fact_index WHERE document_id=?", (document_id,)).fetchone() == (
+        "pending",
+    )
     assert db.execute("SELECT 1 FROM memory_retired_documents WHERE document_id=?", (document_id,)).fetchone() is None
-    assert next_source_segment(db, "c", "s", "hindsight").document_id == document_id
     assert db.execute("SELECT covered_id FROM memory_layer_state WHERE layer='hindsight'").fetchone() == (0,)
     if change == "lease":
         assert db.execute("SELECT lease_token FROM memory_jobs WHERE layer='hindsight'").fetchone() == ("replacement",)
@@ -328,7 +319,7 @@ def test_public_purge_preserves_curator_through_next_real_publication(runtime):
     assert supplied[0][0]["memories"][0]["text"] == "OLD"
     archive.retained.clear()
     assert run(db, settings) == "complete"
-    assert [item["content"] for item in archive.retained] == ["NEW"]
+    assert archive.retained == []  # Curator drafts are local; only classified accepted facts are indexed.
 
 
 @pytest.mark.parametrize("route", ["worker", "manual"])
@@ -436,58 +427,55 @@ def test_complete_scene_snapshot_preserves_no_change_and_accepts_explicit_clear(
     assert scene_state_text(db, "c", "s") == ""
 
 
-@pytest.mark.parametrize("route", ["worker", "seed"])
-def test_raw_mapping_failure_rolls_back_source_acceptance_and_retries(runtime, route):
+def test_native_mapping_failure_rolls_back_acceptance_and_retries_same_id(runtime):
     settings, db, archive = runtime
-    row = append(db, "Current source")
+    append(db, "Current source")
+    remember_local_fact(db, "c", "s", "Bob", "Current native fact.")
     db.execute(
-        "CREATE TRIGGER reject_raw_mapping BEFORE INSERT ON hindsight_documents "
+        "CREATE TRIGGER reject_mapping BEFORE INSERT ON hindsight_documents "
         "BEGIN SELECT RAISE(ABORT,'synthetic mapping failure'); END"
     )
     db.commit()
-    assert seed_or_worker(route, db, settings) == ("degraded" if route == "seed" else "work_failed")
+    assert run(db, settings) == "work_failed"
     document_id = archive.retained[0]["document_id"]
     assert document_id in archive.remote
-    assert load_source(db, document_id) is None
-    assert db.execute("SELECT covered_id FROM memory_layer_state WHERE layer='hindsight'").fetchone() == (0,)
-    assert next_source_segment(db, "c", "s", "hindsight").document_id == document_id
-    db.execute("DROP TRIGGER reject_raw_mapping")
+    assert db.execute("SELECT state FROM memory_fact_index").fetchone() == ("pending",)
+    assert db.execute("SELECT count(*) FROM hindsight_documents").fetchone() == (0,)
+    db.execute("DROP TRIGGER reject_mapping")
     db.commit()
-    assert seed_or_worker(route, db, settings) == ("ready" if route == "seed" else "complete")
+    assert run(db, settings) == "complete"
     assert archive.retained[-1]["document_id"] == document_id
-    assert db.execute("SELECT covered_id FROM memory_layer_state WHERE layer='hindsight'").fetchone() == (row,)
+    assert db.execute("SELECT state FROM memory_fact_index").fetchone() == ("retained",)
 
 
-@pytest.mark.parametrize("route", ["worker", "seed"])
-def test_raw_failed_stale_reopening_recovers_after_restart(runtime, route):
-    settings, db, archive = runtime
-    row = append(db, "Old source with a delayed remote completion")
-    earlier_cleanup = []
-
-    def late(kwargs):
-        change_source(db, row, "rewrite")
-        earlier_cleanup.append(memory_backend.cleanup_retired_memory_documents(db, "c", "s", app_settings=settings))
-        db.execute(
-            "CREATE TRIGGER reject_stale_reopening BEFORE UPDATE ON memory_retired_documents "
-            "BEGIN SELECT RAISE(ABORT,'synthetic stale reopening failure'); END"
-        )
-        db.commit()
-
-    archive.on_retain = late
-    assert seed_or_worker(route, db, settings) == ("degraded" if route == "seed" else "work_failed")
-    old_id = archive.retained[0]["document_id"]
-    assert earlier_cleanup == [True]
-    assert old_id in archive.deleted and old_id in archive.remote
-    assert load_source(db, old_id) is None
-    assert db.execute("SELECT 1 FROM hindsight_documents WHERE document_id=?", (old_id,)).fetchone() is None
-    db.execute("DROP TRIGGER reject_stale_reopening")
+def test_historical_failed_reopening_preserves_finished_token_until_restart(legacy_runtime):
+    settings, db, archive = legacy_runtime
+    append(db, "Old source with a delayed remote completion")
+    source, token, payload = capture_historical_raw(db)
+    initialize_database_schema(db)
+    cleanup(db, settings)
+    archive.remote[source.document_id] = payload
+    finish_archival_attempt(db, token)
+    db.execute(
+        "CREATE TRIGGER reject_reopening BEFORE UPDATE ON memory_retired_documents "
+        "BEGIN SELECT RAISE(ABORT,'synthetic stale reopening failure'); END"
+    )
     db.commit()
-    archive.on_retain = None
+    with pytest.raises(sqlite3.IntegrityError, match="reopening"):
+        reconcile_archival_attempts(db)
+    assert db.execute("SELECT finished FROM memory_archival_attempts WHERE attempt_token=?", (token,)).fetchone() == (
+        1,
+    )
+    db.execute("DROP TRIGGER reject_reopening")
+    db.commit()
     reopened = db_connect(app_settings=settings)
     try:
-        assert seed_or_worker(route, reopened, settings) == ("ready" if route == "seed" else "complete")
         cleanup(reopened, settings)
-        assert old_id not in archive.remote
-        assert load_source(reopened, old_id) is None
+        assert source.document_id not in archive.remote
+        assert (
+            reopened.execute("SELECT 1 FROM memory_archival_attempts WHERE attempt_token=?", (token,)).fetchone()
+            is None
+        )
+        assert archive.retained == []
     finally:
         reopened.close()

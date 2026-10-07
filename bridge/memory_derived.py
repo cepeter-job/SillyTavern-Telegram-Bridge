@@ -50,6 +50,14 @@ def run_derived_layer(db, claim, session, fields, *, provider_port, app_settings
             )
         raise ValueError("Unknown native derived layer")
 
+    on_extract_error = None
+    if layer == "npc":
+        from bridge.npc_extraction import publish_valid_simulation_from_npc_error
+
+        def on_npc_extract_error(error, source):
+            publish_valid_simulation_from_npc_error(db, chat_id, session_id, error, source)
+
+        on_extract_error = on_npc_extract_error
     return process_draft_parts(
         db,
         claim,
@@ -59,4 +67,5 @@ def run_derived_layer(db, claim, session, fields, *, provider_port, app_settings
         valid=valid,
         max_parts=max_parts,
         completed_payload={} if layer == "npc" else None,
+        on_extract_error=on_extract_error,
     )

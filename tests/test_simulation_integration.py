@@ -48,6 +48,90 @@ def test_malformed_simulation_does_not_advance_coverage(session_db):
     assert db.execute("SELECT COUNT(*) FROM simulation_sources").fetchone()[0] == 0
 
 
+def test_valid_simulation_publishes_when_npc_section_is_malformed(session_db):
+    _, db, _ = session_db
+    source = _assistant_row(db, "The user receives a raincoat.")
+
+    refresh(
+        session_db,
+        lambda *a, **k: json.dumps(
+            {
+                "npcs": "malformed",
+                "simulation": {"actor": {"inventory_add": ["Raincoat"]}},
+            }
+        ),
+    )
+
+    actor = SimulationService().state(db, "chat", "s1", "actor", "user")
+    assert actor is not None
+    assert actor["inventory"][0]["name"] == "Raincoat"
+    assert (
+        db.execute(
+            "SELECT MAX(source_rowid) FROM simulation_sources WHERE chat_id=? AND session_id=?",
+            ("chat", "s1"),
+        ).fetchone()[0]
+        == source
+    )
+    assert get_npc_extraction_coverage(db, "chat", "s1") == 0
+
+
+def test_malformed_combined_output_repairs_tracker_without_advancing_npc_coverage(session_db):
+    _, db, _ = session_db
+    source = _assistant_row(db, "The user receives a raincoat.")
+    responses = [
+        "not-json",
+        json.dumps({"simulation": {"actor": {"inventory_add": ["Raincoat"]}}}),
+    ]
+    prompts = []
+
+    def generate(_key, _model, messages, **_kwargs):
+        prompts.append(messages)
+        return responses.pop(0)
+
+    refresh(session_db, generate)
+
+    actor = SimulationService().state(db, "chat", "s1", "actor", "user")
+    assert actor is not None
+    assert actor["inventory"][0]["name"] == "Raincoat"
+    assert len(prompts) == 2
+    assert "tracker" in prompts[1][0]["content"].casefold()
+    assert (
+        db.execute(
+            "SELECT MAX(source_rowid) FROM simulation_sources WHERE chat_id=? AND session_id=?",
+            ("chat", "s1"),
+        ).fetchone()[0]
+        == source
+    )
+    assert get_npc_extraction_coverage(db, "chat", "s1") == 0
+
+
+def test_malformed_npc_partial_tracker_publish_rejects_rewritten_source(session_db):
+    _, db, _ = session_db
+    source = _assistant_row(db, "The user receives a raincoat.")
+
+    def generate(*_args, **_kwargs):
+        db.execute("UPDATE messages SET content=? WHERE id=?", ("Rewritten story.", source))
+        db.commit()
+        return json.dumps(
+            {
+                "npcs": "malformed",
+                "simulation": {"actor": {"inventory_add": ["Raincoat"]}},
+            }
+        )
+
+    refresh(session_db, generate)
+
+    assert SimulationService().state(db, "chat", "s1", "actor", "user") is None
+    assert (
+        db.execute(
+            "SELECT COUNT(*) FROM simulation_sources WHERE chat_id=? AND session_id=?",
+            ("chat", "s1"),
+        ).fetchone()[0]
+        == 0
+    )
+    assert get_npc_extraction_coverage(db, "chat", "s1") == 0
+
+
 def test_missing_simulation_does_not_advance_coverage(session_db):
     _, db, _ = session_db
     _assistant_row(db)

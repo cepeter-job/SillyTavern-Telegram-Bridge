@@ -196,6 +196,7 @@ def process_draft_parts(
     valid: Callable[[], bool],
     max_parts: int = 8,
     completed_payload: Payload | None = None,
+    on_extract_error: Callable[[Exception, MemorySource], None] | None = None,
 ) -> str:
     if db.in_transaction:
         raise RuntimeError("Derived inference requires committed source")
@@ -214,7 +215,14 @@ def process_draft_parts(
                 "AND session_created_at=? AND layer=? AND lease_token=? AND claimed_version=?",
                 (time.time() + LEASE_SECONDS, *_owner(claim), claim.token, claim.version),
             )
-        payload = extract(draft.payload, source)
+        try:
+            payload = extract(draft.payload, source)
+        except Exception as exc:
+            if on_extract_error is not None:
+                with write_transaction(db):
+                    if valid() and source_is_valid(db, source):
+                        on_extract_error(exc, source)
+            raise
         if not accept_draft_part(
             db, claim, source, draft, payload, valid=valid, publish=publish, completed_payload=completed_payload
         ):
@@ -241,6 +249,7 @@ def run_session_draft(
     max_parts: int = 8,
     rebuild: bool = False,
     completed_payload: Payload | None = None,
+    on_extract_error: Callable[[Exception, MemorySource], None] | None = None,
 ) -> str:
     """Manual entry points reuse the same bounded durable claims and accumulator."""
     from dataclasses import replace
@@ -285,6 +294,7 @@ def run_session_draft(
             valid=lambda: claim_is_current(db, claim) and permitted(),
             max_parts=max_parts,
             completed_payload=completed_payload,
+            on_extract_error=on_extract_error,
         )
         if result == "complete" and claim.target_id == original.target_id:
             if not acknowledge_job(db, original):

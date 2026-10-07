@@ -138,7 +138,8 @@ callers; reset, session deletion and the Mini App do not use it.
 
 ## Provider races and uncertainty
 
-Raw and native fact retain calls commit a unique attempt token before dispatch.
+Native fact retain calls commit a unique attempt token before dispatch; historical
+raw attempt tokens retain the same uncertainty guarantees.
 Client construction, HTTP and closure run outside session lifecycle locks. Known
 completion is recorded separately; a short acknowledgment transaction then checks
 the live incarnation, source/fact validity, external epoch, mode and owned claim.
@@ -158,7 +159,7 @@ not by itself reopen a settled retirement.
 
 ## Legacy discovery and scheduling
 
-New raw/native documents carry `st-memory-v2` and a hash of the chat, session,
+New native documents carry `st-memory-v2` and a hash of the chat, session,
 incarnation and external epoch. Background discovery accepts only the exact old
 generation or unmarked legacy documents with proven session-tag/prefix ownership.
 Missing provenance is deferred. Discovery never invokes broad session deletion;
@@ -189,3 +190,30 @@ editing, saved reviewed items and native accepted facts remain available.
 Tracked Telegram message and panel IDs are captured before reset removes local
 rows, then deleted best-effort after the local commit. Telegram failures do not
 restore a session; durable Telegram deletion retries are outside this checkpoint.
+
+## Facts-only Hindsight and local branch readiness (migration 28)
+
+The Hindsight worker indexes accepted native summaries only, with at most eight
+retains per claim. It never creates source_segment mappings or Hindsight transcript
+parts. Complete 12,000-character segmentation, extraction, provenance, drafts and
+lexical retrieval continue in SQLite. A transcript-only dirty job can acknowledge
+without any remote call; accepted native indexes arriving during a claim remain
+pending on a later version. Cleanup outages do not block current native indexing.
+
+Migration 28 records exact raw retirement targets, invalidates historical raw
+segments and removes raw mappings. Its Hindsight claim fence changes the rewrite
+identity, preserving native epochs, source floors, generation tags and accepted
+native documents. It does not compact unresolved attempts or authority tombstones.
+The raw retirement trigger ignores already-invalid rows on subsequent rewrites.
+
+Alternate Ending initializes locally: canonical target validation, restored proof
+and durable future processing. The retained memory_seeding operation stage and
+memory_status field describe this local work. Production ready status is
+independent of memory mode and provider availability; degraded means interrupted
+or invalid local initialization. Initialization owns one short transaction and
+retries do not repeatedly increase every layer's dirty version. Deleted targets
+are rejected before completing their operation.
+
+For native indexing diagnostics, count memory_fact_index rows by state for the
+exact session incarnation (pending, retained or retired). Hindsight covered_id
+is historical source state and is not a remote transcript-ingestion watermark.

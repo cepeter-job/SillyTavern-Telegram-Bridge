@@ -37,21 +37,10 @@ from bridge.memory_scope_store import eligible_fact, ranked_fact_block, resolve_
 from bridge.memory_store import (
     ARCHIVAL_PENDING,
     ARCHIVAL_WATCH_SECONDS,
-    MemoryClaim,
-    MemorySource,
     archival_attempts_outstanding,
-    begin_archival_attempt,
-    claim_is_current,
-    finish_archival_attempt,
-    next_source_segment,
     purge_external_memory,
     reconcile_archival_attempts,
-    reserve_archival_source,
-    resolve_archival_attempt,
-    retire_archival_source,
     retire_derived_layer,
-    source_is_valid,
-    store_segment,
 )
 from bridge.meta_repository import delete_meta_value, load_meta_value, store_meta_value
 from bridge.metadata import get_meta
@@ -361,7 +350,7 @@ def _retirement_would_delete_current_source(db: sqlite3.Connection, document_id:
     return bool(
         db.execute(
             "SELECT 1 FROM memory_segments g JOIN sessions s ON s.chat_id=g.chat_id AND s.session_id=g.session_id "
-            "AND s.created_at=g.session_created_at WHERE g.document_id=? AND g.valid IN (1,?)",
+            "AND s.created_at=g.session_created_at WHERE g.document_id=? AND g.valid IN (1,?) AND g.layer<>'hindsight'",
             (document_id, ARCHIVAL_PENDING),
         ).fetchone()
         or db.execute(
@@ -544,7 +533,9 @@ def _retain_with_client(
     app_settings: AppSettings,
     generation_tags: tuple[str, ...] = (),
 ) -> bool:
-    """Retain one document; native mapping acceptance belongs to its fenced worker."""
+    """Retain an accepted native summary; mapping acceptance belongs to its fenced worker."""
+    if kind != "native_fact":
+        raise ValueError("Only native facts may be retained in Hindsight")
     try:
         with hindsight_client_scope(app_settings=app_settings) as client:
             client.retain(
@@ -557,81 +548,13 @@ def _retain_with_client(
                     "session_id": session_id,
                     "character": character_name,
                 },
-                tags=hindsight_tags(chat_id, session_id, character_name)
-                + (["native-fact"] if kind == "native_fact" else [])
-                + list(generation_tags),
+                tags=[*hindsight_tags(chat_id, session_id, character_name), "native-fact", *generation_tags],
                 retain_async=False,
             )
             return True
     except Exception:
         logging.warning(log_message, chat_id, exc_info=True)
         return False
-
-
-def retain_archival_source(
-    db: sqlite3.Connection,
-    source: MemorySource,
-    character_name: str,
-    context: str,
-    *,
-    app_settings: AppSettings,
-    claim: MemoryClaim | None = None,
-) -> str:
-    """Reserve, dispatch and fence raw acceptance using the same worker/manual protocol."""
-    if db.in_transaction:
-        raise RuntimeError("Archival retain requires committed source")
-    with hindsight_session_lock(source.chat_id, source.session_id):
-        with write_transaction(db):
-            if memory_mode(db, source.chat_id) != "on":
-                return "disabled"
-            if not reserve_archival_source(db, source, claim=claim):
-                return "stale_source"
-            attempt_token = begin_archival_attempt(db, source)
-    retained = _retain_with_client(
-        source.chat_id,
-        source.session_id,
-        source.document_id,
-        character_name,
-        source.content,
-        context,
-        "source_segment",
-        "Hindsight segment retain unavailable for chat %s",
-        app_settings=app_settings,
-        generation_tags=tuple(
-            hindsight_generation_tags(source.chat_id, source.session_id, source.session_created_at, source.purge_epoch)
-        ),
-    )
-    try:
-        if retained:
-            finish_archival_attempt(db, attempt_token)
-        with hindsight_session_lock(source.chat_id, source.session_id), write_transaction(db):
-            if not source_is_valid(db, source):
-                retire_archival_source(db, source)
-                resolve_archival_attempt(db, attempt_token)
-                return "stale_source"
-            if claim is not None and not claim_is_current(db, claim):
-                resolve_archival_attempt(db, attempt_token)
-                return "stale_source"
-            if memory_mode(db, source.chat_id) != "on":
-                resolve_archival_attempt(db, attempt_token)
-                return "disabled"
-            if not retained:
-                return "retain_failed"
-            if not store_segment(db, source):
-                retire_archival_source(db, source)
-                resolve_archival_attempt(db, attempt_token)
-                return "stale_source"
-            db.execute(
-                "INSERT OR REPLACE INTO hindsight_documents(chat_id,session_id,document_id,kind,created_at) "
-                "VALUES(?,?,?,'source_segment',?)",
-                (source.chat_id, source.session_id, source.document_id, time.time()),
-            )
-            resolve_archival_attempt(db, attempt_token)
-            return "complete"
-    except Exception:
-        # The separate dispatch obligation survives invalidation and rollback.
-        logging.warning("Raw archival acceptance deferred for chat %s", source.chat_id, exc_info=True)
-        return "work_failed"
 
 
 def _memory_hindsight_epoch_key(
@@ -758,47 +681,3 @@ def remember_fact(
     app_settings: AppSettings,
 ) -> bool:
     return bool(remember_local_fact(db, str(chat_id), session["session_id"], fields.get("name", ""), fact))
-
-
-def seed_session_memory_now(
-    db: sqlite3.Connection,
-    chat_id: str,
-    session: dict[str, str],
-    *,
-    app_settings: AppSettings,
-) -> str:
-    """Seed all canonical target rows, in complete deterministic bounded parts.
-
-    Alternate ending startup retries this function; successful parts are retained
-    once and failed parts retain the same document identity on the next attempt.
-    """
-    if db.in_transaction:
-        raise ValueError("Memory seeding cannot run inside a write transaction")
-    session_id = str(session["session_id"])
-    if memory_mode(db, chat_id) != "on":
-        return "disabled"
-    try:
-        reconcile_archival_attempts(db, chat_id=chat_id, session_id=session_id)
-    except Exception:
-        logging.warning("Raw archival recovery deferred for chat %s", chat_id, exc_info=True)
-        return "degraded"
-    if not _memory_hindsight_session_exists(db, chat_id, session_id):
-        return "degraded"
-    for _ in range(8):
-        source = next_source_segment(db, chat_id, session_id, "hindsight")
-        if source is None:
-            return "ready"
-        if memory_mode(db, chat_id) != "on":
-            return "disabled"
-        if not source_is_valid(db, source):
-            return "degraded"
-        result = retain_archival_source(
-            db,
-            source,
-            session.get("title", "Story"),
-            f"Independent target transcript: {source.role}; offsets={source.start_offset}:{source.end_offset}",
-            app_settings=app_settings,
-        )
-        if result != "complete":
-            return "disabled" if result == "disabled" else "degraded"
-    return "ready" if next_source_segment(db, chat_id, session_id, "hindsight") is None else "degraded"

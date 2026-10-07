@@ -298,7 +298,7 @@ def test_hindsight_sync_operations_close_owned_event_loops(monkeypatch, tmp_path
             "character",
             "content",
             "context",
-            "explicit",
+            "native_fact",
             "Failure %s",
             app_settings=settings,
         )

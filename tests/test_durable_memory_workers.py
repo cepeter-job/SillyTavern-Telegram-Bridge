@@ -9,7 +9,9 @@ from memory_runtime_test_support import isolated_memory_runtime as isolated_memo
 from test_memory_completion_safety import session_db as session_db
 
 from bridge import memory_backend
-from bridge.memory_store import claim_jobs
+from bridge.memory_contracts import MemoryFact
+from bridge.memory_fact_store import accept_source_facts, remember_local_fact
+from bridge.memory_store import claim_jobs, next_source_segment
 from bridge.metadata import set_meta
 
 
@@ -18,6 +20,12 @@ def add(db, text="A durable event"):
         "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES('chat','s1','user',?,1)", (text,)
     )
     db.commit()
+
+
+def accept_summary(db, summary="Accepted durable event."):
+    return accept_source_facts(
+        db, next_source_segment(db, "chat", "s1", "episodes"), [MemoryFact("fact", 0.9, summary, "shared", ())]
+    )
 
 
 def test_executor_rejection_releases_lease_without_completion(session_db):
@@ -31,32 +39,36 @@ def test_executor_rejection_releases_lease_without_completion(session_db):
     assert db.execute("SELECT count(*) FROM memory_jobs WHERE last_error='executor_rejected'").fetchone()[0] > 0
 
 
-def test_failed_retain_retries_same_document_and_only_success_advances(session_db, monkeypatch):
+def test_failed_native_retain_retries_same_document_and_only_success_advances(session_db, monkeypatch):
     from bridge.memory_workers import run_memory_claim
 
     settings, db, session = session_db
     add(db, "tail " * 10000)
+    accept_summary(db)
     set_meta(db, "memory_mode:chat", "on")
     observed = []
     monkeypatch.setattr(memory_backend, "_retain_with_client", lambda *args, **kw: observed.append(args) or False)
     claim = claim_jobs(db, layers=("hindsight",))[0]
     assert run_memory_claim(db, claim, session, {"name": "Alice"}, app_settings=settings) == "retain_failed"
-    assert db.execute("SELECT count(*) FROM memory_segments WHERE valid=1").fetchone()[0] == 0
+    assert db.execute("SELECT state FROM memory_fact_index").fetchone() == ("pending",)
     db.execute("UPDATE memory_jobs SET next_attempt_at=0")
     db.commit()
     monkeypatch.setattr(memory_backend, "_retain_with_client", lambda *args, **kw: observed.append(args) or True)
     claim = claim_jobs(db, layers=("hindsight",))[0]
     assert run_memory_claim(db, claim, session, {"name": "Alice"}, app_settings=settings) == "complete"
     assert observed[0][2] == observed[1][2]
-    assert sum(len(args[4]) for args in observed[1:]) == 50000
-    assert db.execute("SELECT completed_version FROM memory_jobs WHERE layer='hindsight'").fetchone()[0] == 1
+    assert [args[4] for args in observed] == ["Accepted durable event."] * 2
+    assert db.execute("SELECT dirty_version=completed_version FROM memory_jobs WHERE layer='hindsight'").fetchone() == (
+        1,
+    )
 
 
-def test_memory_off_and_resume_durable_source(session_db, monkeypatch):
+def test_memory_off_and_resume_durable_native_index(session_db, monkeypatch):
     from bridge.memory_workers import run_memory_claim
 
     settings, db, session = session_db
     add(db)
+    accept_summary(db)
     set_meta(db, "memory_mode:chat", "off")
     monkeypatch.setattr(memory_backend, "_retain_with_client", lambda *a, **k: pytest.fail("Disabled network"))
     claim = claim_jobs(db, layers=("hindsight",))[0]
@@ -75,6 +87,7 @@ def test_purge_during_retain_cannot_commit_source(session_db, monkeypatch):
 
     settings, db, session = session_db
     add(db)
+    accept_summary(db)
     set_meta(db, "memory_mode:chat", "on")
 
     def retain(*args, **kwargs):
@@ -157,28 +170,12 @@ def test_summary_success_episode_failure_is_still_pending(session_db, monkeypatc
     assert db.execute("SELECT count(*) FROM memory_segments WHERE layer='episodes' AND valid=1").fetchone()[0] == 1
 
 
-def test_branch_seeding_retains_all_target_rows_and_full_text(session_db, monkeypatch):
-    settings, db, session = session_db
-    set_meta(db, "memory_mode:chat", "on")
-    for n in range(110):
-        add(db, f"target {n} " + ("z" * 20000 if n == 0 else ""))
-    observed = []
-    monkeypatch.setattr(memory_backend, "_retain_with_client", lambda *a, **k: observed.append(a) or True)
-    for _ in range(20):
-        status = memory_backend.seed_session_memory_now(db, "chat", session, app_settings=settings)
-        if status == "ready":
-            break
-    assert status == "ready"
-    assert all(any(f"target {n} " in args[4] for args in observed) for n in range(110))
-    assert sum(args[4].count("z") for args in observed) == 20000
-    assert all(args[1] == "s1" for args in observed)
-
-
 def test_rewrite_during_external_retain_is_stale_and_does_not_ack(session_db, monkeypatch):
     from bridge.memory_workers import run_memory_claim
 
     settings, db, session = session_db
     add(db)
+    accept_summary(db)
 
     def retain(*args, **kwargs):
         db.execute("UPDATE messages SET content='revised'")
@@ -289,9 +286,10 @@ def test_external_purge_keeps_native_progress_and_only_retains_new_turns(session
     assert claim_jobs(db, layers=("hindsight",)) == []
     assert {row[0] for row in db.execute("SELECT covered_id FROM memory_layer_state WHERE layer<>'hindsight'")} == {1}
     add(db, "post-purge event")
+    remember_local_fact(db, "chat", "s1", "Alice", "Accepted post-purge fact.")
     claim = claim_jobs(db, layers=("hindsight",))[0]
     assert run_memory_claim(db, claim, session, {"name": "Alice"}, app_settings=settings) == "complete"
-    assert [a[4] for a in retained] == ["post-purge event"]
+    assert [a[4] for a in retained] == ["Accepted post-purge fact."]
 
 
 def test_curator_keeps_native_facts_without_rewriting_retired_fixed_document(session_db, monkeypatch):
@@ -329,18 +327,6 @@ def test_external_purge_preserves_native_curator_items(session_db, monkeypatch):
     monkeypatch.setattr(memory_backend, "hindsight_client", lambda **kwargs: client)
     purge_hindsight_session(db, "chat", "s1", app_settings=settings)
     assert get_curated_memory_state(db, "chat", "s1")[0][0]["text"] == "Alice arrived"
-
-
-def test_branch_seed_call_has_bounded_external_work(session_db, monkeypatch):
-    settings, db, session = session_db
-    for n in range(12):
-        add(db, f"row {n}")
-    observed = []
-    monkeypatch.setattr(memory_backend, "_retain_with_client", lambda *a, **k: observed.append(a) or True)
-    assert memory_backend.seed_session_memory_now(db, "chat", session, app_settings=settings) == "degraded"
-    assert len(observed) == 8
-    assert memory_backend.seed_session_memory_now(db, "chat", session, app_settings=settings) == "ready"
-    assert len(observed) == 12
 
 
 def test_direct_sql_npc_rewrite_recovers_fixed_suffix_and_preserves_prior_field(session_db):

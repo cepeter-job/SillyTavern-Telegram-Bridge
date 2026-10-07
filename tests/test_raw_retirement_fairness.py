@@ -10,8 +10,7 @@ from settings_test_support import make_test_settings
 from test_memory_final_integration import FIELDS, SESSION, Archive, append
 
 from bridge import memory_backend, memory_workers
-from bridge.memory_fact_store import load_source, remember_local_fact
-from bridge.memory_store import claim_jobs, next_source_segment
+from bridge.memory_fact_store import remember_local_fact
 from bridge.sqlite_store import db_connect
 
 
@@ -53,9 +52,8 @@ def work(tmp_path, monkeypatch, isolated_memory_runtime):
         "world_file,created_at,updated_at) VALUES('c','s','Story','synthetic.png','m','','',1,1)"
     )
     db.commit()
-    row = append(db, "Fresh canonical source must reach the archive")
+    row = append(db, "Fresh canonical source stays local")
     remember_local_fact(db, "c", "s", "Bob", "The brass key opens the north gate.")
-    source = next_source_segment(db, "c", "s", "hindsight")
     native_id, state = db.execute("SELECT document_id,state FROM memory_fact_index").fetchone()
     assert state == "pending"
     watched = {f"watched-raw-{number:02}" for number in range(32)}
@@ -81,7 +79,6 @@ def work(tmp_path, monkeypatch, isolated_memory_runtime):
         submitted=submitted,
         services=services,
         row=row,
-        source=source,
         native_id=native_id,
         watched=watched,
     )
@@ -97,19 +94,17 @@ def dispatch_and_execute(work):
 
 
 def assert_published(work):
-    db, source = work.db, work.source
+    db = work.db
     dirty, completed, error = db.execute(
         "SELECT dirty_version,completed_version,last_error FROM memory_jobs WHERE layer='hindsight'"
     ).fetchone()
     progress = {
-        "raw_remote": source.document_id in work.archive.remote,
-        "raw_accepted": load_source(db, source.document_id) is not None,
-        "raw_mapping": db.execute(
-            "SELECT 1 FROM hindsight_documents WHERE document_id=? AND kind='source_segment'", (source.document_id,)
-        ).fetchone()
-        is not None,
-        "raw_coverage": db.execute("SELECT covered_id FROM memory_layer_state WHERE layer='hindsight'").fetchone()
-        == (work.row,),
+        "no_raw_remote": all("native-fact" in item["tags"] for item in work.archive.retained),
+        "no_raw_source": db.execute("SELECT count(*) FROM memory_segments WHERE layer='hindsight'").fetchone() == (0,),
+        "no_raw_mapping": db.execute("SELECT count(*) FROM hindsight_documents WHERE kind='source_segment'").fetchone()
+        == (0,),
+        "no_raw_coverage": db.execute("SELECT covered_id FROM memory_layer_state WHERE layer='hindsight'").fetchone()
+        == (0,),
         "native_remote": work.native_id in work.archive.remote,
         "native_index": db.execute(
             "SELECT state FROM memory_fact_index WHERE document_id=?", (work.native_id,)
@@ -139,32 +134,26 @@ def test_same_session_watches_allow_executed_worker_progress(work):
     assert_published(work)
 
 
-def test_finite_prerequisite_failure_blocks_then_retry_publishes(work):
+def test_failing_historical_deletion_allows_native_progress_before_cleanup_recovers(work):
     finite = "zz-finite-retirement"
     work.db.execute("INSERT INTO memory_retired_documents(chat_id,session_id,document_id) VALUES('c','s',?)", (finite,))
     work.db.commit()
     work.archive.remote[finite] = {}
     work.failures.update(work.watched | {finite})
-    # A real claimed worker exercises its prerequisite independently of the
-    # dispatcher's separate retirement priority.
-    claim = claim_jobs(work.db, layers=("hindsight",))[0]
-    memory_workers._memory_worker(work.services, claim)
-    assert work.attempted == [finite]
-    assert work.source.document_id not in work.archive.remote
-    assert work.native_id not in work.archive.remote
-    assert load_source(work.db, work.source.document_id) is None
-    assert work.db.execute("SELECT last_error FROM memory_jobs WHERE layer='hindsight'").fetchone() == ("work_failed",)
-    retired_due = work.db.execute(
-        "SELECT deleted,next_attempt_at FROM memory_retired_documents WHERE document_id=?", (finite,)
-    ).fetchone()
-    assert retired_due[0] == 0 and retired_due[1] > work.clock[0]
-    job_due = work.db.execute("SELECT next_attempt_at FROM memory_jobs WHERE layer='hindsight'").fetchone()[0]
-    work.clock[0] = max(job_due, retired_due[1]) + 1
-    work.failures.remove(finite)
-    claim = claim_jobs(work.db, layers=("hindsight",))[0]
-    memory_workers._memory_worker(work.services, claim)
-    assert work.attempted == [finite, finite]
+    assert dispatch_and_execute(work) == "_retired_memory_worker"
+    assert work.attempted  # Historical deletion actually fails at its transport boundary.
+    assert dispatch_and_execute(work) == "_retired_memory_worker"  # Finite debt gets its bounded turn.
+    assert dispatch_and_execute(work) == "_memory_worker"
+    assert_published(work)
+    assert work.db.execute(
+        "SELECT deleted FROM memory_retired_documents WHERE document_id=?", (finite,)
+    ).fetchone() == (0,)
+    work.failures.clear()
+    work.clock[0] += 1000
+    for _ in range(5):
+        dispatch_and_execute(work)
+        if finite not in work.archive.remote:
+            break
     assert finite not in work.archive.remote
-    assert work.watched.issubset(work.archive.remote)
     assert work.db.execute("SELECT count(*) FROM memory_archival_attempts WHERE finished=0").fetchone() == (32,)
     assert_published(work)

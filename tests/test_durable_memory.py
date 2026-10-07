@@ -114,7 +114,7 @@ def test_segments_include_oldest_over_100_and_every_oversized_part(db):
     contents = []
     identifiers = []
     for _ in range(200):
-        segment = next_source_segment(db, "c", "s", "hindsight", max_chars=1000)
+        segment = next_source_segment(db, "c", "s", "episodes", max_chars=1000)
         if segment is None:
             break
         assert len(segment.content) <= 1000
@@ -127,7 +127,7 @@ def test_segments_include_oldest_over_100_and_every_oversized_part(db):
     assert sum(text.count("α") for text in contents) == 12000
     assert all(any(f"tail {number}" in text for text in contents) for number in range(105))
     assert first == 1
-    assert next_source_segment(db, "c", "s", "hindsight", max_chars=1000) is None
+    assert next_source_segment(db, "c", "s", "episodes", max_chars=1000) is None
 
 
 @pytest.mark.parametrize("mutation", ["edit", "delete", "move"])
@@ -136,9 +136,9 @@ def test_rewrite_invalidates_overlapping_and_later_sources(db, mutation):
 
     append(db, "old")
     append(db, "next")
-    one = next_source_segment(db, "c", "s", "hindsight")
+    one = next_source_segment(db, "c", "s", "episodes")
     store_segment(db, one)
-    two = next_source_segment(db, "c", "s", "hindsight")
+    two = next_source_segment(db, "c", "s", "episodes")
     store_segment(db, two)
     if mutation == "edit":
         db.execute("UPDATE messages SET content='changed' WHERE id=1")
@@ -158,11 +158,11 @@ def test_normal_append_preserves_earlier_source(db):
     from bridge.memory_store import next_source_segment, source_is_valid, store_segment
 
     append(db)
-    source = next_source_segment(db, "c", "s", "hindsight")
+    source = next_source_segment(db, "c", "s", "episodes")
     store_segment(db, source)
     append(db, "new")
     assert source_is_valid(db, source)
-    assert next_source_segment(db, "c", "s", "hindsight").start_id == 2
+    assert next_source_segment(db, "c", "s", "episodes").start_id == 2
 
 
 def test_delete_session_before_messages_never_creates_ghost_jobs(db):
@@ -188,11 +188,11 @@ def test_source_retry_has_stable_id_and_purge_invalidates(db):
     from bridge.memory_store import invalidate_memory, next_source_segment, source_is_valid
 
     append(db)
-    one = next_source_segment(db, "c", "s", "hindsight")
-    assert next_source_segment(db, "c", "s", "hindsight").document_id == one.document_id
+    one = next_source_segment(db, "c", "s", "episodes")
+    assert next_source_segment(db, "c", "s", "episodes").document_id == one.document_id
     invalidate_memory(db, "c", "s", purge_epoch=1)
     assert not source_is_valid(db, one)
-    assert next_source_segment(db, "c", "s", "hindsight").document_id != one.document_id
+    assert next_source_segment(db, "c", "s", "episodes").document_id != one.document_id
 
 
 def test_migration_backfills_existing_rows_once_and_retires_legacy_documents():
@@ -236,11 +236,11 @@ def test_next_part_does_not_rescan_completed_prefix(db):
 
     for n in range(150):
         append(db, f"prefix {n}")
-        store_segment(db, next_source_segment(db, "c", "s", "hindsight"))
+        store_segment(db, next_source_segment(db, "c", "s", "episodes"))
     append(db, "uncovered")
     statements = []
     db.set_trace_callback(statements.append)
-    source = next_source_segment(db, "c", "s", "hindsight")
+    source = next_source_segment(db, "c", "s", "episodes")
     db.set_trace_callback(None)
     assert source.start_id == 151
     assert len(statements) <= 5

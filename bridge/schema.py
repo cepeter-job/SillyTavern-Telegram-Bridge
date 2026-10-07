@@ -12,6 +12,7 @@ from bridge.finale_checkpoint_schema import migrate_finale_checkpoint_guards
 from bridge.greeting_media_schema import migrate_greeting_media_cleanup
 from bridge.memory_archival_schema import migrate_archival_attempts
 from bridge.memory_draft_schema import migrate_complete_memory_parts
+from bridge.memory_facts_only_schema import migrate_facts_only_hindsight
 from bridge.memory_retirement_schema import migrate_local_first_memory_cleanup
 from bridge.memory_schema import migrate_durable_memory
 from bridge.memory_scope_schema import migrate_memory_knowledge
@@ -326,10 +327,8 @@ def _run_startup_database_cleanup(db: sqlite3.Connection) -> None:
         (now - 90 * 86400,),
     )
     db.execute(
-        "DELETE FROM sync_bindings "
-        "WHERE NOT EXISTS ("
-        "SELECT 1 FROM sessions "
-        "WHERE sessions.chat_id=sync_bindings.chat_id "
+        "DELETE FROM sync_bindings WHERE NOT EXISTS ("
+        "SELECT 1 FROM sessions WHERE sessions.chat_id=sync_bindings.chat_id "
         "AND sessions.session_id=sync_bindings.session_id"
         ")"
     )
@@ -514,6 +513,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(25, "canonical_simulation_trackers", migrate_simulation_trackers),
     _Migration(26, "retire_prompt_tracker_bootstrap", retire_prompt_tracker_bootstrap),
     _Migration(27, "local_first_memory_cleanup", migrate_local_first_memory_cleanup),
+    _Migration(28, "facts_only_hindsight", migrate_facts_only_hindsight),
 )
 
 

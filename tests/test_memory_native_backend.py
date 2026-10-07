@@ -401,7 +401,7 @@ class MemoryNativeBackendTests(SettingsTestCase):
             "stale_source",
         )
         self.assertEqual(fake.retained, [])
-        # Expired/interrupted claim recovery rebuilds the current transcript.
+        # Transcript-only indexing completes without creating raw remote work.
         self.db.execute("UPDATE memory_jobs SET lease_deadline=0,next_attempt_at=0")
         self.db.commit()
         claim = claim_jobs(self.db, layers=("hindsight",))[0]
@@ -409,7 +409,7 @@ class MemoryNativeBackendTests(SettingsTestCase):
             run_memory_claim(self.db, claim, self.session, self.fields, app_settings=self.app_settings_builder.build()),
             "complete",
         )
-        self.assertEqual(fake.retained[0]["content"], "new text")
+        self.assertEqual(fake.retained, [])
 
     def test_public_purge_invalidates_already_queued_retain(self):
         from bridge.memory_workers import run_memory_claim

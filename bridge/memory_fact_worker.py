@@ -1,4 +1,4 @@
-"""Native fact dispatch uses the same durable attempt fences as raw archival."""
+"""Bounded native fact dispatch preserves durable attempt and generation fences."""
 
 import time
 
@@ -13,6 +13,8 @@ from bridge.memory_store import (
 )
 from bridge.sqlite_store import write_transaction
 
+MAX_FACTS_PER_RUN = 8
+
 
 def retire_fact_document(db, document_id):
     db.execute("UPDATE memory_fact_index SET state='retired' WHERE document_id=?", (document_id,))
@@ -25,8 +27,8 @@ def run_fact_index(db, claim, fields, *, app_settings):
     """Commit intent before I/O; publish only a still-current fact and owned claim."""
     rows = db.execute(
         "SELECT document_id FROM memory_fact_index WHERE chat_id=? AND session_id=? AND session_created_at=? "
-        "AND state='pending' ORDER BY created_at,document_id LIMIT 4",
-        (claim.chat_id, claim.session_id, claim.session_created_at),
+        "AND state='pending' ORDER BY created_at,document_id LIMIT ?",
+        (claim.chat_id, claim.session_id, claim.session_created_at, MAX_FACTS_PER_RUN),
     ).fetchall()
     calls = 0
     for (document_id,) in rows:

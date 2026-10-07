@@ -43,7 +43,7 @@ def successful_report(tmp_path_factory):
 
 def test_standalone_evaluation_contract(successful_report):
     report = successful_report
-    assert report["schema_version"] == 1
+    assert report["schema_version"] == 2
     assert report["failed_case_count"] == 0
     assert report["counts"]["target_later_message_count"] > 100
     assert report["counts"]["target_later_episode_count"] > 200
@@ -70,6 +70,20 @@ def test_actual_canonical_evidence_and_measurement_labels(successful_report):
     assert cases["coverage.complete-long-source"]["covered_chars"] > 150000
     assert cases["retry.remote-success-lost-ack"]["passed"]
     assert cases["purge.floor"]["passed"]
+    boundary = cases["facts-only.remote-boundary"]
+    assert boundary["passed"]
+    assert boundary["retained_payload_count"] > 300
+    assert all(
+        item["category"] == "native_fact" and "native-fact" in item["tags"]
+        for item in report["retained_payload_observations"]
+    )
+    identity = report["measurement_identity"]["source_sha256"]
+    assert set(identity) == {
+        "tools/evaluate_story_memory.py",
+        "tools/story_memory_eval_support.py",
+        "tools/story_memory_eval_checks.py",
+    }
+    assert all(identity[name] == hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in identity)
     assert report["metrics"]["query_sample_count"] == 10
     assert report["metrics"]["query_warmups"] == 1
     assert report["metrics"]["python_tracemalloc_peak_bytes"] > 0
@@ -130,3 +144,15 @@ def test_empty_memory_channels_render_no_evidence(monkeypatch):
     from bridge.memory_contracts import MemoryPromptContext
 
     assert text_of(MemoryPromptContext()) == ""
+
+
+@pytest.mark.parametrize("tags,content", [([], "Raw transcript"), (["native-fact"], "Unaccepted summary")])
+def test_offline_transport_rejects_non_native_or_unaccepted_payloads(monkeypatch, tags, content):
+    monkeypatch.syspath_prepend(str(ROOT / "tools"))
+    from story_memory_eval_support import OfflineTransport
+
+    transport = OfflineTransport({})
+    transport.native_summary = lambda document: "Accepted summary"
+    with pytest.raises(AssertionError, match=r"native|accepted"):
+        transport.retain(document_id="native-document", content=content, tags=tags)
+    assert transport.documents_by_id == {}

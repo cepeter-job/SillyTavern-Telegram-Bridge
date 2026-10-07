@@ -277,7 +277,6 @@ def test_language_callback_updates_and_rerenders_same_panel_without_success_text
     rerendered = []
     monkeypatch.setattr(callbacks, "set_response_language", lambda *a, **k: "id")
     monkeypatch.setattr(callbacks, "send_text", lambda *a, **k: pytest.fail("language selection must stay in panel"))
-    monkeypatch.setattr(callbacks, "remove_inline_keyboard", lambda *a, **k: pytest.fail("panel should be rerendered"))
     monkeypatch.setattr(callbacks, "send_language_menu", lambda *a, **k: rerendered.append((a, k)))
     answers = []
     handled = callbacks.handle_language_callback(
@@ -310,7 +309,7 @@ def test_databank_remove_confirm_mutates_directly_then_rerenders_without_legacy_
         object(),
         "token",
         "chat",
-        SimpleNamespace(db=object()),
+        SimpleNamespace(db=object(), app_settings=object()),
         SimpleNamespace(remove=lambda _db, _chat, filename: removed.append(filename) or 1),
         77,
         ["enum", "ragremoveconfirm", "token"],

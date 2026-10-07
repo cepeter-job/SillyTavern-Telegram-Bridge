@@ -363,7 +363,7 @@ def test_new_story_activity_resets_parked_retry_budget(db):
 
 
 def test_retry_guard_migration_repairs_existing_insert_trigger(db):
-    from bridge.memory_schema import migrate_memory_retry_guard
+    from bridge.memory_retry_schema import migrate_memory_retry_guard
 
     append(db)
     db.execute("UPDATE memory_jobs SET attempts=8,last_error='work_failed',next_attempt_at=999 WHERE layer='npc'")

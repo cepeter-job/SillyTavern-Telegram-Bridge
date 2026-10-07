@@ -1,4 +1,4 @@
-import {api,state,createSessionScope,registerPage,navigate} from './app.js';
+import {api,state,createSessionScope,registerPage,navigate,openChat} from './app.js';
 import {el,card,button,empty,confirmAction,notice} from './ui.js';
 import {icon} from './icons.js';
 function healthCard(iconName,title,...children) {
@@ -103,53 +103,86 @@ function memoryDiagnosticsCard(summary={},detail=null) {
 }
 async function dashboard() {
   const data=await api('/status');
-  const [sessions,personas,worlds,memory]=await Promise.all([
-    api('/sessions').catch(()=>({sessions:[data.session]})),
+  const [sessions,personas,worlds,memory,trackers]=await Promise.all([
+    api('/sessions').catch(()=>({sessions:[],unavailable:true})),
     api('/personas').catch(()=>({personas:[],unavailable:true})),
     api('/worlds').catch(()=>({worlds:[],unavailable:true})),
     api('/memory').catch(()=>({mode:'unknown',unavailable:true})),
+    api('/trackers').catch(()=>null),
   ]);
   state.session=data.session;
   const session=data.session;
-  const characterName=String(session.character_file||'Character').replace(/\.[^.]+$/,'');
-  const activePersona=personas.personas.find(item=>item.id===session.persona_id);
-  const activeWorlds=worlds.worlds.filter(item=>item.active).map(item=>item.filename.replace(/\.json$/i,''));
+  const toolbar=el('div',{class:'dashboard-toolbar'},button('Switch session',()=>navigate('sessions'),'secondary'));
+  const storyActions=el('div',{class:'dashboard-story-actions'},
+    button('Start new story',()=>navigate('characters'),'secondary'),
+    button('All sessions',()=>navigate('sessions'),'secondary'));
+  if(!session)return el('div',{class:'dashboard-layout'},toolbar,
+    card('No story selected',empty('Choose an existing session or start a new story.')),storyActions);
+  const characterName=String(session.character_file||'').replace(/\.[^.]+$/,'');
+  const activePersona=(personas.personas||[]).find(item=>item.id===session.persona_id);
+  const activeWorlds=(worlds.worlds||[]).filter(item=>item.active).map(item=>String(item.filename).replace(/\.json$/i,''));
   const sessionPortrait=el('img',{class:'session-portrait',alt:characterName,decoding:'async',referrerpolicy:'no-referrer'});
   const sessionPortraitFrame=el('div',{class:'session-portrait-frame',hidden:true},sessionPortrait);
   const portraitSlot=el('div',{class:'session-portrait-slot','aria-hidden':'true'},icon('characters'),sessionPortraitFrame);
   const status=el('div',{class:'story-status'},
     storyStatus('personas','Persona',personas.unavailable?'Unavailable':activePersona?.name||'Off'),
     storyStatus('worlds','World',worlds.unavailable?'Unavailable':activeWorlds.length?activeWorlds.join(', '):'None'),
-    storyStatus('memory','Memory',memory.unavailable?'Unavailable':memory.mode==='on'?'On':'Off'));
+    storyStatus('memory','Memory',memory.unavailable?'Unavailable':memory.mode==='on'?'On':memory.mode==='off'?'Off':'Unknown'));
+  const mode=String(session.mode||'').replaceAll('_',' ').replace(/^./,letter=>letter.toUpperCase());
   const summary=el('div',{class:'session-summary'},portraitSlot,
-    el('div',{class:'session-meta'},el('span',{class:'eyebrow'},'CONTINUE YOUR STORY'),el('h2',{},session.title),
-      el('p',{class:'story-character'},'with '+characterName),el('span',{class:'badge'},session.model_id)));
-  const back=button('Continue',()=>{const app=window.Telegram?.WebApp;if(typeof app?.close==='function')app.close();else notice('Continue in your Telegram bot chat.');});back.append(icon('arrow'));
-  const sessionCard=el('section',{class:'card dashboard-session story-card'},summary,status,
-    el('div',{class:'session-actions'},back,button('Sessions',()=>navigate('sessions'),'secondary')));
+    el('div',{class:'session-meta'},
+      el('div',{class:'story-heading-meta'},el('span',{class:'eyebrow'},'ACTIVE STORY'),mode?el('span',{class:'badge'},mode):null),
+      el('h2',{id:'active-story-title'},session.title||'Untitled story'),
+      el('p',{class:'story-character'},characterName?'with '+characterName:'No character selected')));
+  const back=button('Open chat',openChat);back.append(icon('arrow'));
+  const sessionCard=el('section',{class:'card dashboard-session story-card','aria-labelledby':'active-story-title'},summary,
+    el('div',{class:'session-actions'},back));
   if(session.character_file)api('/characters/'+encodeURIComponent(session.character_file)+'/portrait',{binary:true}).then(blob=>{
     if(!blob||blob.size===0)throw new Error('empty portrait');
     const url=URL.createObjectURL(blob);let revoked=false;const revoke=()=>{if(!revoked){revoked=true;URL.revokeObjectURL(url);}};
     sessionPortrait.onload=()=>{sessionPortraitFrame.hidden=false;revoke();};sessionPortrait.onerror=()=>{revoke();sessionPortraitFrame.hidden=true;};sessionPortrait.src=url;
   }).catch(()=>{sessionPortraitFrame.hidden=true;});
 
+  const sessionTools=el('div',{class:'dashboard-session-tools'},
+    storyEntry('trackers','Story Tracker','Read-only',storyTrackerSummary(trackers,session),'trackers'),
+    storyEntry('director','Director Room','Private','Review guidance and decisions','director'));
+  const quickActions=el('div',{class:'dashboard-quick-actions','aria-label':'Story actions'},
+    storyEntry('check','Check','','Resolve an action in Telegram','check'),
+    storyEntry('imagine','Imagine','','Create an image in Telegram','imagine'));
   const recentList=el('div',{class:'recent-story-list'});
-  for(const item of sessions.sessions.slice(0,3)) {
+  for(const item of (sessions.sessions||[]).slice(0,3)) {
     const active=item.session_id===session.session_id;
     const row=button('',()=>navigate('sessions'),'recent-story');
-    row.append(icon('sessions'),el('span',{class:'recent-story-copy'},el('strong',{},item.title),el('small',{},item.character_file+' · '+item.model_id)),active?el('span',{class:'badge'},'Active'):icon('chevron'));
+    row.append(icon('sessions'),el('span',{class:'recent-story-copy'},el('strong',{},item.title),
+      el('small',{},String(item.character_file||'No character selected').replace(/\.[^.]+$/,''))),
+    active?el('span',{class:'badge'},'Active'):icon('chevron'));
     recentList.append(row);
   }
-  if(!sessions.sessions.length)recentList.append(empty('Create a session to start a story.'));
-  const recent=el('section',{class:'recent-stories'},el('div',{class:'section-header'},el('h2',{},'Recent stories'),button('View all',()=>navigate('sessions'),'secondary')),recentList);
+  if(!recentList.childElementCount)recentList.append(empty(sessions.unavailable?'Recent stories unavailable. Open All sessions to try again.':'No saved sessions.'));
+  const recent=el('section',{class:'recent-stories'},el('div',{class:'section-header'},el('h2',{},'Recent stories')),recentList);
+  const setup=el('details',{class:'card disclosure dashboard-context'},el('summary',{},'Story setup'),status,
+    el('p',{class:'session-model muted'},'Story model: '+(session.model_id||'Not configured')),
+    button('Open tools',()=>navigate('tools'),'secondary'));
+  const health=el('details',{class:'card disclosure dashboard-health'},el('summary',{},'Bridge health'),details(data));health.querySelector('.grid').classList.add('health-grid');
+  return el('div',{class:'dashboard-layout','data-session-id':String(session.session_id)},toolbar,sessionCard,
+    sessionTools,quickActions,storyActions,recent,setup,health);
+}
 
-  const shortcuts=el('div',{class:'dashboard-shortcuts'});
-  for(const [key,label,hint] of [['characters','Characters','Find your next story'],['models','Models','Choose story and utility models'],['memory','Memory','Keep important details'],['worlds','Worlds','Shape lore and context']]) {
-    const action=button(label,()=>navigate(key),'shortcut');action.prepend(icon(key));action.append(el('small',{},hint),icon('chevron'));shortcuts.append(action);
-  }
-  const health=el('details',{class:'card dashboard-health'},el('summary',{},'Bridge health'),details(data));health.querySelector('.grid').classList.add('health-grid');
-  return el('div',{class:'dashboard-layout'},sessionCard,recent,
-    el('div',{class:'section-header dashboard-quick-heading'},el('h2',{},'Quick actions')),shortcuts,health);
+function storyTrackerSummary(trackers,session) {
+  if(!trackers?.session?.session_id||String(trackers.session.session_id)!==String(session.session_id))return 'Tracker summary unavailable';
+  const keys=['relationships','agendas','inventory','skills','conditions','factions','quests','tasks','checks'];
+  const count=keys.reduce((total,key)=>total+(Array.isArray(trackers[key])?trackers[key].length:0),0);
+  const saved=count?count+' saved '+(count===1?'entry':'entries'):'No saved trackers yet';
+  return saved+(trackers.pending?' · Updates pending':'');
+}
+
+function storyEntry(page,title,kind,hint,iconName) {
+  const action=button('',()=>navigate(page),'story-entry'+(kind==='Private'?' story-entry-private':''));
+  action.dataset.page=page;
+  action.append(icon(iconName),el('span',{class:'story-entry-copy'},
+    el('span',{class:'story-entry-heading'},el('strong',{},title),kind?el('span',{class:'badge'},kind):null),
+    el('small',{},hint)),icon('chevron'));
+  return action;
 }
 
 function storyStatus(iconName,label,value) {

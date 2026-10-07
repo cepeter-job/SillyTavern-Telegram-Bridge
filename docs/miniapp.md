@@ -18,7 +18,9 @@ After setup, open your bot's **private chat** and use its Bridge menu. Launching
 from Telegram supplies the signed identity the app needs. Only users listed in
 `SILLYTAVERN_TELEGRAM_ALLOWED_USERS` can open it.
 
-You should see Home with the current story and bridge status. A copied browser
+Home opens with your current story, saved trackers and private Director Room.
+Choose **Open chat** to return to the conversation, or **Switch session** to
+choose another saved story. A copied browser
 URL is not a separate login: Telegram supplies the login information when you
 launch the app. If it expires, close the app and reopen it from the bot chat.
 The default launch lifetime is one hour. Opening through a main Mini App profile
@@ -35,13 +37,16 @@ Personas and Worlds; use separate bridge instances for mutually untrusted users.
 
 | Page | Use it for |
 |---|---|
-| **Home** | Return to the current story, open recent sessions and check bridge health. |
+| **Home** | Open chat, switch sessions, inspect saved trackers or enter Director Room. Story setup and bridge health expand below the story. |
 | **Characters** | Browse/search cards, upload, review optimizer proposals, restore backups or create a conversation. |
-| **Sessions** | Create, rename, switch or delete inactive sessions. |
-| **Manage** | Models, Personas, Worlds, Generation, Memory, NPC Bank, Story trackers, Data Bank and Advanced settings. |
-| **System** | Running/installed version, operations, retained memory diagnostics and signed updates. |
+| **Tools** | Open story controls, Check and Imagine handoffs, Personas, Worlds, Memory, NPC Bank or Data Bank. |
+| **Settings** | Choose Model roles or Generation, review Usage, or open System & operations. |
 
-For token counts, open **Manage → Advanced settings → Usage**. It reports
+The four tabs stay visible on mobile. **All sessions** on Home opens session
+creation, renaming, switching and inactive-session deletion. Director Room and
+Story trackers return to Home; model and system controls return to Settings.
+
+For token counts, open **Settings → Usage**. It reports
 provider counters for the selected private session or all sessions in that chat.
 See [Token usage](token-usage.md) for missing counters and coverage limits.
 
@@ -52,7 +57,7 @@ session. Existing sessions keep their own style. Use Telegram `/narrative` to
 change it or save a new personal default; the Mini App does not yet provide
 separate Narrative Style controls.
 
-Choose a character to create a new normal session, then send `/start` in Telegram
+Choose **Start new story** on a character to create a new normal session, then send `/start` in Telegram
 for its opening. This leaves your existing conversation intact.
 
 The Optimizer asks the Utility model to prepare a preview. Compare the original
@@ -71,9 +76,13 @@ animation is unavailable or reduced motion is enabled.
 
 ### Models and generation
 
-Story, Utility and Director selections belong to the current session. Director can
-inherit Utility; Utility can inherit
-Story. Provider credentials stay on the server.
+Open **Settings → Model roles**. Story, Utility and Director selections belong
+to the story named at the top. Each role shows its configured choice and its
+effective model. Director can inherit Utility; Utility can inherit Story. An
+explicit choice remains explicit even when it matches the inherited model.
+If a saved choice differs from the resolved route, review that selection before
+saving. These values describe routing, not provider availability. Provider
+credentials stay on the server.
 
 Generation uses the same limits as Telegram: temperature 0–2, top-p 0–1, output
 tokens 1–16,000, frequency/presence penalties −2–2, reasoning budget 0–32,000,
@@ -110,9 +119,10 @@ complications and established consequences. These are extracted after narration;
 a successful die roll is not itself task completion. Set automatic mechanics in
 Telegram with the `/check` panel; typed `/check mode auto|director|manual` remains available.
 
-Open **Manage → Story trackers** to inspect the active session's saved
+Open **Home → Story Tracker** to inspect the active session's saved
 relationships, visible agendas, inventory, skills, conditions, factions, linked
-quests and recent d20 checks. **Last updated** shows the time of the latest story
+quests, tasks and recent d20 checks. Category links jump to the saved details.
+**Last updated** shows the time of the latest story
 text included in the saved trackers; **Catching up** means newer story text is
 waiting for extraction. Refresh reloads the saved view without a model request,
 a new roll or a story turn. A fresh chat shows an empty state without creating
@@ -124,20 +134,39 @@ view; Director Room exposes its own planning controls separately. See
 [Story trackers and checks](user-guide.md#story-trackers-and-checks) for mechanics
 and storage details.
 
+### Check and Imagine
+
+Open **Check** or **Imagine** from Home or Tools. Choose **Copy command**, then
+**Open chat**, and send `/check` or `/imagine` to the bot. **Open chat** closes the
+MiniApp; it does not send a message or automatically open a command panel.
+
+Check offers Auto (Utility), Director and Manual options in Telegram. Imagine
+offers Current Scene, Custom Prompt and Options. **View saved checks** opens
+the read-only Story trackers page.
+
 ### Slow operations and stale forms
 
-For a task that takes time, open **System → Operations** before submitting it
+For a task that takes time, open **Settings → System & operations** before submitting it
 again. Each task has an operation ID so you can find the same request:
 
 | State | What to do |
 |---|---|
 | **Queued** | The request is waiting for a worker. Do not submit another copy. |
 | **Running** | Work has started. Check this operation for the result. |
-| **Completed** | Open its result; an optimizer preview can be reviewed from here. |
+| **Succeeded** | Open its result; an optimizer preview can be reviewed from here. |
+| **Failed** | Read the recorded failure before deciding whether to retry. |
 | **Interrupted** | The process restarted. Inspect the result before retrying because part of the action may already have happened. |
 
-Identical retries reuse the accepted operation. Interrupted work is marked for
-review rather than silently started over.
+If the app cannot confirm a running operation's outcome, it shows **Status
+unavailable** and an Operations link. Director and optimizer controls retain
+your entries and block another submission from that view. Review the recorded
+operation before starting more work. Interrupted work is marked for review
+rather than silently started over.
+
+Errors remain visible until dismissed or resolved. In Director Room, Models and
+Characters, a completed change whose follow-up refresh fails is reported as
+completed, with a refresh action. Refreshing replaces the form with current saved
+data.
 
 A completed optimizer preview can be reopened from Operations without another
 model call. Apply still checks the originating user/session and card revision.
@@ -146,16 +175,21 @@ redirect an old confirmation. Refresh and review again when a form is stale.
 
 ## Director Room
 
-Choose **Manage → Director Room** to read scene plans, the current viewpoint,
+Choose **Home → Director Room** to read scene plans, the current viewpoint,
 storylines and recent decisions. Planning text is not story dialogue or character
 knowledge. **Next scene only** and **Persistent objective** are separate controls;
 only the latter remains until you explicitly change or clear it. The same
 persistent objective is available through Telegram `/group goal`.
 
+Decision history lists the recorded outcome, source, direction and reason above
+the editing controls. Expand **Earlier decisions** for the rest of the recent
+history. No date is shown when the stored decision has no timestamp.
+
 Choose an established thread to guide the next scene, or use **Reassess now** for a
 provider-backed Director check. The confirmation makes the extra model call
-explicit. Repeated requests reuse the existing job, and an old rendered page
-cannot retarget its edit to a different active session.
+explicit. Check Operations for uncertain outcomes before starting another
+reassessment. An old rendered page cannot retarget its edit to a different active
+session.
 
 Director settings offer Adaptive, 4/6/10-turn and custom 1–100-turn cadence, plus a
 reasoning budget separate from Utility. **Choose models** opens Story/Utility/
@@ -272,7 +306,7 @@ between delivery and recording the acknowledgement.
 | The app will not open | Check service status and the exact Funnel mapping; launch from the private bot chat. |
 | **401** | Reopen from Telegram; check that your numeric user ID is allowed. |
 | **409** | The session, revision or confirmation changed. Refresh and review before trying again. |
-| **429** | Check System → Operations for pending work before resubmitting. |
+| **429** | Check Settings → System & operations for pending work before resubmitting. |
 | **Interrupted** | The process restarted. Inspect the result; some actions may already have happened. |
 | An optimizer preview will not apply | Check the original session/card revision and generate a new preview if it changed or expired. |
 | Update appears installed but not running | Inspect the service log and running revision; a successful file update does not prove a successful restart. |

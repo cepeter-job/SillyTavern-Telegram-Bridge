@@ -9,18 +9,42 @@ export function el(tag, attrs = {}, ...children) {
   for (const child of children.flat(Infinity)) if (child != null) node.append(child instanceof Node ? child : document.createTextNode(String(child)));
   return node;
 }
-export function notice(message) {
-  const target = document.getElementById('notice'); target.textContent = message; target.hidden = false;
-  clearTimeout(notice.timer); notice.timer = setTimeout(() => { target.hidden = true; }, 7000);
+export function notice(message,kind='status') {
+  const target=document.getElementById('notice');
+  clearTimeout(notice.timer);
+  target.replaceChildren(el('span',{},message));target.hidden=false;target.dataset.kind=kind;
+  target.setAttribute('role',kind==='error'?'alert':'status');target.setAttribute('aria-live',kind==='error'?'assertive':'polite');
+  const dismiss=el('button',{type:'button',class:'notice-dismiss','aria-label':'Dismiss notification',onclick:()=>{target.hidden=true;}},'Dismiss');
+  if(kind==='error')target.append(dismiss);
+  if(kind!=='error')notice.timer=setTimeout(()=>{target.hidden=true;},7000);
 }
 export function button(label, action, kind = '') {
   return el('button', {type:'button', class:kind, onclick:async event => {
-    const target = event.currentTarget; target.disabled = true;target.setAttribute('aria-busy','true');
-    try { await action(); } catch (error) { notice(error.message || 'Operation failed.'); }
-    finally { target.disabled = false;target.removeAttribute('aria-busy'); }
+    const target = event.currentTarget;
+    if(target.disabled||target.getAttribute('aria-busy')==='true'||target.getAttribute('aria-disabled')==='true')return;
+    target.disabled = true;target.setAttribute('aria-busy','true');
+    try { await action(); } catch (error) {
+      const recovery=error.status===409?' Refresh this page and review the current story before trying again.':'';
+      notice((error.message || 'Operation failed.')+recovery,'error');
+    }
+    finally { target.disabled = target.getAttribute('aria-disabled')==='true';target.removeAttribute('aria-busy'); }
   }}, label);
 }
-export function field(label, input) { const id = 'field-' + crypto.randomUUID(); input.id = id; return el('div', {}, el('label', {for:id}, label), input); }
+export function sessionContext(session) {
+  const character=String(session?.character_file||'').replace(/\.[^.]+$/,'');
+  const meta=[character,session?.mode?String(session.mode).replaceAll('_',' '):''].filter(Boolean).join(' · ');
+  return el('section',{class:'session-context','aria-label':'Current story'},
+    el('span',{class:'eyebrow'},'CURRENT STORY'),el('strong',{},session?.title||'No story selected'),
+    meta?el('span',{class:'muted'},meta):null);
+}
+export function feedback(message,kind='error') {
+  return el('div',{class:'feedback feedback-'+kind,role:kind==='error'?'alert':'status'},el('p',{},message));
+}
+export function field(label, input) {
+  const id='field-'+crypto.randomUUID();input.id=id;
+  if(input.type==='checkbox')return el('div',{},el('label',{for:id},input,el('span',{},label)));
+  return el('div',{},el('label',{for:id},label),input);
+}
 export function card(title, ...children) { return el('section', {class:'card'}, el('h2',{},title), ...children); }
 export function empty(text = 'Nothing here yet.') { return el('p', {class:'empty'}, text); }
 export function confirmAction(message) { return new Promise(resolve => {

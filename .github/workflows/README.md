@@ -31,7 +31,7 @@ accepting a reduced gate.
 | Job | Scope | Retained evidence |
 | --- | --- | --- |
 | `python-tests` | Complete pytest discovery, at most four workers, resource warnings as errors, whole-application statement and branch coverage, security coverage floors | `application-coverage`: coverage JSON/XML, JUnit XML, pytest log with the 20 slowest tests |
-| `miniapp-smoke` | Browser DOM behavior against the local Python fixture, including page loads, mutations, and stale session handling | `miniapp-smoke`: browser smoke log |
+| `miniapp-smoke` | Focused DOM regressions for navigation, model roles and operation failures, plus integration against the local Python fixture for page loads, mutations and stale sessions | `miniapp-smoke`: focused test and integration logs |
 | `secret-scan` | Repository history secret scan | Action result and logs |
 | `dependency-audit` | Both complete hash-locked runtime and development dependency sets | Action result and logs |
 | `static-analysis` | Dependency lock consistency, module-size ratchet, reference evidence, architecture policy, leak scan, Ruff, and mypy | `memory-leak-scan`: leak scan and module reference JSON |

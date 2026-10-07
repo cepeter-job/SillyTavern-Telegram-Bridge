@@ -292,7 +292,7 @@ rolls NPC state back to the applicable revision before regeneration.
 | AI Director | One planning call on an event or cadence threshold, with at most one repair for malformed version-1 output. Groups reuse the accepted plan without another planning call. |
 | Autonomous groups | Bounded multi-character Story replies; not another independent story planner. |
 
-Review reported counts in the Mini App's **Manage → Advanced settings → Usage**.
+Review reported counts in the Mini App's **Settings → Usage**.
 A failed request can still consume tokens. The tracker is not an invoice or a
 remaining-quota display, and some task types are outside its coverage. See
 [Token usage](token-usage.md).
@@ -355,7 +355,7 @@ trimmed when the request needs space.
 
 ### View saved trackers
 
-Use `/trackers` in Telegram, or open **Manage → Story trackers** in the Mini App.
+Use `/trackers` in Telegram, or open **Home → Story Tracker** in the Mini App.
 The view shows saved relationships, visible agendas, inventory, skills,
 conditions, faction state, linked quests, user tasks and recent d20 checks for the active
 session. **Last updated** identifies the latest story text included in the saved
@@ -433,7 +433,7 @@ deleting the session invalidates affected work. A pending result cannot cross a
 session or alternate-ending checkpoint boundary.
 
 Tasks are extracted from **committed story evidence** after narration. They appear
-under Tasks in `/trackers` and Manage → Story trackers. A task can span several
+under Tasks in `/trackers` and Home → Story Tracker. A task can span several
 checks, with stage, progress, completed steps and still-pending steps; its latest
 check link is internal. Physical outcomes and progress are not granted merely
 because a check succeeded. Private NPC agendas remain in their existing owners.
@@ -541,7 +541,7 @@ pretending stale facts are current.
 
 ## Director Room
 
-Open `/director`, or **Manage → Director Room** in the Mini App, to see what the
+Open `/director`, or **Home → Director Room** in the Mini App, to see what the
 Director is planning. This is a private planning view: plans do not become story
 facts, and characters do not learn them just because you opened the panel.
 

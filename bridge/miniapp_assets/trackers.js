@@ -1,15 +1,15 @@
 import {api,navigate,registerPage} from './app.js';
-import {el,card,button,empty} from './ui.js';
+import {el,card,button,empty,sessionContext} from './ui.js';
 
 const label=value=>String(value??'').replaceAll('_',' ').replace(/^./,letter=>letter.toUpperCase());
 const signed=value=>value>=0?'+'+value:String(value);
 const badge=value=>el('span',{class:'badge'},value);
 const detail=(name,value)=>value?el('p',{},el('strong',{},name+': '),value):null;
-const entry=(name,...children)=>el('article',{class:'card'},el('h3',{},name),...children);
+const entry=(name,...children)=>el('article',{class:'card tracker-entry'},el('h3',{},name),...children);
 
 function section(key,title,items,render,description='') {
-  return el('section',{'aria-labelledby':'tracker-'+key},
-    el('div',{class:'section-header'},el('h2',{id:'tracker-'+key},title),badge(items.length+' saved')),
+  return el('section',{class:'tracker-section','aria-labelledby':'tracker-'+key},
+    el('div',{class:'section-header'},el('h2',{id:'tracker-'+key,tabindex:'-1'},title),badge(items.length+' saved')),
     description?el('p',{class:'muted'},description):null,
     items.length?el('div',{class:'grid'},...items.map(render)):empty('No saved '+title.toLowerCase()+'.'));
 }
@@ -71,12 +71,14 @@ function freshness(data) {
 async function renderTrackers() {
   const data=await api('/trackers');
   const intro=card('Saved story state',
-    data.session?el('p',{class:'muted'},'Session: '+data.session.title):null,
+    badge('Read only'),
+    el('p',{class:'muted'},'Known story facts only. Director plans are separate from these saved details.'),
     el('div',{class:'row spaced'},freshness(data),button('Refresh',()=>navigate('trackers'),'secondary')),
     el('p',{class:'muted'},'Use /trackers in Telegram for a compact view of these saved details.'));
+  intro.classList.add('tracker-overview');
   if(data.pending)intro.append(el('p',{role:'status'},badge('Catching up'),
     ' Newer story replies are waiting for tracker updates. Refresh later to check again.'));
-  const root=el('div',{class:'characters-page story-trackers-page'},intro);
+  const root=el('div',{class:'story-trackers-page'},data.session?sessionContext(data.session):null,intro);
   if(!data.session) {
     root.append(card('No story selected',empty('Open or create a story in Sessions to see its saved trackers.'),
       button('Sessions',()=>navigate('sessions'),'secondary')));
@@ -97,6 +99,8 @@ async function renderTrackers() {
     root.append(card('No saved trackers yet',empty('Details will appear here as your story progresses.')));
     return root;
   }
+  root.append(el('nav',{class:'tracker-navigation','aria-label':'Saved tracker categories'},
+    ...sections.map(([key,title])=>el('a',{href:'#tracker-'+key},title,el('span',{class:'badge'},(data[key]||[]).length)))));
   for(const [key,title,render,description] of sections)root.append(section(key,title,data[key]||[],render,description));
   return root;
 }

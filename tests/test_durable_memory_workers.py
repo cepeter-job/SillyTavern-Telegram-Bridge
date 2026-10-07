@@ -1,5 +1,4 @@
-"""Exercise recoverable workers with real synthetic databases; fake external I/O only."""
-
+# Exercise recoverable workers with real synthetic databases; fake external I/O only.
 import json
 from types import SimpleNamespace
 

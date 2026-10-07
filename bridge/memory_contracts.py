@@ -47,6 +47,15 @@ class MemoryBlock:
 
 
 @dataclass(frozen=True)
+class MemorySearchResult:
+    """A locally rehydrated native fact selected by an optional remote identity."""
+
+    document_id: str
+    text: str
+    type: str
+
+
+@dataclass(frozen=True)
 class MemoryFact:
     kind: str
     importance: float

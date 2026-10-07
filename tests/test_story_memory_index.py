@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from application_test_setup import make_test_provider_port
+from hindsight_recall_test_support import identity_port
 from settings_test_support import make_test_settings
 from test_story_memory_scope import accept, append
 from test_story_memory_scope import db as db
@@ -193,13 +194,17 @@ def test_recall_queries_direct_native_facts_and_rehydrates_local_text(db, monkey
 
     monkeypatch.setattr(memory_backend, "hindsight_client", lambda **k: Client())
     result = memory_backend.recall_memory_context(
-        db, "c", {"session_id": "s"}, {"name": "Bob"}, "silver key", app_settings=make_test_settings()
+        db,
+        "c",
+        {"session_id": "s"},
+        {"name": "Bob"},
+        "silver key",
+        app_settings=make_test_settings(),
+        remote_recall=identity_port(Client()),
     )
     assert "silver key" in result and "REMOTE" not in result and "PRIVATE" not in result
-    assert queries[0]["types"] == ["world", "experience"]
-    assert queries[0]["tags"] == ["session:s", "native-fact"]
-    assert queries[0]["tags_match"] == "all_strict"
-    assert queries[0]["include_entities"] is False
+    assert queries[0]["session_id"] == "s"
+    assert queries[0]["query"] == "silver key"
 
 
 @pytest.mark.parametrize("classification", [{}, {"visibility": "restricted", "known_by": [42]}])
@@ -233,7 +238,13 @@ def test_direct_recall_rejects_observations_and_returns_only_local_authorized_te
 
     monkeypatch.setattr(memory_backend, "hindsight_client", lambda **k: Client())
     results = memory_backend.recall_memory_results(
-        db, "c", {"session_id": "s"}, "silver key", "Bob", app_settings=make_test_settings()
+        db,
+        "c",
+        {"session_id": "s"},
+        "silver key",
+        "Bob",
+        app_settings=make_test_settings(),
+        remote_recall=identity_port(Client()),
     )
     assert len(results) == 1
     assert results[0].text == "The silver key is hidden in the tower."

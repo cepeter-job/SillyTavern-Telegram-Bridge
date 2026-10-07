@@ -142,7 +142,11 @@ def test_slow_recall_excludes_reindexed_replacement_but_keeps_unchanged_prefix(d
             pass
 
     monkeypatch.setattr(memory_backend, "hindsight_client", lambda **kwargs: Client())
-    memory = service(partial(memory_backend.recall_scoped_memory, app_settings=settings))
+    from hindsight_recall_test_support import identity_port
+
+    memory = service(
+        partial(memory_backend.recall_scoped_memory, app_settings=settings, remote_recall=identity_port(Client()))
+    )
     old = memory.prompt_context(db, "c", {"session_id": "s"}, {"name": "Mira"}, "silver key")
     assert (old.recall + old.episodic).count("harbor") == 1
     assert "vault" not in old.recall + old.episodic and "attic" not in old.recall + old.episodic

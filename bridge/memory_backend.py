@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import ipaddress
 import json
 import logging
-import os
 import sqlite3
 import threading
 import time
@@ -17,14 +15,16 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any
-from urllib.parse import urlsplit
 
+from bridge.hindsight_endpoint import (
+    _ensure_hindsight_loopback_proxy_bypass as _ensure_hindsight_loopback_proxy_bypass,
+)
+from bridge.hindsight_endpoint import prepare_compatible_hindsight_endpoint
 from bridge.limits import (
-    HINDSIGHT_DEFAULT_URL,
     HINDSIGHT_RECALL_MAX_TOKENS,
     HINDSIGHT_RETAIN_MAX_MESSAGES,
 )
-from bridge.memory_contracts import MemoryBlock, MemoryReadScope
+from bridge.memory_contracts import MemoryBlock, MemoryReadScope, MemorySearchResult
 from bridge.memory_fact_store import index_fact_is_current, remember_local_fact
 from bridge.memory_identity import (
     hindsight_generation_tags as hindsight_generation_tags,
@@ -44,6 +44,7 @@ from bridge.memory_store import (
 )
 from bridge.meta_repository import delete_meta_value, load_meta_value, store_meta_value
 from bridge.metadata import get_meta
+from bridge.port_contracts import ForegroundRecall
 from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
 
@@ -58,62 +59,8 @@ def hindsight_tags(chat_id: str, session_id: str, character_name: str) -> list[s
     return [f"user:telegram-{user_key}", f"session:{session_id}", f"character:{character_key}"]
 
 
-def _validated_hindsight_base_url(value: str) -> tuple[str, str]:
-    raw = str(value or "").strip().rstrip("/")
-    message = "Hindsight SDK endpoint must use a numeric loopback origin"
-    try:
-        parsed = urlsplit(raw)
-        _ = parsed.port
-    except ValueError as exc:
-        raise ValueError(message) from exc
-    if (
-        parsed.scheme not in {"http", "https"}
-        or not parsed.hostname
-        or parsed.username
-        or parsed.password
-        or parsed.query
-        or parsed.fragment
-        or parsed.path not in {"", "/"}
-    ):
-        raise ValueError(message)
-    try:
-        address = ipaddress.ip_address(parsed.hostname)
-    except ValueError as exc:
-        raise ValueError(message) from exc
-    if not address.is_loopback:
-        raise ValueError(message)
-    return raw, address.compressed
-
-
-def _ensure_hindsight_loopback_proxy_bypass(host: str) -> None:
-    # Merge read both spellings (NO_PROXY and no_proxy) but wrote the merged
-    # value back to both, so every call re-read its own previous output twice
-    # and doubled the variable: 3 * 2**(n-1) entries, 42MB and 6.3M items
-    # after 22 client constructions. urllib parses NO_PROXY on every request,
-    # so the growth stalled polling outright. Deduplicate on read so the merge
-    # is idempotent, and skip the write when nothing changed so os.environ -
-    # and the copy handed to every child process - stays stable.
-    values: list[str] = []
-    seen: set[str] = set()
-    for name in ("NO_PROXY", "no_proxy"):
-        for item in os.environ.get(name, "").split(","):
-            entry = item.strip()
-            if entry and entry not in seen:
-                seen.add(entry)
-                values.append(entry)
-    for required in (host, "127.0.0.1", "::1", "[::1]"):
-        if required not in seen:
-            seen.add(required)
-            values.append(required)
-    combined = ",".join(values)
-    for name in ("NO_PROXY", "no_proxy"):
-        if os.environ.get(name) != combined:
-            os.environ[name] = combined
-
-
 def hindsight_client(*, app_settings: AppSettings) -> Any:
-    base_url, host = _validated_hindsight_base_url(app_settings.environ.get("HINDSIGHT_API_URL", HINDSIGHT_DEFAULT_URL))
-    _ensure_hindsight_loopback_proxy_bypass(host)
+    base_url = prepare_compatible_hindsight_endpoint(app_settings)
 
     from hindsight_client import Hindsight
 
@@ -284,45 +231,35 @@ def recall_memory_results(
     *,
     app_settings: AppSettings,
     read_scope: MemoryReadScope | None = None,
-) -> list[Any]:
-    if memory_mode(db, chat_id) != "on" or not query.strip():
+    remote_recall: ForegroundRecall | None = None,
+) -> list[MemorySearchResult]:
+    if remote_recall is None or memory_mode(db, chat_id) != "on" or not query.strip():
         return []
     scope = read_scope or resolve_memory_scope(db, chat_id, session, {"name": character_name})
     if scope is None or not scope_is_current(db, scope, external=True):
         return []
     try:
-        with hindsight_client_scope(app_settings=app_settings) as client:
-            results = client.recall(
-                bank_id=hindsight_bank_id(chat_id),
-                query=query[:4000],
-                max_tokens=max_tokens,
-                budget="low",
-                tags=memory_recall_filter(
-                    db, chat_id, session, character_name or session.get("character_file", "unknown")
-                ),
-                tags_match="all_strict",
-                types=["world", "experience"],
-                include_entities=False,
-                include_chunks=False,
-                include_source_facts=False,
-                prefer_observations=False,
-            )
-            accepted = []
-            seen: set[str] = set()
-            if not scope_is_current(db, scope, external=True):
-                return []
-            for item in list(getattr(results, "results", []) or []):
-                document_id = str(getattr(item, "document_id", "") or "")
-                if getattr(item, "type", None) not in {"world", "experience"} or document_id in seen:
-                    continue
-                if not memory_document_is_current(db, chat_id, session["session_id"], document_id):
-                    continue
-                indexed = index_fact_is_current(db, document_id)
-                fact = eligible_fact(db, scope, indexed.memory_id) if indexed else None
-                if fact is not None:
-                    seen.add(document_id)
-                    accepted.append(SimpleNamespace(document_id=document_id, text=fact.fact.summary, type=item.type))
-            return accepted
+        results = remote_recall(
+            bank_id=hindsight_bank_id(chat_id),
+            session_id=session["session_id"],
+            query=query[:4000],
+            max_tokens=max_tokens,
+        )
+        if memory_mode(db, chat_id) != "on" or not scope_is_current(db, scope, external=True):
+            return []
+        accepted = []
+        seen: set[str] = set()
+        for document_id, kind in results[:64]:
+            if kind not in {"world", "experience"} or document_id in seen:
+                continue
+            if not memory_document_is_current(db, chat_id, session["session_id"], document_id):
+                continue
+            indexed = index_fact_is_current(db, document_id)
+            fact = eligible_fact(db, scope, indexed.memory_id) if indexed else None
+            if fact is not None:
+                seen.add(document_id)
+                accepted.append(MemorySearchResult(document_id=document_id, text=fact.fact.summary, type=kind))
+        return accepted
     except Exception:
         logging.warning("Hindsight recall unavailable for chat %s", chat_id, exc_info=True)
         return []
@@ -500,13 +437,23 @@ def recall_memory_context(
     query: str,
     *,
     app_settings: AppSettings,
+    remote_recall: ForegroundRecall | None = None,
 ) -> str:
     scope = resolve_memory_scope(db, chat_id, session, fields)
-    return recall_scoped_memory(db, scope, query, app_settings=app_settings).text if scope else ""
+    return (
+        recall_scoped_memory(db, scope, query, app_settings=app_settings, remote_recall=remote_recall).text
+        if scope
+        else ""
+    )
 
 
 def recall_scoped_memory(
-    db: sqlite3.Connection, scope: MemoryReadScope, query: str, *, app_settings: AppSettings
+    db: sqlite3.Connection,
+    scope: MemoryReadScope,
+    query: str,
+    *,
+    app_settings: AppSettings,
+    remote_recall: ForegroundRecall | None = None,
 ) -> MemoryBlock:
     results = recall_memory_results(
         db,
@@ -516,6 +463,7 @@ def recall_scoped_memory(
         scope.principals[0] if scope.principals else "",
         app_settings=app_settings,
         read_scope=scope,
+        remote_recall=remote_recall,
     )
     return ranked_fact_block(db, scope, [str(getattr(result, "document_id", "") or "") for result in results])
 

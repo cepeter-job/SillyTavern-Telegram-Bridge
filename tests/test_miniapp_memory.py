@@ -260,16 +260,20 @@ def test_databank_upload_rejects_unsafe_or_unsupported_files(tmp_path, filename)
 
 
 def test_hindsight_query_and_character_are_not_swapped(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from application_test_setup import make_test_memory_service
+
     import bridge.miniapp_memory as memory
 
     s, w, p = setup(tmp_path)
     seen = []
 
-    def recalled(db, chat_id, session, query, character_name="", **kwargs):
+    def recalled(db, chat_id, session, query, character_name="", max_tokens=1600):
         seen.append((query, character_name))
         return [{"text": "Remembered the garden."}]
 
-    monkeypatch.setattr(memory, "recall_memory_results", recalled)
+    s.memory = replace(make_test_memory_service(), search_backend=recalled)
     result = memory.recall_remote(s, w, {**p, "query": "garden"})
     assert seen == [("garden", "Default")]
     assert result["results"] == ["Remembered the garden."]

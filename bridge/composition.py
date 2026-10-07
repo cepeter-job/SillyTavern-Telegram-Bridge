@@ -10,6 +10,7 @@ from bridge.conversation_service import ConversationService
 from bridge.delivery_port import DeliveryPort
 from bridge.group_director_service import GroupDirectorService
 from bridge.group_service import GroupService
+from bridge.hindsight_recall_runtime import HindsightRecallRuntime
 from bridge.input_flow_service import InputFlowService
 from bridge.job_service import JobService
 from bridge.memory_diagnostics import MemoryDiagnostics
@@ -64,3 +65,4 @@ class BridgeServices:
     memory_diagnostics: MemoryDiagnostics | None = None
     health: RuntimeHealth | None = None
     provider_probes: ProviderProbes | None = None
+    hindsight_recall: HindsightRecallRuntime | None = None

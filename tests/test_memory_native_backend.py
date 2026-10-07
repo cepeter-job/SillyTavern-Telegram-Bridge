@@ -110,16 +110,15 @@ class MemoryNativeBackendTests(SettingsTestCase):
             pass
 
     def test_hindsight_sdk_transport_forces_loopback_proxy_bypass(self):
+        import os
         from dataclasses import replace
 
-        settings = self.app_settings_builder.build()
-        environ = dict(settings.environ)
-        environ["HINDSIGHT_API_URL"] = "http://127.0.0.1:8890"
-        settings = replace(settings, environ=environ)
-        with patch.dict("os.environ", {"HTTP_PROXY": "http://proxy.example:8080", "NO_PROXY": ""}, clear=False):
-            with memory_backend.hindsight_client_scope(app_settings=settings):
-                import os
+        from bridge.hindsight_endpoint import prepare_hindsight_endpoint
 
+        settings = replace(self.app_settings_builder.build(), environ={"HINDSIGHT_API_URL": "http://127.0.0.1:8890"})
+        with patch.dict("os.environ", {"HTTP_PROXY": "http://proxy.example:8080", "NO_PROXY": ""}, clear=False):
+            prepare_hindsight_endpoint(settings)
+            with memory_backend.hindsight_client_scope(app_settings=settings):
                 bypass = {item.strip() for item in os.environ["NO_PROXY"].split(",") if item.strip()}
                 self.assertIn("127.0.0.1", bypass)
                 self.assertIn("::1", bypass)

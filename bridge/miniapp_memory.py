@@ -19,7 +19,6 @@ from bridge.memory_backend import (
     hindsight_session_lock,
     memory_mode,
     memory_scope,
-    recall_memory_results,
 )
 from bridge.memory_curator import (
     clear_curated_memory_state,
@@ -204,11 +203,10 @@ def purge_remote(services: Any, who: MiniAppIdentity, values: dict) -> dict:
 def recall_remote(services: Any, who: MiniAppIdentity, values: dict) -> dict:
     query = text(values, "query", 2000)
     with session_scope(services, who, values) as scope:
-        results = recall_memory_results(
+        results = services.memory.search(
             scope.db,
             scope.chat_id,
             scope.session,
-            app_settings=services.config,
             query=query,
             character_name=_character(services, scope),
         )

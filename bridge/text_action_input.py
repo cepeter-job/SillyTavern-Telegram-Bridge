@@ -162,6 +162,7 @@ def _handle_text_action_input(
                 "/memory search " + value,
                 send_text_fn=send_text,
                 app_settings=request_context.app_settings,
+                memory_service=memory_service,
             )
             send_memory_menu(token, chat_id, db, request_context=request_context)
         elif action == "databank_search":

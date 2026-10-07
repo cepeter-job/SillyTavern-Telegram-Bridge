@@ -63,18 +63,10 @@ from bridge.job_store import (
     retry_delivery_job,
     store_job_payload,
 )
-from bridge.memory import (
-    get_session_summary,
-    purge_hindsight_session,
-    retain_session_memory,
-)
-from bridge.memory_artifact_store import read_scene_block, read_summary_block
-from bridge.memory_backend import recall_scoped_memory
+from bridge.memory import purge_hindsight_session as purge_hindsight_session
+from bridge.memory import retain_session_memory
+from bridge.memory_composition import build_memory_service
 from bridge.memory_diagnostics import MemoryDiagnostics
-from bridge.memory_retirement_store import queue_session_memory_cleanup
-from bridge.memory_scope_runtime import resolve_session_memory_scope
-from bridge.memory_scope_store import read_episodic_block, validate_memory_blocks
-from bridge.memory_service import MemoryService as _MemoryService
 from bridge.message_commands import generate_and_store_reply, prepare_message
 from bridge.miniapp_config import load_miniapp_config
 from bridge.miniapp_runtime import MiniAppRuntime, configure_miniapp_menu
@@ -226,14 +218,9 @@ def _build_startup_services(
         card_fields=_partial(card_fields_from_file, app_settings=config),
         director_policy=director_goal_policy,
     )
-    memory = _MemoryService(
-        resolve_scope=_partial(resolve_session_memory_scope, app_settings=config, load_group_state=group.state),
-        scoped_recall=_partial(recall_scoped_memory, app_settings=config),
-        scoped_episodes=read_episodic_block,
-        scoped_summary=read_summary_block,
-        scoped_scene=read_scene_block,
-        validate_blocks=validate_memory_blocks,
-        summary_state=get_session_summary,
+    memory, hindsight_recall = build_memory_service(
+        config,
+        load_group_state=group.state,
         retain_session=(
             lambda db, chat_id, session, fields: retain_session_memory(
                 db,
@@ -246,8 +233,6 @@ def _build_startup_services(
                 delivery_port=delivery,
             )
         ),
-        queue_session_cleanup=queue_session_memory_cleanup,
-        purge_session_memory=_partial(purge_hindsight_session, app_settings=config),
     )
     npc = _NpcService()
     session = _SessionService(
@@ -385,6 +370,7 @@ def _build_startup_services(
         provider=provider,
         rag=rag,
         memory=memory,
+        hindsight_recall=hindsight_recall,
         npc=npc,
         persona=persona,
         sync=sync,

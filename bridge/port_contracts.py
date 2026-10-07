@@ -10,7 +10,7 @@ import sqlite3
 from collections.abc import Callable, Mapping
 from typing import Any, Literal, ParamSpec, Protocol, TypeVar
 
-from bridge.memory_contracts import MemoryBlock, MemoryReadScope
+from bridge.memory_contracts import MemoryBlock, MemoryReadScope, MemorySearchResult
 from bridge.provider_errors import ProviderRequestError
 from bridge.provider_health_values import HealthAttempt, HealthSnapshot, HealthTransition
 from bridge.request_types import PreparedMessage, RequestContext
@@ -219,6 +219,24 @@ class RecallMemory(Protocol):
     def __call__(
         self, db: sqlite3.Connection, chat_id: str, session: dict[str, str], fields: dict[str, str], query: str
     ) -> str: ...
+
+
+class ForegroundRecall(Protocol):
+    def __call__(
+        self, *, bank_id: str, session_id: str, query: str, max_tokens: int
+    ) -> tuple[tuple[str, str], ...]: ...
+
+
+class SearchMemory(Protocol):
+    def __call__(
+        self,
+        db: sqlite3.Connection,
+        chat_id: str,
+        session: dict[str, str],
+        query: str,
+        character_name: str = "",
+        max_tokens: int = ...,
+    ) -> list[MemorySearchResult]: ...
 
 
 class ReadSummary(Protocol):

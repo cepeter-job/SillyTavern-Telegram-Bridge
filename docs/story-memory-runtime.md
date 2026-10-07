@@ -217,3 +217,54 @@ are rejected before completing their operation.
 For native indexing diagnostics, count memory_fact_index rows by state for the
 exact session incarnation (pending, retained or retired). Hindsight covered_id
 is historical source state and is not a remote transcript-ingestion watermark.
+
+## Bounded optional foreground recall
+
+Application composition owns one foreground Hindsight runtime for an immutable
+endpoint/credential pair. Construction and check-only startup create no thread
+or network request. The protected runtime lifecycle starts one named non-daemon
+owner thread, one persistent asyncio loop, and one reusable async SDK client.
+Generation, `/memory search`, text-action search and Mini App recall all use the
+same explicitly injected adapter. Requests before startup, after shutdown, or
+without the explicit port fall back safely to local operation.
+
+The optional remote stage has a 1.5-second caller budget measured before
+admission/scheduling. A separate synchronous completion wait lets the caller
+return even when asynchronous cancellation is slow. At most two requests are
+accepted, with no waiting queue; a timed-out task holds its slot until the task
+actually finishes. Queries are capped at 4,000 characters and at most 64 returned
+candidates are inspected. SDK retries are disabled (`max_attempts=1`). Neither
+an SDK timeout alone nor these bounds establish a hard real-time limit for SQL
+locks, OS scheduling, or the complete prompt assembly.
+
+Connection failures, timeouts, 429 and 5xx open a 30-second endpoint cooldown.
+Afterward one demand-driven probe is admitted; successful empty recall also
+restores availability. Missing banks (404) are ordinary empty results. Invalid
+configuration/authentication/response failures have separately labelled,
+rate-limited diagnostics. Capacity bypass and shutdown cancellation do not open
+the circuit. Health generation stamps stop older completions from overriding
+newer failures or successful recovery. There are no per-chat circuit maps or
+background probe timers.
+
+The owner returns document IDs and fact types only. SQLite rechecks memory mode,
+session incarnation/epoch, current index identity, source validity, and reader
+eligibility before rehydrating the accepted local summary. Final block validation
+still checks the captured request scope. A late reset, source rewrite, or disabled
+memory cannot make old returned identities authoritative. Optional remote failure
+preserves the already captured local facts, episodes, summary and scene.
+
+Shutdown initiation rejects admission and wakes waiting callers with local
+fallback. Background work drains before final recall closure; closure still runs
+if another cleanup raises and precedes database close. The final close waits at
+most three seconds and reports failure unless the SDK, loop and owner thread
+close. Failed closure suppresses maintenance and reaches the existing forced-exit
+watchdog. The runtime never creates a replacement owner thread after stopping.
+
+Numeric-loopback origin validation remains unchanged. Startup merges and
+deduplicates both `NO_PROXY` spellings in the actual process environment while
+preserving configured entries. Repeated foreground calls reuse this preparation;
+proxy configuration changes require an explicit configuration lifecycle event.
+The supported SDK transport remains responsible for its own session, without
+private transport mutation. Background retain, discovery and deletion continue
+to use individually owned clients/Runner scopes; this change does not remove all
+Runner creation or establish a measured RAM/semantic-quality improvement.

@@ -38,7 +38,6 @@ from bridge.memory_backend import (
     hindsight_session_lock,
     memory_mode,
     memory_scope,
-    recall_memory_results,
 )
 from bridge.memory_backend import _retain_with_client as _retain_with_client
 from bridge.memory_backend import hindsight_client as hindsight_client
@@ -48,9 +47,11 @@ from bridge.memory_backend import hindsight_session_prefix as hindsight_session_
 from bridge.memory_backend import hindsight_tags as hindsight_tags
 from bridge.memory_backend import memory_recall_filter as memory_recall_filter
 from bridge.memory_backend import recall_memory_context as recall_memory_context
+from bridge.memory_backend import recall_memory_results as recall_memory_results
 from bridge.memory_backend import remember_fact as remember_fact
 from bridge.memory_draft_publish import publish_derived, restore_derived
 from bridge.memory_draft_store import run_session_draft
+from bridge.memory_service import MemoryService
 from bridge.memory_store import enqueue_memory, retire_derived_layer
 from bridge.metadata import set_meta
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
@@ -142,6 +143,7 @@ def handle_memory_command(
     *,
     send_text_fn: Callable[[str, str, str], object],
     app_settings: AppSettings,
+    memory_service: MemoryService,
 ) -> None:
     parts = command_text.split(None, 2)
     argument = parts[1].casefold() if len(parts) > 1 else "status"
@@ -182,9 +184,7 @@ def handle_memory_command(
         if not query:
             send_text_fn(token, chat_id, "Use /memory search <query>.")
             return
-        results = recall_memory_results(
-            db, chat_id, session, query, fields["name"], max_tokens=1600, app_settings=app_settings
-        )
+        results = memory_service.search(db, chat_id, session, query, fields["name"], max_tokens=1600)
         lines = [str(getattr(result, "text", "") or "").strip() for result in results]
         lines = [f"- {line}" for line in lines if line][:5]
         send_text_fn(

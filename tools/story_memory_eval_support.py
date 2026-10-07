@@ -105,6 +105,22 @@ class OfflineTransport:
             callback, self.after_retain = self.after_retain, None
             callback()
 
+    def foreground_recall(self, *, bank_id, session_id, query, max_tokens):
+        result = self.recall(
+            bank_id=bank_id,
+            query=query,
+            max_tokens=max_tokens,
+            budget="low",
+            tags=[f"session:{session_id}", "native-fact"],
+            tags_match="all_strict",
+            types=["world", "experience"],
+            include_entities=False,
+            include_chunks=False,
+            include_source_facts=False,
+            prefer_observations=False,
+        )
+        return tuple((str(item.document_id or ""), str(item.type or "")) for item in result.results)
+
     def recall(self, **kwargs):
         from hindsight_client_api.models.recall_response import RecallResponse
         from hindsight_client_api.models.recall_result import RecallResult
@@ -258,7 +274,11 @@ class EvaluationRuntime:
                 app_settings=self.settings,
                 load_group_state=self.group.state,
             ),
-            scoped_recall=partial(memory_backend.recall_scoped_memory, app_settings=self.settings),
+            scoped_recall=partial(
+                memory_backend.recall_scoped_memory,
+                app_settings=self.settings,
+                remote_recall=self.transport.foreground_recall,
+            ),
             scoped_episodes=memory_scope_store.read_episodic_block,
             scoped_summary=memory_artifact_store.read_summary_block,
             scoped_scene=memory_artifact_store.read_scene_block,

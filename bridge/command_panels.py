@@ -168,6 +168,7 @@ def _handle_memory_media(
             stripped,
             send_text_fn=delivery_port.send_text,
             app_settings=request_context.app_settings,
+            memory_service=memory_service,
         )
         return True
     if command.startswith("/memory "):

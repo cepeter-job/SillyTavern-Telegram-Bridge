@@ -291,6 +291,8 @@ def test_memory_module_no_longer_imports_telegram():
 
 
 def test_memory_command_requires_text_delivery_and_preserves_message(*, app_settings_builder):
+    from application_test_setup import make_test_memory_service
+
     import bridge.memory as memory
 
     param = inspect.signature(memory.handle_memory_command).parameters.get("send_text_fn")
@@ -307,6 +309,7 @@ def test_memory_command_requires_text_delivery_and_preserves_message(*, app_sett
         "/memory scope user",
         send_text_fn=lambda token, chat_id, text: sent.append((token, chat_id, text)),
         app_settings=app_settings_builder.build(),
+        memory_service=make_test_memory_service(),
     )
 
     assert sent == [

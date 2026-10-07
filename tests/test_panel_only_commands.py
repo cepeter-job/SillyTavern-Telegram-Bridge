@@ -237,3 +237,47 @@ def test_prompt_text_alias_opens_prompt_panel_without_plain_text_diagnostic(sess
         provider_port=make_test_provider_port(),
     )
     assert opened == [True]
+
+
+def test_group_panel_callback_rerenders_without_extra_text(monkeypatch):
+    import bridge.group_callbacks as callbacks
+
+    rendered = []
+    monkeypatch.setattr(callbacks, "send_text", lambda *a, **k: pytest.fail("group panel must not emit extra text"))
+    monkeypatch.setattr(callbacks, "handle_group_command", lambda *a, **k: None)
+    monkeypatch.setattr(callbacks, "send_group_menu", lambda *a, **k: rendered.append(True))
+
+    group_service = SimpleNamespace(
+        claim_user_turn=lambda *a: True,
+        pass_user_turn=lambda *a: True,
+    )
+    callbacks.handle_group_panel_callback(
+        object(),
+        "token",
+        "chat|topic:1",
+        {"session_id": "s1"},
+        "group:claim",
+        {"message_id": 77},
+        sender_id="actor",
+        group_service=group_service,
+        input_flow_service=object(),
+        request_context=SimpleNamespace(db=object()),
+    )
+    assert rendered == [True]
+
+
+def test_databank_reindex_callback_rerenders_without_extra_text(monkeypatch):
+    import bridge.enum_callbacks as callbacks
+
+    rendered = []
+    monkeypatch.setattr(callbacks, "send_text", lambda *a, **k: pytest.fail("Data Bank panel must not emit extra text"))
+    monkeypatch.setattr(callbacks, "send_databank_menu", lambda *a, **k: rendered.append(True))
+    callbacks._handle_rag_reindex(
+        object(),
+        "token",
+        "chat",
+        SimpleNamespace(app_settings=object()),
+        SimpleNamespace(reindex=lambda *a: (4, 4)),
+        77,
+    )
+    assert rendered == [True]

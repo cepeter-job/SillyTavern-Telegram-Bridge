@@ -48,6 +48,42 @@ def test_malformed_simulation_does_not_advance_coverage(session_db):
     assert db.execute("SELECT COUNT(*) FROM simulation_sources").fetchone()[0] == 0
 
 
+def test_invalid_optional_narrative_link_does_not_block_tracker_publication(session_db):
+    _, db, _ = session_db
+    source = _assistant_row(db, "The user receives a brass key while opening the gate.")
+
+    def generate(*_args, **_kwargs):
+        return json.dumps(
+            {
+                "npcs": [],
+                "simulation": {
+                    "actor": {"inventory_add": ["Brass key"]},
+                    "quests": [
+                        {
+                            "id": "gate",
+                            "kind": "main",
+                            "status": "active",
+                            "objective": "Open the gate",
+                            "progress_current": 0,
+                            "progress_target": 1,
+                            "reward": "",
+                            "arc_id": "invented-arc",
+                        }
+                    ],
+                },
+            }
+        )
+
+    refresh(session_db, generate)
+
+    service = SimulationService()
+    assert service.state(db, "chat", "s1", "actor", "user")["inventory"][0]["name"] == "Brass key"
+    quest = service.state(db, "chat", "s1", "quest", "gate")
+    assert quest["objective"] == "Open the gate"
+    assert "arc_id" not in quest
+    assert get_npc_extraction_coverage(db, "chat", "s1") == source
+
+
 def test_parts_remain_private_until_the_complete_source_row(session_db):
     _, db, _ = session_db
     _assistant_row(db, "Long story. " * 1500)

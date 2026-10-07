@@ -1,0 +1,31 @@
+name: Issue 410 workspace
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  recovery-red-green:
+    if: github.head_ref == 'fix/issue410-job-recovery'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24'
+      - run: npm ci --prefix tests/miniapp-ui --include=dev --ignore-scripts --no-audit --no-fund
+      - name: Preserve public source and locked DOM dependencies
+        run: |
+          git archive --format=tar HEAD > /tmp/issue410-source.tar
+          tar -rf /tmp/issue410-source.tar tests/miniapp-ui/node_modules
+          gzip /tmp/issue410-source.tar
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: issue410-source
+          path: /tmp/issue410-source.tar.gz
+          retention-days: 2
+      - name: Test recovery contract
+        run: node --experimental-vm-modules --test tests/miniapp-ui/recovery.test.mjs

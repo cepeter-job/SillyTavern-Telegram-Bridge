@@ -18,7 +18,7 @@ defaults:
 
 jobs:
   python-tests:
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-2404-x64-4x
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -74,7 +74,7 @@ jobs:
           retention-days: 14
 
   miniapp-smoke:
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-2404-x64-4x
     timeout-minutes: 20
     steps:
       - name: Checkout

@@ -1,6 +1,7 @@
 """Isolated installer trust regressions: pinned signers and SSH server keys."""
 
 import subprocess
+
 from test_installer import ROOT, _bootstrap_installer_fixture, inputs
 
 

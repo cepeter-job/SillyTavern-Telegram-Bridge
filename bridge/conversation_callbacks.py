@@ -7,14 +7,16 @@ import logging
 
 from bridge.callbacks import close_panel_message, discard_panel_binding, remove_inline_keyboard
 from bridge.card_content import card_fields_from_file
+from bridge.closed_session_guard import story_mutation_message
 from bridge.conversation_lifecycle import ALREADY_STARTED, conversation_state, is_group_conversation
 from bridge.delivery_port import DeliveryPort
 from bridge.delivery_progress import delivery_complete
 from bridge.greetings import greeting_choice_label, greeting_options, send_character_greeting, send_greeting_menu
 from bridge.message_commands import reset_session
-from bridge.metadata import get_meta
-from bridge.response_delivery import delete_outgoing_messages
-from bridge.response_variants import keep_swipe_variant, last_user_variants, swipe_state_key
+from bridge.metadata import get_meta, set_meta
+from bridge.response_delivery import collect_outgoing_telegram_ids, delete_tracked_panel_messages
+from bridge.response_variants import keep_swipe_variant, last_user_variants, swipe_source_token, swipe_state_key
+from bridge.sqlite_store import write_transaction
 from bridge.swipe_panels import edit_swipe_menu
 from bridge.telegram import send_text, telegram_request
 
@@ -101,65 +103,78 @@ def handle_swipe_callback(
     request_context,
 ):
     """Handle response variant browsing and keep/cancel callbacks."""
-    if data.startswith("swipe:"):
-        action = data.split(":", 1)[1]
-        user_row, variants = last_user_variants(db, chat_id, session_id)
-        if not variants:
-            answer_callback(token, str(callback.get("id", "")), "No variants")
-            remove_inline_keyboard(db, token, callback)
-            return True
-        current = int(get_meta(db, swipe_state_key(chat_id, session_id), str(variants[-1][0])))
-        indexes = [int(row[0]) for row in variants]
-        if action == "cancel":
-            answer_callback(token, str(callback.get("id", "")), "Cancelled")
-            remove_inline_keyboard(db, token, callback)
-            return True
-        if action in {"prev", "next"}:
-            position = indexes.index(current) if current in indexes else 0
-            position = (position - 1) % len(indexes) if action == "prev" else (position + 1) % len(indexes)
-            answer_callback(token, str(callback.get("id", "")), f"Variant {indexes[position]}")
-            edit_swipe_menu(
-                token,
-                db,
-                callback,
-                session_id,
-                indexes[position],
-                variants,
-                delivery_port=delivery_port,
-                request_context=request_context,
-            )
-            return True
-        if action == "keep":
-            if user_row:
-                delete_outgoing_messages(db, token, chat_id, session_id, int(user_row[0]))
-            selected = keep_swipe_variant(
-                db,
-                chat_id,
-                session_id,
-                current,
-                npc_service=npc_service,
-            )
-            if selected is None:
-                answer_callback(token, str(callback.get("id", "")), "Variant not found")
-                return True
-            fields = card_fields_from_file(
-                session["character_file"],
-                app_settings=request_context.app_settings,
-            )
-            memory_service.retain(db, chat_id, session, fields)
-            answer_callback(token, str(callback.get("id", "")), "Kept")
-            telegram_request(
-                token,
-                "editMessageText",
-                {
-                    "chat_id": chat_id,
-                    "message_id": message.get("message_id"),
-                    "text": f"✅ Kept variant {current}\n\n{selected[:3900]}",
-                },
-            )
-            return True
+    if not data.startswith("swipe:"):
+        return False
+    parts = data.split(":", 2)
+    action = parts[1]
+    if action == "cancel":
+        answer_callback(token, str(callback.get("id", "")), "Cancelled")
+        remove_inline_keyboard(db, token, callback)
         return True
-    return False
+    if action not in {"prev", "next", "keep"}:
+        return True
+    source_token = parts[2] if len(parts) == 3 else ""
+    with write_transaction(db):
+        problem = story_mutation_message(db, chat_id, session_id)
+        user_row, variants = last_user_variants(db, chat_id, session_id)
+        try:
+            current = int(get_meta(db, swipe_state_key(chat_id, session_id)))
+        except (TypeError, ValueError):
+            current = 0
+        indexes = [int(row[0]) for row in variants]
+        if problem is None and (
+            not user_row
+            or current not in indexes
+            or not source_token
+            or source_token != swipe_source_token(db, chat_id, session_id, int(user_row[0]))
+            or get_meta(db, f"swipe_message:{chat_id}:{session_id}") != str(message.get("message_id"))
+        ):
+            problem = "Response changed or panel expired; reopen /swipe."
+        if problem is None and action == "keep":
+            old_ids = collect_outgoing_telegram_ids(db, chat_id, session_id, int(user_row[0]))
+            selected = keep_swipe_variant(db, chat_id, session_id, current, npc_service=npc_service)
+            if selected is None:
+                problem = "Variant not found; reopen /swipe."
+            else:
+                set_meta(db, swipe_state_key(chat_id, session_id), "")
+    if problem is not None:
+        discard_panel_binding(db, chat_id, message.get("message_id"))
+        answer_callback(token, str(callback.get("id", "")), problem)
+        if callback.get("_queued"):
+            send_text(token, chat_id, problem)
+        return True
+    if action in {"prev", "next"}:
+        position = indexes.index(current)
+        position = (position - 1) % len(indexes) if action == "prev" else (position + 1) % len(indexes)
+        answer_callback(token, str(callback.get("id", "")), f"Variant {indexes[position]}")
+        edit_swipe_menu(
+            token,
+            db,
+            callback,
+            session_id,
+            indexes[position],
+            variants,
+            source_token=source_token,
+            delivery_port=delivery_port,
+            request_context=request_context,
+        )
+        return True
+    discard_panel_binding(db, chat_id, message.get("message_id"))
+    delete_tracked_panel_messages(token, chat_id, old_ids, request=telegram_request)
+    fields = card_fields_from_file(session["character_file"], app_settings=request_context.app_settings)
+    memory_service.retain(db, chat_id, session, fields)
+    answer_callback(token, str(callback.get("id", "")), "Kept")
+    telegram_request(
+        token,
+        "editMessageText",
+        {
+            "chat_id": chat_id,
+            "message_id": message.get("message_id"),
+            "text": f"✅ Kept variant {current}\n\n{selected[:3900]}",
+            "reply_markup": {"inline_keyboard": []},
+        },
+    )
+    return True
 
 
 def _greeting_cancel(db, token, callback, answer_callback, chat_id, message_id):

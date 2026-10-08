@@ -228,24 +228,36 @@ def collect_session_telegram_ids(db: sqlite3.Connection, chat_id: str, session_i
     return sorted(found)
 
 
-def delete_outgoing_messages(
-    db: sqlite3.Connection, token: str, chat_id: str, session_id: str, after_rowid: int | None = None
-) -> None:
+def collect_outgoing_telegram_ids(
+    db: sqlite3.Connection, chat_id: str, session_id: str, after_rowid: int | None = None
+) -> list[int]:
     query = "SELECT telegram_message_ids FROM messages WHERE chat_id=? AND session_id=? AND role='assistant'"
     params: list[str | int] = [chat_id, session_id]
     if after_rowid is not None:
         query += " AND rowid>?"
         params.append(after_rowid)
+    found: set[int] = set()
     for (raw_ids,) in db.execute(query, params).fetchall():
         try:
             message_ids = json.loads(raw_ids or "[]")
-        except json.JSONDecodeError:
-            message_ids = []
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(message_ids, list):
+            continue
         for message_id in message_ids:
             try:
-                telegram_request(token, "deleteMessage", {"chat_id": chat_id, "message_id": int(message_id)})
-            except Exception:
-                logging.info("Could not delete outgoing Telegram message %s", message_id, exc_info=True)
+                if int(message_id) > 0:
+                    found.add(int(message_id))
+            except (TypeError, ValueError):
+                continue
+    return sorted(found)
+
+
+def delete_outgoing_messages(
+    db: sqlite3.Connection, token: str, chat_id: str, session_id: str, after_rowid: int | None = None
+) -> None:
+    message_ids = collect_outgoing_telegram_ids(db, chat_id, session_id, after_rowid)
+    delete_tracked_panel_messages(token, chat_id, message_ids, request=telegram_request)
 
 
 def delete_incoming_messages(db: sqlite3.Connection, token: str, chat_id: str, session_id: str) -> None:
@@ -456,7 +468,7 @@ def _send_preview(
 
 
 class TelegramDeletionReport(NamedTuple):
-    """Counts for best-effort Telegram cleanup; local reset is already committed."""
+    """Counts for best-effort Telegram cleanup after local changes are committed."""
 
     attempted: int
     deleted: int
@@ -466,7 +478,7 @@ class TelegramDeletionReport(NamedTuple):
 def delete_tracked_panel_messages(
     token: str, chat_id: str, message_ids: list[int], *, request: Callable
 ) -> TelegramDeletionReport:
-    """Attempt each tracked message once; report failures without undoing reset."""
+    """Attempt each tracked message once; report failures without undoing local changes."""
     deleted = 0
     failures: set[str] = set()
     for message_id in message_ids:
@@ -479,7 +491,7 @@ def delete_tracked_panel_messages(
     failed = len(message_ids) - deleted
     if failed:
         logging.warning(
-            "Telegram reset cleanup incomplete: deleted=%d attempted=%d failed=%d error_types=%s",
+            "Telegram message cleanup incomplete: deleted=%d attempted=%d failed=%d error_types=%s",
             deleted,
             len(message_ids),
             failed,

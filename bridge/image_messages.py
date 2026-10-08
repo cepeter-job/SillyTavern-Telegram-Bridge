@@ -108,6 +108,7 @@ def process_image_message(
         simulation_context=story_simulation_context(db, chat_id, session["session_id"], memory_prompt.scope),
         session_summary=session_summary,
         scene_context=memory_prompt.scene,
+        memory_prompt=memory_prompt,
         defer_compaction=True,
         rag_context=rag_service.context_for_prompt(db, chat_id, caption, rag_bundle),
         group_context=group_context,

@@ -134,6 +134,7 @@ def continue_last(
         simulation_context=story_simulation_context(db, chat_id, session_id, memory_prompt.scope, through_rowid=None),
         session_summary=memory_prompt.summary,
         scene_context=memory_prompt.scene,
+        memory_prompt=memory_prompt,
         defer_compaction=True,
         narrative_context=narrative_context_for_session(db, chat_id, session_id, "story"),
         persona_service=persona_service,

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
-from typing import Literal
+import sqlite3
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Literal, Protocol
 
 
 @dataclass(frozen=True)
@@ -40,10 +42,33 @@ class MemoryEvidence:
 
 
 @dataclass(frozen=True)
+class MemoryBlockLeaf:
+    """An exact emitted payload bound to its locally authorized source and reader."""
+
+    text: str
+    evidence: MemoryEvidence
+    scope: MemoryReadScope | None = None
+    visibility: str = ""
+    known_by: tuple[str, ...] = ()
+    rewrite_revision: int = -1
+
+
+@dataclass(frozen=True)
 class MemoryBlock:
     text: str = ""
     evidence: tuple[MemoryEvidence, ...] = ()
     channel: str = ""
+    leaves: tuple[MemoryBlockLeaf, ...] = ()
+
+
+@dataclass(frozen=True)
+class ContextBlockSelection:
+    """Candidate payloads retain the baseline channel order and tuple arity."""
+
+    blocks: tuple[MemoryBlock, ...]
+    selected_blocks: int
+    deduplicated_blocks: int = 0
+    reason: str = "no_savings"
 
 
 @dataclass(frozen=True)
@@ -72,6 +97,22 @@ class MemoryPromptContext:
     scene: str = ""
     scope: MemoryReadScope | None = None
     evidence: tuple[MemoryEvidence, ...] = ()
+    baseline_blocks: tuple[MemoryBlock, ...] = ()
+    selection: ContextBlockSelection | None = None
+    selection_mode: str = "off"
+    selection_reason: str = "off"
+    selection_coverage_valid: bool = False
+    selection_guard: Callable[[], str] | None = field(default=None, compare=False, repr=False)
+
+
+class SelectMemoryContext(Protocol):
+    def __call__(
+        self,
+        db: sqlite3.Connection,
+        context: MemoryPromptContext,
+        resolve_current_scope: Callable[[], MemoryReadScope | None],
+        /,
+    ) -> MemoryPromptContext: ...
 
 
 QUERY_STOPWORDS = frozenset(

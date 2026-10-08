@@ -179,6 +179,9 @@ jobs:
           "$RUNNER_TEMP/gitleaks" version
 
       - name: Scan changed commits with licensed Gitleaks Action
+        # Fork PRs and Dependabot cannot use the repository's Actions license
+        # secret. Their required scan is the verified full-history CLI below.
+        if: ${{ github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

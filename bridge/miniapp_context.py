@@ -51,10 +51,8 @@ def session_scope(services: Any, who: MiniAppIdentity, values: dict, *, write: b
     try:
         with closing(services.db_factory()) as db:
             session = services.session.ensure(db, who.chat_id, services.config.default_model)
-            if write and values.get("session_id") != session["session_id"]:
-                raise MiniAppError(
-                    "The active session changed. Refresh before applying changes.", status=409, code="stale"
-                )
+            if (write or "session_id" in values) and values.get("session_id") != session["session_id"]:
+                raise MiniAppError("The active session changed. Refresh before continuing.", status=409, code="stale")
             with diagnostic_scope(chat_id=who.chat_id, session_id=session["session_id"]):
                 status = "failed"
                 event("miniapp.session_start")

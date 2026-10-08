@@ -38,6 +38,26 @@ async function confirm(document) {
   namedButton(document,'Confirm').click();
 }
 
+test('viewing a saved ending cannot show another story selected after the page loaded',async t=>{
+  const state={session:null},requests=[],data=room();data.ending.has_epilogue=true;
+  const page=await createPage('director.js',{state,api:async path=>{
+    if(path==='/director')return data;
+    const request=new URL(path,'http://fixture');
+    assert.equal(request.pathname,'/director/ending');requests.push(request);
+    const requested=request.searchParams.get('session_id');
+    if(requested&&requested!==state.session.session_id)throw Object.assign(new Error('The active session changed.'),{status:409});
+    return {epilogue:'Only the new story epilogue.'};
+  }});
+  t.after(page.close);page.document.querySelector('main').append(await page.pages.director());
+  state.session={session_id:'other-story',title:'New current story'};
+  const view=namedButton(page.document,'View ending');view.click();
+  await until(()=>requests.length===1&&!view.hasAttribute('aria-busy'),'saved ending read finishes');
+  assert.equal(page.document.querySelector('.saved-ending'),null,'A stale page must not append another story’s prose');
+  assert.equal(requests[0].searchParams.get('session_id'),'story-one');
+  assert.match(page.document.querySelector('#notice[role="alert"]')?.textContent||'',/session changed.*Refresh/);
+  assert.match(page.document.querySelector('.session-context').textContent,/The lighthouse/);
+});
+
 test('a pending Director confirmation cannot submit after another mutation replaces its view',async t=>{
   let finish,reads=0,jobs=0;
   const page=await createPage('director.js',{api:async(path,{method='GET'}={})=>{

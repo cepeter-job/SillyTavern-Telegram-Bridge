@@ -1,5 +1,5 @@
 import {api,state,createSessionScope,registerPage,navigate,openChat} from './app.js';
-import {el,card,button,empty,confirmAction,notice} from './ui.js';
+import {el,card,button,empty,confirmAction,notice,createPortraitLoader} from './ui.js';
 import {icon} from './icons.js';
 import {diagnosticsCard} from './diagnostics.js';
 function healthCard(iconName,title,...children) {
@@ -102,7 +102,7 @@ function memoryDiagnosticsCard(summary={},detail=null) {
   }
   view.append(list);return view;
 }
-async function dashboard() {
+async function dashboard({signal}={}) {
   const data=await api('/status');
   const [sessions,personas,worlds,memory,trackers]=await Promise.all([
     api('/sessions').catch(()=>({sessions:[],unavailable:true})),
@@ -138,11 +138,10 @@ async function dashboard() {
   const back=button('Open chat',openChat);back.append(icon('arrow'));
   const sessionCard=el('section',{class:'card dashboard-session story-card','aria-labelledby':'active-story-title'},summary,
     el('div',{class:'session-actions'},back));
-  if(session.character_file)api('/characters/'+encodeURIComponent(session.character_file)+'/portrait',{binary:true}).then(blob=>{
-    if(!blob||blob.size===0)throw new Error('empty portrait');
-    const url=URL.createObjectURL(blob);let revoked=false;const revoke=()=>{if(!revoked){revoked=true;URL.revokeObjectURL(url);}};
-    sessionPortrait.onload=()=>{sessionPortraitFrame.hidden=false;revoke();};sessionPortrait.onerror=()=>{revoke();sessionPortraitFrame.hidden=true;};sessionPortrait.src=url;
-  }).catch(()=>{sessionPortraitFrame.hidden=true;});
+  if(session.character_file)createPortraitLoader(api,signal).load(sessionPortrait,
+    '/characters/'+encodeURIComponent(session.character_file)+'/portrait',{
+      loaded:()=>{sessionPortraitFrame.hidden=false;},failed:()=>{sessionPortraitFrame.hidden=true;},
+    });
 
   const sessionTools=el('div',{class:'dashboard-session-tools'},
     storyEntry('trackers','Story Tracker','Read-only',storyTrackerSummary(trackers,session),'trackers'),

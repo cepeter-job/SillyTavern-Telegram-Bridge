@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import json
 import sqlite3
 import time
 
+from bridge.closed_session_guard import guard_story_mutation
+from bridge.narrative_repository import load_narrative_clock
 from bridge.npc_service import NpcService
 from bridge.simulation_service import SimulationService
 from bridge.sqlite_store import write_transaction
@@ -29,6 +34,17 @@ def swipe_state_key(chat_id: str, session_id: str) -> str:
     return f"swipe_index:{chat_id}:{session_id}"
 
 
+def swipe_source_token(db: sqlite3.Connection, chat_id: str, session_id: str, user_rowid: int) -> str:
+    """Bind a preview to its exact turn and transcript clock without retaining text."""
+    clock = load_narrative_clock(db, chat_id, session_id)
+    if clock is None:
+        return ""
+    source = [chat_id, session_id, user_rowid]
+    source.extend(clock[key] for key in ("session_created_at", "history_revision", "rewrite_revision", "latest_rowid"))
+    digest = hashlib.sha256(json.dumps(source, separators=(",", ":")).encode()).digest()
+    return base64.urlsafe_b64encode(digest).decode().rstrip("=")
+
+
 def last_user_variants(
     db: sqlite3.Connection,
     chat_id: str,
@@ -46,6 +62,7 @@ def keep_swipe_variant(
     npc_service: NpcService,
 ) -> str | None:
     with write_transaction(db):
+        guard_story_mutation(db, chat_id, session_id)
         user_row, variants = last_user_variants(db, chat_id, session_id)
         selected = next((row[1] for row in variants if int(row[0]) == index), None)
         if not user_row or selected is None:

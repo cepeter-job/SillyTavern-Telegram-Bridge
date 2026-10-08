@@ -21,6 +21,9 @@ class Response:
     def read(self, size=-1):
         return self.buffer.read(size)
 
+    def readline(self, size=-1):
+        return self.buffer.readline(size)
+
     def __iter__(self):
         return iter(self.raw.splitlines(keepends=True))
 

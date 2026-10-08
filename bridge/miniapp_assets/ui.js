@@ -53,6 +53,30 @@ export function sessionContext(session) {
 export function feedback(message,kind='error') {
   return el('div',{class:'feedback feedback-'+kind,role:kind==='error'?'alert':'status'},el('p',{},message));
 }
+export function createPortraitLoader(request,signal) {
+  const controller=new AbortController(),pending=new Set();
+  function dispose() {
+    controller.abort();
+    signal?.removeEventListener('abort',dispose);
+    for(const release of pending)release();
+  }
+  if(signal?.aborted)dispose();else signal?.addEventListener('abort',dispose,{once:true});
+  return {dispose,async load(image,path,{loaded=()=>{},failed=()=>{}}={}) {
+    if(controller.signal.aborted)return;
+    try {
+      const blob=await request(path,{binary:true,signal:AbortSignal.any([controller.signal,AbortSignal.timeout(30000)])});
+      if(controller.signal.aborted)return;
+      if(!blob||blob.size===0)throw new Error('empty portrait');
+      const url=URL.createObjectURL(blob);
+      const release=()=>{
+        if(!pending.delete(release))return;
+        image.onload=null;image.onerror=null;URL.revokeObjectURL(url);
+      };
+      pending.add(release);
+      image.onload=()=>{release();loaded();};image.onerror=()=>{release();failed();};image.src=url;
+    } catch {if(!controller.signal.aborted)failed();}
+  }};
+}
 export function field(label, input) {
   const id='field-'+crypto.randomUUID();input.id=id;
   if(input.type==='checkbox')return el('div',{},el('label',{for:id},input,el('span',{},label)));
@@ -62,7 +86,9 @@ export function card(title, ...children) { return el('section', {class:'card'}, 
 export function empty(text = 'Nothing here yet.') { return el('p', {class:'empty'}, text); }
 export function confirmAction(message) { return new Promise(resolve => {
   const opener=initiatingControl;
-  const popup = el('dialog', {}, el('h2',{},'Confirm action'), el('p',{},message));
+  const id='confirmation-'+crypto.randomUUID();
+  const popup = el('dialog', {'aria-labelledby':id+'-title','aria-describedby':id+'-message'},
+    el('h2',{id:id+'-title'},'Confirm action'), el('p',{id:id+'-message'},message));
   const done = answer => {
     popup.close();popup.remove();
     if(opener?.focused)closedDialogs.add(opener.control);

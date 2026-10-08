@@ -264,3 +264,60 @@ A default plan explicitly states `model_evaluation.status: not_executed` and
 means a plan or evidence-validation report was written, including reports with
 blocked readiness. Exit 2 means invalid input or CLI configuration. Inspect
 `decision`, rather than treating exit 0 as a benchmark pass.
+
+
+## Additional shadow-only history-framing checkpoint
+
+An optional **shadow-only** preview now reads an ephemeral, bounded canonical
+history snapshot and compares exact source row identities, roles, and contents
+to the prompt builder's history. It runs only for non-historical current-tip
+readers with complete, non-invalidated summary source coverage. A source,
+reader, incarnation, or content change invalidates the capture before dispatch.
+
+When eligible, the preview packs some older dialogue into quoted JSON pairs of
+original role and complete text, in order, while keeping the first turn, eight
+recent turns, direct query callbacks, negations, unresolved commitments, and
+causal neighbors in their original roles. It declines uncertain mappings and
+non-ASCII older dialogue. No dialogue text is summarized, paraphrased, silently
+removed, or promoted to policy in this *local preview*.
+
+The safe baseline remains the only dispatched prompt. Even
+SILLYTAVERN_CONTEXT_SELECTION_MODE=enabled with a history allowlist **cannot**
+send role-reframed history in this revision. Shadow stores only allowlisted
+numeric estimates and fixed reason codes: history_shadow_candidate_tokens,
+history_shadow_reframed_turns and history_shadow_reason. Source identities,
+dialogue, and candidate prompts remain ephemeral and are never saved in those
+metrics. Preview estimates are *not* provider token savings.
+
+The initial focused fixtures verify source/text/order reconstruction, role and
+reader boundaries, repeated/negated lines, long-range commitments, continuation
+protection, source rewrites, and unchanged off/shadow dispatch. This is a
+preparation for separately approved model and blinded narrative comparisons,
+not a certificate of narrative equivalence or permission to enable.
+The 30% provider-measured goal, holistic helper cost and quality release gates
+remain open until representative matched evidence and explicit rollout approval.
+
+
+## Frozen standalone history-shadow stress study
+
+Run `python tools/evaluate_context_history_shadow.py --output /tmp/history-shadow-study.json`
+to estimate a separate synthetic role-framing candidate **without network calls**.
+Its eight predeclared weighted scenarios cover long archives, repeated
+negations, delayed promises, exact-ending continuations, historical branches,
+non-ASCII dialogue, stale source snapshots and missing summary coverage.
+
+Every preview must reconstruct all original source text and order exactly,
+preserve mandatory/current input and the last continuation target, and keep
+negation and callback anchors in their original roles. The report writes
+bounded metrics and fixed identifiers only; it does not export story contents.
+Cases with missing authorization or an ambiguous source use the baseline.
+
+The frozen synthetic study estimates **6.25% aggregate** and **7.55%
+preweighted** input reduction by the character-ratio estimator. The result is
+**not** provider-reported usage, a live-SQLite coverage or causal proof, or
+a blinded narrative comparison. Reframing dialogue into a quoted user payload
+might alter model interpretation even if every source byte is recoverable.
+The existing native full-story evaluator and separate provider-accounting,
+human-review and staged-activation gates remain authoritative; no history
+pruning or paid/live request is enabled by the study. The 30% goal remains
+unmet and uncertain rather than forcing a weaker prompt.

@@ -105,6 +105,7 @@ def choose_context_messages(
     context = baseline[0].get("_context_selection") if baseline else None
     for message in baseline:
         message.pop("_context_selection", None)
+        message.pop("_context_history_index", None)
     mode = context_selection_mode(app_settings)
     original = estimate_message_tokens(baseline, chars_per_token=chars_per_token)
     metrics: dict[str, object] = {
@@ -136,6 +137,24 @@ def choose_context_messages(
                 # it is not a safe optimization fallback; the caller must retry.
                 raise ContextSelectionStaleError(metrics)
             return baseline, metrics
+    if mode == "shadow" and context is not None and getattr(context, "scope", None) is not None:
+        from bridge.context_history_preview import preview_packed_history
+
+        preview, reframed, history_reason = preview_packed_history(
+            messages,
+            getattr(context, "selection_history_source_rows", ()),
+            context.scope,
+            coverage_valid=metrics["coverage_valid"] is True,
+            query=getattr(context, "selection_query", ""),
+        )
+        # These estimates describe a never-dispatched, role-reframed candidate.
+        # Source content is retained, but narrative equivalence is unverified.
+        history_tokens = estimate_message_tokens(preview, chars_per_token=chars_per_token)
+        if history_reason == "selected" and history_tokens >= original:
+            history_tokens, reframed, history_reason = original, 0, "no_savings"
+        metrics["history_shadow_reason"] = history_reason
+        metrics["history_shadow_candidate_tokens"] = history_tokens
+        metrics["history_shadow_reframed_turns"] = reframed
     if mode == "enabled" and not context_slice_enabled(app_settings, "dedup"):
         if reason in {"off", "selected", "no_savings", "ambiguous"}:
             metrics["reason"] = "not_approved"

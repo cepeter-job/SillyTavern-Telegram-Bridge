@@ -15,10 +15,29 @@ from bridge.context_compaction import DEFAULT_TOKEN_ESTIMATE_CHARS_PER_TOKEN, no
 SECTION_CATEGORIES = ("mandatory", "history", "world_info", "derived", "task")
 BUILDER_METRIC_FIELDS = frozenset({"section_estimated_tokens", "selection_metrics"})
 MAX_METRIC_COUNT = 2**31 - 1
-_SELECTION_COUNTS = frozenset({"original_tokens", "candidate_tokens", "selected_blocks", "deduplicated_blocks"})
+_SELECTION_COUNTS = frozenset(
+    {
+        "original_tokens",
+        "candidate_tokens",
+        "selected_blocks",
+        "deduplicated_blocks",
+        "history_shadow_candidate_tokens",
+        "history_shadow_reframed_turns",
+    }
+)
 _SELECTION_FLAGS = frozenset({"coverage_valid", "applied"})
 _SELECTION_ENUMS = {
     "mode": frozenset({"off", "shadow", "enabled"}),
+    "history_shadow_reason": frozenset(
+        {
+            "historical",
+            "invalid_scope",
+            "incomplete_coverage",
+            "ambiguous",
+            "no_savings",
+            "selected",
+        }
+    ),
     "reason": frozenset(
         {
             "off",

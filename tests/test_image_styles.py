@@ -244,6 +244,13 @@ def test_selected_style_reaches_image_provider_for_both_generation_modes(
                 assert quality in utility_messages[0][0]["content"].casefold()
         if action == "custom":
             assert utility_messages == []
+    if style == "anime":
+        for quality_cue in ("clean linework", "cel shading", "polished detail", "balanced lighting"):
+            assert quality_cue in prompt.casefold()
+            if action == "scene":
+                assert quality_cue in utility_messages[0][0]["content"].casefold()
+        if action == "custom":
+            assert utility_messages == []
     assert photos == [(b"image-bytes", "")]
     assert state.db.execute("SELECT role,content FROM messages ORDER BY rowid").fetchall() == before
 

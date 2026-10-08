@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import re
 import sqlite3
 from pathlib import Path
 
@@ -34,7 +33,6 @@ from bridge.limits import (
     SUMMARY_MAX_CHARS,
 )
 from bridge.memory_contracts import MemoryPromptContext
-from bridge.narrative_values import NARRATIVE_STEERING_PREFIX
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
 from bridge.rag_service import RagService
@@ -42,6 +40,7 @@ from bridge.roleplay_format import normalize_roleplay_transport
 from bridge.settings import AppSettings
 from bridge.simulation_prompt import SIMULATION_OUTPUT_POLICY
 from bridge.telegram_output import telegram_transport_output
+from bridge.user_dialogue import format_user_dialogue_action
 
 _ROLEPLAY_OUTPUT_CONTRACT = (
     "## Telegram Roleplay Output Contract\n"
@@ -138,28 +137,6 @@ def render_session_response(
     return normalize_roleplay_transport(telegram_transport_output(rendered))
 
 
-def format_user_dialogue_action(text: str) -> str:
-    """Make user dialogue and single-star actions explicit to the model."""
-    original = str(text or "").strip()
-    if original.startswith(NARRATIVE_STEERING_PREFIX):
-        return (
-            "Out-of-world narrative steering, not character dialogue, action, knowledge, or a completed event:\n"
-            + original[len(NARRATIVE_STEERING_PREFIX) :]
-        )
-    actions = re.findall(r"(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)", original, flags=re.DOTALL)
-    if not actions:
-        return original
-    dialogue = re.sub(r"(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)", " ", original, flags=re.DOTALL)
-    dialogue = re.sub(r"\s+", " ", dialogue).strip()
-    action_text = " ".join(re.sub(r"\s+", " ", item).strip() for item in actions).strip()
-    sections = []
-    if dialogue:
-        sections.append("User dialogue:\n" + dialogue)
-    if action_text:
-        sections.append("User action:\n" + action_text)
-    return "\n\n".join(sections) or original
-
-
 def build_chat_messages(
     session: dict[str, str],
     fields: dict[str, str],
@@ -185,10 +162,13 @@ def build_chat_messages(
     current_persona = session["persona_id"]
     user_name = persona_service.name(current_persona) if current_persona else app_settings.default_user_name
     persona = persona_service.get(current_persona) if current_persona else None
-    history = [
+    history: list[dict] = [
         {"role": role, "content": format_user_dialogue_action(content) if role == "user" else content}
         for role, content in history_rows
     ]
+    if memory_prompt is not None and memory_prompt.selection_mode != "off":
+        for index, message in enumerate(history):
+            message["_context_history_index"] = index
     language_value = session.get("response_language") or "auto"
     language_instruction = response_language_instruction(language_value)
     system = build_system_prompt(fields, user_name, app_settings=app_settings)

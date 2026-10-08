@@ -392,3 +392,36 @@ def test_retry_guard_migration_repairs_existing_insert_trigger(db):
     migrate_memory_retry_guard(db)
     append(db, "fresh after upgrade")
     assert db.execute("SELECT attempts,last_error FROM memory_jobs WHERE layer='npc'").fetchone() == (0, "")
+
+
+def test_summary_job_cannot_clear_invalidation_without_accepted_coverage(db):
+    """A lease ACK without published source coverage must not make summary valid."""
+    from bridge.memory_store import acknowledge_job, claim_jobs
+
+    append(db)
+    db.execute(
+        "UPDATE memory_layer_state SET invalidated_from_id=1 WHERE chat_id='c' AND session_id='s' AND layer='summary'"
+    )
+    db.commit()
+    claim = claim_jobs(db, now=10, layers=("summary",), chat_id="c", session_id="s")[0]
+    assert claim.target_id > 0
+
+    assert not acknowledge_job(db, claim)
+    assert db.execute(
+        "SELECT covered_id, invalidated_from_id FROM memory_layer_state "
+        "WHERE chat_id='c' AND session_id='s' AND layer='summary'"
+    ).fetchone() == (0, 1)
+    assert db.execute(
+        "SELECT completed_version FROM memory_jobs WHERE chat_id='c' AND session_id='s' AND layer='summary'"
+    ).fetchone() == (0,)
+
+    # Simulate an atomic accepted checkpoint made by the existing publisher.
+    db.execute(
+        "UPDATE memory_layer_state SET covered_id=? WHERE chat_id='c' AND session_id='s' AND layer='summary'",
+        (claim.target_id,),
+    )
+    db.commit()
+    assert acknowledge_job(db, claim)
+    assert db.execute(
+        "SELECT invalidated_from_id FROM memory_layer_state WHERE chat_id='c' AND session_id='s' AND layer='summary'"
+    ).fetchone() == (None,)

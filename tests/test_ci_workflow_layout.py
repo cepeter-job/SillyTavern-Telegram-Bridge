@@ -196,6 +196,7 @@ def test_playwright_cache_is_lock_scoped_without_skipping_browser_dependencies()
         uv = next(step for step in jobs[name]["steps"] if step.get("uses", "").startswith("astral-sh/setup-uv@"))
         assert uv["with"]["enable-cache"] is True
 
+
 def test_advisory_workflows_are_not_part_of_the_protected_gate():
     aggregate_needs = set(workflow_jobs()[AGGREGATE][1]["needs"])
     for job in ADVISORY_JOBS:

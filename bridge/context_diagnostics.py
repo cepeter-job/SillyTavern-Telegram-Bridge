@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
 from bridge.context_compaction import context_profile
+from bridge.context_section_metrics import BUILDER_METRIC_FIELDS, redact_builder_metrics
 from bridge.metadata import get_meta, set_meta
 from bridge.settings import AppSettings
 
@@ -32,6 +33,33 @@ _BOOL_FIELDS = {
     "estimated",
     "allocation_invalid",
 }
+_ENUM_FIELDS = {
+    "source": {"global-fallback", "provider", "provider-model", "discovered-provider-model", "codex-alias"},
+    "input_budget_limiter": {"input-cap", "model-window"},
+}
+
+
+def _redact_context_stats(stats: dict[str, object]) -> dict[str, object]:
+    redacted = redact_builder_metrics(stats)
+    for key in _INT_FIELDS:
+        value = stats.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            redacted[key] = value
+    for key in _BOOL_FIELDS:
+        if isinstance(stats.get(key), bool):
+            redacted[key] = stats[key]
+    value = stats.get("chars_per_token")
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and 1.0 <= value <= 8.0:
+        redacted["chars_per_token"] = float(value)
+    for key, choices in _ENUM_FIELDS.items():
+        value = stats.get(key)
+        if isinstance(value, str) and value in choices:
+            redacted[key] = value
+    for key in ("model", "request_stage"):
+        value = stats.get(key)
+        if isinstance(value, str):
+            redacted[key] = value[:160]
+    return redacted
 
 
 def context_stats_key(chat_id: str, session_id: str) -> str:
@@ -40,10 +68,7 @@ def context_stats_key(chat_id: str, session_id: str) -> str:
 
 def save_context_stats(db: sqlite3.Connection, chat_id: str, session_id: str, stats: dict[str, object]) -> None:
     """Persist only numbers, flags and known metadata; never prompt content."""
-    allowed = (
-        _INT_FIELDS | _BOOL_FIELDS | {"chars_per_token", "source", "input_budget_limiter", "model", "request_stage"}
-    )
-    redacted = {key: value for key, value in stats.items() if key in allowed}
+    redacted = _redact_context_stats(stats)
     set_meta(db, context_stats_key(chat_id, session_id), json.dumps(redacted, sort_keys=True))
 
 
@@ -62,12 +87,12 @@ def record_context_attempts(
                 previous = json.loads(raw) if raw else {}
             except (TypeError, ValueError):
                 previous = {}
-            stats = (
-                {key: value for key, value in previous.items() if key == "dropped_history" or key.endswith("_trimmed")}
-                if isinstance(previous, dict)
-                else {}
-            )
-            stats.update(attempts[-1])
+            previous = _redact_context_stats(previous) if isinstance(previous, dict) else {}
+            stats = {
+                key: value for key, value in previous.items() if key == "dropped_history" or key.endswith("_trimmed")
+            }
+            stats.update({key: value for key, value in attempts[-1].items() if key not in BUILDER_METRIC_FIELDS})
+            stats.update({key: value for key, value in previous.items() if key in BUILDER_METRIC_FIELDS})
             save_context_stats(db, chat_id, session_id, stats)
 
 
@@ -105,31 +130,7 @@ def context_diagnostics_snapshot(
         saved = {}
     if not isinstance(saved, dict):
         return result
-    for key in _INT_FIELDS:
-        value = saved.get(key)
-        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
-            result[key] = value
-    value = saved.get("chars_per_token")
-    if isinstance(value, (int, float)) and not isinstance(value, bool) and 1.0 <= float(value) <= 8.0:
-        result["chars_per_token"] = float(value)
-    source = saved.get("source")
-    if isinstance(source, str) and source in {
-        "global-fallback",
-        "provider",
-        "provider-model",
-        "discovered-provider-model",
-        "codex-alias",
-    }:
-        result["source"] = source
-    limiter = saved.get("input_budget_limiter")
-    if limiter in {"input-cap", "model-window"}:
-        result["input_budget_limiter"] = limiter
-    for key in ("model", "request_stage"):
-        if isinstance(saved.get(key), str):
-            result[key] = saved[key][:160]
-    for key in _BOOL_FIELDS:
-        if isinstance(saved.get(key), bool):
-            result[key] = saved[key]
+    result.update(_redact_context_stats(saved))
     final_tokens = result.get("final_tokens")
     budget_tokens = result.get("budget_tokens")
     result["usage_percent"] = (

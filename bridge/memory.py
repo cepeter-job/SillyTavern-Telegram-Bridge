@@ -9,10 +9,12 @@ from dataclasses import dataclass
 from functools import partial as _partial
 
 from bridge.background import submit_background
+from bridge.context_selection import context_selection_mode, context_slice_enabled
 from bridge.delivery_port import DeliveryPort
 from bridge.extension_registry import run_post_retain_hooks as _run_post_retain_hooks
 from bridge.extension_registry import run_summary_clear_hooks as _run_summary_clear_hooks
 from bridge.generation_settings import get_generation_settings
+from bridge.helper_input_projection import project_summary_messages
 from bridge.hindsight_integrity import HindsightStaleGuard as _HindsightStaleGuard
 from bridge.limits import (
     SUMMARY_MAX_CHARS,
@@ -294,6 +296,10 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
             ),
         },
     ]
+    mode = context_selection_mode(app_settings)
+    if mode == "enabled" and not context_slice_enabled(app_settings, "summary"):
+        mode = "off"
+    messages = project_summary_messages(messages, previous, mode=mode)
     model = task_model_for_session(db, chat_id, session, "summary", app_settings=app_settings)
     raw = provider_port.for_usage(chat_id, session["session_id"], "summary").generate(
         "", model, messages, session_id=f"summary:{chat_id}:{session['session_id']}", settings=settings

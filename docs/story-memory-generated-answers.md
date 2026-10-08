@@ -161,3 +161,20 @@ before reporting empirical generated-answer results. Keep its full synthetic
 report, source/fixture identities and a separately completed human narrative
 review together; do not infer model performance from the offline plan or fake
 provider tests.
+
+## Full-story efficiency replay
+
+The generated-answer checkpoint above uses a controlled retrieval/extraction
+prompt. It does not measure complete production story-request input or establish
+context-efficiency savings. For paired **full-story** prompt replay, use
+[`evaluate_context_efficiency.py`](context-efficiency.md). That separate offline
+checkpoint captures the actual native `MemoryService.prompt_context`, runs the actual story
+builder and final budget gate, preserves matched settings and protected story
+state, and reports estimates separately from supplied provider usage. Its
+30% reduction remains a goal until complete paired accounting and a separately
+recorded blinded human review are available. Neither tool's default offline
+plan executes a real model.
+
+The current native full-story replay reports zero estimated reduction because
+the baseline memory service already fuses native recall and episodic facts.
+Artificial duplicates are excluded from checkpoint totals.

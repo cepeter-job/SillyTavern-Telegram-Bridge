@@ -17,6 +17,8 @@ from bridge.context_compaction import (
     profile_stats,
 )
 from bridge.context_diagnostics import record_context_attempts, save_context_stats
+from bridge.context_dispatch import capture_prompt_sections, prepare_context_dispatch
+from bridge.context_selection_runtime import ContextSelectionStaleError
 from bridge.delivery_port import DeliveryPort
 from bridge.generation_settings import get_generation_settings
 from bridge.grounded_user_settings import grounded_user_policy
@@ -31,6 +33,7 @@ from bridge.limits import (
     RAG_MAX_CONTEXT_CHARS,
     SUMMARY_MAX_CHARS,
 )
+from bridge.memory_contracts import MemoryPromptContext
 from bridge.narrative_values import NARRATIVE_STEERING_PREFIX
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
@@ -177,6 +180,7 @@ def build_chat_messages(
     app_settings: AppSettings,
     context_stats: dict[str, object] | None = None,
     defer_compaction: bool = False,
+    memory_prompt: MemoryPromptContext | None = None,
 ) -> list[dict]:
     current_persona = session["persona_id"]
     user_name = persona_service.name(current_persona) if current_persona else app_settings.default_user_name
@@ -304,9 +308,13 @@ def build_chat_messages(
     else:
         messages.append({"role": "user", "content": user_content})
     messages[-1]["_context_optional"] = user_optional
+    capture_prompt_sections(messages, scene_chars=len(scene_context[:5000]), world_chars=len(world_info))
+    if memory_prompt is not None:
+        messages[0]["_context_selection"] = memory_prompt
     if defer_compaction:
         return messages
     selected_model = session.get("model_id", "")
+    messages, builder_stats = prepare_context_dispatch(messages, app_settings=app_settings, model=selected_model)
     profile = context_profile(selected_model, app_settings=app_settings)
     compacted, stats = compact_chat_messages(
         messages,
@@ -315,6 +323,7 @@ def build_chat_messages(
         app_settings=app_settings,
     )
     stats.update(profile_stats(profile))
+    stats.update(builder_stats)
     if context_stats is not None:
         context_stats.clear()
         context_stats.update(stats)
@@ -357,7 +366,14 @@ def finalize_generation_messages(
     requested_output = settings.get("max_tokens") or GENERATION_DEFAULTS["max_tokens"]
     if not isinstance(requested_output, (str, int, float)):
         raise TypeError("max_tokens must be a numeric setting")
+    builder_stats: dict[str, object] = {}
     try:
+        messages, builder_stats = prepare_context_dispatch(
+            messages,
+            app_settings=app_settings,
+            model=str(session.get("model_id") or app_settings.default_model),
+            requested_output_tokens=int(requested_output),
+        )
         result, stats = budget_chat_messages(
             messages,
             str(session.get("model_id") or app_settings.default_model),
@@ -365,9 +381,11 @@ def finalize_generation_messages(
             app_settings=app_settings,
             preserve_last_assistant=preserve_last_assistant,
         )
-    except ContextWindowBudgetError as exc:
+    except (ContextWindowBudgetError, ContextSelectionStaleError) as exc:
+        exc.stats.update(builder_stats)
         save_context_stats(db, chat_id, session["session_id"], exc.stats)
         raise
+    stats.update(builder_stats)
     save_context_stats(db, chat_id, session["session_id"], stats)
     return result
 

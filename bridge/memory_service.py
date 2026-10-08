@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from bridge.memory_contracts import MemoryPromptContext as MemoryPromptContext
-from bridge.memory_contracts import MemorySearchResult, expand_memory_query
+from bridge.memory_contracts import MemoryReadScope, MemorySearchResult, SelectMemoryContext, expand_memory_query
 from bridge.port_contracts import (
     PurgeSessionMemory,
     QueueSessionMemoryCleanup,
@@ -36,6 +36,7 @@ class MemoryService:
     purge_session_memory: PurgeSessionMemory
     queue_session_cleanup: QueueSessionMemoryCleanup
     search_backend: SearchMemory | None = None
+    select_context: SelectMemoryContext | None = None
 
     def search(
         self,
@@ -69,18 +70,23 @@ class MemoryService:
         if edited_user_rowid is not None:
             through_rowid = max(0, edited_user_rowid - 1)
             historical = True
-        scope = self.resolve_scope(
-            db,
-            chat_id,
-            session,
-            fields,
-            through_rowid=through_rowid,
-            principals=principals,
-            consumer=consumer,
-            historical=historical,
-        )
+
+        def resolve_current_scope() -> MemoryReadScope | None:
+            return self.resolve_scope(
+                db,
+                chat_id,
+                session,
+                fields,
+                through_rowid=through_rowid,
+                principals=principals,
+                consumer=consumer,
+                historical=historical,
+            )
+
+        scope = resolve_current_scope()
         if scope is None:
-            return MemoryPromptContext()
+            context = MemoryPromptContext()
+            return self.select_context(db, context, resolve_current_scope) if self.select_context else context
         # Capture local evidence before slow recall, then revalidate every returned pointer.
         summary = self.scoped_summary(db, scope)
         scene = self.scoped_scene(db, scope)
@@ -88,14 +94,16 @@ class MemoryService:
         episodes = self.scoped_episodes(db, scope, expanded_query)
         recall = self.scoped_recall(db, scope, expanded_query)
         recall, episodes, summary, scene = self.validate_blocks(db, scope, (recall, episodes, summary, scene))
-        return MemoryPromptContext(
+        context = MemoryPromptContext(
             recall.text,
             summary.text,
             episodes.text,
             scene.text,
             scope,
             tuple(pointer for block in (recall, episodes, summary, scene) for pointer in block.evidence),
+            (recall, episodes, summary, scene),
         )
+        return self.select_context(db, context, resolve_current_scope) if self.select_context else context
 
     def summary_status(
         self,

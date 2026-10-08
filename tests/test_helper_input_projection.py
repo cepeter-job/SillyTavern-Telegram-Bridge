@@ -280,3 +280,118 @@ def test_summary_pending_source_parts_remain_private_until_complete(db, tmp_path
         {"text": "HEAD", "visibility": "restricted", "known_by": ["mira"]},
         {"text": "TAIL", "visibility": "restricted", "known_by": ["mira"]},
     ]
+
+
+def test_summary_near_capacity_instructs_bounded_compaction_on_both_calls(db, tmp_path):
+    """Near-full checkpoints must request a compact complete result, including repair."""
+    append(db, "Later, a promise must be honored even when the earlier summary is full.")
+    source = next_source_segment(db, "c", "s", "summary")
+    settings = make_test_settings(home=tmp_path)
+    private = {"text": "Mira promised not to reveal the key.", "visibility": "restricted", "known_by": ["Mira"]}
+    old = {
+        "blocks": [
+            {"text": ("Old public fact number %02d. " % i) * 16, "visibility": "shared", "known_by": []}
+            for i in range(27)
+        ]
+        + [private]
+    }
+    assert 10000 < sum(len(b["text"]) for b in old["blocks"]) < 12000
+    too_long = {
+        "blocks": [
+            {"text": "A" * 4200, "visibility": "shared", "known_by": []},
+            {"text": "B" * 4200, "visibility": "shared", "known_by": []},
+            {"text": "C" * 4200, "visibility": "restricted", "known_by": ["Mira"]},
+        ]
+    }
+    # A model-supplied repaired result must still carry forward earlier
+    # continuity; we do not test acceptance of an artifact that drops it.
+    accepted = {
+        "blocks": [
+            *old["blocks"],
+            {"text": "The promise remains active.", "visibility": "shared", "known_by": []},
+        ]
+    }
+    requests = []
+
+    def generate(api_key, model, messages, **kwargs):
+        requests.append(copy.deepcopy(messages))
+        return json.dumps(too_long if len(requests) == 1 else accepted)
+
+    result = memory.extract_summary_segment(
+        db,
+        "c",
+        SESSION,
+        old,
+        source,
+        provider_port=ProviderPort(generate),
+        app_settings=settings,
+    )
+    assert result["blocks"][:-1] == [
+        *[{**block, "text": block["text"].strip()} for block in old["blocks"][:-1]],
+        {"text": private["text"], "visibility": "restricted", "known_by": ["mira"]},
+    ]
+    assert result["blocks"][-1] == accepted["blocks"][-1]
+    assert len(requests) == 2
+    for messages in requests:
+        combined_system = " ".join(item["content"] for item in messages if item["role"] == "system")
+        assert "12,000 characters" in combined_system
+        assert "10,800 characters" in combined_system
+        assert "visibility" in combined_system and "known_by" in combined_system
+        prior, continuation = unpack(messages)
+        assert prior == old
+        assert continuation.endswith(SOURCE_MARKER + source.content)
+        assert "A" * 4200 not in combined_system
+
+
+def test_summary_near_capacity_rejects_second_oversized_response_without_publication(db, tmp_path):
+    append(db, "New source part remains available after malformed extraction.")
+    source = next_source_segment(db, "c", "s", "summary")
+    settings = make_test_settings(home=tmp_path)
+    long_response = json.dumps(
+        {"blocks": [{"text": letter * 4200, "visibility": "shared", "known_by": []} for letter in ("A", "B", "C")]}
+    )
+    calls = []
+
+    def generate(api_key, model, messages, **kwargs):
+        calls.append(messages)
+        return long_response
+
+    with pytest.raises(ValueError, match="bounded, nonempty"):
+        memory.extract_summary_segment(
+            db,
+            "c",
+            SESSION,
+            {"blocks": [{"text": "Prior fact", "visibility": "shared", "known_by": []}]},
+            source,
+            provider_port=ProviderPort(generate),
+            app_settings=settings,
+        )
+    assert len(calls) == 2
+    assert memory.get_session_summary(db, "c", "s") == ("", 0)
+    assert next_source_segment(db, "c", "s", "summary") == source
+
+
+def test_summary_compaction_must_never_repair_conflicting_audience(db, tmp_path):
+    append(db, "Another source part.")
+    source = next_source_segment(db, "c", "s", "summary")
+    settings = make_test_settings(home=tmp_path)
+    attempts = []
+
+    def generate(api_key, model, messages, **kwargs):
+        attempts.append(messages)
+        return json.dumps(
+            {"blocks": [{"text": "Alice secretly knows the password", "visibility": "shared", "known_by": ["Alice"]}]}
+        )
+
+    with pytest.raises(ValueError):
+        memory.extract_summary_segment(
+            db,
+            "c",
+            SESSION,
+            {"blocks": []},
+            source,
+            provider_port=ProviderPort(generate),
+            app_settings=settings,
+        )
+    assert len(attempts) == 1
+    assert memory.get_session_summary(db, "c", "s") == ("", 0)

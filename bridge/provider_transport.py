@@ -11,7 +11,7 @@ import urllib.request
 from collections.abc import Callable
 
 from bridge.codex_transport import generate_codex_response
-from bridge.config import GENERATION_DEFAULTS
+from bridge.config import GENERATION_DEFAULTS, structured_json_options
 from bridge.context_attempt_budget import check_attempt_budget
 from bridge.limits import DEFAULT_MAX_TOKENS, PROVIDER_TEXT_RESPONSE_MAX_BYTES
 from bridge.model_router import ModelRouter
@@ -541,6 +541,7 @@ def generate_provider_text(
         "frequency_penalty": float(generation["frequency_penalty"]),
         "presence_penalty": float(generation["presence_penalty"]),
         "stream": is_streaming,
+        **structured_json_options(generation, provider_id, endpoint_base, actual_model),
     }
     if is_streaming and usage_callback is not None and spec.get("stream_usage", True):
         body["stream_options"] = {"include_usage": True}
@@ -588,7 +589,7 @@ def generate_provider_text(
             finish_reason = choices[0].get("finish_reason") if choices else None
             content = choices[0].get("message", {}).get("content") if choices else None
             if not content:
-                if finish_reason == "length" and _recovery_attempt < 2:
+                if finish_reason == "length" and generation.get("json_once") is not True and _recovery_attempt < 2:
                     recovered = _recovery_settings(generation)
                     if recovered:
                         return generate_provider_text(
@@ -623,9 +624,8 @@ def generate_provider_text(
                 )
                 raise RuntimeError("backend returned no assistant content")
             content = str(content).strip()
-            if finish_reason != "length":
+            if finish_reason != "length" or generation.get("json_once") is True:
                 return content
-
             segments = [content]
             continuation_messages = list(body["messages"])
             for _attempt in range(3):

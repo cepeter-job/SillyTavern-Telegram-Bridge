@@ -67,7 +67,7 @@ def generate_memory_response(
     settings: dict[str, Any],
     source_valid: Callable[[], bool] | None = None,
 ) -> T:
-    options = dict(settings, stop_sequences="")
+    options = dict(settings, stop_sequences="", json_once=True)
     raw = generate(api_key, model, messages, session_id=session_id, settings=options, force_non_stream=True)
     try:
         return parser(raw)

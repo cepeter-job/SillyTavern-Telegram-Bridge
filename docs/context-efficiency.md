@@ -366,6 +366,28 @@ Compare the inspector output before and after the controlled catch-up and only
 claim recovery when the accepted checkpoint and source evidence agree.
 
 
+## Structured JSON extractor transport (issue #421 follow-up)
+
+Summary, Scene and Episodes helpers use `generate_memory_response` with
+`json_once=True` on the per-call provider settings. For OpenAI-compatible
+non-streaming transports, an HTTP `finish_reason=length` must **not**
+trigger story-style continuation or append a fictional user request to
+"continue from the exact ending." If the first response has partial JSON,
+its parser is allowed **one** canonical-input retry with the ordinary
+bounded repair instruction; no failed response text is replayed into the
+repair request. Empty truncated responses fail rather than silently
+expanding the model output budget or issuing additional HTTP calls.
+Ordinary story/continue streaming behavior remains unchanged.
+
+Summary extraction reserves an adaptive `1200–4096` output-token allowance
+according to serialized accepted prior state size. It never reduces the
+previous output allowance; a large prior summary remains bound, and
+`check_attempt_budget` still guards protected context. Failed or partial
+helper attempts count as provider work, including incomplete usage, and
+leave durable coverage/invalidation unchanged unless accepted by the
+canonical source/checkpoint publisher. This reduces runaway repair costs;
+it does **not** establish narrative equivalence or 30% story-token savings.
+
 ## Continuity-closure and budgeted quality preflight
 
 The separate `bridge/context_continuity_proof.py` checks **opaque,
@@ -406,3 +428,13 @@ and cached input), accepted work and a separate blinded human review.
 Synthetic review attestations or output hashes are not independent
 provider verification. Do not mark narrative equivalence complete
 without real paired model outputs and an authorized reviewer.
+
+
+For the explicitly verified NanoGPT HTTPS GLM 5.2 route only, structured helpers
+also send `response_format: {"type":"json_object"}` to request valid JSON
+syntax. This capability was confirmed with one 80-token-capped, synthetic
+GLM-5.2 request (HTTP 200, parseable JSON, 30 input / 6 output tokens).
+It is **not** sent to normal roleplay requests, other NanoGPT models or
+unverified OpenRouter routes. The response still passes the same strict block, visibility,
+audience, source revision, and durable publication validation: syntactic
+JSON does not establish that a scene or summary is complete or truthful.

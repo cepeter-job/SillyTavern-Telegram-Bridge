@@ -238,3 +238,32 @@ def test_explicit_manual_parked_summary_catches_up_from_accepted_source_only(ses
     assert db.execute(
         "SELECT covered_id,invalidated_from_id FROM memory_layer_state WHERE layer='summary'"
     ).fetchone() == (claim.target_id, None)
+
+
+def test_summary_extraction_requests_at_most_32_audience_consistent_blocks(session_db):
+    """Prompt must match the validator's hard limit without discarding facts."""
+    settings, db, session = session_db
+    add(db, "One synthetic promise made in the archive.")
+    calls = []
+
+    def generate(*args, **_kwargs):
+        calls.append(1)
+        instructions = args[2][0]["content"]
+        assert "at most 32" in instructions.lower()
+        assert "same visibility and known_by" in instructions
+        assert "negations" in instructions and "promises" in instructions
+        return '{"blocks":[{"text":"One synthetic promise.","visibility":"shared","known_by":[]}]}'
+
+    claim = claim_jobs(db, layers=("summary",))[0]
+    assert (
+        run_memory_claim(
+            db,
+            claim,
+            session,
+            {"name": "Alice"},
+            provider_port=make_test_provider_port(generate_backend=generate),
+            app_settings=settings,
+        )
+        == "complete"
+    )
+    assert calls == [1]

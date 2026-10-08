@@ -52,6 +52,16 @@ retain credentials. Actions remain pinned to complete commit SHAs; Python and DO
 tooling continue to use the checked-in locks. Browser tooling has a separate npm
 lock under `tests/miniapp-browser/`; its Playwright version pins engine revisions.
 Both engines run sequentially against a fresh isolated loopback fixture per test.
+
+`setup-uv` and `setup-node` already cache lockfile-keyed Python and npm downloads.
+`miniapp-smoke` also caches Chromium and WebKit binaries in
+`~/.cache/ms-playwright`, keyed by runner OS, architecture and the locked
+`tests/miniapp-browser/package-lock.json` (Playwright pins the browser
+revisions). The SHA-pinned cache action is best-effort: every run still invokes
+`playwright install --with-deps chromium webkit` to install system libraries
+and repair missing browser binaries. Caches never skip tests or security scans.
+Playwright cautions that browser cache restore can cost about as much as a
+download; compare cold and warm `miniapp-smoke` runs before keeping this cache.
 Only the external provider response is synthetic; the summary handler, utility
 executor, API adapter and SQLite records are real. Browser emulation does not
 claim native Telegram Android/iOS acceptance. See

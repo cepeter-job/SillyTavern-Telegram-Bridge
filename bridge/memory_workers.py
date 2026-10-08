@@ -8,6 +8,8 @@ import uuid
 
 from bridge import memory_backend
 from bridge.card_content import card_fields_from_file
+from bridge.diagnostic_events import event
+from bridge.diagnostic_workers import bind_worker
 from bridge.episodic_extraction import extract_episodic_memories_result
 from bridge.memory_discovery import cleanup_candidate
 from bridge.memory_fact_worker import run_fact_index as _run_fact_index
@@ -30,6 +32,7 @@ from bridge.memory_store import (
     recover_expired_jobs,
     source_is_valid,
 )
+from bridge.memory_work_diagnostics import memory_identity, observe_memory_claim
 from bridge.model_router import ModelRoutingError
 from bridge.narrative_repository import load_narrative_clock
 from bridge.sqlite_store import write_transaction
@@ -42,6 +45,7 @@ def _claim_current(db, claim):
     return claim_is_current(db, claim)
 
 
+@observe_memory_claim
 def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_settings):
     if db.in_transaction:
         raise RuntimeError("Memory workers require a committed source")
@@ -165,12 +169,14 @@ def _memory_worker(services, claim):
     try:
         if not _claim_current(db, claim):
             fail_job(db, claim, "stale_source")
+            event("memory.rejected", reason="stale_source", status="rejected", **memory_identity(claim))
             return
         session = services.session.load(db, claim.chat_id, claim.session_id, services.config.default_model)
         fields = card_fields_from_file(session["character_file"], app_settings=services.config)
         run_memory_claim(db, claim, session, fields, provider_port=services.provider, app_settings=services.config)
-    except Exception:
+    except Exception as exc:
         logging.warning("Could not reconstruct durable memory work", exc_info=True)
+        event("memory.reconstruction_failed", status="failed", error_type=type(exc).__name__, **memory_identity(claim))
         fail_job(db, claim)
     finally:
         db.close()
@@ -288,8 +294,8 @@ def _dispatch_legacy_discovery(services, db) -> int | None:
     request_id, token = claimed
     with write_transaction(db):
         db.execute(
-            "INSERT INTO meta(key,value) VALUES('memory_retirement_turn','normal') ON CONFLICT(key) DO "
-            "UPDATE SET value=excluded.value"
+            "INSERT INTO meta(key,value) VALUES('memory_retirement_turn','normal') "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value"
         )
     if services.background.submit("hindsight_retain", _legacy_discovery_worker, services, request_id, token):
         return 1
@@ -349,13 +355,19 @@ def dispatch_memory_backlog(services, db, *, startup=False):
             )
     dispatched = 0
     for claim in claims:
+        identity = memory_identity(claim)
         if claim.layer in {"hindsight", "curator"} and memory_backend.memory_mode(db, claim.chat_id) != "on":
             fail_job(db, claim, "disabled")
+            event("memory.rejected", reason="disabled", status="skipped", **identity)
             continue
-        if services.background.submit("hindsight_retain", _memory_worker, services, claim):
+        worker = bind_worker(_memory_worker, identity=identity)
+        accepted = services.background.submit("hindsight_retain", worker, services, claim)
+        event("memory.queued", accepted=accepted, **identity)
+        if accepted:
             dispatched += 1
         else:
             fail_job(db, claim, "executor_rejected")
+            event("memory.rejected", reason="executor_rejected", status="deferred", **identity)
     if normal_turn and not claims:
         retirement = _dispatch_retirement(services, db)
         return retirement if retirement is not None else (_dispatch_legacy_discovery(services, db) or 0)

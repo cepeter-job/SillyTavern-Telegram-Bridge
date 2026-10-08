@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Generic, TypeVar
 
 from bridge.diagnostic_events import clean_fields, diagnostic_scope, event
+from bridge.diagnostic_workers import bind_worker
 from bridge.performance import operation_scope, perf_span, performance_enabled
 from bridge.settings import AppSettings
 
@@ -197,4 +198,4 @@ class DurableWorkerGuard:
                 finally:
                     event("job.worker_finish", status=status, elapsed_ms=max(0, int((time.monotonic() - started) * 1000)))
 
-        return guarded_worker
+        return bind_worker(guarded_worker, identity=identity)

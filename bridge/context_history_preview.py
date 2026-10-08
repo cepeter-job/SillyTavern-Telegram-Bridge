@@ -11,6 +11,7 @@ import re
 
 from bridge.context_compaction import estimate_message_tokens
 from bridge.memory_contracts import MemoryReadScope, relevance_terms
+from bridge.user_dialogue import format_user_dialogue_action
 
 _MARKER = "_context_history_index"
 _PACKET = "_history_preview_packet"
@@ -64,9 +65,6 @@ def preview_packed_history(
         for rowid, role, content in snapshot
     ):
         return messages, 0, "ambiguous"
-    # Imports lazily to avoid making generation depend on its own selector.
-    from bridge.generation import format_user_dialogue_action
-
     for ordinal, ((_index, message), (_rowid, role, content)) in enumerate(zip(indexed, snapshot, strict=True)):
         expected = format_user_dialogue_action(content) if role == "user" else content
         if message.get(_MARKER) != ordinal or message.get("role") != role or message.get("content") != expected:

@@ -438,3 +438,25 @@ It is **not** sent to normal roleplay requests, other NanoGPT models or
 unverified OpenRouter routes. The response still passes the same strict block, visibility,
 audience, source revision, and durable publication validation: syntactic
 JSON does not establish that a scene or summary is complete or truthful.
+
+
+## Lossless Summary block overflow handling (issue #421)
+
+A read-only source-scoped OpenRouter probe showed a complete JSON response
+with 35 explicit classified blocks; one canonical-input repair still returned
+33. Both exceeded the unchanged 32-block artifact contract despite valid JSON,
+valid per-item text, and total text within the 12,000-character summary limit.
+A failed classification must never be marked as accepted coverage.
+
+The summary-only formatter now validates **each original item and audience**
+then permits a bounded 33–64-block response to merge only **adjacent**
+items with identical normalized `visibility` and `known_by`. The original
+text order and every trimmed item text are retained verbatim, separated by a
+single newline. A merge must respect the per-block 5,000-character and total
+summary length caps. It publishes at most 32 classified blocks **after**
+running the existing strict validator. Mixed audiences, nonadjacent facts,
+oversized items, unmatched groups, conflicting private knowledge, and
+unmergeable overflow fail closed with the same classified error and normal
+one-repair limit. The coalescer neither summarizes nor drops a statement,
+and does not change the story or scene transport. It is a **format repair**,
+not semantic proof or license to prune historical dialogue.

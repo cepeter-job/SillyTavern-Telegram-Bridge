@@ -63,6 +63,7 @@ from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect, write_transaction
+from bridge.summary_block_coalescing import coalesce_summary_response
 
 
 def _make_hindsight_stale_guard(
@@ -313,7 +314,7 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
     model = task_model_for_session(db, chat_id, session, "summary", app_settings=app_settings)
 
     def parse(raw: str) -> dict[str, object]:
-        classified = parse_classified_blocks(parse_classified_response(raw))
+        classified = parse_classified_blocks(coalesce_summary_response(parse_classified_response(raw)))
         text = "\n".join(block["text"] for block in classified)
         if not text or len(text) > SUMMARY_MAX_CHARS:
             raise ValueError("Classified summary requires bounded, nonempty output")

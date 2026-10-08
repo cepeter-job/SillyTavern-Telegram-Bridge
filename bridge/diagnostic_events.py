@@ -52,6 +52,7 @@ _TEXT_FIELDS = frozenset(
 _NUMBER_FIELDS = frozenset(
     {
         "job_id",
+        "parent_job_id",
         "update_id",
         "attempt",
         "elapsed_ms",
@@ -113,8 +114,10 @@ def diagnostic_context() -> dict[str, object]:
 
 
 @contextmanager
-def diagnostic_scope(**fields: object) -> Iterator[None]:
-    token = _CONTEXT.set({**diagnostic_context(), **clean_fields(fields)})
+def diagnostic_scope(*, inherit: bool = True, **fields: object) -> Iterator[None]:
+    """Durable recovery can replace, rather than inherit, dispatcher identity."""
+    parent = diagnostic_context() if inherit else {}
+    token = _CONTEXT.set({**parent, **clean_fields(fields)})
     try:
         yield
     finally:

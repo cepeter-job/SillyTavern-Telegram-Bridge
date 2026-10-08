@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ast
 import importlib.util
-import re
 import subprocess
 import sys
 import tomllib
@@ -444,13 +443,20 @@ def test_type_target_count_cli_reports_current_surface():
 
 
 def test_ci_has_sha_pinned_secret_scan_job():
+    """The protected secret scan cannot silently revert to a licensed action or a partial scan."""
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "  secret-scan:" in workflow
     assert "fetch-depth: 0" in workflow
-    match = re.search(r"gitleaks/gitleaks-action@([0-9a-f]{40})(?:\s|$)", workflow)
-    assert match is not None
-    assert "gitleaks/gitleaks-action@v" not in workflow
-    assert match.group(1) != "ff98106e4c7b2bc287b24eaf42907196329070c7"
+    assert "persist-credentials: false" in workflow
+    assert "gitleaks/gitleaks-action@" not in workflow
+    assert "gitleaks_8.30.1_linux_x64.tar.gz" in workflow
+    assert "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb" in workflow
+    assert "sha256sum --check" in workflow
+    assert 'gitleaks" git' in workflow
+    assert "--log-opts=--all" in workflow
+    assert "--config=.gitleaks.toml" in workflow
+    assert "--gitleaks-ignore-path=.gitleaksignore" in workflow
+    assert "--redact" in workflow and "--exit-code=1" in workflow
 
 
 def test_operations_docs_describe_generated_typed_surface_not_stale_fixed_count():

@@ -26,6 +26,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Fixed
 
+- Regenerate malformed JSON/schema output once for Summary, Scene and Episodes from canonical inputs, without replaying failed model text or weakening audience validation. Disable narrative stop sequences for these JSON tasks. Preserve stale-source/lease fences, prior accepted state and independently valid partial NPC tracker publication.
+- Replace generic extraction `work_failed` with bounded safe format/audience/NPC codes and opaque session/target log correlation, without logging raw exceptions or story text. Keep unknown failures generic and preserve the autonomous retry ceiling for all new codes. No source replay, tracker reset, database migration or provider/model change.
 - Retire the abandoned Internal States prompt protocol, including numeric baseline import, automatic historical bootstrap, special prompt rewriting and output suppression. Native tracker extraction, ordinary Telegram formatting and Light Novel renderer-envelope validation remain in place.
 - Fence tracker publication and check delivery against replay, stale workers, rewritten/deleted sources and session changes. Reset, swipe, continuation and alternate-ending checkpoints now preserve the same state boundary as canonical story history.
 - Reconstruct historical NPC checkpoint fields from bounded field history so a later tracker projection cannot erase the older snapshot value.

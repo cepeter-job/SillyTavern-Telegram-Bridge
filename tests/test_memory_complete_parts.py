@@ -216,7 +216,8 @@ def test_malformed_part_never_advances_coverage(db, tmp_path, layer):
         make_test_settings(home=tmp_path),
         make_test_provider_port(generate_backend=lambda *a, **k: "{bad JSON"),
     )
-    assert result == "work_failed"
+    expected = {"summary": "malformed_json", "scene": "malformed_json", "npc": "invalid_npc_output"}
+    assert result == expected.get(layer, "work_failed")
     assert published(db, layer)[1] == 0
     assert db.execute("SELECT count(*) FROM memory_segments WHERE layer=? AND valid=1", (layer,)).fetchone() == (0,)
 

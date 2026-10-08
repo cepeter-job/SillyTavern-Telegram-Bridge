@@ -13,6 +13,7 @@ from bridge.json_fences import unfence_json
 from bridge.memory_artifact_store import CLASSIFIED_AUDIENCE_PROMPT
 from bridge.memory_contracts import MemoryFact
 from bridge.memory_fact_store import accept_source_facts, classified_audience
+from bridge.memory_response import generate_memory_response
 from bridge.memory_store import MemorySource
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.narrative_repository import load_narrative_clock
@@ -148,14 +149,16 @@ def extract_episodic_memories_result(
         }
     )
     model = task_model_for_session(db, chat_id, session, "memory", app_settings=app_settings)
-    response = provider_port.for_usage(chat_id, session_id, "memory").generate(
+    candidates = generate_memory_response(
+        provider_port.for_usage(chat_id, session_id, "memory").generate,
         "",
         model,
         messages,
+        parser=parse_episodic_candidates,
         session_id=f"episodic:{chat_id}:{session_id}",
         settings=settings,
+        source_valid=source_valid,
     )
-    candidates = parse_episodic_candidates(response)
     if source_ref is not None:
         with write_transaction(db):
             previous_id = int(db.execute("SELECT COALESCE(MAX(memory_id),0) FROM episodic_memories").fetchone()[0])

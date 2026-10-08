@@ -1,6 +1,8 @@
 """Durable-memory retry classifications shared by the worker store."""
 
-MEMORY_FAILURE_CODES = frozenset(
+from bridge.memory_response import RESPONSE_FAILURE_CODES
+
+MEMORY_FAILURE_CODES = RESPONSE_FAILURE_CODES | frozenset(
     {
         "work_failed",
         "retain_failed",

@@ -152,7 +152,7 @@ def test_summary_success_episode_failure_is_still_pending(session_db, monkeypatc
         provider_port=make_test_provider_port(generate_backend=lambda *a, **k: "invalid"),
         app_settings=settings,
     )
-    assert result == "work_failed"
+    assert result == "malformed_json"
     assert db.execute("SELECT completed_version FROM memory_jobs WHERE layer='episodes'").fetchone()[0] == 0
     db.execute("UPDATE memory_jobs SET next_attempt_at=0")
     db.commit()

@@ -14,7 +14,8 @@ RECENT_SOURCE = (
     "AND m.session_id=memory_jobs.session_id AND m.created_at>=:idle_since))"
 )
 RETRY_ALLOWED = (
-    "(layer='hindsight' OR NOT (attempts>=:failure_limit AND last_error IN ('work_failed','retain_failed')))"
+    "(layer='hindsight' OR NOT (attempts>=:failure_limit AND last_error IN "
+    "('work_failed','retain_failed','malformed_json','invalid_shape','invalid_audience','invalid_npc_output')))"
 )
 MODE_ENABLED = (
     "(layer NOT IN ('hindsight','curator') OR "

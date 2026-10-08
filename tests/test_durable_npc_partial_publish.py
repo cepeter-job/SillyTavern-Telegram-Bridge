@@ -28,7 +28,7 @@ def test_durable_npc_worker_publishes_valid_tracker_when_npc_output_is_malformed
 
     assert (
         run_memory_claim(db, claim, session, {"name": "Alice"}, provider_port=provider, app_settings=settings)
-        == "work_failed"
+        == "invalid_npc_output"
     )
     actor = SimulationService().state(db, "chat", "s1", "actor", "user")
     assert actor is not None
@@ -46,4 +46,4 @@ def test_durable_npc_worker_publishes_valid_tracker_when_npc_output_is_malformed
         ("chat", "s1"),
     ).fetchone()
     assert job[0] == 0
-    assert job[1] == "work_failed"
+    assert job[1] == "invalid_npc_output"

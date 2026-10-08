@@ -368,7 +368,7 @@ def submit_chat_background(
         should_start = chat_id not in _CHAT_ACTIVE
         if should_start:
             _CHAT_ACTIVE.add(chat_id)
-    event("background.queued", label=label, **worker_identity(function))
+    event("background.queued", **{**worker_identity(function), "label": label})
     if should_start:
         _start_next_chat_job(chat_id)
     return True

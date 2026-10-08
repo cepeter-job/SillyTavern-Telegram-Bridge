@@ -120,7 +120,7 @@ class SimulationService(SimulationMechanics):
             validate_narrative_links(db, chat_id, session_id, payload, source_rowid)
             self._relationship_updates(db, chat_id, session_id, payload, source_rowid, now, tick=role == "assistant")
             self._agenda_updates(db, chat_id, session_id, payload, source_rowid, now, tick=role == "assistant")
-            self._actor_update(db, chat_id, session_id, payload, source_rowid, now)
+            self._actor_update(db, chat_id, session_id, payload, source_rowid, now, user_name=user_name)
             self._replace_named_states(
                 db,
                 chat_id,

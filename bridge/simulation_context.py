@@ -82,7 +82,8 @@ def _state_line(kind: str, name: str, value: dict[str, Any], *, narrator: bool) 
         return (
             f"TASK {display}: {value.get('status', 'active')} {value.get('objective', '')} "
             f"[{value.get('progress_current', 0)}/{value.get('progress_target', 0)}] "
-            f"stage={value.get('stage', '')}; pending={value.get('pending_steps', [])}; "
+            f"stage={value.get('stage', '')}; completed={value.get('completed_steps', [])}; "
+            f"pending={value.get('pending_steps', [])}; "
             f"established consequence={value.get('consequence', '')}"
         )
     if kind == "faction":

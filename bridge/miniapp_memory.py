@@ -202,6 +202,8 @@ def purge_remote(services: Any, who: MiniAppIdentity, values: dict) -> dict:
 
 def recall_remote(services: Any, who: MiniAppIdentity, values: dict) -> dict:
     query = text(values, "query", 2000)
+    # This queued read must retain the story from the submitted form.
+    text(values, "session_id", 200)
     with session_scope(services, who, values) as scope:
         results = services.memory.search(
             scope.db,

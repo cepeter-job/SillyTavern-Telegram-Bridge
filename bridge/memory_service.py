@@ -102,6 +102,7 @@ class MemoryService:
             scope,
             tuple(pointer for block in (recall, episodes, summary, scene) for pointer in block.evidence),
             (recall, episodes, summary, scene),
+            selection_query=query,
         )
         return self.select_context(db, context, resolve_current_scope) if self.select_context else context
 

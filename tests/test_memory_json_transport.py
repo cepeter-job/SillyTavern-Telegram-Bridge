@@ -21,7 +21,9 @@ class FakeResponse(io.BytesIO):
         super().__init__(json.dumps(data).encode())
 
 
-def routed_provider(tmp_path, monkeypatch, payloads, *, provider="openrouter", host="openrouter.ai"):
+def routed_provider(
+    tmp_path, monkeypatch, payloads, *, provider="openrouter", host="openrouter.ai", model_id="test/model"
+):
     settings = make_test_settings(
         environ={"TEST_MEMORY_KEY": "synthetic-key", "SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": host},
         home=tmp_path,
@@ -31,7 +33,7 @@ def routed_provider(tmp_path, monkeypatch, payloads, *, provider="openrouter", h
         "api_endpoint": "https://" + host + "/api/v1",
         "api_key_env": "TEST_MEMORY_KEY",
     }
-    router = type("Router", (), {"route": lambda _self, _: ModelRoute(provider, "test/model", spec)})()
+    router = type("Router", (), {"route": lambda _self, _: ModelRoute(provider, model_id, spec)})()
     requests = []
 
     def fake_urlopen(request, timeout, *, environ=None):
@@ -116,7 +118,9 @@ def test_nanogpt_structured_helper_adds_json_object_only_for_compatible_endpoint
         {"choices": [{"message": {"content": '{"blocks":[]}'}, "finish_reason": "stop"}]},
         {"choices": [{"message": {"content": "Ordinary story response"}, "finish_reason": "stop"}]},
     ]
-    port, sent = routed_provider(tmp_path, monkeypatch, payloads, provider="nano-gpt", host="nano-gpt.com")
+    port, sent = routed_provider(
+        tmp_path, monkeypatch, payloads, provider="nano-gpt", host="nano-gpt.com", model_id="z-ai/glm-5.2"
+    )
     assert generate_memory_response(
         port.generate,
         "",
@@ -149,6 +153,27 @@ def test_json_mode_is_never_implicitly_used_for_other_openai_providers(tmp_path,
         port.generate,
         "",
         "openrouter::test/model",
+        [{"role": "system", "content": "Return JSON"}],
+        parser=parse_classified_response,
+        session_id="synthetic",
+        settings={"max_tokens": 1200},
+    ) == {"blocks": []}
+    assert "response_format" not in sent[0]
+
+
+def test_other_nanogpt_models_do_not_inherit_untested_json_mode(tmp_path, monkeypatch):
+    port, sent = routed_provider(
+        tmp_path,
+        monkeypatch,
+        [{"choices": [{"message": {"content": '{"blocks":[]}'}, "finish_reason": "stop"}]}],
+        provider="nano-gpt",
+        host="nano-gpt.com",
+        model_id="other/untested-model",
+    )
+    assert generate_memory_response(
+        port.generate,
+        "",
+        "nano-gpt::other/untested-model",
         [{"role": "system", "content": "Return JSON"}],
         parser=parse_classified_response,
         session_id="synthetic",

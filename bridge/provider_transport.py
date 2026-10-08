@@ -541,7 +541,7 @@ def generate_provider_text(
         "frequency_penalty": float(generation["frequency_penalty"]),
         "presence_penalty": float(generation["presence_penalty"]),
         "stream": is_streaming,
-        **structured_json_options(generation, provider_id, endpoint_base),
+        **structured_json_options(generation, provider_id, endpoint_base, actual_model),
     }
     if is_streaming and usage_callback is not None and spec.get("stream_usage", True):
         body["stream_options"] = {"include_usage": True}

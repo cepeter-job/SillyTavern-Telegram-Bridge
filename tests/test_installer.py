@@ -157,6 +157,7 @@ def test_install_script_help_and_bash_syntax_are_safe():
     result = subprocess.run(["/bin/bash", str(script), "--help"], capture_output=True, text=True, check=True)
     assert "--no-start" in result.stdout and "--with-tailscale-funnel" in result.stdout
     assert "--release" in result.stdout and "--allowed-signers" in result.stdout and "--unsafe-main" in result.stdout
+    assert "--no-github-known-hosts" in result.stdout
     assert "--with-caddy" not in result.stdout
 
 
@@ -222,9 +223,14 @@ def _bootstrap_installer_fixture(tmp_path):
     executable("loginctl", 'if [ "${1:-}" = show-user ]; then echo yes; fi\nexit 0\n')
     executable(
         "ssh-keygen",
-        'if [ "${1:-}" = -lf ]; then '
-        "cat >/dev/null; "
-        'echo "256 SHA256:Au9pahLKr9Wj1ayrHyXAZEO48y/xuVY88dk6zATqYqU cepeter-release-signing (ED25519)"; '
+        'if [ "${1:-}" = -lf ]; then\n'
+        "  input=$(cat)\n"
+        '  case "$input" in\n'
+        '    *IOMqqnkVzrm0*) echo "256 SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU github.com (ED25519)" ;;\n'
+        '    *) echo "256 SHA256:Au9pahLKr9Wj1ayrHyXAZEO48y/xuVY88dk6zATqYqU cepeter-release-signing (ED25519)" ;;\n'
+        "  esac\n"
+        'elif [ "${1:-}" = -F ]; then\n'
+        "  exit 1\n"
         "fi\nexit 0\n",
     )
     executable(
@@ -239,6 +245,12 @@ if [ "${{1:-}}" = clone ]; then
   cat > "$target/.venv/bin/python" <<'PYWRAP'
 #!/bin/sh
 if [ "${1:-}" = -c ]; then printf '%s\\n' "${3:-}"; fi
+if [ "${1:-}" = -m ] && [ "${3:-}" = signer-path ]; then
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = --signers-path ]; then shift; printf '%s\\n' "$1"; exit 0; fi
+    shift
+  done
+fi
 exit 0
 PYWRAP
   chmod +x "$target/.venv/bin/python"

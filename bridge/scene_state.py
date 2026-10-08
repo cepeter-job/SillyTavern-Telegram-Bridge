@@ -28,6 +28,7 @@ from bridge.memory_artifact_store import (
 )
 from bridge.memory_draft_publish import publish_derived, restore_derived
 from bridge.memory_draft_store import run_session_draft
+from bridge.memory_response import generate_memory_response
 from bridge.memory_store import enqueue_memory, retire_derived_layer
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.provider_port import ProviderPort
@@ -164,23 +165,27 @@ def extract_scene_segment(
         },
     ]
     model = task_model_for_session(db, chat_id, session, "scene_state", app_settings=app_settings)
-    raw = provider_port.for_usage(chat_id, session["session_id"], "scene").generate(
+
+    def parse(raw: str) -> dict[str, object]:
+        payload = parse_classified_response(raw)
+        raw_state = payload.get("state")
+        if not isinstance(raw_state, dict):
+            raise ValueError("Scene extraction requires an explicit state object")
+        state = {} if not raw_state else parse_scene_state(json.dumps(raw_state, ensure_ascii=False))
+        blocks = parse_classified_blocks(payload)
+        if state is None:
+            raise ValueError("Scene extraction requires valid state")
+        return {"state": state, "blocks": blocks}
+
+    return generate_memory_response(
+        provider_port.for_usage(chat_id, session["session_id"], "scene").generate,
         api_key,
         model,
         messages,
+        parser=parse,
         session_id=f"scene-state:{chat_id}:{session['session_id']}",
         settings=settings,
-        force_non_stream=True,
     )
-    payload = parse_classified_response(raw)
-    raw_state = payload.get("state")
-    if not isinstance(raw_state, dict):
-        raise ValueError("Scene extraction requires an explicit state object")
-    state = {} if not raw_state else parse_scene_state(json.dumps(raw_state, ensure_ascii=False))
-    blocks = parse_classified_blocks(payload)
-    if state is None:
-        raise ValueError("Scene extraction requires valid state")
-    return {"state": state, "blocks": blocks}
 
 
 def refresh_scene_state_now(

@@ -302,7 +302,7 @@ def test_summary_malformed_oversized_part_is_not_marked_covered(session_db):
     )
     assert memory.get_session_summary(db, "chat", "s1") == ("", 0)
     assert result == ""
-    assert len(prompts) == 1
+    assert len(prompts) == 2 and prompts[0][2][-1] == prompts[1][2][-1]
     source = prompts[0][2][-1]["content"].split("\n\nCanonical source part:\n", 1)[1]
     assert len(source) == 12000
     assert len(db.execute("SELECT content FROM messages").fetchone()[0]) > 51000

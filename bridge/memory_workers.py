@@ -11,6 +11,7 @@ from bridge.card_content import card_fields_from_file
 from bridge.episodic_extraction import extract_episodic_memories_result
 from bridge.memory_discovery import cleanup_candidate
 from bridge.memory_fact_worker import run_fact_index as _run_fact_index
+from bridge.memory_response import memory_failure_code, memory_scope_reference
 from bridge.memory_retirement_store import (
     RETIREMENT_SCOPE_UNPAUSED,
     accept_discovery_page,
@@ -128,9 +129,15 @@ def run_memory_claim(db, claim, session, fields, *, provider_port=None, app_sett
     except ModelRoutingError:
         logging.warning("Durable memory layer %s blocked by model configuration", claim.layer, exc_info=True)
         result = "configuration"
-    except Exception:
-        logging.warning("Durable memory layer %s failed", claim.layer, exc_info=True)
-        result = "work_failed"
+    except Exception as error:
+        result = memory_failure_code(error)
+        logging.warning(
+            "Durable memory layer %s failed code=%s scope=%s target=%s",
+            claim.layer,
+            result,
+            memory_scope_reference(claim.chat_id, claim.session_id, claim.session_created_at),
+            claim.target_id,
+        )
     fail_job(db, claim, result, deferred=result == "deferred")
     return result
 

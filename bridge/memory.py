@@ -53,6 +53,7 @@ from bridge.memory_backend import recall_memory_results as recall_memory_results
 from bridge.memory_backend import remember_fact as remember_fact
 from bridge.memory_draft_publish import publish_derived, restore_derived
 from bridge.memory_draft_store import run_session_draft
+from bridge.memory_response import generate_memory_response
 from bridge.memory_service import MemoryService
 from bridge.memory_store import enqueue_memory, retire_derived_layer
 from bridge.metadata import set_meta
@@ -301,14 +302,23 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
         mode = "off"
     messages = project_summary_messages(messages, previous, mode=mode)
     model = task_model_for_session(db, chat_id, session, "summary", app_settings=app_settings)
-    raw = provider_port.for_usage(chat_id, session["session_id"], "summary").generate(
-        "", model, messages, session_id=f"summary:{chat_id}:{session['session_id']}", settings=settings
+
+    def parse(raw: str) -> dict[str, object]:
+        classified = parse_classified_blocks(parse_classified_response(raw))
+        text = "\n".join(block["text"] for block in classified)
+        if not text or len(text) > SUMMARY_MAX_CHARS:
+            raise ValueError("Classified summary requires bounded, nonempty output")
+        return {"blocks": classified}
+
+    return generate_memory_response(
+        provider_port.for_usage(chat_id, session["session_id"], "summary").generate,
+        "",
+        model,
+        messages,
+        parser=parse,
+        session_id=f"summary:{chat_id}:{session['session_id']}",
+        settings=settings,
     )
-    classified = parse_classified_blocks(parse_classified_response(raw))
-    text = "\n".join(block["text"] for block in classified)
-    if not text or len(text) > SUMMARY_MAX_CHARS:
-        raise ValueError("Classified summary requires bounded, nonempty output")
-    return {"blocks": classified}
 
 
 def generate_session_summary_result(

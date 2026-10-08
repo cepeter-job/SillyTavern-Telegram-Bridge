@@ -398,7 +398,8 @@ def test_malformed_empty_scene_never_accepts_coverage(runtime, payload):
     settings, db, _ = runtime
     append(db, "Greeting")
     provider = make_test_provider_port(generate_backend=lambda *a, **k: json.dumps(payload))
-    assert run(db, settings, "scene", provider) == "work_failed"
+    expected = "invalid_audience" if payload.get("blocks") else "invalid_shape"
+    assert run(db, settings, "scene", provider) == expected
     assert get_scene_state(db, "c", "s") == ({}, 0)
     assert db.execute("SELECT covered_id FROM memory_layer_state WHERE layer='scene'").fetchone() == (0,)
 

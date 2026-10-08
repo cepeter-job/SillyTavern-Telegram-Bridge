@@ -448,7 +448,7 @@ def test_completed_step_does_not_remove_distinct_long_pending_step():
     db = _db()
     try:
         service = SimulationService()
-        prefix = "Inspect " + "the northern archive dossier " * 7
+        prefix = "Inspect " + "the northern archive dossier " * 6
         assert 160 < len(prefix.encode()) < 210
         completed = prefix + "blue record"
         unfinished = prefix + "red record"

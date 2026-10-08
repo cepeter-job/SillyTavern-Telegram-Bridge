@@ -23,11 +23,11 @@ defaults:
 
 jobs:
   pr-title:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout trusted revision
-        uses: useblacksmith/checkout@v1 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 

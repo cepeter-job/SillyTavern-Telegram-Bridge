@@ -10,6 +10,7 @@ from typing import Any, TypeVar
 from bridge.json_fences import unfence_json
 from bridge.memory_fact_store import classified_audience
 from bridge.memory_retry import MEMORY_RESPONSE_ERRORS
+from bridge.provider_errors import ProviderRequestError
 
 T = TypeVar("T")
 
@@ -27,6 +28,8 @@ class MemorySourceChanged(RuntimeError):
 
 
 def memory_failure_code(error: Exception) -> str:
+    if isinstance(error, ProviderRequestError):
+        return "rate_limit" if error.category == "rate_limit" else "work_failed"
     if isinstance(error, MemorySourceChanged):
         return "stale_source"
     if isinstance(error, json.JSONDecodeError):

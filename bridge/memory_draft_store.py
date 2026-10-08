@@ -307,6 +307,8 @@ def run_session_draft(
                 deferred=result in {"complete", "deferred"},
             )
         return result
-    except Exception:
-        fail_job(db, original, "work_failed")
+    except Exception as error:
+        from bridge.memory_response import memory_failure_code
+
+        fail_job(db, original, memory_failure_code(error))
         raise

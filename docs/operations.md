@@ -260,6 +260,13 @@ an online database snapshot, advances the source checkout, replaces the managed
 live mirror and requests a service restart. It retains the previous mirror for
 recovery. Confirm the running version and resumed polling afterward.
 
+When an operator reruns the signed updater for the installed release, it compares
+the managed source and assets with the verified release before reporting that
+they are current. Modified or missing files and retired modules trigger the same
+guarded mirror replacement. Generated Python caches and unrelated notes at the
+mirror root do not trigger replacement; the old mirror remains available in its
+recovery backup when replacement is needed.
+
 Changed `requirements.lock` dependencies require a manual update. Use the table
 below if automatic installation refuses to continue:
 

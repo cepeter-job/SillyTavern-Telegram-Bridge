@@ -18,7 +18,7 @@
     "bridge/provider_callbacks.py": 698,
     "bridge/provider_transport.py": 802,
     "bridge/schema.py": 523,
-    "bridge/self_update.py": 541,
+    "bridge/self_update.py": 512,
     "bridge/update_message_routing.py": 611,
     "bridge/worker_orchestration.py": 550,
     "tests/application_test_setup.py": 503,

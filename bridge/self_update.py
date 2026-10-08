@@ -32,11 +32,12 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from bridge.database_backup import create_database_backup
+from bridge.deployment_payload import APPLICATION, MARKER
+from bridge.deployment_payload import live_matches_release as _live_matches_release
+from bridge.deployment_payload import prepare_payload as _prepare_payload
 from bridge.subprocess_security import minimal_subprocess_environment
 
-APPLICATION = "cepeter/SillyTavern-Telegram-Bridge"
 CANONICAL_GIT_URL = f"https://github.com/{APPLICATION}.git"
-MARKER = ".bridge-deployment.json"
 _VERSION = re.compile(r"[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}\Z")
 _UNIT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.@:-]{0,120}\.service\Z")
 _MAX_ARCHIVE_BYTES = 128 * 1024 * 1024
@@ -395,42 +396,12 @@ def _extract_release(bare: Path, commit: str, workspace: Path, git: str) -> Path
     return target
 
 
-def _prepare_payload(release: Path, destination: Path, commit: str, version: str) -> None:
-    destination.mkdir(mode=0o700)
-    shutil.copytree(release / "bridge", destination / "bridge")
-    for name in ("sillytavern_telegram_bridge.py", "CHANGELOG.md", "requirements.lock"):
-        shutil.copy2(release / name, destination / name)
-    (destination / MARKER).write_text(
-        json.dumps(
-            {"application": APPLICATION, "format": 1, "commit": commit, "version": version},
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-
 def _clean_source(source: Path, git: str) -> str:
     if _git(["symbolic-ref", "--short", "HEAD"], source, executable=git) != "main":
         raise UpdateRefused("branch")
     if _git(["status", "--porcelain"], source, executable=git):
         raise UpdateRefused("dirty")
     return _git(["rev-parse", "HEAD"], source, executable=git)
-
-
-def _live_matches_release(live: Path, version: str, commit: str) -> bool:
-    marker = live / MARKER
-    try:
-        data = json.loads(marker.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return False
-    return (
-        isinstance(data, dict)
-        and data.get("application") == APPLICATION
-        and data.get("format") == 1
-        and data.get("version") == version
-        and data.get("commit") == commit
-    )
 
 
 def _activate_live(payload: Path, live: Path, backup: Path) -> None:
@@ -472,10 +443,10 @@ def apply_update(plan: UpdatePlan, *, before_restart: Callable[[UpdateOutcome], 
                 _git(["merge-base", "--is-ancestor", old, commit], bare, executable=tools["git"])
             except subprocess.CalledProcessError:
                 raise UpdateRefused("ancestry") from None
-            if old == commit and _live_matches_release(plan.live, plan.release_version, commit):
-                return UpdateOutcome(UpdateStatus.ALREADY_LATEST, plan.release_version, commit)
             phase = "prepare"
             release = _extract_release(bare, commit, workspace, tools["git"])
+            if old == commit and _live_matches_release(plan.live, release, plan.release_version, commit):
+                return UpdateOutcome(UpdateStatus.ALREADY_LATEST, plan.release_version, commit)
             if (
                 hashlib.sha256((release / "requirements.lock").read_bytes()).digest()
                 != hashlib.sha256(

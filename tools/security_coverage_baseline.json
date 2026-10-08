@@ -5,6 +5,7 @@
     "bridge/miniapp_auth.py": 91,
     "bridge/network_security.py": 84,
     "bridge/self_update.py": 79,
+    "bridge/deployment_payload.py": 93,
     "bridge/environment.py": 93,
     "bridge/diagnostic_events.py": 90,
     "bridge/diagnostic_logging.py": 85,

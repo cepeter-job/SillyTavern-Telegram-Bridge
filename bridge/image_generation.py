@@ -17,6 +17,7 @@ from pathlib import Path
 from bridge.card_content import card_fields_from_file, safe_character_path
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.generation_settings import get_generation_settings
+from bridge.image_prompt_provider import generate_image_prompt_text
 from bridge.image_prompting import build_image_prompt, scene_prompt_max_chars
 from bridge.image_reference import ImageReference, load_character_reference
 from bridge.image_routing import (
@@ -257,7 +258,6 @@ def edit_image(
         raise ValueError("Image size must use WIDTHxHEIGHT with supported dimensions")
     if not reference.data or len(reference.data) > IMAGE_MAX_BYTES:
         raise ValueError("Character reference image is empty or exceeds the image upload limit")
-
     endpoint = _image_edit_endpoint(route.spec, app_settings=app_settings)
     body, content_type = _multipart_edit_body(route, prompt, reference, size)
     headers = _image_headers(route.spec, app_settings=app_settings)
@@ -385,7 +385,6 @@ def build_scene_image_prompt(
     latest_story = _latest_assistant_scene_text(db, chat_id, session_id)
     if not scene and not latest_story:
         raise ValueError("No current roleplay scene is available to visualize yet")
-
     character_name = str(fields.get("name") or "character")[:200]
     character_description = str(fields.get("description") or "")[:3000]
     messages = [
@@ -427,13 +426,14 @@ def build_scene_image_prompt(
         }
     )
     model = task_model_for_session(db, chat_id, session, "image_prompt", app_settings=app_settings)
-    raw = provider_port.for_usage(chat_id, session_id, "image").generate(
+    raw = generate_image_prompt_text(
+        provider_port,
+        chat_id,
+        session_id,
         app_settings.api_key,
         model,
         messages,
-        session_id=f"image-prompt:{chat_id}:{session_id}",
         settings=settings,
-        force_non_stream=True,
     )
     prompt = " ".join(str(raw or "").strip().split())
     if prompt.casefold().startswith("prompt:"):

@@ -50,7 +50,7 @@ async function renderDataBank() {
     const file=el('input',{type:'file',accept:'.txt,.md,.markdown,.json,.yaml,.yml,.csv,.html,.htm,.xml,.docx,.pdf'});
     const query=el('input',{maxlength:2000,placeholder:'Search your documents'}),searchResults=el('div');
     root.replaceChildren(card('Data Bank',el('p',{class:'muted'},data.total+' documents · '+data.indexed+'/'+data.chunks+' chunks indexed. Documents are private to your bot chat, across its sessions.'),field('Use retrieval in conversations',mode),button('Save RAG mode',async()=>{await api('/databank/settings',{method:'PATCH',body:sessionBody({mode:mode.value})});notice('RAG mode saved.');})),documents,
-      card('Upload document',el('p',{class:'muted'},'Supported text, PDF and DOCX documents, up to 10 MB. Uploading the same filename creates a version. Indexing may call the configured embedding backend.'),file,button('Upload and index',async()=>{
+      card('Upload document',el('p',{class:'muted'},'Supported text, PDF and DOCX documents, up to 10 MB. Uploading the same filename creates a version. Indexing may call the configured embedding backend.'),field('Document file',file),button('Upload and index',async()=>{
         const selected=file.files[0];if(!selected)throw new Error('Choose a document.');if(selected.size>10485760)throw new Error('Document exceeds 10 MB.');
         const bytes=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result.split(',')[1]);reader.onerror=()=>reject(new Error('Cannot read file.'));reader.readAsDataURL(selected);});
         const result=await runJob('/databank',sessionBody({filename:selected.name,data:bytes}),root);await load();notice(result.chunks+' chunks processed.');

@@ -25,7 +25,7 @@
   --bg:var(--tg-theme-secondary-bg-color,#f5f2eb);
   --surface:var(--tg-theme-bg-color,#ffffff);
   --text:var(--tg-theme-text-color,#18222d);
-  --muted:var(--tg-theme-hint-color,#647585);
+  --muted:var(--tg-theme-hint-color,#5b6b7a);
   --accent-ink:#805719;
   --line:color-mix(in srgb,var(--text) 13%,var(--surface));
   --director:#6755ad;

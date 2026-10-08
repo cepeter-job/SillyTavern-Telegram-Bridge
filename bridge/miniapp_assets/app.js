@@ -67,7 +67,7 @@ async function loadPage(key) {
   await loadedModules.get(name);
 }
 export function registerPage(key, label, render) { pages[key] = {label,render}; }
-let current='dashboard', generation=0;
+let current='dashboard', generation=0,pageController;
 
 function goBack() {
   return navigate(pageInfo[current].parent||'dashboard');
@@ -100,6 +100,7 @@ function loadingView() {
 export async function navigate(key=current) {
   if (!Object.hasOwn(pageInfo,key)) key='dashboard';
   const changed=key!==current;current=key;const seq=++generation;
+  pageController?.abort();const controller=new AbortController();pageController=controller;
   if(changed)selectionFeedback();
   renderNavigation();updateShell(key);
   const content=document.getElementById('content');content.setAttribute('aria-busy','true');content.inert=true;
@@ -107,7 +108,7 @@ export async function navigate(key=current) {
   try {
     await loadPage(key);
     if(seq!==generation)return;
-    const view=await pages[key].render();
+    const view=await pages[key].render({signal:controller.signal});
     if(seq===generation){
       const actions=key==='dashboard'?view.querySelector('.dashboard-toolbar'):null;
       if(actions)document.getElementById('page-actions').replaceChildren(actions);
@@ -115,6 +116,7 @@ export async function navigate(key=current) {
       if(changed){window.scrollTo(0,0);document.getElementById('page-title').focus({preventScroll:true});}
     }
   } catch(error) {
+    controller.abort();
     if(seq===generation)content.replaceChildren(card('Could not load this page',el('p',{},error.message),button('Retry',()=>navigate(key))));
   } finally {
     clearTimeout(loading);

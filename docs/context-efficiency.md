@@ -296,3 +296,28 @@ preparation for separately approved model and blinded narrative comparisons,
 not a certificate of narrative equivalence or permission to enable.
 The 30% provider-measured goal, holistic helper cost and quality release gates
 remain open until representative matched evidence and explicit rollout approval.
+
+
+## Frozen standalone history-shadow stress study
+
+Run `python tools/evaluate_context_history_shadow.py --output /tmp/history-shadow-study.json`
+to estimate a separate synthetic role-framing candidate **without network calls**.
+Its eight predeclared weighted scenarios cover long archives, repeated
+negations, delayed promises, exact-ending continuations, historical branches,
+non-ASCII dialogue, stale source snapshots and missing summary coverage.
+
+Every preview must reconstruct all original source text and order exactly,
+preserve mandatory/current input and the last continuation target, and keep
+negation and callback anchors in their original roles. The report writes
+bounded metrics and fixed identifiers only; it does not export story contents.
+Cases with missing authorization or an ambiguous source use the baseline.
+
+The frozen synthetic study estimates **6.25% aggregate** and **7.55%
+preweighted** input reduction by the character-ratio estimator. The result is
+**not** provider-reported usage, a live-SQLite coverage or causal proof, or
+a blinded narrative comparison. Reframing dialogue into a quoted user payload
+might alter model interpretation even if every source byte is recoverable.
+The existing native full-story evaluator and separate provider-accounting,
+human-review and staged-activation gates remain authoritative; no history
+pruning or paid/live request is enabled by the study. The 30% goal remains
+unmet and uncertain rather than forcing a weaker prompt.

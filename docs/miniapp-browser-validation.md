@@ -21,7 +21,7 @@ synthetic WebApp object is installed. Every other external browser request is
 blocked and fails the test. No production configuration, credentials, databases,
 private stories, Telegram messages or paid providers participate.
 
-The six scenarios run in each engine:
+The seven scenarios run in each engine:
 
 1. Accept a real summary POST with `route.fetch()`, then abort delivery to the
    page. Navigate to Characters and recover through the surviving control.
@@ -39,8 +39,11 @@ The six scenarios run in each engine:
    editor. Assert the pending action does not take focus or change the draft.
 6. Complete a confirmation after navigation removes its opener. Assert the new
    page heading keeps focus.
+7. Delay successful character portrait responses, then leave the page. Assert
+   navigation cancels both requests without allocating late Blob URLs, and a
+   new Characters visit loads and releases its portraits normally.
 
-The last two scenarios exercise the exported real UI primitives with a
+Scenarios 5 and 6 exercise the exported real UI primitives with a
 test-owned pending action. They do not replace the dialog implementation or
 introduce production-only test hooks. The focus fix associates a confirmation
 opened synchronously before the action's first await with its exact initiating
@@ -73,7 +76,7 @@ provider calls, drains its executor and closes its server on SIGTERM. Each
 Playwright context and process is isolated from the next test.
 
 Normal `miniapp-smoke` CI still runs the existing DOM suite and loopback smoke,
-then installs both engine revisions and runs all twelve browser cases. Neither
+then installs both engine revisions and runs all fourteen browser cases. Neither
 engine is skipped. Its protected aggregate dependency is unchanged. Logs,
 the HTML report, and failure screenshots/traces are uploaded for 14 days.
 The job timeout is ten minutes to include browser/system-library installation.

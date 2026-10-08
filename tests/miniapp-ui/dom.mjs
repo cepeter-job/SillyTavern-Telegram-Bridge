@@ -19,6 +19,7 @@ export async function createPage(name,{api=async path=>{throw new Error('Unexpec
   window.scrollTo=()=>{};
   if(actualApp) {
     window.AbortSignal=globalThis.AbortSignal;
+    window.AbortController=globalThis.AbortController;
     window.fetch=async(path,options)=>{
       assert.ok(String(path).startsWith('/api/v1/'),'Only the local API boundary is available');
       try {

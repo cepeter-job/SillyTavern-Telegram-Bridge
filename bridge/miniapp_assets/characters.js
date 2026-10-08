@@ -1,5 +1,5 @@
 import {api,state,createSessionScope,registerPage,runJob,navigate} from './app.js';
-import {el,card,button,field,empty,confirmAction,notice,sessionContext,feedback} from './ui.js';
+import {el,card,button,field,empty,confirmAction,notice,sessionContext,feedback,createPortraitLoader} from './ui.js';
 import {icon} from './icons.js';
 const enc=encodeURIComponent;
 const rankTiers=new Set(['S','A','B','C','D']);
@@ -17,15 +17,16 @@ function rankVisual(rank) {
 }
 function portraitUnavailable(image) { image.classList.add('portrait-broken');image.alt='Portrait unavailable';image.removeAttribute('src'); }
 export async function reopenCharacterPreview(result) { resumedProposal=result; await navigate('characters'); }
-async function renderCharacters() {
+async function renderCharacters({signal}={}) {
   const root=el('div',{class:'characters-page'});
   let readGeneration=0,currentView;
   function createView(session) {
     const scope=createSessionScope();scope.set(session);
+    const portraits=createPortraitLoader(api,signal);
     const controls=[],status=el('div',{class:'character-feedback'});
     let context=sessionContext(session),locked=false;
     const view={
-      session,body:scope.body,status,
+      session,body:scope.body,status,portraits,
       active:()=>currentView===view&&!locked,
       lock() {locked=true;for(const control of controls) {control.setAttribute('aria-disabled','true');control.disabled=true;}},
       control(label,action,kind='') {
@@ -37,7 +38,7 @@ async function renderCharacters() {
         return true;
       },
       show(...children) {
-        ++readGeneration;currentView?.lock();currentView=view;
+        ++readGeneration;currentView?.lock();currentView?.portraits.dispose();currentView=view;
         root.replaceChildren(context,status,...children);
       },
       updateContext(nextSession) {
@@ -122,11 +123,7 @@ async function renderCharacters() {
             await api('/characters/'+enc(item.filename),{method:'DELETE',body:sessionBody({digest:item.digest,confirm:true})});await view.saved('Character deleted.');
           },'danger')));
         body.append(el('div',{class:'character-primary-actions'},use,menu));
-        api('/characters/'+enc(item.filename)+'/portrait',{binary:true}).then(blob=>{
-          if(!blob||blob.size===0)throw new Error('empty portrait');
-          const url=URL.createObjectURL(blob);let revoked=false;const revoke=()=>{if(!revoked){revoked=true;URL.revokeObjectURL(url);}};
-          image.onload=revoke;image.onerror=()=>{revoke();portraitUnavailable(image);};image.src=url;
-        }).catch(()=>portraitUnavailable(image));
+        view.portraits.load(image,'/characters/'+enc(item.filename)+'/portrait',{failed:()=>portraitUnavailable(image)});
       }
       grid.append(entry);
     }

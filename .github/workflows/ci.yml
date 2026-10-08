@@ -118,8 +118,22 @@ jobs:
       - name: Install locked development-only real browser tooling
         run: npm ci --prefix tests/miniapp-browser --include=dev --ignore-scripts --no-audit --no-fund
 
+      - name: Cache Playwright Chromium and WebKit binaries
+        id: playwright-browsers-cache
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/miniapp-browser/package-lock.json') }}
+
       - name: Install pinned Chromium and WebKit engines and system dependencies
         run: node tests/miniapp-browser/node_modules/@playwright/test/cli.js install --with-deps chromium webkit
+
+      - name: Report browser cache hit
+        env:
+          PLAYWRIGHT_CACHE_HIT: ${{ steps.playwright-browsers-cache.outputs.cache-hit }}
+        run: |
+          echo "### Playwright browsers" >> "$GITHUB_STEP_SUMMARY"
+          echo "Cache hit: ${PLAYWRIGHT_CACHE_HIT:-false}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Exercise real browser recovery and mobile interaction
         env:
@@ -144,6 +158,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      pull-requests: read
     steps:
       - name: Checkout full history for secret scanning
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -163,6 +178,18 @@ jobs:
           chmod 0755 "$RUNNER_TEMP/gitleaks"
           "$RUNNER_TEMP/gitleaks" version
 
+      - name: Scan changed commits with licensed Gitleaks Action
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_ENABLE_COMMENTS: "false"
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+          GITLEAKS_ENABLE_SUMMARY: "false"
+
+      # The Action only scans the event's commit range; retain the full-history gate.
       - name: Scan repository history for secrets
         run: |
           set -euo pipefail

@@ -102,7 +102,8 @@ def handle_director_input(
                     reasoning=director_reasoning_for_session(db, chat_id, session["session_id"]),
                 )
             else:
-                apply_direction(db, chat_id, session["session_id"], values["revision"], text, values["scope"])
+                direction = "" if text.strip().casefold() == "/clear" else text
+                apply_direction(db, chat_id, session["session_id"], values["revision"], direction, values["scope"])
 
             notice = {
                 "next_scene": "Director direction saved for the next scene.",

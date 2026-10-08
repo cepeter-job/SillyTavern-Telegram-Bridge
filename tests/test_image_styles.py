@@ -102,7 +102,7 @@ def test_imagine_style_controls_live_only_in_options(image_session):
         for button in row
         if button["callback_data"].startswith("imagine:style:")
     }
-    assert set(styles) == {"imagine:style:realism", "imagine:style:anime"}
+    assert set(styles) == {"imagine:style:realism", "imagine:style:anime", "imagine:style:manhwa"}
     assert "✅" in styles["imagine:style:realism"]
     assert "✅" not in styles["imagine:style:anime"]
     assert "Style: Realism" in options_text
@@ -114,7 +114,7 @@ def test_style_callbacks_persist_selection_without_changing_model_or_size(image_
         state.db, "chat", "scene", "images::z-image-turbo", app_settings=state.settings
     )
     image_routing.set_session_image_size(state.db, "chat", "scene", "1024x1536")
-    for style, label in (("anime", "Anime"), ("realism", "Realism")):
+    for style, label in (("anime", "Anime"), ("manhwa", "Manhwa"), ("realism", "Realism")):
         panels, _answers = _callback(state, f"style:{style}", monkeypatch)
         assert get_meta(state.db, "image_style:chat:scene") == style
         assert len(panels) == 1
@@ -149,9 +149,10 @@ def test_invalid_style_callback_retains_previous_selection(image_session, monkey
     assert len(panels) == 1 and "Style: Anime" in panels[0][0]
 
 
-def test_image_reset_restores_default_style(image_session, monkeypatch):
+@pytest.mark.parametrize("style", ["anime", "manhwa"])
+def test_image_reset_restores_default_style(image_session, monkeypatch, style):
     state = image_session
-    set_meta(state.db, "image_style:chat:scene", "anime")
+    set_meta(state.db, "image_style:chat:scene", style)
     panels, _answers = _callback(state, "reset", monkeypatch)
     assert get_meta(state.db, "image_style:chat:scene") in {"", "realism"}
     assert len(panels) == 1 and "Style: Realism" in panels[0][0]
@@ -188,7 +189,9 @@ def _capture_generation(state, monkeypatch, *, transport, visual_prompt="Mira st
     return requests, photos, utility_messages, make_test_provider_port(generate_backend=utility)
 
 
-@pytest.mark.parametrize("style, marker", [("realism", "photorealistic"), ("anime", "cel shading")])
+@pytest.mark.parametrize(
+    "style, marker", [("realism", "photorealistic"), ("anime", "cel shading"), ("manhwa", "korean webtoon")]
+)
 @pytest.mark.parametrize("action", ["scene", "custom"])
 @pytest.mark.parametrize("transport", ["text", "reference"])
 def test_selected_style_reaches_image_provider_for_both_generation_modes(
@@ -231,13 +234,21 @@ def test_selected_style_reaches_image_provider_for_both_generation_modes(
     assert ("identity reference" in prompt) == (transport == "reference")
     if action == "scene":
         assert marker in utility_messages[0][0]["content"].casefold()
-    if style == "anime":
+    if style in {"anime", "manhwa"}:
         assert "photorealistic" not in prompt.casefold()
+    if style == "manhwa":
+        quality_markers = ("crisp linework", "rich cel shading", "polished detail", "balanced lighting")
+        for quality in quality_markers:
+            assert quality in prompt.casefold()
+            if action == "scene":
+                assert quality in utility_messages[0][0]["content"].casefold()
+        if action == "custom":
+            assert utility_messages == []
     assert photos == [(b"image-bytes", "")]
     assert state.db.execute("SELECT role,content FROM messages ORDER BY rowid").fetchall() == before
 
 
-@pytest.mark.parametrize("style", ["realism", "anime"])
+@pytest.mark.parametrize("style", ["realism", "anime", "manhwa"])
 @pytest.mark.parametrize("transport, model_limit", [("text", 1200), ("reference", 512)])
 def test_custom_input_hint_matches_style_and_reference_prompt_budget(
     image_session,
@@ -278,10 +289,13 @@ def test_custom_input_hint_matches_style_and_reference_prompt_budget(
     assert len(requests) == 1
 
 
+@pytest.mark.parametrize("style,marker", [("anime", "cel shading"), ("manhwa", "polished detail")])
 @pytest.mark.parametrize("transport, model_limit", [("text", 1200), ("reference", 512)])
-def test_scene_prompt_truncation_keeps_anime_directive(image_session, monkeypatch, transport, model_limit):
+def test_scene_prompt_truncation_keeps_style_directive(
+    image_session, monkeypatch, transport, model_limit, style, marker
+):
     state = image_session
-    set_meta(state.db, "image_style:chat:scene", "anime")
+    set_meta(state.db, "image_style:chat:scene", style)
     requests, _photos, _messages, provider = _capture_generation(
         state,
         monkeypatch,
@@ -298,28 +312,31 @@ def test_scene_prompt_truncation_keeps_anime_directive(image_session, monkeypatc
     )
     assert len(requests) == 1
     assert len(requests[0][1]) == model_limit
-    assert "cel shading" in requests[0][1]
+    assert marker in requests[0][1]
     assert ("identity reference" in requests[0][1]) == (transport == "reference")
 
 
-def test_style_selection_remains_available_without_image_provider(image_session, monkeypatch):
+@pytest.mark.parametrize("style", ["anime", "manhwa"])
+def test_style_selection_remains_available_without_image_provider(image_session, monkeypatch, style):
     image_session.settings.provider_config_file.write_text("providers: {}\n", encoding="utf-8")
-    panels, _answers = _callback(image_session, "style:anime", monkeypatch)
-    assert get_meta(image_session.db, "image_style:chat:scene") == "anime"
-    assert "Style: Anime" in panels[0][0]
+    panels, _answers = _callback(image_session, f"style:{style}", monkeypatch)
+    assert get_meta(image_session.db, "image_style:chat:scene") == style
+    assert f"Style: {style.title()}" in panels[0][0]
     assert "Model: Not configured" in panels[0][0]
 
 
-def test_checkpoint_capture_includes_session_image_style(image_session):
+@pytest.mark.parametrize("style", ["anime", "manhwa"])
+def test_checkpoint_capture_includes_session_image_style(image_session, style):
     from bridge.narrative_checkpoint_capture import capture_pre_finale_state
 
     state = image_session
-    set_meta(state.db, "image_style:chat:scene", "anime")
+    set_meta(state.db, "image_style:chat:scene", style)
     checkpoint = capture_pre_finale_state(state.db, "chat", "scene", 1)
-    assert checkpoint["config"]["preferences"].get("image_style") == "anime"
+    assert checkpoint["config"]["preferences"].get("image_style") == style
 
 
-def test_checkpoint_restore_accepts_image_style_without_changing_source(image_session):
+@pytest.mark.parametrize("style", ["anime", "manhwa"])
+def test_checkpoint_restore_accepts_image_style_without_changing_source(image_session, style):
     from bridge.alternate_ending_restore import restore_checkpoint_state
     from bridge.narrative_checkpoint_capture import capture_pre_finale_state
     from bridge.narrative_checkpoints import NarrativeCheckpoint
@@ -327,11 +344,11 @@ def test_checkpoint_restore_accepts_image_style_without_changing_source(image_se
 
     state = image_session
     snapshot = capture_pre_finale_state(state.db, "chat", "scene", 1)
-    snapshot["config"]["preferences"]["image_style"] = "anime"
+    snapshot["config"]["preferences"]["image_style"] = style
     checkpoint = NarrativeCheckpoint("test-checkpoint", 0, 1, snapshot)
     create_session(state.db, "chat", "story::main", session_id="target", app_settings=state.settings)
     set_meta(state.db, "image_style:chat:scene", "realism")
     with write_transaction(state.db):
         restore_checkpoint_state(state.db, "chat", "target", checkpoint, {0: 0, 1: 1})
-    assert get_meta(state.db, "image_style:chat:target") == "anime"
+    assert get_meta(state.db, "image_style:chat:target") == style
     assert get_meta(state.db, "image_style:chat:scene") == "realism"

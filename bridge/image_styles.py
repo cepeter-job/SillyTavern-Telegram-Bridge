@@ -5,10 +5,15 @@ from __future__ import annotations
 from bridge.metadata import get_meta, set_meta
 
 IMAGE_DEFAULT_STYLE = "realism"
-IMAGE_STYLE_OPTIONS = (("realism", "Realism"), ("anime", "Anime"))
+IMAGE_STYLE_OPTIONS = (("realism", "Realism"), ("anime", "Anime"), ("manhwa", "Manhwa"))
 _STYLE_PROMPT_PREFIXES = {
     "realism": "Style: Realism, photorealistic detail, natural textures; override source medium. ",
     "anime": "Style: Anime, 2D illustration, clean linework, cel shading; override source medium. ",
+    # Leave scene room beside the identity directive on 512-character reference models.
+    "manhwa": (
+        "Style: Manhwa, Korean webtoon, crisp linework, rich cel shading, polished detail, "
+        "balanced lighting; override source medium. "
+    ),
 }
 
 

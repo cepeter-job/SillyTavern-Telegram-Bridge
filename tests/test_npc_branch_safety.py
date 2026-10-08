@@ -19,12 +19,12 @@ import bridge.conversation_callbacks as conversation_callbacks
 import bridge.edit_messages as edit_messages
 import bridge.message_commands as message_commands
 import bridge.regeneration as regeneration
-from bridge.metadata import set_meta
 from bridge.npc_repository import load_npc_fields, set_npc_extraction_coverage
 from bridge.npc_service import NpcService
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
-from bridge.response_variants import keep_swipe_variant, save_response_variant, swipe_state_key
+from bridge.response_variants import keep_swipe_variant, save_response_variant
 from bridge.sqlite_store import write_transaction
+from bridge.swipe_panels import send_swipe_menu
 
 
 def _set_relationship(service, db, rowid, value):
@@ -234,9 +234,14 @@ def test_swipe_keep_retain_queues_processing_for_selected_assistant(monkeypatch)
         save_response_variant(db, "chat", "s1", "Choose Maya Torres.", "Old branch.", user_rowid=user_row)
         save_response_variant(db, "chat", "s1", "Choose Maya Torres.", "New branch.", user_rowid=user_row)
         _set_relationship(service, db, old_assistant, "hostile")
-        set_meta(db, swipe_state_key("chat", "s1"), "2")
+        rendered = []
+        delivery = make_test_delivery_port(
+            send_panel_request=lambda _token, _method, payload, **_kw: rendered.append(payload) or {"message_id": 77}
+        )
+        context = make_test_request_context(db, "s1", app_settings=SettingsBuilder().build())
+        send_swipe_menu("token", db, "chat", "s1", delivery_port=delivery, request_context=context)
+        keep_data = rendered[0]["reply_markup"]["inline_keyboard"][1][0]["callback_data"]
 
-        monkeypatch.setattr(conversation_callbacks, "delete_outgoing_messages", lambda *_a, **_k: None)
         monkeypatch.setattr(conversation_callbacks, "telegram_request", lambda *_a, **_k: {})
         monkeypatch.setattr(conversation_callbacks, "card_fields_from_file", lambda *_a, **_k: _fields())
 
@@ -245,20 +250,16 @@ def test_swipe_keep_retain_queues_processing_for_selected_assistant(monkeypatch)
             "token",
             {"id": "cb"},
             lambda *_a, **_k: None,
-            "swipe:keep",
+            keep_data,
             "chat",
             {"message_id": 77},
             _session(),
             "s1",
             None,
-            delivery_port=make_test_delivery_port(),
+            delivery_port=delivery,
             memory_service=Memory(),
             npc_service=service,
-            request_context=make_test_request_context(
-                db,
-                "s1",
-                app_settings=SettingsBuilder().build(),
-            ),
+            request_context=context,
         )
 
         assert handled is True

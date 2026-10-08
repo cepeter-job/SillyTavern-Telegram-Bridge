@@ -6,10 +6,12 @@ import ast
 import importlib
 import inspect
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 from application_test_setup import make_test_rag_service, make_test_request_context
+from npc_test_support import db as npc_db
+from npc_test_support import turn as npc_turn
 from settings_test_support import SettingsTestCase
 
 import bridge.enum_callbacks as _owner_enum_callbacks
@@ -138,29 +140,36 @@ class SwipePanelOutputTests(SettingsTestCase):
         delivery = Mock()
         delivery.send_panel_request.return_value = {"message_id": 91}
         variants = [(1, "<div>Recovered<br>variant</div>", 1)]
-
-        with (
-            patch.object(swipe_panels, "last_user_variants", return_value=((1, "prompt"), variants)),
-            patch.object(swipe_panels, "set_meta"),
-        ):
+        db = npc_db()
+        try:
+            user_rowid = npc_turn(db, "user", "prompt", 1)
+            npc_turn(db, "assistant", variants[0][1], 2)
+            db.commit()
+            save_response_variant(db, "chat", "s1", "prompt", variants[0][1], user_rowid)
+            context = make_test_request_context(db, "s1", app_settings=self.app_settings_builder.build())
             swipe_panels.send_swipe_menu(
                 "token",
-                Mock(),
+                db,
                 "chat",
-                "session",
+                "s1",
                 delivery_port=delivery,
-                request_context=object(),
+                request_context=context,
             )
+            markup = delivery.send_panel_request.call_args.args[2]["reply_markup"]
+            source_token = markup["inline_keyboard"][0][0]["callback_data"].split(":", 2)[2]
             swipe_panels.edit_swipe_menu(
                 "token",
-                Mock(),
+                db,
                 {"message": {"chat": {"id": "chat"}, "message_id": 91}},
-                "session",
+                "s1",
                 1,
                 variants,
+                source_token=source_token,
                 delivery_port=delivery,
-                request_context=object(),
+                request_context=context,
             )
+        finally:
+            db.close()
 
         payloads = [call.args[2] for call in delivery.send_panel_request.call_args_list]
         self.assertEqual(len(payloads), 2)

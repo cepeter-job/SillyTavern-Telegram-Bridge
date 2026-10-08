@@ -162,7 +162,7 @@ def build_chat_messages(
     current_persona = session["persona_id"]
     user_name = persona_service.name(current_persona) if current_persona else app_settings.default_user_name
     persona = persona_service.get(current_persona) if current_persona else None
-    history = [
+    history: list[dict] = [
         {"role": role, "content": format_user_dialogue_action(content) if role == "user" else content}
         for role, content in history_rows
     ]

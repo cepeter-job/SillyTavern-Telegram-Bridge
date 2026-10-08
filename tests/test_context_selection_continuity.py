@@ -269,3 +269,32 @@ def test_unapproved_dedup_preserves_both_payloads_and_the_selected_count(db):
     assert prepared.selection.blocks == (evidence, evidence)
     assert prepared.selection.selected_blocks == 2
     assert prepared.selection.deduplicated_blocks == 0
+
+
+def test_history_shadow_snapshot_is_bound_to_committed_sources_and_detects_rewrites(db):
+    from bridge.memory_store import store_segment
+
+    for index in range(24):
+        append(db, f"Archive routine {index}: inspected.")
+    last = db.execute("SELECT max(id) FROM messages WHERE chat_id='c' AND session_id='s'").fetchone()[0]
+    with write_transaction(db):
+        db.execute("INSERT INTO session_summaries VALUES('c','s','All archive routines were inspected.',?,1)", (last,))
+        store_artifact_visibility(
+            db,
+            "c",
+            "s",
+            "summary",
+            [{"text": "All archive routines were inspected.", "visibility": "shared", "known_by": []}],
+        )
+    for _ in range(26):
+        source = next_source_segment(db, "c", "s", "summary")
+        if source is None:
+            break
+        assert store_segment(db, source)
+    context = memory_context(db, mode="shadow", slices="history")
+    assert context.selection_coverage_valid
+    assert len(context.selection_history_source_rows) == 24
+    assert callable(context.selection_guard) and context.selection_guard() == ""
+    db.execute("UPDATE messages SET content='An old message was rewritten.' WHERE id=1")
+    db.commit()
+    assert context.selection_guard() == "source_changed"

@@ -189,6 +189,9 @@ def build_chat_messages(
         {"role": role, "content": format_user_dialogue_action(content) if role == "user" else content}
         for role, content in history_rows
     ]
+    if memory_prompt is not None and memory_prompt.selection_mode != "off":
+        for index, message in enumerate(history):
+            message["_context_history_index"] = index
     language_value = session.get("response_language") or "auto"
     language_instruction = response_language_instruction(language_value)
     system = build_system_prompt(fields, user_name, app_settings=app_settings)

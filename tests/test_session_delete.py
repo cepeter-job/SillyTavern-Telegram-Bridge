@@ -1,5 +1,6 @@
 from application_test_setup import (
     ensure_application_extensions,
+    make_test_application_services,
     make_test_group_service,
     make_test_memory_service,
     make_test_request_context,
@@ -16,6 +17,7 @@ import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import bridge.cards as _m_cards
 import bridge.memory as _m_memory
@@ -24,6 +26,7 @@ import bridge.message_commands as _m_message_commands
 import bridge.session_callbacks as _owner_session_callbacks
 import bridge.session_naming as _m_session_naming
 from bridge.episodic_memory import store_episodic_memory
+from bridge.metadata import get_meta, set_meta
 
 
 class SessionDeletionTests(SettingsTestCase):
@@ -53,6 +56,7 @@ class SessionDeletionTests(SettingsTestCase):
             session_id="inactive",
             app_settings=self.app_settings_builder.build(),
         )
+        set_meta(self.db, "active_session:chat", active["session_id"])
         self.db.execute(
             "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
             ("chat", inactive["session_id"], "user", "old", time.time()),
@@ -130,6 +134,7 @@ class SessionDeletionTests(SettingsTestCase):
             session_id="preserved",
             app_settings=self.app_settings_builder.build(),
         )
+        set_meta(self.db, "active_session:chat", active["session_id"])
         self.db.execute(
             "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
             ("chat", inactive["session_id"], "user", "keep", time.time()),
@@ -182,6 +187,55 @@ class SessionDeletionTests(SettingsTestCase):
         )
         self.assertFalse(denied)
         self.assertEqual(reason, "session has active jobs")
+
+    def test_delete_confirmation_preserves_target_activated_after_panel_opened(self):
+        from bridge.callback_dispatch import process_callback
+        from bridge.callback_tokens import dynamic_callback_token
+        from bridge.memory_retirement_store import queue_session_memory_cleanup
+        from bridge.panel_bindings import bind_panel_session
+
+        settings = self.app_settings_builder.build()
+        original = _owner_session_core.ensure_session(self.db, "chat", "fixture::model", app_settings=settings)
+        _owner_session_core.create_session(
+            self.db, "chat", "fixture::model", session_id="target", app_settings=settings
+        )
+        self.db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+            ("chat", "target", "user", "Keep the active story", time.time()),
+        )
+        self.db.commit()
+        set_meta(self.db, "active_session:chat", original["session_id"])
+        bind_panel_session(self.db, "chat", 55, original["session_id"], "owner")
+        choice = dynamic_callback_token("session", "target", "chat", db=self.db)
+        # The Mini App can change the active session without closing this Telegram panel.
+        set_meta(self.db, "active_session:chat", "target")
+        callback = {
+            "id": "delete-confirmation",
+            "from": {"id": "owner"},
+            "message": {"chat": {"id": "chat"}, "message_id": 55},
+            "data": "sessiondeleteconfirm:" + choice,
+        }
+        services = make_test_application_services(
+            app_settings=settings,
+            memory=make_test_memory_service(queue_session_cleanup=queue_session_memory_cleanup),
+        )
+        with (
+            patch("bridge.callback_dispatch.answer_callback"),
+            patch("bridge.callbacks.telegram_request", return_value={}),
+            patch("bridge.telegram.telegram_request", return_value={"message_id": 99}),
+        ):
+            process_callback(self.db, "token", callback, operation_id=702, services=services)
+
+        self.assertEqual(
+            self.db.execute("SELECT session_id FROM sessions WHERE session_id='target'").fetchone(), ("target",)
+        )
+        self.assertEqual(
+            self.db.execute("SELECT content FROM messages WHERE session_id='target'").fetchall(),
+            [("Keep the active story",)],
+        )
+        self.assertEqual(get_meta(self.db, "active_session:chat"), "target")
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM memory_cleanup_discovery").fetchone(), (0,))
+        self.assertFalse(_m_message_commands.operation_was_applied(self.db, 702))
 
     def test_successful_delete_sends_fresh_session_menu(self):
         active = _owner_session_core.ensure_session(

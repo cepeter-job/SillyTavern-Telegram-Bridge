@@ -106,10 +106,9 @@ def test_curator_reset_discards_inflight_completion(session_db, monkeypatch, cha
                 db, "token", "chat", session, memory_service=make_test_memory_service(), npc_service=NpcService()
             )
         elif change in {"delete", "recreate"}:
-            assert delete_session_data(db, "chat", "s1", "other", memory_service=make_test_memory_service()) == (
-                True,
-                "deleted",
-            )
+            create_session(db, "chat", "dummy::model", session_id="other", app_settings=settings)
+            result = delete_session_data(db, "chat", "s1", "other", memory_service=make_test_memory_service())
+            assert result == (True, "deleted")
             if change == "recreate":
                 create_session(db, "chat", "dummy::model", session_id="s1", app_settings=settings)
                 add_rows(db, 2)
@@ -208,16 +207,15 @@ def test_curator_acceptance_preserves_native_state_without_remote_rewrite_during
 
 
 def test_session_deletion_removes_curated_state_before_session_id_reuse(session_db):
-    _settings, db, _session = session_db
+    settings, db, _session = session_db
     set_meta(
         db,
         memory_curator.memory_curator_key("chat", "s1"),
         json.dumps({"items": [{"key": "old", "text": "Old fact"}], "through_rowid": 10}),
     )
-    assert delete_session_data(db, "chat", "s1", "other", memory_service=make_test_memory_service()) == (
-        True,
-        "deleted",
-    )
+    create_session(db, "chat", "dummy::model", session_id="other", app_settings=settings)
+    result = delete_session_data(db, "chat", "s1", "other", memory_service=make_test_memory_service())
+    assert result == (True, "deleted")
     assert memory_curator.get_curated_memory_state(db, "chat", "s1") == ([], 0)
 
 
@@ -389,6 +387,7 @@ def test_summary_rejects_completion_after_source_changes(session_db, monkeypatch
                 db, "token", "chat", session, memory_service=make_test_memory_service(), npc_service=NpcService()
             )
         elif change in {"delete", "recreate"}:
+            create_session(db, "chat", "dummy::model", session_id="other", app_settings=settings)
             assert delete_session_data(db, "chat", "s1", "other", memory_service=make_test_memory_service())[0]
             if change == "recreate":
                 create_session(db, "chat", "dummy::model", session_id="s1", app_settings=settings)
@@ -457,6 +456,7 @@ def test_episodic_completion_after_invalidation_does_not_restore_old_facts(sessi
                 db, "token", "chat", session, memory_service=make_test_memory_service(), npc_service=NpcService()
             )
         elif change in {"delete", "recreate"}:
+            create_session(db, "chat", "dummy::model", session_id="other", app_settings=settings)
             assert delete_session_data(db, "chat", "s1", "other", memory_service=make_test_memory_service())[0]
             if change == "recreate":
                 create_session(db, "chat", "dummy::model", session_id="s1", app_settings=settings)

@@ -588,7 +588,7 @@ def generate_provider_text(
             finish_reason = choices[0].get("finish_reason") if choices else None
             content = choices[0].get("message", {}).get("content") if choices else None
             if not content:
-                if finish_reason == "length" and _recovery_attempt < 2:
+                if finish_reason == "length" and generation.get("json_once") is not True and _recovery_attempt < 2:
                     recovered = _recovery_settings(generation)
                     if recovered:
                         return generate_provider_text(
@@ -623,7 +623,7 @@ def generate_provider_text(
                 )
                 raise RuntimeError("backend returned no assistant content")
             content = str(content).strip()
-            if finish_reason != "length":
+            if finish_reason != "length" or generation.get("json_once") is True:
                 return content
 
             segments = [content]

@@ -364,3 +364,26 @@ Record all such input and any model fallbacks as real helper work. Never set
 directly to invent successful coverage, and do not force an unbounded replay.
 Compare the inspector output before and after the controlled catch-up and only
 claim recovery when the accepted checkpoint and source evidence agree.
+
+
+## Structured JSON extractor transport (issue #421 follow-up)
+
+Summary, Scene and Episodes helpers use `generate_memory_response` with
+`json_once=True` on the per-call provider settings. For OpenAI-compatible
+non-streaming transports, an HTTP `finish_reason=length` must **not**
+trigger story-style continuation or append a fictional user request to
+"continue from the exact ending." If the first response has partial JSON,
+its parser is allowed **one** canonical-input retry with the ordinary
+bounded repair instruction; no failed response text is replayed into the
+repair request. Empty truncated responses fail rather than silently
+expanding the model output budget or issuing additional HTTP calls.
+Ordinary story/continue streaming behavior remains unchanged.
+
+Summary extraction reserves an adaptive `1200–4096` output-token allowance
+according to serialized accepted prior state size. It never reduces the
+previous output allowance; a large prior summary remains bound, and
+`check_attempt_budget` still guards protected context. Failed or partial
+helper attempts count as provider work, including incomplete usage, and
+leave durable coverage/invalidation unchanged unless accepted by the
+canonical source/checkpoint publisher. This reduces runaway repair costs;
+it does **not** establish narrative equivalence or 30% story-token savings.

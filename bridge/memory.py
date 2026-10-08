@@ -257,6 +257,13 @@ def generate_session_summary(
     ).summary
 
 
+def summary_output_budget(previous: dict[str, object]) -> int:
+    """Reserve enough output for accepted JSON state without runaway generation."""
+    previous_bytes = len(json.dumps(previous, ensure_ascii=False).encode("utf-8"))
+    estimated = (previous_bytes + 2) // 3 + 320
+    return min(4096, max(SUMMARY_MAX_OUTPUT_TOKENS, estimated))
+
+
 def extract_summary_segment(db, chat_id, session, previous, source, *, provider_port, app_settings):
     """One complete canonical part and explicit prior state; no coverage write."""
     if db.in_transaction:
@@ -267,7 +274,7 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
     settings.update(
         {
             "temperature": 0.2,
-            "max_tokens": SUMMARY_MAX_OUTPUT_TOKENS,
+            "max_tokens": summary_output_budget(previous),
             "reasoning_budget": utility_reasoning_for_session(db, chat_id, session["session_id"]),
         }
     )

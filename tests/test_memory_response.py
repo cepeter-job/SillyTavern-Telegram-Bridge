@@ -34,6 +34,7 @@ def test_repair_preserves_inputs_and_does_not_replay_invalid_output():
     assert settings["stop_sequences"] == "story stop"
     assert len(messages) == 2
     assert all(call[1]["force_non_stream"] for call in calls)
+    assert all(call[1]["settings"]["json_once"] is True for call in calls)
 
 
 def test_source_invalidated_before_repair_does_not_call_provider_again():

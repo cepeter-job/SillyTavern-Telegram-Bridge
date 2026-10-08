@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "description": "Synthetic textual mechanism probes; not native SQLite evidence or provider quality proof",
+  "cases": [
+    {
+      "id": "long_transcript", "weight": 0.20, "repeat": 16,
+      "query": "Read the next archive page.",
+      "history_seed": [
+        ["user", "Doorway description: the lights flicker."],
+        ["assistant", "A lantern hangs over the corridor."],
+        ["user", "We inspect the old shelves."],
+        ["assistant", "Dust covers the stone floor."]
+      ]
+    },
+    {
+      "id": "callback", "weight": 0.20, "repeat": 10,
+      "query": "What happened in the western hall?",
+      "protected_anchors": ["Rowan promised never", "The ring was never given"],
+      "history_seed": [
+        ["user", "We enter the western archive."],
+        ["assistant", "Rowan lists the illuminated rooms."],
+        ["user", "Rowan promised never to open the vault."],
+        ["assistant", "The archivist nods toward the stairs."],
+        ["user", "The ring was never given to Mira."],
+        ["assistant", "A clock echoes over the hall."],
+        ["user", "We examine the stairwell."],
+        ["assistant", "The paper rustles on the desk."]
+      ]
+    },
+    {
+      "id": "negation", "weight": 0.15, "repeat": 12,
+      "query": "What is the state of the chamber?",
+      "protected_anchors": ["Never unlock the chamber"],
+      "history_seed": [
+        ["user", "Never unlock the chamber; wait for permission."],
+        ["assistant", "Rowan considers the corridor."],
+        ["user", "I check the north door."],
+        ["assistant", "The north door is closed."],
+        ["user", "I check the north door."],
+        ["assistant", "A hinge creaks beside the wall."]
+      ]
+    },
+    {
+      "id": "continuation", "weight": 0.15, "repeat": 14,
+      "query": "Continue the previous response without repeating its ending.",
+      "history_seed": [
+        ["user", "I search for the faded inscription."],
+        ["assistant", "The archivist reads the title."],
+        ["user", "I turn one page of the journal."],
+        ["assistant", "The last sentence is a cliffhanger."]
+      ]
+    },
+    {
+      "id": "historical", "weight": 0.10, "repeat": 14,
+      "historical": true,
+      "query": "Inspect the earlier branch.",
+      "history_seed": [
+        ["user", "I enter the old laboratory."],
+        ["assistant", "A fire burns in the fireplace."]
+      ]
+    },
+    {
+      "id": "multilingual", "weight": 0.10, "repeat": 14,
+      "query": "What happened in the silent room?",
+      "history_seed": [
+        ["user", "Jangan membuka pintu ini. 門"],
+        ["assistant", "Rowan hears the bell from the stairs."]
+      ]
+    },
+    {
+      "id": "missing_coverage", "weight": 0.05, "repeat": 14,
+      "coverage_valid": false,
+      "query": "Inspect the index.",
+      "history_seed": [
+        ["user", "I catalog the manuscripts."],
+        ["assistant", "Rowan records the shelf number."]
+      ]
+    },
+    {
+      "id": "source_rewrite", "weight": 0.05, "repeat": 14,
+      "source_mutation": true,
+      "query": "Inspect the index.",
+      "history_seed": [
+        ["user", "I catalog the manuscripts."],
+        ["assistant", "Rowan records the shelf number."]
+      ]
+    }
+  ]
+}

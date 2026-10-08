@@ -395,3 +395,29 @@ def test_summary_compaction_must_never_repair_conflicting_audience(db, tmp_path)
         )
     assert len(attempts) == 1
     assert memory.get_session_summary(db, "c", "s") == ("", 0)
+
+
+def test_small_accepted_summary_uses_short_length_contract(db, tmp_path):
+    """Do not add a near-capacity compaction prompt to normal helper requests."""
+    append(db, "A simple canonical turn.")
+    source = next_source_segment(db, "c", "s", "summary")
+    settings = make_test_settings(home=tmp_path)
+    instructions = []
+
+    def generate(api_key, model, messages, **kwargs):
+        instructions.append(" ".join(item["content"] for item in messages if item["role"] == "system"))
+        return json.dumps({"blocks": [{"text": "A simple fact.", "visibility": "shared", "known_by": []}]})
+
+    result = memory.extract_summary_segment(
+        db,
+        "c",
+        SESSION,
+        {"blocks": []},
+        source,
+        provider_port=ProviderPort(generate),
+        app_settings=settings,
+    )
+    assert len(result["blocks"]) == 1
+    assert len(instructions) == 1
+    assert "12,000 characters" in instructions[0]
+    assert "10,800 characters" not in instructions[0]

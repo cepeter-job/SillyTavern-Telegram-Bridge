@@ -20,6 +20,10 @@ MAX_SINGLE_BLOCK_CHARS = 5000
 # Prefer headroom so accepting one source part does not immediately saturate
 # the next update. The unchanged hard limit stays in the artifact validator.
 SUMMARY_TARGET_CHARS = SUMMARY_MAX_CHARS * 9 // 10
+SUMMARY_PRESSURE_CHARS = SUMMARY_MAX_CHARS * 4 // 5
+SUMMARY_SHORT_LENGTH_CONTRACT = (
+    f"Their combined block text including newline separators must be at most {SUMMARY_MAX_CHARS:,} characters. "
+)
 SUMMARY_COMPACTION_CONTRACT = (
     "Complete updated summary JSON must contain no more than 32 classified blocks. "
     f"Their combined text including newline separators must be at most {SUMMARY_MAX_CHARS:,} characters; "
@@ -31,6 +35,19 @@ SUMMARY_COMPACTION_CONTRACT = (
     "Keep shared and restricted visibility/known_by separate; never widen a private audience. "
     "Never invent continuity or claim a source part was accepted without a valid complete summary."
 )
+
+
+def summary_length_contract(previous: dict[str, Any]) -> str:
+    """Only near-full accumulators need the longer compression guidance."""
+    blocks = previous.get("blocks")
+    if not isinstance(blocks, list):
+        return SUMMARY_COMPACTION_CONTRACT
+    total = 0
+    for block in blocks:
+        if not isinstance(block, dict) or not isinstance(block.get("text"), str):
+            return SUMMARY_COMPACTION_CONTRACT
+        total += len(block["text"])
+    return SUMMARY_COMPACTION_CONTRACT if total >= SUMMARY_PRESSURE_CHARS else SUMMARY_SHORT_LENGTH_CONTRACT
 
 
 def coalesce_summary_response(payload: dict[str, Any]) -> dict[str, Any]:

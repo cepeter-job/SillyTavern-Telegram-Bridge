@@ -185,6 +185,11 @@ def _scope(claim: MemoryClaim) -> tuple[str, str, float, str, str, int]:
 
 def acknowledge_job(db: sqlite3.Connection, claim: MemoryClaim) -> bool:
     with write_transaction(db):
+        if claim.layer == "summary":
+            from bridge.summary_ack_proof import summary_ack_has_accepted_source
+
+            if not claim_is_current(db, claim) or not summary_ack_has_accepted_source(db, claim):
+                return False
         accepted = bool(
             db.execute(
                 "UPDATE memory_jobs SET completed_version=?,lease_token='',lease_deadline=0,"  # noqa: S608 -- fixed internal SQL with audited summary ACK predicate

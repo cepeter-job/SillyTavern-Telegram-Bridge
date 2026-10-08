@@ -1,5 +1,6 @@
 """Durable source coverage survives rollback, interrupted execution and rewrites."""
 
+import json
 import sqlite3
 
 import pytest
@@ -415,13 +416,38 @@ def test_summary_job_cannot_clear_invalidation_without_accepted_coverage(db):
         "SELECT completed_version FROM memory_jobs WHERE chat_id='c' AND session_id='s' AND layer='summary'"
     ).fetchone() == (0,)
 
-    # Simulate an atomic accepted checkpoint made by the existing publisher.
+    # A manually advanced row counter is not an accepted source checkpoint.
+    # The production database once had covered_id at the tip but no valid
+    # classified artifact, checkpoint or source segments.
     db.execute(
         "UPDATE memory_layer_state SET covered_id=? WHERE chat_id='c' AND session_id='s' AND layer='summary'",
         (claim.target_id,),
     )
     db.commit()
-    assert acknowledge_job(db, claim)
+    assert not acknowledge_job(db, claim)
     assert db.execute(
         "SELECT invalidated_from_id FROM memory_layer_state WHERE chat_id='c' AND session_id='s' AND layer='summary'"
-    ).fetchone() == (None,)
+    ).fetchone() == (1,)
+
+
+def test_summary_ack_rejects_classified_payload_without_durable_source_proof(db):
+    """A classified panel artifact alone does not prove canonical source acceptance."""
+    from bridge.memory_artifact_store import load_artifact_classification
+    from bridge.memory_draft_publish import publish_derived
+    from bridge.memory_store import acknowledge_job, claim_jobs
+
+    append(db, "A synthetic obligation remains unresolved.")
+    claim = claim_jobs(db, now=10, layers=("summary",), chat_id="c", session_id="s")[0]
+    payload = {"blocks": [{"text": "A synthetic obligation.", "visibility": "shared", "known_by": []}]}
+    with write_transaction(db):
+        publish_derived(db, "c", "s", "summary", payload, claim.target_id)
+        db.execute(
+            "UPDATE memory_layer_state SET covered_id=?,draft_json=?,invalidated_from_id=1 "
+            "WHERE chat_id='c' AND session_id='s' AND layer='summary'",
+            (claim.target_id, json.dumps(payload)),
+        )
+    assert load_artifact_classification(db, "c", "s", "summary") is not None
+    assert not acknowledge_job(db, claim)
+    assert db.execute(
+        "SELECT invalidated_from_id FROM memory_layer_state WHERE chat_id='c' AND session_id='s' AND layer='summary'"
+    ).fetchone() == (1,)

@@ -28,6 +28,9 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Fixed
 
+- Show whether a saved Director direction is active or inactive in Telegram and the Mini App, and warn when Narrative continuity is not current; preserve inactive plans for editing without treating them as current guidance.
+- Make `/clear` remove next-scene directions and persistent Director objectives instead of saving the command as literal guidance. Preserve actor, session and revision guards.
+
 - Regenerate malformed JSON/schema output once for Summary, Scene and Episodes from canonical inputs, without replaying failed model text or weakening audience validation. Disable narrative stop sequences for these JSON tasks. Preserve stale-source/lease fences, prior accepted state and independently valid partial NPC tracker publication.
 - Replace generic extraction `work_failed` with bounded safe format/audience/NPC codes and opaque session/target log correlation, without logging raw exceptions or story text. Keep unknown failures generic and preserve the autonomous retry ceiling for all new codes. No source replay, tracker reset, database migration or provider/model change.
 - Retire the abandoned Internal States prompt protocol, including numeric baseline import, automatic historical bootstrap, special prompt rewriting and output suppression. Native tracker extraction, ordinary Telegram formatting and Light Novel renderer-envelope validation remain in place.

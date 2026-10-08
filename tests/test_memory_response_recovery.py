@@ -267,3 +267,37 @@ def test_summary_extraction_requests_at_most_32_audience_consistent_blocks(sessi
         == "complete"
     )
     assert calls == [1]
+
+
+def test_summary_worker_accepts_lossless_adjacent_block_coalescing(session_db):
+    """A 35-block helper output can advance one fenced canonical part without retry."""
+    from bridge.memory_artifact_store import load_artifact_classification
+
+    settings, db, session = session_db
+    add(db, "Established synthetic continuity with causality.")
+    items = [{"text": f"Canonical synthetic fact {i:02d}", "visibility": "shared", "known_by": []} for i in range(35)]
+    generated = json.dumps({"blocks": items})
+    calls = []
+
+    def generate(*_args, **_kwargs):
+        calls.append(1)
+        return generated
+
+    claim = claim_jobs(db, layers=("summary",))[0]
+    status = run_memory_claim(
+        db,
+        claim,
+        session,
+        {"name": "Alice"},
+        provider_port=make_test_provider_port(generate_backend=generate),
+        app_settings=settings,
+    )
+    assert status == "complete"
+    assert calls == [1], "lossless local formatting must not spend a repair call"
+    result = load_artifact_classification(db, claim.chat_id, claim.session_id, "summary")
+    assert result is not None
+    assert len(result[2]) == 32
+    assert "\n".join(b["text"] for b in result[2]) == "\n".join(b["text"] for b in items)
+    assert db.execute(
+        "SELECT covered_id,invalidated_from_id FROM memory_layer_state WHERE layer='summary'"
+    ).fetchone() == (claim.target_id, None)

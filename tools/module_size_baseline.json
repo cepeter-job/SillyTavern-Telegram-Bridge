@@ -10,7 +10,7 @@
     "bridge/main.py": 538,
     "bridge/memory_backend.py": 630,
     "bridge/memory_diagnostics.py": 684,
-    "bridge/memory_store.py": 571,
+    "bridge/memory_store.py": 548,
     "bridge/message_commands.py": 602,
     "bridge/narrative_reconciliation.py": 528,
     "bridge/native_imports.py": 545,

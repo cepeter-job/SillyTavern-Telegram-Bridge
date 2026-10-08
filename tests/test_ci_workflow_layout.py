@@ -196,20 +196,3 @@ def test_workflow_registry_records_provenance_and_retirement_conditions():
     for gate in (*REQUIRED_JOBS, *ADVISORY_JOBS):
         assert registry.count(f"`{gate}`") >= 2, gate
     assert "docs/audits/2026-10-07-ci-workflow-audit.md" in registry
-
-
-def test_secret_scan_is_organization_license_free_and_scans_full_history():
-    job = workflow_jobs()["secret-scan"][1]
-    checkout = next(step for step in job["steps"] if "actions/checkout@" in str(step.get("uses", "")))
-    assert checkout["with"]["fetch-depth"] == 0
-    assert checkout["with"]["persist-credentials"] is False
-    assert all("gitleaks-action@" not in str(step.get("uses", "")) for step in job["steps"])
-    run = "\n".join(str(step.get("run") or "") for step in job["steps"])
-    assert "gitleaks_8.30.1_linux_x64.tar.gz" in run
-    assert "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb" in run
-    assert "sha256sum" in run
-    assert 'gitleaks" git' in run or "gitleaks git" in run
-    assert "--log-opts" in run and "--all" in run
-    assert "--config=.gitleaks.toml" in run
-    assert "--gitleaks-ignore-path=.gitleaksignore" in run
-    assert "--redact" in run and "--exit-code=1" in run

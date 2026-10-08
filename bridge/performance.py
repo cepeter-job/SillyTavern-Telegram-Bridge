@@ -12,6 +12,7 @@ from contextvars import ContextVar
 from functools import wraps
 from typing import Any, ParamSpec, TypeVar, cast
 
+from bridge.diagnostic_events import event
 from bridge.settings import AppSettings
 
 P = ParamSpec("P")
@@ -34,6 +35,15 @@ def _log_duration(name: str, duration_ms: float, fields: dict[str, object]) -> N
     operation = _OPERATION.get()
     suffix = (f" operation_id={operation}" if operation else "") + (f" {safe}" if safe else "")
     logging.info("perf span=%s duration_ms=%.3f%s", name, max(0, duration_ms), suffix)
+    event(
+        "performance.span",
+        **{
+            **fields,
+            "phase": name,
+            "operation_id": operation,
+            "elapsed_ms": int(min(max(0, duration_ms), 2**63 - 1)),
+        },
+    )
 
 
 @contextmanager

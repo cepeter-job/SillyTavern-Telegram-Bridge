@@ -409,3 +409,64 @@ def test_identity_matching_never_crosses_chat_or_session(kind, group, other_chat
         assert list_states(db, other_chat, other_session, kind=kind) == old
     finally:
         db.close()
+
+
+@pytest.mark.parametrize("kind,group", [("task", "tasks"), ("quest", "quests")])
+def test_distinct_long_objectives_keep_separate_records(kind, group):
+    db = _db()
+    try:
+        service = SimulationService()
+        prefix = "Document the source and destination of " + "the northern archive records " * 7
+        assert len(prefix.encode()) > 160
+        first = _assistant_row(db)
+        service.apply_payload(
+            db,
+            "chat",
+            "s1",
+            {group: [{"id": "Morgan's Keys", "objective": prefix + "in the east vault"}]},
+            source_rowid=first,
+        )
+        second = _assistant_row(db)
+        service.apply_payload(
+            db,
+            "chat",
+            "s1",
+            {group: [{"id": "morgans-keys", "objective": prefix + "in the west vault"}]},
+            source_rowid=second,
+        )
+        states = list_states(db, "chat", "s1", kind=kind)
+        assert len(states) == 2
+        assert {value["objective"] for _, _, value, _, _ in states} == {
+            prefix + "in the east vault",
+            prefix + "in the west vault",
+        }
+    finally:
+        db.close()
+
+
+def test_completed_step_does_not_remove_distinct_long_pending_step():
+    db = _db()
+    try:
+        service = SimulationService()
+        prefix = "Inspect " + "the northern archive dossier " * 7
+        assert 160 < len(prefix.encode()) < 210
+        completed = prefix + "blue record"
+        unfinished = prefix + "red record"
+        source = _assistant_row(db)
+        service.apply_payload(
+            db,
+            "chat",
+            "s1",
+            {
+                "tasks": [{
+                    "id": "archive-visit",
+                    "completed_steps": [completed],
+                    "pending_steps": [unfinished, completed + " !"],
+                }]
+            },
+            source_rowid=source,
+        )
+        value = service.state(db, "chat", "s1", "task", "archive-visit")
+        assert value["pending_steps"] == [unfinished]
+    finally:
+        db.close()

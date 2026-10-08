@@ -31,6 +31,7 @@ def test_install_signer_path_preserves_preconfigured_custom_trust(tmp_path):
     home, _source, env, _units = inputs(tmp_path)
     env.parent.mkdir(parents=True)
     env.write_text("SILLYTAVERN_UPDATE_ALLOWED_SIGNERS=~/operator-keys\nSECRET=keep\n")
+    env.chmod(0o600)
     original = env.read_bytes()
     assert ensure_install_update_signer_path(env, home, home / "default-signers") == home / "operator-keys"
     assert env.read_bytes() == original

@@ -301,3 +301,75 @@ def test_summary_worker_accepts_lossless_adjacent_block_coalescing(session_db):
     assert db.execute(
         "SELECT covered_id,invalidated_from_id FROM memory_layer_state WHERE layer='summary'"
     ).fetchone() == (claim.target_id, None)
+
+
+def test_summary_worker_rate_limit_uses_safe_retry_code(session_db, caplog):
+    from bridge.provider_errors import ProviderRequestError
+
+    settings, db, session = session_db
+    add(db, "Synthetic source is preserved")
+    calls = []
+
+    def refused(*_args, **_kwargs):
+        calls.append(1)
+        raise ProviderRequestError("openrouter-free::example", "rate_limit", 429)
+
+    claim = claim_jobs(db, layers=("summary",))[0]
+    status = run_memory_claim(
+        db,
+        claim,
+        session,
+        {"name": "Alice"},
+        provider_port=make_test_provider_port(generate_backend=refused),
+        app_settings=settings,
+    )
+    assert status == "rate_limit"
+    assert len(calls) == 1
+    assert db.execute(
+        "SELECT last_error, lease_token, completed_version FROM memory_jobs WHERE layer='summary'"
+    ).fetchone() == ("rate_limit", "", 0)
+    assert db.execute("SELECT covered_id FROM memory_layer_state WHERE layer='summary'").fetchone() == (0,)
+    assert "code=rate_limit" in caplog.text
+
+
+def test_manual_summary_rate_limit_keeps_accepted_coverage_unchanged(session_db):
+    from bridge.memory import generate_session_summary_result
+    from bridge.provider_errors import ProviderRequestError
+
+    settings, db, session = session_db
+    add(db, "Keep this synthetic source")
+    calls = []
+
+    def refused(*_args, **_kwargs):
+        calls.append(1)
+        raise ProviderRequestError("openrouter-free::example", "rate_limit", 429)
+
+    result = generate_session_summary_result(
+        db,
+        "chat",
+        session,
+        force=True,
+        durable=True,
+        max_segments=1,
+        provider_port=make_test_provider_port(generate_backend=refused),
+        app_settings=settings,
+    )
+    assert result.covered_until_rowid == 0
+    assert calls == [1]
+    assert db.execute(
+        "SELECT last_error, lease_token, completed_version FROM memory_jobs WHERE layer='summary'"
+    ).fetchone() == ("rate_limit", "", 0)
+
+
+def test_rate_limited_summary_respects_autonomous_retry_ceiling(session_db):
+    from bridge.memory_queue import AUTO_FAILURE_LIMIT, queue_counters
+
+    _, db, _ = session_db
+    add(db, "No automatic rate-limit loop")
+    db.execute(
+        "UPDATE memory_jobs SET attempts=?, last_error='rate_limit', next_attempt_at=0 WHERE layer='summary'",
+        (AUTO_FAILURE_LIMIT,),
+    )
+    db.commit()
+    assert claim_jobs(db, layers=("summary",), autonomous=True) == []
+    assert queue_counters(db)["memory.jobs.parked"] >= 1

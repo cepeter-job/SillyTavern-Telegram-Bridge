@@ -10,6 +10,7 @@ from typing import Any
 
 from bridge.alternate_ending_repository import linked_alternate_checkpoint
 from bridge.delivery_progress import delivery_complete
+from bridge.director_guidance import active_director_plan
 from bridge.director_repository import (
     append_director_decision,
     director_decision_history,
@@ -21,6 +22,7 @@ from bridge.ending_service import ending_goal_history, load_ending_state, set_en
 from bridge.ending_values import EndingState
 from bridge.model_selection import director_reasoning_for_session, set_director_reasoning
 from bridge.narrative_arc_repository import list_arc_rows, load_arc_row
+from bridge.narrative_context import narrative_clock_is_current
 from bridge.narrative_repository import list_narrative_threads, load_narrative_clock, load_narrative_state_row
 from bridge.narrative_settings import (
     load_session_narrative_settings,
@@ -51,6 +53,9 @@ def director_room(db: sqlite3.Connection, chat_id: str, session_id: str) -> dict
         director_reasoning_for_session(db, chat_id, session_id),
     )
     revision = hashlib.sha256(json.dumps(identity, sort_keys=True, default=str).encode()).hexdigest()
+    direction_status = "none"
+    if director["active_direction"]:
+        direction_status = "active" if active_director_plan(db, chat_id, session_id) is not None else "inactive"
     history = [
         {
             "id": row["decision_id"],
@@ -74,6 +79,8 @@ def director_room(db: sqlite3.Connection, chat_id: str, session_id: str) -> dict
             "pov": str(state.get("pov_mode", "")),
         },
         "direction": str(director["active_direction"])[:4000],
+        "direction_status": direction_status,
+        "narrative_current": narrative_clock_is_current(clock),
         "scope": str(director.get("direction_scope", "")),
         "objective": str(director["goal"])[:4000],
         "degraded": bool(director["degraded_state"]),

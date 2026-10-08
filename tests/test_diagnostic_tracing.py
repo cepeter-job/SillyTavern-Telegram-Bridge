@@ -52,7 +52,9 @@ def test_provider_fallback_is_correlated_and_accounts_for_both_attempts(caplog):
 
     port = ProviderPort(backend, usage_recorder=recorded.append, policy=Policy()).for_usage("111", "story-a", "story")
     with caplog.at_level(logging.INFO), diagnostic_scope(request_id="tg-1", job_id=8):
-        assert port.generate("synthetic-private-key", "primary::model", [{"content": "private story"}]) == "private reply"
+        assert (
+            port.generate("synthetic-private-key", "primary::model", [{"content": "private story"}]) == "private reply"
+        )
     started = events(caplog, "provider.start")
     finished = events(caplog, "provider.finish")
     assert len(started) == len(finished) == 2
@@ -103,7 +105,8 @@ def test_durable_worker_reconstructs_identity_instead_of_using_dispatcher_contex
 
     with sqlite3.connect(":memory:") as db:
         db.execute(
-            "CREATE TABLE jobs(job_id INTEGER,update_id INTEGER,chat_id TEXT,session_id TEXT,kind TEXT,attempts INTEGER)"
+            "CREATE TABLE jobs(job_id INTEGER,update_id INTEGER,chat_id TEXT,"
+            "session_id TEXT,kind TEXT,attempts INTEGER)"
         )
         db.execute("INSERT INTO jobs VALUES(8,12,'111','story-a','generation',1)")
         guard = DurableWorkerGuard(lambda *args, **kwargs: None)

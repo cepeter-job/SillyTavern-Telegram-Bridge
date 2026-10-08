@@ -69,9 +69,7 @@ def test_retained_rotation_and_incident_filters_preserve_trace_identity(tmp_path
         record(purpose="summary", status="succeeded", input_tokens=8, usage_reported=True, usage_complete=False),
     )
     result = read_events(path, chat_id="11", session_id="a", purpose="summary", request_id="tg-1")
-    assert [item["event"] for item in result["events"]] == [
-        "provider.start", "provider.fallback", "provider.finish"
-    ]
+    assert [item["event"] for item in result["events"]] == ["provider.start", "provider.fallback", "provider.finish"]
     assert result["traces"][0]["request_id"] == "tg-1"
     assert result["traces"][0]["fallbacks"] == 1
     assert result["usage"]["complete"] is False
@@ -116,7 +114,14 @@ def test_failed_and_unreported_attempts_never_become_zero_cost_success(tmp_path)
     write(
         path,
         record(status="failed", input_tokens=5, usage_reported=True, usage_complete=False, purpose="story"),
-        record(status="succeeded", input_tokens=7, output_tokens=2, usage_reported=True, usage_complete=True, purpose="story"),
+        record(
+            status="succeeded",
+            input_tokens=7,
+            output_tokens=2,
+            usage_reported=True,
+            usage_complete=True,
+            purpose="story",
+        ),
         record(status="failed", usage_reported=False, usage_complete=False, purpose="summary"),
     )
     result = read_events(path, chat_id="11", session_id="a")
@@ -126,3 +131,46 @@ def test_failed_and_unreported_attempts_never_become_zero_cost_success(tmp_path)
     assert result["usage"]["complete"] is False
     assert {item["purpose"] for item in result["usage_by_purpose"]} == {"story", "summary"}
     assert result["traces"][0]["failures"] == 2
+
+
+def test_unfinished_attempt_is_unknown_even_beside_a_successful_attempt(tmp_path):
+    from bridge.diagnostic_reader import read_events
+
+    path = tmp_path / "runtime.log"
+    write(
+        path,
+        record("provider.start", call_id="call-a", attempt=1, purpose="story"),
+        record(
+            call_id="call-a",
+            attempt=1,
+            status="succeeded",
+            input_tokens=8,
+            output_tokens=2,
+            usage_reported=True,
+            usage_complete=True,
+            purpose="story",
+        ),
+        record("provider.start", call_id="call-a", attempt=2, purpose="story"),
+        record("provider.start", chat="22", call_id="other", attempt=1, purpose="story"),
+    )
+    result = read_events(path, chat_id="11", session_id="a")
+    assert result["usage"]["attempts"] == 2
+    assert result["usage"]["completed_attempts"] == 1
+    assert result["usage"]["unfinished_attempts"] == 1
+    assert result["usage"]["complete"] is False
+    assert result["usage"]["input_tokens"] == 8
+    assert result["traces"][0]["unfinished_attempts"] == 1
+    assert result["traces"][0]["outcome"] == "unknown"
+    assert result["usage_by_purpose"][0]["unfinished_attempts"] == 1
+
+
+def test_start_only_has_unknown_usage_not_a_zero_cost_success(tmp_path):
+    from bridge.diagnostic_reader import read_events
+
+    path = tmp_path / "runtime.log"
+    write(path, record("provider.start", call_id="call-only", attempt=1, purpose="summary"))
+    result = read_events(path, chat_id="11", session_id="a")
+    assert result["usage"]["attempts"] == 1
+    assert result["usage"]["input_tokens"] is None
+    assert result["usage"]["complete"] is False
+    assert result["usage_by_purpose"][0]["purpose"] == "summary"

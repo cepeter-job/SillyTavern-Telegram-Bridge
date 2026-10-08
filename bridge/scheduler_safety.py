@@ -132,7 +132,9 @@ class DurableWorkerGuard:
                     (last_error, time.time(), int(job_id)),
                 )
                 connection.commit()
-                event("job.requeue", job_id=int(job_id), accepted=cursor.rowcount > 0, reason="database_locked")
+                rowcount = getattr(cursor, "rowcount", None)
+                outcome = {"accepted": rowcount > 0} if type(rowcount) is int else {}
+                event("job.requeue", job_id=int(job_id), reason="database_locked", **outcome)
                 logging.warning(
                     "Requeued durable job %s after transient DB startup failure",
                     job_id,
@@ -192,10 +194,12 @@ class DurableWorkerGuard:
                     status = "succeeded"
                     return result
                 except BaseException as exc:
-                    event("job.worker_error", level=logging.WARNING, error_type=type(exc).__name__)
+                    event("job.worker_error", level=logging.WARNING, error_type=type(exc).__name__, exc_info=True)
                     self._requeue(int(job_id), exc, database_path)
                     raise
                 finally:
-                    event("job.worker_finish", status=status, elapsed_ms=max(0, int((time.monotonic() - started) * 1000)))
+                    event(
+                        "job.worker_finish", status=status, elapsed_ms=max(0, int((time.monotonic() - started) * 1000))
+                    )
 
         return bind_worker(guarded_worker, identity=identity)

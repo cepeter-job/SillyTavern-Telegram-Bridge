@@ -68,7 +68,7 @@ def _run_observed_background(label: str, function: Callable[P, T], *args: P.args
         status = "succeeded"
         return result
     except BaseException as exc:
-        event("background.error", level=logging.ERROR, label=label, error_type=type(exc).__name__)
+        event("background.error", level=logging.ERROR, label=label, error_type=type(exc).__name__, exc_info=True)
         raise
     finally:
         after_rss, after_threads = _runtime_process_snapshot()

@@ -1,6 +1,7 @@
 """Explicit dependency allowlists for low-level bridge owners."""
 
 LOW_LEVEL_IMPORTS = {
+    "bridge.diagnostic_operations": frozenset({"bridge.diagnostic_events"}),
     "bridge.npc_rollback": frozenset({"bridge.npc_repository", "bridge.repository_contracts"}),
     "bridge.token_usage_schema": frozenset(),
     "bridge.token_usage": frozenset(

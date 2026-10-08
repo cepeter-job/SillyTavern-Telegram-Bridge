@@ -7,6 +7,8 @@ import logging
 import sqlite3
 
 import bridge.limits as _limits
+from bridge.diagnostic_events import diagnostic_scope, event
+from bridge.diagnostic_operations import observe_boundary
 from bridge.extension_context import PostRetainContext
 from bridge.extension_registry import extension_registry_snapshot as _extension_registry_snapshot
 from bridge.extension_registry import register_post_retain_hook as _register_post_retain_hook
@@ -196,6 +198,7 @@ def _user_name(session: dict[str, str], *, app_settings: AppSettings) -> str:
     return persona_name(selected, app_settings=app_settings) or app_settings.default_user_name
 
 
+@observe_boundary("tracker.extraction")
 def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provider_port, app_settings):
     """Accumulate private row operations; only a complete row may change NPC fields."""
     if db.in_transaction:
@@ -282,15 +285,18 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
                 ),
             },
         ]
-        repaired = provider_port.for_usage(chat_id, session["session_id"], "npc").generate(
-            "",
-            model,
-            repair_messages,
-            session_id=f"tracker-repair:{chat_id}:{session['session_id']}",
-            settings=settings,
-            force_non_stream=True,
-        )
+        event("tracker.repair_start", reason="invalid_shape")
+        with diagnostic_scope(phase="tracker_repair"):
+            repaired = provider_port.for_usage(chat_id, session["session_id"], "npc").generate(
+                "",
+                model,
+                repair_messages,
+                session_id=f"tracker-repair:{chat_id}:{session['session_id']}",
+                settings=settings,
+                force_non_stream=True,
+            )
         simulation, simulation_valid = parse_simulation_payload(repaired)
+        event("tracker.repair_finish", accepted=simulation_valid)
     merged_simulation = merge_simulation_payload(previous.get("simulation"), simulation) if simulation_valid else {}
     if not valid:
         if simulation_valid:
@@ -364,7 +370,14 @@ def refresh_npc_state_now(
                 db, chat_id, session_id, error, source
             ),
         )
-    except Exception:
+    except Exception as exc:
+        event(
+            "tracker.refresh_failed",
+            chat_id=chat_id,
+            session_id=session_id,
+            status="failed",
+            error_type=type(exc).__name__,
+        )
         logging.warning("NPC extraction failed for %s/%s", chat_id, session_id, exc_info=True)
     after = int(db.execute(count_sql, (chat_id, session_id)).fetchone()[0])
     return max(0, after - before)

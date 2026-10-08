@@ -34,14 +34,14 @@ def inventory_file(path: Path, root: Path) -> list[dict[str, object]]:
             known = isinstance(value, ast.Name) and value.id in logger_bindings
             if isinstance(value, ast.Call):
                 factory = value.func
-                known |= (
-                    isinstance(factory, ast.Name)
-                    and direct.get(factory.id) in {"getLogger", "LoggerAdapter", "Logger"}
-                )
+                known |= isinstance(factory, ast.Name) and direct.get(factory.id) in {
+                    "getLogger",
+                    "LoggerAdapter",
+                    "Logger",
+                }
                 known |= isinstance(factory, ast.Attribute) and (
-                    factory.attr in {"getLogger", "LoggerAdapter", "Logger"}
-                    and ast.unparse(factory.value) in aliases
-                    or factory.attr == "getChild" and ast.unparse(factory.value) in logger_bindings
+                    (factory.attr in {"getLogger", "LoggerAdapter", "Logger"} and ast.unparse(factory.value) in aliases)
+                    or (factory.attr == "getChild" and ast.unparse(factory.value) in logger_bindings)
                 )
             if known:
                 logger_bindings.update(ast.unparse(target) for target in targets)
@@ -76,21 +76,21 @@ def inventory_file(path: Path, root: Path) -> list[dict[str, object]]:
             continue
         normalized = owner.casefold().replace("_", "")
         logging_owner = (
-            owner in aliases | logger_bindings
-            or normalized.endswith(("logger", "log"))
-            or "getLogger(" in owner
+            owner in aliases | logger_bindings or normalized.endswith(("logger", "log")) or "getLogger(" in owner
         )
         if method == "dynamic" and not logging_owner:
             continue
         index = 1 if method == "log" else 0
-        message = node.args[index] if len(node.args) > index else next(
-            (item.value for item in node.keywords if item.arg in {"msg", "message", "name"}), None
+        message = (
+            node.args[index]
+            if len(node.args) > index
+            else next((item.value for item in node.keywords if item.arg in {"msg", "message", "name"}), None)
         )
         constant = isinstance(message, ast.Constant) and isinstance(message.value, str)
         logger_name = method == "getLogger" and (
             message is None
-            or isinstance(message, ast.Constant) and message.value is None
-            or isinstance(message, ast.Name) and message.id == "__name__"
+            or (isinstance(message, ast.Constant) and message.value is None)
+            or (isinstance(message, ast.Name) and message.id == "__name__")
         )
         checked_event = (
             path.relative_to(root).as_posix() == "diagnostic_events.py"
@@ -98,19 +98,27 @@ def inventory_file(path: Path, root: Path) -> list[dict[str, object]]:
             and method == "log"
             and owner == "_LOG"
         )
-        rows.append({
-            "file": path.relative_to(root).as_posix(),
-            "line": node.lineno,
-            "owner": owner[:120],
-            "method": method,
-            "scope": scopes[id(node)],
-            "classification": "logging" if logging_owner else "nonlogging_candidate",
-            "message_kind": (
-                "literal" if constant else "checked_event" if checked_event else "logger_name" if logger_name else "dynamic"
-            ),
-            "expression": ast.unparse(message)[:160] if message is not None else "",
-            "unsafe": logging_owner and not (constant or logger_name or checked_event),
-        })
+        rows.append(
+            {
+                "file": path.relative_to(root).as_posix(),
+                "line": node.lineno,
+                "owner": owner[:120],
+                "method": method,
+                "scope": scopes[id(node)],
+                "classification": "logging" if logging_owner else "nonlogging_candidate",
+                "message_kind": (
+                    "literal"
+                    if constant
+                    else "checked_event"
+                    if checked_event
+                    else "logger_name"
+                    if logger_name
+                    else "dynamic"
+                ),
+                "expression": ast.unparse(message)[:160] if message is not None else "",
+                "unsafe": logging_owner and not (constant or logger_name or checked_event),
+            }
+        )
     return rows
 
 
@@ -131,12 +139,17 @@ def main() -> int:
     rendered = json.dumps(report, indent=2, ensure_ascii=True)
     if args.output:
         args.output.write_text(rendered + "\n", encoding="utf-8")
-    print(json.dumps({
-        "files": report["files"],
-        "logging_candidates": len(report["calls"]),
-        "unsafe": report["unsafe"],
-        "nonlogging_candidates": [row for row in report["calls"] if row["classification"] != "logging"],
-    }, indent=2))
+    print(
+        json.dumps(
+            {
+                "files": report["files"],
+                "logging_candidates": len(report["calls"]),
+                "unsafe": report["unsafe"],
+                "nonlogging_candidates": [row for row in report["calls"] if row["classification"] != "logging"],
+            },
+            indent=2,
+        )
+    )
     return int(bool(report["unsafe"]))
 
 

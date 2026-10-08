@@ -7,7 +7,7 @@ from tools.audit_logging_privacy import inventory, inventory_file
 
 def test_inventory_identifies_fstrings_joined_strings_aliases_and_variable_messages(tmp_path):
     source = tmp_path / "sample.py"
-    source.write_text('''import logging as log
+    source.write_text("""import logging as log
 from logging import warning as warn
 logger = log.getLogger(__name__)
 log.info("safe %s", user_text)
@@ -15,7 +15,7 @@ log.error(f"unsafe {user_text}")
 warn("unsafe " + user_text)
 logger.debug(user_text)
 log.getLogger(user_text)
-''')
+""")
     report = inventory(tmp_path)
     assert report["files"] == 1
     assert [row["line"] for row in report["unsafe"]] == [5, 6, 7, 8]

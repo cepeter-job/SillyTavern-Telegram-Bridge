@@ -88,12 +88,28 @@ def _record(raw: bytes, chat_ref: str, session_ref: str) -> dict[str, Any] | Non
         return None
 
 
+def _unfinished(events: list[dict[str, Any]]) -> int:
+    finished = {
+        (item.get("call_id"), item.get("attempt"))
+        for item in events
+        if item["event"] == "provider.finish" and item.get("call_id")
+    }
+    starts = [item for item in events if item["event"] == "provider.start"]
+    return sum(not item.get("call_id") or (item.get("call_id"), item.get("attempt")) not in finished for item in starts)
+
+
 def _usage(events: list[dict[str, Any]], *, truncated: bool) -> dict[str, Any]:
     attempts = [item for item in events if item["event"] == "provider.finish"]
+    unfinished = _unfinished(events)
     result: dict[str, Any] = {
-        "attempts": len(attempts),
+        "attempts": len(attempts) + unfinished,
+        "completed_attempts": len(attempts),
+        "unfinished_attempts": unfinished,
         "reported_attempts": sum(item.get("usage_reported") is True for item in attempts),
-        "complete": bool(attempts) and not truncated and all(item.get("usage_complete") is True for item in attempts),
+        "complete": bool(attempts)
+        and not truncated
+        and not unfinished
+        and all(item.get("usage_complete") is True for item in attempts),
     }
     for field in _COUNTS:
         values = [item[field] for item in attempts if type(item.get(field)) is int]
@@ -113,6 +129,10 @@ def _traces(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if item["event"] == "provider.fallback" and item.get("status") == "selected":
             group["fallbacks"] += 1
         group.update(last_event=item["event"], last_status=item.get("status", ""), timestamp=item["timestamp"])
+    for key, group in groups.items():
+        related = [item for item in events if (item.get("request_id") or item.get("call_id")) == key]
+        group["unfinished_attempts"] = _unfinished(related)
+        group["outcome"] = "unknown" if group["unfinished_attempts"] else group["last_status"]
     return list(reversed(groups.values()))
 
 
@@ -164,7 +184,13 @@ def read_events(
             truncated = True
             break
     events.reverse()
-    purposes = sorted({str(item.get("purpose", "unscoped")) for item in events if item["event"] == "provider.finish"})
+    purposes = sorted(
+        {
+            str(item.get("purpose", "unscoped"))
+            for item in events
+            if item["event"] in {"provider.start", "provider.finish"}
+        }
+    )
     return {
         "events": events,
         "traces": _traces(events),

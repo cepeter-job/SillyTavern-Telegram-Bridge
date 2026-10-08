@@ -242,7 +242,7 @@ def _make_sync_snapshot_integrity(*, app_settings: AppSettings, retain_memory: R
         retain_memory=retain_memory,
         card_fields=(lambda character_file: card_fields_from_file(character_file, app_settings=app_settings)),
         default_model=app_settings.default_model,
-        log_warning=(lambda message, **kwargs: logging.warning(message, **kwargs)),
+        log_warning=(logging.warning),
     )
 
 

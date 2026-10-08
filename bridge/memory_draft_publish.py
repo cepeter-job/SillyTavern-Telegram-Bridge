@@ -3,6 +3,7 @@
 import json
 import time
 
+from bridge.diagnostic_operations import observe_boundary
 from bridge.memory_artifact_store import store_artifact_visibility
 from bridge.memory_store import pending_memory_invalidation
 from bridge.npc_repository import set_npc_extraction_coverage
@@ -13,6 +14,7 @@ from bridge.simulation_projection import is_managed_field
 from bridge.simulation_service import SimulationService
 
 
+@observe_boundary("tracker.publication", success="staged")
 def publish_simulation(db, chat_id, session_id, payload, through, *, primary_name="", user_name=""):
     simulation = canonicalize_narrative_links(db, chat_id, session_id, payload or {}, through)
     SimulationService().apply_payload(
@@ -26,6 +28,7 @@ def publish_simulation(db, chat_id, session_id, payload, through, *, primary_nam
     )
 
 
+@observe_boundary("memory.publication", success="staged")
 def publish_derived(db, chat_id, session_id, layer, payload, through):
     if layer == "summary":
         text = "\n".join(block["text"] for block in payload["blocks"])

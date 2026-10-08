@@ -9,9 +9,9 @@ import re
 import stat
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from io import TextIOWrapper
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import TextIO
 
 from bridge.diagnostic_events import clean_fields, diagnostic_context
 
@@ -129,7 +129,7 @@ class PrivateRotatingHandler(RotatingFileHandler):
 
     dropped = 0
 
-    def _open(self) -> TextIO:
+    def _open(self) -> TextIOWrapper:
         flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
         fd = os.open(self.baseFilename, flags, 0o600)
         try:

@@ -58,7 +58,8 @@ def _runtime_metadata(services: Any) -> dict[str, Any]:
             if isinstance(identity, dict):
                 deployment = clean_fields({key: identity.get(key) for key in ("version", "commit")})
         except Exception:
-            pass
+            # Boot identity is optional; do not expose the failed snapshot or its exception.
+            deployment = {}
     return {
         "deployment": deployment,
         "log_level": logging.getLevelName(logging.getLogger().getEffectiveLevel()),
@@ -83,7 +84,8 @@ def diagnostic_timeline(services: Any, who: MiniAppIdentity, values: dict[str, A
         )
     result["runtime"] = _runtime_metadata(services)
     result["limitations"] = (
-        "A bounded retained-log window, not a complete audit trail. Legacy free-form logs and other sessions are excluded. "
+        "A bounded retained-log window, not a complete audit trail. "
+        "Legacy free-form logs and other sessions are excluded. "
         "Rotation, log levels, filters, unreadable files and credential rotation can omit events. "
         "Missing usage is unknown, not zero; reported totals include failed and fallback attempts in this window."
     )

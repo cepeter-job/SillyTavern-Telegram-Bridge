@@ -86,3 +86,23 @@ def test_logging_failure_does_not_break_work(monkeypatch):
 
     monkeypatch.setattr(logging.getLogger("bridge.events"), "log", unavailable)
     event("job.started", job_id=1)
+
+
+def test_error_event_preserves_code_locations_without_exception_content(caplog):
+    import json
+    import logging
+
+    from bridge.diagnostic_events import event
+    from bridge.diagnostic_logging import DiagnosticFormatter
+
+    with caplog.at_level(logging.ERROR, logger="bridge.events"):
+        try:
+            raise RuntimeError("PRIVATE_EXCEPTION_BODY")
+        except RuntimeError:
+            event("diagnostic.error", level=logging.ERROR, exc_info=True)
+    record = caplog.records[-1]
+    assert record.exc_info is not None
+    result = json.loads(DiagnosticFormatter().format(record))
+    assert result["error_type"] == "RuntimeError"
+    assert result["traceback"][-1]["function"] == "test_error_event_preserves_code_locations_without_exception_content"
+    assert "PRIVATE_EXCEPTION_BODY" not in json.dumps(result)

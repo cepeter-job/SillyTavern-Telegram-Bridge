@@ -10,6 +10,7 @@ from typing import Any
 
 from bridge.background import chat_job_lock
 from bridge.conversation_lifecycle import conversation_state
+from bridge.diagnostic_events import diagnostic_scope, event
 from bridge.miniapp_auth import MiniAppIdentity
 from bridge.miniapp_errors import MiniAppError
 from bridge.request_types import RequestContext
@@ -54,12 +55,20 @@ def session_scope(services: Any, who: MiniAppIdentity, values: dict, *, write: b
                 raise MiniAppError(
                     "The active session changed. Refresh before applying changes.", status=409, code="stale"
                 )
-            yield MiniAppScope(
-                db,
-                session,
-                RequestContext(db, session["session_id"], who.user_id, app_settings=services.config),
-                who.chat_id,
-            )
+            with diagnostic_scope(chat_id=who.chat_id, session_id=session["session_id"]):
+                status = "failed"
+                event("miniapp.session_start")
+                try:
+                    yield MiniAppScope(
+                        db,
+                        session,
+                        RequestContext(db, session["session_id"], who.user_id, app_settings=services.config),
+                        who.chat_id,
+                    )
+                    status = "succeeded"
+                finally:
+                    event("miniapp.session_finish", status=status)
+
     except MiniAppError:
         raise
     except (ValueError, FileNotFoundError, FileExistsError):

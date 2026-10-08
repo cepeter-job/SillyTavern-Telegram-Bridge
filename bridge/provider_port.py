@@ -147,7 +147,7 @@ class ProviderPort:
         }
         if scope is not None:
             identity.update(chat_id=scope.chat_id, session_id=scope.session_id)
-        with diagnostic_scope(**identity):
+        with diagnostic_scope(inherit=True, **identity):
             return self._generate_call(
                 api_key,
                 model,
@@ -213,8 +213,13 @@ class ProviderPort:
                     if index + 1 == len(candidates):
                         phase = "exhausted"
                     elif error.category not in {
-                        "timeout", "network", "provider_unavailable", "rate_limit",
-                        "authentication", "credits", "model_unavailable",
+                        "timeout",
+                        "network",
+                        "provider_unavailable",
+                        "rate_limit",
+                        "authentication",
+                        "credits",
+                        "model_unavailable",
                     }:
                         phase = "category"
                     elif visible:
@@ -336,6 +341,8 @@ class ProviderPort:
             )
             diagnostic_event(
                 "provider.finish",
+                level=logging.INFO,
+                exc_info=bool(error_fields),
                 provider=observed_provider,
                 model=observed_model_id,
                 purpose=purpose,

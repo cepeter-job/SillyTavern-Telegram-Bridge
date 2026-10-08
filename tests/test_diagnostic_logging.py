@@ -19,7 +19,13 @@ def test_json_format_keeps_events_but_not_legacy_arguments():
 
     formatter = DiagnosticFormatter(["synthetic-private-credential"])
     record = logging.LogRecord(
-        "bridge.test", logging.ERROR, __file__, 1, "Provider failed: %s", ("private story",), None
+        "bridge.test",
+        logging.ERROR,
+        str(Path(__file__).parents[1] / "bridge/provider_port.py"),
+        1,
+        "Provider failed: %s",
+        ("private story",),
+        None,
     )
     try:
         raise ValueError("synthetic-private-credential private story")
@@ -130,8 +136,10 @@ def test_logging_configuration_is_idempotent_and_json(tmp_path):
         added = [h for h in root.handlers if h not in before]
         assert len(added) == 2
         assert len([h for h in added if getattr(h, "bridge_console", False)]) == 1
-        logging.info("test logging")
-        assert json.loads(config.log_file.read_text().splitlines()[-1])["message"] == "test logging"
+        from bridge.diagnostic_events import event
+
+        event("diagnostic.test")
+        assert json.loads(config.log_file.read_text().splitlines()[-1])["event"] == "diagnostic.test"
     finally:
         for handler in list(root.handlers):
             if handler not in before:

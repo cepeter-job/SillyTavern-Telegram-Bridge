@@ -83,7 +83,10 @@ def test_foreign_and_stale_session_cannot_export_another_timeline(tmp_path):
     from bridge.miniapp_errors import MiniAppError
 
     services, who, session = setup(tmp_path)
-    assert diagnostic_timeline(services, identity("67890"), {})["events"] == []
+    own_events = diagnostic_timeline(services, identity("67890"), {})["events"]
+    assert len(own_events) == 1
+    assert own_events[0]["model"] == "OTHER_PRIVATE_MODEL"
+    assert own_events[0]["chat_ref"] == scope_reference("chat", "67890")
     with pytest.raises(MiniAppError) as failure:
         diagnostic_export(services, who, {"session_id": "not-the-active-session"})
     assert failure.value.status == 409
@@ -114,3 +117,38 @@ def test_http_diagnostics_auth_origin_assets_and_get_only(tmp_path):
             assert "innerHTML" not in await asset.text()
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("session_id", [None, "", 17, "x" * 201, "bad\x00session"])
+def test_invalid_diagnostic_session_is_rejected(tmp_path, session_id):
+    from bridge.miniapp_diagnostics import diagnostic_timeline
+    from bridge.miniapp_errors import MiniAppError
+
+    services, who, _session = setup(tmp_path)
+    with pytest.raises(MiniAppError):
+        diagnostic_timeline(services, who, {"session_id": session_id})
+
+
+def test_runtime_metadata_never_exports_other_health_fields_or_failures(tmp_path):
+    from types import SimpleNamespace
+
+    from bridge.miniapp_diagnostics import diagnostic_timeline
+
+    services, who, _session = setup(tmp_path)
+    services.health = SimpleNamespace(
+        snapshot=lambda: {
+            "deployment": {"version": "0.3.009", "commit": "a" * 40, "path": "PRIVATE_PATH"},
+            "secret": "PRIVATE_SECRET",
+        }
+    )
+    view = diagnostic_timeline(services, who, {})
+    assert view["runtime"]["deployment"] == {"version": "0.3.009", "commit": "a" * 40}
+    assert "PRIVATE" not in json.dumps(view)
+
+    def broken():
+        raise RuntimeError("PRIVATE_FAILURE")
+
+    services.health = SimpleNamespace(snapshot=broken)
+    assert diagnostic_timeline(services, who, {})["runtime"]["deployment"] == {}
+    services.health = SimpleNamespace(snapshot=lambda: {"deployment": ["PRIVATE"]})
+    assert diagnostic_timeline(services, who, {})["runtime"]["deployment"] == {}

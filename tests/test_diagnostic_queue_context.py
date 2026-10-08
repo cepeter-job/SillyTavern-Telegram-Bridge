@@ -56,7 +56,8 @@ def test_ordered_queue_keeps_enqueue_time_identity_not_completion_callback_scope
     assert observed[0]["request_id"] == "tg-second"
     assert observed[0]["session_ref"] == scope_reference("session", "new")
     starts = [
-        record.diagnostic_fields for record in caplog.records
+        record.diagnostic_fields
+        for record in caplog.records
         if hasattr(record, "diagnostic_fields") and record.diagnostic_fields["event"] == "background.start"
     ]
     assert [item["request_id"] for item in starts] == ["tg-first", "tg-second"]
@@ -77,7 +78,8 @@ def test_parent_label_cannot_break_ordered_admission(isolated_queue):
 def test_recovered_identity_also_applies_to_outer_worker_events(isolated_queue, caplog):
     with sqlite3.connect(":memory:") as db:
         db.execute(
-            "CREATE TABLE jobs(job_id INTEGER,update_id INTEGER,chat_id TEXT,session_id TEXT,kind TEXT,attempts INTEGER)"
+            "CREATE TABLE jobs(job_id INTEGER,update_id INTEGER,chat_id TEXT,"
+            "session_id TEXT,kind TEXT,attempts INTEGER)"
         )
         db.execute("INSERT INTO jobs VALUES(8,12,'11','saved','generation',1)")
         worker = DurableWorkerGuard(lambda *args, **kwargs: None).prepare(db, 8, diagnostic_context)
@@ -87,10 +89,25 @@ def test_recovered_identity_also_applies_to_outer_worker_events(isolated_queue, 
             assert background.drain_background_jobs(5)
     assert result["request_id"] == "tg-12"
     items = [
-        record.diagnostic_fields for record in caplog.records
+        record.diagnostic_fields
+        for record in caplog.records
         if hasattr(record, "diagnostic_fields")
         and record.diagnostic_fields["event"] in {"background.start", "job.worker_start"}
     ]
     assert len(items) == 2
     assert {item["request_id"] for item in items} == {"tg-12"}
     assert {item["session_ref"] for item in items} == {scope_reference("session", "saved")}
+
+
+def test_queue_binding_assigns_a_distinct_worker_id_and_preserves_it():
+    from bridge.diagnostic_events import diagnostic_context, diagnostic_scope
+    from bridge.diagnostic_workers import bind_worker, worker_identity
+
+    with diagnostic_scope(request_id="tg-42", worker_id="parent-worker"):
+        bound = bind_worker(diagnostic_context)
+        current = worker_identity(bound)
+        assert current["request_id"] == "tg-42"
+        assert current["worker_id"] != "parent-worker"
+        assert worker_identity(bind_worker(bound)) == current
+    assert bound() == current
+    assert diagnostic_context() == {}

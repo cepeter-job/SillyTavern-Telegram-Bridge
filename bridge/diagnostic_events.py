@@ -143,13 +143,13 @@ def new_request_id(prefix: str = "request") -> str:
     return f"{prefix}-{secrets.token_hex(8)}"
 
 
-def event(name: str, *, level: int = logging.INFO, **fields: object) -> None:
+def event(name: str, *, level: int = logging.INFO, exc_info: bool = False, **fields: object) -> None:
     """Diagnostics are best effort and never change the application's outcome."""
     global _DROPPED
     values = {**diagnostic_context(), **clean_fields(fields)}
     values["event"] = name if _NAME.fullmatch(name) else "diagnostic.invalid_event"
     try:
-        _LOG.log(level, values["event"], extra={"diagnostic_fields": values})
+        _LOG.log(level, values["event"], extra={"diagnostic_fields": values}, exc_info=exc_info)
     except Exception:
         # A broken/custom handler must not fail a generation or worker.
         _DROPPED += 1

@@ -7,6 +7,7 @@ import json
 from collections.abc import Callable
 from typing import Any, TypeVar
 
+from bridge.diagnostic_events import diagnostic_context, diagnostic_scope, event, new_request_id
 from bridge.json_fences import unfence_json
 from bridge.memory_fact_store import classified_audience
 from bridge.memory_retry import MEMORY_RESPONSE_ERRORS
@@ -67,20 +68,45 @@ def generate_memory_response(
     settings: dict[str, Any],
     source_valid: Callable[[], bool] | None = None,
 ) -> T:
-    options = dict(settings, stop_sequences="", json_once=True)
-    raw = generate(api_key, model, messages, session_id=session_id, settings=options, force_non_stream=True)
-    try:
-        return parser(raw)
-    except ValueError as error:
-        if memory_failure_code(error) not in _REPAIRABLE:
-            raise
-        _reject_supplied_audience_conflicts(raw)
-    if source_valid is not None and not source_valid():
-        raise MemorySourceChanged
-    # Reuse canonical inputs, not the failed output (which may contain injected instructions).
-    repair_messages = [dict(message) for message in messages]
-    repair_messages.insert(0, {"role": "system", "content": _REPAIR_INSTRUCTION})
-    repaired = generate(
-        api_key, model, repair_messages, session_id=session_id, settings=dict(options), force_non_stream=True
-    )
-    return parser(repaired)
+    with diagnostic_scope(request_id=diagnostic_context().get("request_id") or new_request_id("memory")):
+        options = dict(settings, stop_sequences="", json_once=True)
+        with diagnostic_scope(phase="extraction"):
+            raw = generate(api_key, model, messages, session_id=session_id, settings=options, force_non_stream=True)
+            try:
+                result = parser(raw)
+                event("memory.response_parsed", accepted=True)
+                return result
+            except ValueError as error:
+                reason = memory_failure_code(error)
+                event("memory.response_rejected", accepted=False, reason=reason)
+                if reason not in _REPAIRABLE:
+                    raise
+                _reject_supplied_audience_conflicts(raw)
+        if source_valid is not None and not source_valid():
+            event("memory.response_repair_suppressed", accepted=False, reason="stale_source")
+            raise MemorySourceChanged
+        # Reuse canonical inputs, never echo the rejected output into a repair prompt.
+        repair_messages = [dict(message) for message in messages]
+        repair_messages.insert(0, {"role": "system", "content": _REPAIR_INSTRUCTION})
+        with diagnostic_scope(phase="json_repair"):
+            event("memory.response_repair_start")
+            try:
+                repaired = generate(
+                    api_key,
+                    model,
+                    repair_messages,
+                    session_id=session_id,
+                    settings=dict(options),
+                    force_non_stream=True,
+                )
+                result = parser(repaired)
+            except Exception as error:
+                event(
+                    "memory.response_repair_finish",
+                    accepted=False,
+                    reason=memory_failure_code(error),
+                    error_type=type(error).__name__,
+                )
+                raise
+            event("memory.response_repair_finish", accepted=True)
+            return result

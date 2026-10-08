@@ -7,6 +7,7 @@ function usageView(data) {
   const view=el('section',{},el('h3',{},'Reported model usage'),
     el('p',{},usage.complete?'Usage reported for every displayed attempt.':'Partial / unknown usage; missing values are not zero.'),
     el('p',{},'Attempts '+count(usage.attempts)+' · Reported '+count(usage.reported_attempts)),
+    el('p',{},'Unfinished in window: '+count(usage.unfinished_attempts)+' · May be running, interrupted, or omitted from retained logs.'),
     el('p',{},'Input '+count(usage.input_tokens)+' · Output '+count(usage.output_tokens)));
   for(const item of (data.usage_by_purpose||[]).slice(0,32)) {
     view.append(el('p',{class:'muted'},String(item.purpose||'Unscoped')+': '+count(item.input_tokens)+' input · '+count(item.output_tokens)+' output · '+count(item.attempts)+' attempts'));
@@ -58,7 +59,7 @@ export function diagnosticsCard(session) {
         :'Diagnostic log unavailable. Check the running version and configured logging.');
       const traces=el('section',{},el('h3',{},'Related requests'));
       for(const trace of (data.traces||[]).slice(0,100)) {
-        const summary=String(trace.request_id||'Unlinked request')+' · '+count(trace.events)+' events · '+count(trace.failures)+' failure signals · '+count(trace.fallbacks)+' fallbacks';
+        const summary=String(trace.request_id||'Unlinked request')+' · '+count(trace.events)+' events · '+count(trace.failures)+' failure signals · '+count(trace.fallbacks)+' fallbacks · '+count(trace.unfinished_attempts)+' unfinished in window';
         const row=el('div',{},el('p',{},summary));
         if(trace.request_id)row.append(button('Trace '+trace.request_id,async()=>{
           request.value=trace.request_id;purpose.value='';level.value='DEBUG';await load();

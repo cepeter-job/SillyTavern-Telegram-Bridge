@@ -63,7 +63,7 @@ from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect, write_transaction
-from bridge.summary_block_coalescing import coalesce_summary_response
+from bridge.summary_block_coalescing import coalesce_summary_response, summary_length_contract
 
 
 def _make_hindsight_stale_guard(
@@ -279,6 +279,7 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
             "reasoning_budget": utility_reasoning_for_session(db, chat_id, session["session_id"]),
         }
     )
+    length_contract = summary_length_contract(previous)
     messages = [
         {
             "role": "system",
@@ -287,7 +288,8 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
                 "Preserve locations, characters, relationships, facts, goals and unresolved hooks. "
                 "Each block requires text, visibility (shared or restricted), and known_by. "
                 "Use at most 32 blocks. Combine related facts only when they share the same visibility and known_by. "
-                "Preserve every fact, negations, promises, causal links and reader knowledge within the limit. "
+                + length_contract
+                + " Preserve every fact, negations, promises, causal links and reader knowledge within the limit. "
                 + CLASSIFIED_AUDIENCE_PROMPT
                 + " Split public continuity from private facts. Preserve prior audiences unless the new source "
                 "explicitly establishes additional knowledge. Presence never grants private "
@@ -328,6 +330,7 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
         parser=parse,
         session_id=f"summary:{chat_id}:{session['session_id']}",
         settings=settings,
+        repair_contract=length_contract,
     )
 
 

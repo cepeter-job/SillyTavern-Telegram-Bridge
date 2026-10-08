@@ -28,19 +28,21 @@ job is added, update both `test.needs` and the checker's required job list. The
 checker deliberately rejects incomplete dependency sets instead of silently
 accepting a reduced gate.
 
-The licensed Gitleaks Action requires the repository or organization Actions secret
-`GITLEAKS_LICENSE`. Its token has only `contents: read` and `pull-requests: read`
-(to discover PR commits), with no comment permission. The Action's scan is limited
-to the event's commit range, so the additional SHA-256-verified CLI scan retains
-`--log-opts=--all`, `.gitleaks.toml`, `.gitleaksignore`, redaction and failure on
-findings. Both scans must succeed; neither license failure nor a scan error falls
-back to a green result.
+The licensed Gitleaks Action runs for trusted same-repository events and requires
+the repository or organization Actions secret `GITLEAKS_LICENSE`. Fork pull
+requests and Dependabot events use the SHA-256-verified full-history CLI without
+the licensed wrapper because GitHub withholds ordinary Actions secrets from those
+events. The CLI remains required for every event, with `--log-opts=--all`,
+`.gitleaks.toml`, `.gitleaksignore`, redaction and failure on findings. On events
+that also select the licensed wrapper, both scans must succeed. The wrapper's
+token has only `contents: read` and `pull-requests: read` to discover PR commits;
+comments, SARIF uploads and Action summaries are disabled.
 
 | Job | Scope | Retained evidence |
 | --- | --- | --- |
 | `python-tests` | Complete pytest discovery, at most four workers, resource warnings as errors, whole-application statement and branch coverage, security coverage floors | `application-coverage`: coverage JSON/XML, JUnit XML, pytest log with the 20 slowest tests |
 | `miniapp-smoke` | Focused DOM regressions and loopback integration, plus pinned Chromium and WebKit tests of accepted-response loss, polling recovery, native dialogs, focus and narrow viewports | `miniapp-smoke`: DOM, integration and browser logs, browser HTML report and failure traces/screenshots |
-| `secret-scan` | SHA-pinned licensed Gitleaks Action v3.0.0 (commit-range scan) plus full-history CLI v8.30.1 scan with SHA-256-verified binary; both use repository config/ignore file | Missing/invalid organization license, findings, scanner errors or integrity mismatch fail the required job; comments, SARIF uploads and Action summaries disabled |
+| `secret-scan` | Full-history CLI v8.30.1 scan with SHA-256-verified binary on every event; trusted same-repository events also run the SHA-pinned licensed Gitleaks Action v3.0.0 commit-range scan | Findings, scanner errors or integrity mismatch fail the required job; a selected licensed wrapper also requires its organization license |
 | `dependency-audit` | Both complete hash-locked runtime and development dependency sets | Action result and logs |
 | `static-analysis` | Dependency lock consistency, module-size ratchet, reference evidence, architecture policy, leak scan, Ruff, and mypy | `memory-leak-scan`: leak scan and module reference JSON |
 | `test` | Strict aggregate of the five jobs above | Table of every dependency result in the job summary |

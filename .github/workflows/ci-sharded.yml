@@ -1,0 +1,145 @@
+name: CI (sharded)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-sharded-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PYTEST_OPTS: >-
+    -X dev -W error::ResourceWarning -m pytest -q -n auto --maxprocesses=4 --dist=loadfile
+    --cov --cov-report=term-missing:skip-covered
+    --cov-report=json:coverage.json --cov-report=xml:coverage.xml
+    --junitxml=pytest-results.xml --durations=20 --durations-min=1
+    2>&1 | tee pytest.log
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+          enable-cache: true
+          cache-dependency-glob: |
+            requirements.lock
+            requirements-dev.lock
+
+      - name: Install locked runtime dependencies
+        run: uv pip install --system --python python --require-hashes -r requirements.lock
+
+      - name: Install development test tooling
+        run: uv pip install --system --python python --require-hashes -r requirements-dev.lock
+
+      - name: Validate dependency environment
+        run: python -m pip check
+
+      - name: Run shard ${{ matrix.shard }}
+        run: ${{ env.PYTEST_OPTS }} "tests/test_image*.py" "tests/test_tracker*.py" "tests/test_miniapp*.py" "tests/test_narrative*.py" "tests/test_character*.py" "tests/test_director*.py" "tests/test_memory*.py" "tests/test_provider*.py" "tests/test_simulation*.py" "tests/test_story_memory*.py" "tests/test_sync*.py" "tests/test_persona*.py" "tests/test_context*.py" "tests/test_panel*.py" "tests/test_npc*.py" "tests/test_alternate_ending*.py" "tests/test_ending*.py" "tests/test_action*.py" "tests/test_callback*.py" "tests/test_conversation*.py" "tests/test_episodic*.py" "tests/test_group*.py" "tests/test_hindsight*.py" "tests/test_light_novel*.py" "tests/test_persistence*.py" "tests/test_retrieval*.py" "tests/test_runtime*.py" "tests/test_session*.py" "tests/test_shutdown*.py" "tests/test_startup*.py" "tests/test_transcript*.py" "tests/test_update*.py" "tests/test_world*.py" "tests/test_application*.py" "tests/test_audit*.py" "tests/test_background*.py" "tests/test_catalog*.py" "tests/test_config*.py" "tests/test_database*.py" "tests/test_diagnostic*.py" "tests/test_document*.py" "tests/test_enum*.py" "tests/test_environment*.py" "tests/test_expressions*.py" "tests/test_extension*.py" "tests/test_facts*.py" "tests/test_failed_turn*.py" "tests/test_feature*.py" "tests/test_final*.py" "tests/test_generation*.py" "tests/test_governance*.py" "tests/test_greeting*.py" "tests/test_grounded*.py" "tests/test_help*.py" "tests/test_input*.py" "tests/test_installer*.py" "tests/test_item*.py" "tests/test_job*.py" "tests/test_language*.py" "tests/test_live_sync*.py" "tests/test_lock*.py" "tests/test_logging*.py" "tests/test_migrations*.py" "tests/test_model*.py" "tests/test_network*.py" "tests/test_note*.py" "tests/test_operation*.py" "tests/test_opencode*.py" "tests/test_pending*.py" "tests/test_port*.py" "tests/test_production*.py" "tests/test_prompt*.py" "tests/test_queue*.py" "tests/test_quoted*.py" "tests/test_rag*.py" "tests/test_raw*.py" "tests/test_repository*.py" "tests/test_reset*.py" "tests/test_resource*.py" "tests/test_response*.py" "tests/test_retry*.py" "tests/test_roleplay*.py" "tests/test_scene*.py" "tests/test_scheduler*.py" "tests/test_self_update*.py" "tests/test_semantic*.py" "tests/test_sqlite*.py" "tests/test_start*.py" "tests/test_static*.py" "tests/test_summary*.py" "tests/test_swipe*.py" "tests/test_task*.py" "tests/test_token*.py" "tests/test_ui*.py" "tests/test_usage*.py" "tests/test_world*.py" "tests/test_codex*.py" "tests/test_composition.py" "tests/test_coverage_contract.py" "tests/test_default_character_name.py" "tests/test_delivery_review_regressions.py" "tests/test_dependency_lock.py" "tests/test_durable_memory*.py" "tests/test_durable_npc_partial_publish.py" "tests/test_edit_user_cleanup.py" "tests/test_edited_group_policy.py" "tests/test_epilogue_service.py" "tests/test_explicit*.py" "tests/test_humanizer*.py" "tests/test_import_cycle_boundaries.py" "tests/test_install*.py" "tests/test_native*.py" "tests/test_speech_cache_lifecycle.py" "tests/test_subprocess_environment.py" "tests/test_tailscale_funnel.py" "tests/test_turn_performance.py" "tests/test_user_dialogue_action.py" "tests/test_card_foundation_boundaries.py" "tests/test_check_panel.py" "tests/test_ci*.py" "tests/test_closed_session_guard.py" "tests/test_alternate_greetings.py"
+
+      - name: Publish shard ${{ matrix.shard }} results
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aa675d1fc6a0a # v7
+        with:
+          name: pytest-results-shard-${{ matrix.shard }}
+          path: |
+            coverage.json
+            coverage.xml
+            pytest-results.xml
+            pytest.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  miniapp-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+          enable-cache: true
+          cache-dependency-glob: requirements.lock
+
+      - name: Install locked runtime dependencies for browser fixture
+        run: uv pip install --system --python python --require-hashes -r requirements.lock
+
+      - name: Set up Node for development-only Mini App tests
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            tests/miniapp-ui/package-lock.json
+            tests/miniapp-browser/package-lock.json
+      - name: Install locked DOM test tooling
+        run: npm ci --prefix tests/miniapp-ui --include=dev --ignore-scripts --no-audit --no-fund
+      - name: Exercise Mini App pages and session safety
+        env:
+          MINIAPP_JSDOM_ROOT: ${{ github.workspace }}/tests/miniapp-ui
+          PYTHON: python
+        run: |
+          npm test --prefix tests/miniapp-ui 2>&1 | tee miniapp-ui-unit.log
+          node --experimental-vm-modules tools/miniapp_ui_smoke.mjs 2>&1 | tee miniapp-ui.log
+
+      - name: Install locked development-only real browser tooling
+        run: npm ci --prefix tests/miniapp-browser --include=dev --ignore-scripts --no-audit --no-fund
+
+  test:
+    name: test
+    if: ${{ always() }}
+    needs: [python-tests, miniapp-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+
+      - name: Require complete CI success
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python tools/ci_gate.py

@@ -146,6 +146,9 @@ def director_panel(
             "Fixed intervals use 1–100 completed Story turns.",
             {"inline_keyboard": rows},
         )
+    direction_title = "Current direction" if view["direction_status"] == "active" else "Last accepted direction"
+    if view["direction_status"] == "inactive":
+        direction_title += " (inactive)"
     lines = [
         "<b>Director Room</b>",
         "Hidden plans are shown here only. They are not part of the story.",
@@ -153,10 +156,14 @@ def director_panel(
         f"<b>Scene</b>: {_escape(scene['scene_id'] or 'Not initialized', 160)}\n"
         f"<b>Viewpoint</b>: {_escape(scene['viewpoint'] or 'Not set', 300)}\n"
         f"<b>Thread</b>: {_escape(scene['thread_id'] or 'Not set', 160)}",
-        f"<b>Current direction</b>\n{_escape(view['direction'] or 'No accepted direction yet.')}",
+        f"<b>{direction_title}</b>\n{_escape(view['direction'] or 'No accepted direction yet.')}",
         f"<b>Persistent objective</b>\n{_escape(view['objective'] or 'No manual objective.')}",
         f"<b>Cadence</b>: {_escape(view['cadence'].replace('_', ' '), 80)}",
     ]
+    if view["direction_status"] == "inactive":
+        lines.append("This saved direction is not currently used. Its continuity or scene changed, or it expired.")
+    if not view["narrative_current"]:
+        lines.append("Narrative continuity is not current. Director planning waits for reconciliation.")
     if view["degraded"]:
         lines.append("Director planning is degraded. Your saved story is unchanged; ordinary roleplay can continue.")
     if view["mutable"]:

@@ -7,7 +7,7 @@ function room(overrides={}) {
     session:{session_id:'story-one',title:'The lighthouse',character_file:'Mira.png',mode:'normal'},
     session_id:'story-one',revision:'reviewed-revision',mutable:true,lifecycle:'open',phase:'rising_action',
     scene:{scene_id:'scene-one',thread_id:'thread-one',viewpoint:'Mira',pov:'third_person'},
-    direction:'Search the quiet tower.',scope:'next_scene',objective:'Find the missing keeper.',degraded:false,
+    direction:'Search the quiet tower.',direction_status:'active',narrative_current:true,scope:'next_scene',objective:'Find the missing keeper.',degraded:false,
     threads:[{thread_id:'thread-one',title:'The missing keeper',status:'active'}],
     arcs:[{arc_id:'arc-one',title:'The beacon',status:'active',phase:'rising_action',importance:'major',summary:'The beacon is dark.',open_questions:[],guidance:''}],
     ending:{mode:'open_ended',lifecycle:'open',goal:'',editable:true,require_confirmation:true,reason:'',
@@ -154,4 +154,16 @@ test('an empty tracker view does not invent a story or freshness date',async t=>
   assert.match(page.document.querySelector('main').textContent,/No story selected/);
   assert.equal(page.document.querySelector('time'),null);
   assert.equal(page.document.querySelector('main input,main textarea,main select'),null);
+});
+
+test('inactive direction is clearly historical while its draft stays editable',async t=>{
+  const page=await createPage('director.js',{api:async()=>room({direction_status:'inactive',narrative_current:false})});
+  t.after(page.close);page.document.querySelector('main').append(await page.pages.director());
+  const overview=page.document.querySelector('.director-overview');
+  assert.match(overview.textContent,/Last accepted direction \(inactive\)/);
+  assert.ok(!overview.textContent.includes('Current direction'));
+  assert.match(overview.textContent,/not currently used/);
+  assert.match(overview.textContent,/Narrative continuity is not current/);
+  assert.equal(namedInput(page.document,'Next-scene direction').value,'Search the quiet tower.');
+  assert.equal(namedInput(page.document,'Persistent objective').value,'Find the missing keeper.');
 });

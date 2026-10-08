@@ -203,6 +203,33 @@ def test_ending_preferences_share_canonical_revision_and_private_scope(tmp_path)
     assert other["ending"]["mode"] == "open_ended"
 
 
+def test_saved_ending_read_rejects_the_previously_displayed_story(tmp_path):
+    services, who, _, body = setup(tmp_path)
+
+    def save_epilogue(db, session_id, prose):
+        rowid = db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,'assistant',?,1)",
+            (who.chat_id, session_id, prose),
+        ).lastrowid
+        db.execute(
+            "INSERT INTO ending_state(chat_id,session_id,lifecycle,epilogue_committed_rowid) VALUES(?,?,'closed',?)",
+            (who.chat_id, session_id, rowid),
+        )
+        db.commit()
+
+    with closing(services.db_factory()) as db:
+        save_epilogue(db, body["session_id"], "The original story epilogue.")
+    assert api.get_ending(services, who, body)["epilogue"] == "The original story epilogue."
+    with closing(services.db_factory()) as db:
+        services.session.create(db, who.chat_id, services.config.default_model, session_id="other-story")
+        save_epilogue(db, "other-story", "Only the new story epilogue.")
+    with pytest.raises(MiniAppError, match="active session changed") as failure:
+        api.get_ending(services, who, body)
+    assert failure.value.status == 409
+    # Current-state callers without a captured form scope retain their existing API behavior.
+    assert api.get_ending(services, who, {})["epilogue"] == "Only the new story epilogue."
+
+
 def test_ending_recovery_requires_consent_and_uses_the_background_job_route(tmp_path, monkeypatch):
     services, who, _data, body = setup(tmp_path)
     calls = []

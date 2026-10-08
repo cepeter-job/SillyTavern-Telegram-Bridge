@@ -138,7 +138,7 @@ async function renderDirector() {
         target=>runJob('/director/recover-ending',body({confirm:true}),target),result=>result.message||'Ending recovery completed.',
         'Resume only the unfinished epilogue or delivery? Committed scenes will not be generated again.'));
       if(data.ending.has_resolution||data.ending.has_epilogue)progress.append(button('View ending',async()=>{
-        const saved=await api('/director/ending');
+        const saved=await api('/director/ending?session_id='+encodeURIComponent(sessionBody().session_id));
         progress.append(el('div',{class:'saved-ending'},el('h3',{},'Saved ending'),el('p',{},saved.epilogue||saved.resolution)));
       },'secondary'));
       if(data.ending.alternate_available)progress.append(mutationButton('Alternate Ending',

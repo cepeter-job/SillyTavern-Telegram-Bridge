@@ -3,6 +3,7 @@ from settings_test_support import SettingsTestCase
 
 ensure_application_extensions()
 
+import io
 import json
 import os
 import unittest
@@ -12,18 +13,9 @@ import bridge.provider_transport as _m_provider_transport
 from bridge.model_router import ModelRouter
 
 
-class _Response:
+class _Response(io.BytesIO):
     def __init__(self, payload):
-        self.payload = payload
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_args):
-        return False
-
-    def read(self):
-        return json.dumps(self.payload).encode()
+        super().__init__(json.dumps(payload).encode())
 
 
 class OpenCodeMuseTests(SettingsTestCase):
@@ -120,8 +112,7 @@ class OpenCodeMuseTests(SettingsTestCase):
 
         def fake_urlopen(request, timeout, *, environ=None):
             captured.append((request, timeout))
-            response = _Response({})
-            response.read = lambda: (
+            return io.BytesIO(
                 chr(10)
                 .join(
                     "data: " + item
@@ -133,7 +124,6 @@ class OpenCodeMuseTests(SettingsTestCase):
                 )
                 .encode()
             )
-            return response
 
         _m_provider_transport.strict_urlopen = fake_urlopen
         result = _m_provider_transport.opencode_muse_generate(

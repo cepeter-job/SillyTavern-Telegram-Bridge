@@ -13,9 +13,11 @@ from collections.abc import Callable
 from bridge.codex_transport import generate_codex_response
 from bridge.config import GENERATION_DEFAULTS, structured_json_options
 from bridge.context_attempt_budget import check_attempt_budget
-from bridge.limits import DEFAULT_MAX_TOKENS, PROVIDER_TEXT_RESPONSE_MAX_BYTES
+from bridge.limits import DEFAULT_MAX_TOKENS
 from bridge.model_router import ModelRouter
 from bridge.network_security import strict_urlopen, validate_provider_endpoint
+from bridge.provider_response import openai_response_choices as _openai_response_choices
+from bridge.provider_response import provider_response_lines, read_provider_response
 from bridge.settings import AppSettings
 from bridge.token_usage_values import TokenUsage, UsageCallback, UsageCapture
 
@@ -42,26 +44,6 @@ def _stream_text(value) -> str:
     if isinstance(value, list):
         return "".join(str(item.get("text") or item.get("content") or "") for item in value if isinstance(item, dict))
     return ""
-
-
-def _openai_response_choices(result: object) -> list[dict]:
-    """Return OpenAI-compatible choices from standard or wrapped responses."""
-    if not isinstance(result, dict):
-        return []
-
-    top_level = result.get("choices")
-    if isinstance(top_level, list) and top_level:
-        return [choice for choice in top_level if isinstance(choice, dict)]
-
-    data = result.get("data")
-    if isinstance(data, dict):
-        nested = data.get("choices")
-        if isinstance(nested, list):
-            return [choice for choice in nested if isinstance(choice, dict)]
-
-    if isinstance(top_level, list):
-        return [choice for choice in top_level if isinstance(choice, dict)]
-    return []
 
 
 def _recovery_settings(settings: dict[str, object]) -> dict[str, object] | None:
@@ -100,7 +82,7 @@ def _read_openai_stream_segment(
         last_emit = 0.0
         cancelled = False
 
-        for raw_line in response:
+        for raw_line in provider_response_lines(response):
             if cancel_event is not None and cancel_event.is_set():
                 cancelled = True
                 break
@@ -109,7 +91,7 @@ def _read_openai_stream_segment(
                 continue
             payload = line[5:].lstrip()
             if payload == "[DONE]":
-                continue
+                break
             try:
                 event = json.loads(payload)
             except json.JSONDecodeError:
@@ -133,13 +115,6 @@ def _read_openai_stream_segment(
             cancelled = True
         usage.final = not cancelled and finish_reason is not None
         return content, finish_reason, cancelled
-
-
-def _read_bounded_provider_json(response):
-    raw = response.read(PROVIDER_TEXT_RESPONSE_MAX_BYTES + 1)
-    if len(raw) > PROVIDER_TEXT_RESPONSE_MAX_BYTES:
-        raise ValueError("Provider response exceeded the safety limit")
-    return json.loads(raw.decode("utf-8"))
 
 
 def _parse_stop_sequences(raw: object) -> list[str]:
@@ -243,7 +218,7 @@ def anthropic_generate(
     ):
         usage.final = False
         parts = []
-        for raw_line in response:
+        for raw_line in provider_response_lines(response):
             line = raw_line.decode("utf-8", "replace").strip()
             if not line.startswith("data:"):
                 continue
@@ -254,6 +229,8 @@ def anthropic_generate(
             usage.observe(event)
             if event.get("type") == "message_stop" or (event.get("delta") or {}).get("stop_reason"):
                 usage.final = True
+            if event.get("type") == "message_stop":
+                break
             delta = event.get("delta") or {}
             if delta.get("type") == "text_delta" and delta.get("text"):
                 parts.append(str(delta["text"]))
@@ -435,7 +412,7 @@ def opencode_muse_generate(
     with strict_urlopen(
         request, timeout=240 if request_timeout is None else request_timeout, environ=app_settings.environ
     ) as response:
-        raw = response.read().decode("utf-8", "replace")
+        raw = read_provider_response(response).decode("utf-8", "replace")
     output_text = _opencode_responses_text(raw, usage_callback=usage_callback)
     if not output_text:
         raise RuntimeError("OpenCode Muse returned no assistant content")
@@ -583,7 +560,7 @@ def generate_provider_text(
     ) as response:
         if not is_streaming:
             with UsageCapture(usage_callback) as usage:
-                result = _read_bounded_provider_json(response)
+                result = json.loads(read_provider_response(response).decode("utf-8"))
                 usage.observe(result)
             choices = _openai_response_choices(result)
             finish_reason = choices[0].get("finish_reason") if choices else None
@@ -640,6 +617,7 @@ def generate_provider_text(
                 )
                 continuation_body = dict(body)
                 continuation_body["messages"] = continuation_messages
+                reading_started = False
                 try:
                     check_attempt_budget(
                         continuation_messages,
@@ -661,8 +639,11 @@ def generate_provider_text(
                         timeout=180 if request_timeout is None else request_timeout,
                         environ=app_settings.environ,
                     ) as continuation_response:
+                        reading_started = True
                         with UsageCapture(usage_callback) as usage:
-                            continuation_result = _read_bounded_provider_json(continuation_response)
+                            continuation_result = json.loads(
+                                read_provider_response(continuation_response).decode("utf-8")
+                            )
                             usage.observe(continuation_result)
                     continuation_choices = _openai_response_choices(continuation_result)
                     continuation = (
@@ -670,7 +651,7 @@ def generate_provider_text(
                     )
                     continuation_reason = continuation_choices[0].get("finish_reason") if continuation_choices else None
                 except Exception:
-                    if usage_callback is not None:
+                    if usage_callback is not None and not reading_started:
                         usage_callback(TokenUsage(final=False))
                     logging.warning("Automatic continuation failed after %s segment(s)", len(segments), exc_info=True)
                     break
@@ -741,6 +722,7 @@ def generate_provider_text(
             )
             continuation_body = dict(body)
             continuation_body["messages"] = continuation_messages
+            reading_started = False
             try:
                 check_attempt_budget(
                     continuation_messages,
@@ -763,6 +745,7 @@ def generate_provider_text(
                     environ=app_settings.environ,
                 ) as continuation_response:
                     prefix = " ".join(segment for segment in segments if segment)
+                    reading_started = True
                     (
                         continuation,
                         continuation_reason,
@@ -775,7 +758,7 @@ def generate_provider_text(
                         usage_callback=usage_callback,
                     )
             except Exception:
-                if usage_callback is not None:
+                if usage_callback is not None and not reading_started:
                     usage_callback(TokenUsage(final=False))
                 logging.warning(
                     "Automatic continuation failed after %s segment(s)",

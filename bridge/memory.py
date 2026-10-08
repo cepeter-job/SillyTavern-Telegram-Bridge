@@ -285,6 +285,8 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
                 "Compress fictional roleplay continuity into the complete updated JSON object with blocks. "
                 "Preserve locations, characters, relationships, facts, goals and unresolved hooks. "
                 "Each block requires text, visibility (shared or restricted), and known_by. "
+                "Use at most 32 blocks. Combine related facts only when they share the same visibility and known_by. "
+                "Preserve every fact, negations, promises, causal links and reader knowledge within the limit. "
                 + CLASSIFIED_AUDIENCE_PROMPT
                 + " Split public continuity from private facts. Preserve prior audiences unless the new source "
                 "explicitly establishes additional knowledge. Presence never grants private "

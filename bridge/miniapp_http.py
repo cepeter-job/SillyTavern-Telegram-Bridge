@@ -7,12 +7,14 @@ import json
 import logging
 import time
 from collections import defaultdict, deque
+from functools import partial
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
 from aiohttp import web
 
+from bridge.diagnostic_events import bind_diagnostics, diagnostic_scope, event, new_request_id
 from bridge.miniapp_auth import MiniAppIdentity, authenticate
 from bridge.miniapp_config import MiniAppConfig
 from bridge.miniapp_errors import MiniAppError
@@ -39,6 +41,7 @@ _ASSETS = {
     "manage.js": "text/javascript",
     "memory.js": "text/javascript",
     "director.js": "text/javascript",
+    "diagnostics.js": "text/javascript",
     "npcs.js": "text/javascript",
     "trackers.js": "text/javascript",
     "system.js": "text/javascript",
@@ -48,6 +51,7 @@ _ASSETS = {
 def api_routes() -> list[ApiRoute]:
     from bridge.miniapp_characters import routes as character_routes
     from bridge.miniapp_context import current_session
+    from bridge.miniapp_diagnostics import routes as diagnostic_routes
     from bridge.miniapp_director import routes as director_routes
     from bridge.miniapp_jobs import job_by_operation, job_status, recent_jobs
     from bridge.miniapp_memory import routes as memory_routes
@@ -74,6 +78,7 @@ def api_routes() -> list[ApiRoute]:
         *tracker_routes(),
         *system_routes(),
         *usage_routes(),
+        *diagnostic_routes(),
     ]
 
 
@@ -190,8 +195,7 @@ def create_miniapp_app(services: Any, config: MiniAppConfig) -> web.Application:
         return web.Response(body=content, content_type="video/webm")
 
     def adapt(route: ApiRoute) -> Any:
-        async def handle(request: web.Request) -> web.Response:
-            who = identity(request)
+        async def execute_request(request: web.Request, who: MiniAppIdentity) -> web.Response:
             values: dict[str, Any] = dict(request.query)
             if len(values) != len(request.query):
                 raise MiniAppError("Duplicate request fields.")
@@ -216,16 +220,49 @@ def create_miniapp_app(services: Any, config: MiniAppConfig) -> web.Application:
                 if route.background_kind:
                     from bridge.miniapp_jobs import submit_job
 
-                    result = await asyncio.to_thread(
-                        submit_job, services, who, route.background_kind, values, route.handler
-                    )
+                    work = partial(submit_job, services, who, route.background_kind, values, route.handler)
                 else:
-                    result = await asyncio.to_thread(route.handler, services, who, values)
+                    work = partial(route.handler, services, who, values)
+                result = await asyncio.get_running_loop().run_in_executor(None, bind_diagnostics(work))
             finally:
                 slots.release()
             if isinstance(result, BinaryResult):
                 return web.Response(body=result.content, content_type=result.content_type)
             return web.json_response(result)
+
+        async def handle(request: web.Request) -> web.Response:
+            who = identity(request)
+            with diagnostic_scope(
+                inherit=False,
+                request_id=new_request_id("miniapp"),
+                chat_id=who.chat_id,
+                method=route.method,
+                route=route.path.replace("{", "").replace("}", ""),
+                source="miniapp",
+            ):
+                started = time.monotonic()
+                status, http_status = "failed", 500
+                failure: dict[str, object] = {}
+                event("miniapp.request_start")
+                try:
+                    response = await execute_request(request, who)
+                    status, http_status = "succeeded", response.status
+                    return response
+                except BaseException as exc:
+                    failure["error_type"] = type(exc).__name__
+                    if isinstance(exc, (MiniAppError, web.HTTPException)):
+                        http_status = exc.status
+                    elif isinstance(exc, asyncio.CancelledError):
+                        status = "cancelled"
+                    raise
+                finally:
+                    event(
+                        "miniapp.request_finish",
+                        status=status,
+                        http_status=http_status,
+                        elapsed_ms=max(0, int((time.monotonic() - started) * 1000)),
+                        **failure,
+                    )
 
         return handle
 

@@ -197,7 +197,7 @@ def test_span_fields_cannot_log_arbitrary_content(tmp_path, caplog):
             api_key="synthetic credential",
         ):
             pass
-    message = caplog.records[-1].getMessage()
+    message = next(record.getMessage() for record in caplog.records if record.getMessage().startswith("perf span="))
     assert "rows=3" in message and "operation_id=job-7" in message
     assert "private story text" not in message and "synthetic credential" not in message
 
@@ -292,14 +292,17 @@ def test_actual_reply_reports_context_provider_and_delivery_boundaries(tmp_path,
     )
 
 
-def test_disabled_guard_does_not_query_queue_metadata(tmp_path):
+def test_disabled_timing_reads_only_durable_identity_not_queue_timestamps(tmp_path):
     with closing(sqlite3.connect(tmp_path / "guard.sqlite")) as db:
         initialize_database_schema(db)
         queries = []
         db.set_trace_callback(queries.append)
         guard = DurableWorkerGuard(lambda *_a, **_k: None, app_settings=settings(tmp_path, enabled=False))
         assert guard.prepare(db, 7, lambda: 42)() == 42
-        assert queries == ["PRAGMA database_list"]
+        assert queries == [
+            "PRAGMA database_list",
+            "SELECT update_id,chat_id,session_id,kind,attempts FROM jobs WHERE job_id=7",
+        ]
 
 
 def test_unavailable_queue_metadata_does_not_block_worker(tmp_path, caplog):

@@ -13,6 +13,7 @@ from typing import Any
 
 from bridge import miniapp_job_repository as store
 from bridge.background import submit_background
+from bridge.diagnostic_events import event
 from bridge.miniapp_auth import MiniAppIdentity
 from bridge.miniapp_context import text
 from bridge.miniapp_errors import MiniAppError
@@ -87,18 +88,25 @@ def submit_job(services: Any, who: MiniAppIdentity, kind: str, values: dict, wor
         try:
             with closing(services.db_factory()) as db, write_transaction(db):
                 store.update(db, job_id, "running", time.time())
+            event("miniapp.job_started", operation_id=job_id, kind=kind)
             result = json.dumps(work(services, who, values), ensure_ascii=False, allow_nan=False)
             if len(result) > 524288:
                 raise MiniAppError("Operation response exceeded the display limit.")
             with closing(services.db_factory()) as db, write_transaction(db):
                 store.update(db, job_id, "succeeded", time.time(), result)
+            event("miniapp.job_finished", operation_id=job_id, kind=kind, status="succeeded")
         except Exception as exc:
             error = str(exc) if isinstance(exc, MiniAppError) else "Operation failed; check configuration and retry."
             logging.warning("Mini App operation %s failed (%s)", kind, type(exc).__name__)
             with closing(services.db_factory()) as db, write_transaction(db):
                 store.update(db, job_id, "failed", time.time(), error=error)
+            event(
+                "miniapp.job_finished", operation_id=job_id, kind=kind, status="failed", error_type=type(exc).__name__
+            )
 
-    if not submit_background("miniapp", execute):
+    accepted = submit_background("miniapp", execute)
+    event("miniapp.job_submitted", operation_id=job_id, kind=kind, accepted=accepted)
+    if not accepted:
         with closing(services.db_factory()) as db, write_transaction(db):
             store.update(db, job_id, "failed", time.time(), error="Worker capacity is full. Try again later.")
     return job_status(services, who, {"job_id": job_id})

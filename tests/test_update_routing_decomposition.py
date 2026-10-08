@@ -58,6 +58,8 @@ def test_focused_routing_modules_exist_and_own_expected_functions():
 
 def test_route_update_is_only_a_coordinator():
     route_source = function_source("update_routing.py", "route_update")
+    assert "_route_update(" in route_source
+    route_source += function_source("update_routing.py", "_route_update")
     update_functions = top_level_functions("update_routing.py")
 
     assert "is_long_running_command" not in update_functions

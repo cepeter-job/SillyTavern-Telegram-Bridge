@@ -309,15 +309,7 @@ def test_hindsight_operations_close_owned_event_loops(monkeypatch, tmp_path, ope
             finally:
                 db.close()
         return memory_backend._retain_with_client(
-            "chat",
-            "session",
-            "document",
-            "character",
-            "content",
-            "context",
-            "native_fact",
-            "Failure %s",
-            app_settings=settings,
+            "chat", "session", "document", "character", "content", "context", "native_fact", app_settings=settings
         )
 
     try:

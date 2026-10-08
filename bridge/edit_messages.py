@@ -70,11 +70,7 @@ _COMMAND_OPERATION_RECOVERY = _OperationRecovery(
             rowid,
         )
     ),
-    log_info=lambda message, *args, **kwargs: logging.info(
-        message,
-        *args,
-        **kwargs,
-    ),
+    log_info=logging.info,
 )
 
 

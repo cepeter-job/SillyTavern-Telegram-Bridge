@@ -37,9 +37,5 @@ def _generation_operation_recovery(
         ),
         telegram_request=delivery_port.request,
         delete_outgoing_message_row=(delivery_port.delete_outgoing_message_row),
-        log_info=lambda message, *args, **kwargs: logging.info(
-            message,
-            *args,
-            **kwargs,
-        ),
+        log_info=logging.info,
     )

@@ -258,13 +258,7 @@ def _make_sync_poll_safety(*, app_settings: AppSettings, retain_memory: RetainSe
         ),
         sync_interval=(lambda: app_settings.live_sync_interval_seconds),
         now=(lambda: time.time()),
-        log_warning=(
-            lambda message, *args, **kwargs: logging.warning(
-                message,
-                *args,
-                **kwargs,
-            )
-        ),
+        log_warning=(logging.warning),
     )
 
 

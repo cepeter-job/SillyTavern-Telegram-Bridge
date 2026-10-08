@@ -8,7 +8,7 @@
     "bridge/image_generation.py": 578,
     "bridge/install_support.py": 753,
     "bridge/main.py": 538,
-    "bridge/memory_backend.py": 631,
+    "bridge/memory_backend.py": 630,
     "bridge/memory_diagnostics.py": 684,
     "bridge/memory_store.py": 571,
     "bridge/message_commands.py": 602,

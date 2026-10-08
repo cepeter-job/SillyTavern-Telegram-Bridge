@@ -13,48 +13,26 @@ from pathlib import Path
 from typing import ParamSpec, TypeVar
 
 import bridge.limits as _limits
+from bridge.diagnostic_events import event
+from bridge.diagnostic_workers import bind_worker, worker_identity
 
 P = ParamSpec("P")
 T = TypeVar("T")
 
 _GENERATION_SLOTS = threading.BoundedSemaphore(6)
-
-
 _UTILITY_SLOTS = threading.BoundedSemaphore(4)
-
-
 _MEMORY_SLOTS = threading.BoundedSemaphore(4)
-
-
 _GENERATION_EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
-
-
 _UTILITY_EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
-
-
 _MEMORY_EXECUTOR: concurrent.futures.ThreadPoolExecutor | None = None
-
-
 _GENERATION_LABELS = {"generation", "command", "retry", "regen", "continue", "edit", "summarize"}
 _MEMORY_LABELS = {"hindsight_retain", "memory_curator", "scene_state_refresh", "npc_state_refresh"}
-
-
 _CHAT_LOCKS: weakref.WeakValueDictionary[str, threading.Lock] = weakref.WeakValueDictionary()
-
-
 _CHAT_LOCKS_GUARD = threading.Lock()
-
-
 _BACKGROUND_STATE_LOCK = threading.Lock()
-
-
 _EXECUTOR_LOCK = threading.Lock()
-
-
 _BACKGROUND_FUTURES: set[concurrent.futures.Future] = set()
 _BACKGROUND_FUTURE_LABELS: dict[concurrent.futures.Future, str] = {}
-
-
 _BACKGROUND_ACCEPTING = True
 
 
@@ -83,11 +61,15 @@ def _run_observed_background(label: str, function: Callable[P, T], *args: P.args
     before_rss, before_threads = _runtime_process_snapshot()
     started = time.monotonic()
     logging.info("background_start label=%s rss_kib=%s threads=%s", label, before_rss, before_threads)
+    event("background.start", label=label, rss_kib=before_rss, threads=before_threads)
     status = "failed"
     try:
         result = function(*args, **kwargs)
         status = "succeeded"
         return result
+    except BaseException as exc:
+        event("background.error", level=logging.ERROR, label=label, error_type=type(exc).__name__, exc_info=True)
+        raise
     finally:
         after_rss, after_threads = _runtime_process_snapshot()
         duration_ms = max(0, int((time.monotonic() - started) * 1000))
@@ -100,6 +82,14 @@ def _run_observed_background(label: str, function: Callable[P, T], *args: P.args
             after_rss - before_rss,
             after_threads,
         )
+        event(
+            "background.finish",
+            label=label,
+            status=status,
+            elapsed_ms=duration_ms,
+            rss_kib=after_rss,
+            threads=after_threads,
+        )
 
 
 def chat_job_lock(chat_id: str) -> threading.Lock:
@@ -110,29 +100,19 @@ def chat_job_lock(chat_id: str) -> threading.Lock:
 
 def _executor_for(label: str) -> concurrent.futures.ThreadPoolExecutor:
     global _GENERATION_EXECUTOR, _UTILITY_EXECUTOR, _MEMORY_EXECUTOR
-
     with _EXECUTOR_LOCK:
         if label in _GENERATION_LABELS:
             if _GENERATION_EXECUTOR is None:
                 _GENERATION_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
-                    max_workers=3,
-                    thread_name_prefix="st-generation",
+                    max_workers=3, thread_name_prefix="st-generation"
                 )
             return _GENERATION_EXECUTOR
-
         if label in _MEMORY_LABELS:
             if _MEMORY_EXECUTOR is None:
-                _MEMORY_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
-                    max_workers=1,
-                    thread_name_prefix="st-memory",
-                )
+                _MEMORY_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="st-memory")
             return _MEMORY_EXECUTOR
-
         if _UTILITY_EXECUTOR is None:
-            _UTILITY_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
-                max_workers=2,
-                thread_name_prefix="st-utility",
-            )
+            _UTILITY_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="st-utility")
         return _UTILITY_EXECUTOR
 
 
@@ -152,17 +132,22 @@ def background_jobs_accepting() -> bool:
 def _submit_tracked_future(
     label: str, function: Callable[P, T], *args: P.args, **kwargs: P.kwargs
 ) -> concurrent.futures.Future[T] | None:
+    queued_at = time.monotonic()
+    function = bind_worker(function)
     with _BACKGROUND_STATE_LOCK:
         if not _BACKGROUND_ACCEPTING:
+            event("background.rejected", label=label, reason="shutdown")
             return None
 
         def observed() -> T:
+            event("background.dequeued", label=label, queue_ms=max(0, int((time.monotonic() - queued_at) * 1000)))
             return _run_observed_background(label, function, *args, **kwargs)
 
         try:
-            future = _executor_for(label).submit(observed)
+            future = _executor_for(label).submit(bind_worker(observed, identity=worker_identity(function)))
         except RuntimeError:
             logging.info("Background executor is shutting down; rejected %s job", label)
+            event("background.rejected", label=label, reason="executor_shutdown")
             return None
         _BACKGROUND_FUTURES.add(future)
         _BACKGROUND_FUTURE_LABELS[future] = label
@@ -226,10 +211,12 @@ def background_observability_counters() -> dict[str, int]:
 def submit_background(label: str, function: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> bool:
     if not background_jobs_accepting():
         logging.info("Background shutdown in progress; rejected %s job", label)
+        event("background.rejected", label=label, reason="shutdown")
         return False
     slot = _admission_slot(label)
     if not slot.acquire(blocking=False):
         logging.warning("Background queue full; dropping %s job", label)
+        event("background.rejected", level=logging.WARNING, label=label, reason="queue_full")
         return False
     future = _submit_tracked_future(label, function, *args, **kwargs)
     if future is None:
@@ -260,8 +247,6 @@ def register_durable_backlog_dispatcher(callback: Callable[[], None] | None) -> 
 def begin_background_shutdown() -> None:
     """Stop accepting work; durable chat jobs remain recoverable in SQLite."""
     global _BACKGROUND_ACCEPTING, _DURABLE_BACKLOG_DISPATCHER
-    # Admission and shutdown take locks in the same order. SQLite owns the
-    # durable backlog; queued closures must not retain payloads after shutdown.
     with _BACKGROUND_STATE_LOCK:
         _BACKGROUND_ACCEPTING = False
         _DURABLE_BACKLOG_DISPATCHER = None
@@ -272,17 +257,16 @@ def begin_background_shutdown() -> None:
 
 def shutdown_background_executors(timeout: float = 20.0) -> bool:
     global _GENERATION_EXECUTOR, _UTILITY_EXECUTOR, _MEMORY_EXECUTOR
-
     begin_background_shutdown()
     drained = drain_background_jobs(timeout)
     if not drained:
         labels = active_background_job_labels()
+        event("background.shutdown_deferred", level=logging.WARNING, count=len(labels), reason="deadline")
         logging.warning(
             "Background shutdown deadline reached with %d unfinished job(s): %s",
             len(labels),
             ", ".join(labels) or "unknown",
         )
-
     with _EXECUTOR_LOCK:
         generation = _GENERATION_EXECUTOR
         utility = _UTILITY_EXECUTOR
@@ -290,7 +274,6 @@ def shutdown_background_executors(timeout: float = 20.0) -> bool:
         _GENERATION_EXECUTOR = None
         _UTILITY_EXECUTOR = None
         _MEMORY_EXECUTOR = None
-
     if generation is not None:
         generation.shutdown(wait=drained, cancel_futures=not drained)
     if utility is not None:
@@ -301,11 +284,7 @@ def shutdown_background_executors(timeout: float = 20.0) -> bool:
 
 
 _CHAT_QUEUES: dict[str, deque[tuple[str, Callable, tuple, dict]]] = {}
-
-
 _CHAT_ACTIVE: set[str] = set()
-
-
 _CHAT_IN_FLIGHT: set[str] = set()
 
 
@@ -321,6 +300,7 @@ def _dispatch_waiting_chat_jobs() -> None:
             _DURABLE_BACKLOG_DISPATCHER()
         except Exception:
             logging.warning("Durable backlog dispatcher failed", exc_info=True)
+            event("background.dispatch_failed", level=logging.WARNING)
 
 
 def _start_next_chat_job(chat_id: str) -> None:
@@ -370,21 +350,26 @@ def submit_chat_background(
     label: str, chat_id: str, function: Callable[P, T], *args: P.args, **kwargs: P.kwargs
 ) -> bool:
     chat_id = str(chat_id)
+    function = bind_worker(function)
     with _BACKGROUND_STATE_LOCK, _CHAT_LOCKS_GUARD:
         if not _BACKGROUND_ACCEPTING:
             logging.info("Background shutdown in progress; durable %s job remains in SQLite", label)
+            event("background.rejected", label=label, reason="shutdown", chat_id=chat_id)
             return False
         if chat_id not in _CHAT_QUEUES and len(_CHAT_QUEUES) >= _limits._BACKGROUND_MAX_SCOPED_QUEUES:
             logging.warning("Global ordered queue limit reached; durable job remains in SQLite")
+            event("background.rejected", level=logging.WARNING, label=label, reason="scope_limit", chat_id=chat_id)
             return False
         queue = _CHAT_QUEUES.setdefault(chat_id, deque())
         if len(queue) >= _limits._BACKGROUND_MAX_QUEUED_PER_CHAT:
             logging.warning("Ordered queue full for %s; durable job remains in SQLite", chat_id)
+            event("background.rejected", level=logging.WARNING, label=label, reason="queue_full", chat_id=chat_id)
             return False
         queue.append((label, function, args, kwargs))
         should_start = chat_id not in _CHAT_ACTIVE
         if should_start:
             _CHAT_ACTIVE.add(chat_id)
+    event("background.queued", level=logging.INFO, exc_info=False, **{**worker_identity(function), "label": label})
     if should_start:
         _start_next_chat_job(chat_id)
     return True

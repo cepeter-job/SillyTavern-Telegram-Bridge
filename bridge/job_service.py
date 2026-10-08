@@ -6,6 +6,7 @@ import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from bridge.diagnostic_events import diagnostic_scope, event
 from bridge.port_contracts import ChatSubmit
 
 
@@ -25,6 +26,19 @@ class JobSubmission:
     chat_id: str
     worker: Callable[..., None]
     args: tuple[object, ...]
+
+
+def _record_enqueue(job_id: int, update_id: int, chat_id: str, session_id: str, kind: str) -> None:
+    event(
+        "job.enqueued",
+        request_id=f"tg-{update_id}" if update_id >= 0 else f"job-{job_id}",
+        job_id=job_id,
+        update_id=update_id,
+        chat_id=chat_id,
+        session_id=session_id,
+        kind=kind,
+        status="queued",
+    )
 
 
 @dataclass(frozen=True)
@@ -51,7 +65,7 @@ class JobService:
         kind: str,
         payload: dict[str, object],
     ) -> int:
-        return int(
+        job_id = int(
             self.enqueue_backend(
                 db,
                 int(update_id),
@@ -62,6 +76,8 @@ class JobService:
                 payload,
             )
         )
+        _record_enqueue(job_id, int(update_id), str(chat_id), str(session_id), str(kind))
+        return job_id
 
     def enqueue_callback(
         self,
@@ -82,6 +98,10 @@ class JobService:
             int(telegram_message_id),
             payload,
         )
+        if result is not None:
+            _record_enqueue(int(result), int(update_id), str(chat_id), str(session_id), "callback")
+        else:
+            event("job.callback_rejected", update_id=int(update_id), chat_id=str(chat_id), accepted=False)
         return int(result) if result is not None else None
 
     def submit(
@@ -106,18 +126,24 @@ class JobService:
                 int(job_id),
             )
         )
+        event("job.submitted", job_id=int(job_id), label=submission.label, accepted=accepted)
         if accepted:
-            self.schedule_backend(db, int(job_id))
+            scheduled = bool(self.schedule_backend(db, int(job_id)))
+            event("job.scheduled", job_id=int(job_id), accepted=scheduled)
         return accepted
 
     def replace_payload(self, db: sqlite3.Connection, job_id: int, payload: dict[str, object]) -> bool:
-        return bool(self.payload_backend(db, int(job_id), payload))
+        accepted = bool(self.payload_backend(db, int(job_id), payload))
+        event("job.payload_replaced", job_id=int(job_id), accepted=accepted)
+        return accepted
 
     def start(self, db: sqlite3.Connection, job_id: int) -> bool:
-        return bool(self.start_backend(db, int(job_id)))
+        accepted = bool(self.start_backend(db, int(job_id)))
+        event("job.started", job_id=int(job_id), accepted=accepted)
+        return accepted
 
     def complete(self, db: sqlite3.Connection, job_id: int) -> bool:
-        return bool(
+        accepted = bool(
             self.finish_backend(
                 db,
                 int(job_id),
@@ -125,6 +151,8 @@ class JobService:
                 "",
             )
         )
+        event("job.completed", job_id=int(job_id), accepted=accepted, status="done" if accepted else "unchanged")
+        return accepted
 
     def fail(
         self,
@@ -132,7 +160,7 @@ class JobService:
         job_id: int,
         error: object,
     ) -> bool:
-        return bool(
+        accepted = bool(
             self.finish_backend(
                 db,
                 int(job_id),
@@ -140,9 +168,13 @@ class JobService:
                 str(error),
             )
         )
+        event("job.failed", job_id=int(job_id), accepted=accepted, status="failed" if accepted else "unchanged")
+        return accepted
 
     def retry_delivery(self, db: sqlite3.Connection, job_id: int, error: object) -> bool:
-        return bool(self.delivery_retry_backend(db, int(job_id), error)) if self.delivery_retry_backend else False
+        accepted = bool(self.delivery_retry_backend(db, int(job_id), error)) if self.delivery_retry_backend else False
+        event("delivery.retry_requested", job_id=int(job_id), accepted=accepted)
+        return accepted
 
     def actor_id(
         self,
@@ -170,36 +202,39 @@ class JobService:
             kind,
             payload_json,
         ) in rows:
-            try:
-                payload = json.loads(payload_json)
-                if not isinstance(payload, dict):
-                    raise ValueError("job payload must be an object")
-                job = DurableJob(
-                    job_id=int(job_id),
-                    chat_id=str(chat_id),
-                    session_id=str(session_id),
-                    telegram_message_id=int(message_id or 0),
-                    kind=str(kind),
-                    payload=payload,
-                )
-                submission = resolver(job)
-                if submission is None:
-                    self.fail(
-                        db,
-                        job.job_id,
-                        "unsupported recovered job kind",
+            with diagnostic_scope(
+                inherit=False,
+                request_id=f"job-{int(job_id)}",
+                job_id=int(job_id),
+                chat_id=str(chat_id),
+                session_id=str(session_id),
+                kind=str(kind),
+                recovered=True,
+                source="durable_recovery",
+            ):
+                event("job.recovery_started")
+                try:
+                    payload = json.loads(payload_json)
+                    if not isinstance(payload, dict):
+                        raise ValueError("job payload must be an object")
+                    job = DurableJob(
+                        job_id=int(job_id),
+                        chat_id=str(chat_id),
+                        session_id=str(session_id),
+                        telegram_message_id=int(message_id or 0),
+                        kind=str(kind),
+                        payload=payload,
                     )
-                    continue
-                if not self.submit(db, job.job_id, submission):
-                    logging.warning(
-                        "Could not dispatch recovered %s job %s",
-                        job.kind,
-                        job.job_id,
-                    )
-            except Exception as exc:
-                self.fail(db, int(job_id), exc)
-                logging.error(
-                    "Could not recover job %s",
-                    job_id,
-                    exc_info=True,
-                )
+                    submission = resolver(job)
+                    if submission is None:
+                        self.fail(db, job.job_id, "unsupported recovered job kind")
+                        event("job.recovery_rejected", reason="unsupported_kind", accepted=False)
+                        continue
+                    accepted = self.submit(db, job.job_id, submission)
+                    event("job.recovery_submitted", accepted=accepted)
+                    if not accepted:
+                        logging.warning("Could not dispatch recovered %s job %s", job.kind, job.job_id)
+                except Exception as exc:
+                    self.fail(db, int(job_id), exc)
+                    event("job.recovery_failed", level=logging.WARNING, error_type=type(exc).__name__)
+                    logging.error("Could not recover job %s", job_id, exc_info=True)

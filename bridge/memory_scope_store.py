@@ -8,7 +8,7 @@ from typing import Literal
 
 from bridge.limits import EPISODIC_CONTEXT_MAX_CHARS, HINDSIGHT_CONTEXT_MAX_CHARS
 from bridge.memory_artifact_store import read_artifact_block
-from bridge.memory_contracts import MemoryBlock, MemoryEvidence, MemoryReadScope
+from bridge.memory_contracts import MemoryBlock, MemoryBlockLeaf, MemoryEvidence, MemoryReadScope
 from bridge.memory_fact_store import StoredMemoryFact, index_fact_is_current, load_current_fact, normalize_principals
 from bridge.memory_search_store import MAX_SEARCH_CANDIDATES, search_fact_ids
 from bridge.memory_store import external_memory_boundary, request_source_cutoff
@@ -102,10 +102,11 @@ def eligible_fact(db: sqlite3.Connection, scope: MemoryReadScope, memory_id: int
 
 
 def _fact_block(
-    facts: list[tuple[StoredMemoryFact, str]], channel: str, *, limit: int = 6, max_chars: int
+    facts: list[tuple[StoredMemoryFact, str]], channel: str, *, scope: MemoryReadScope, limit: int = 6, max_chars: int
 ) -> MemoryBlock:
     lines: list[str] = []
     evidence: list[MemoryEvidence] = []
+    leaves: list[MemoryBlockLeaf] = []
     seen: set[str] = set()
     size = 0
     for stored, document_id in facts:
@@ -123,11 +124,15 @@ def _fact_block(
             continue
         seen.add(key)
         lines.append(line)
-        evidence.append(replace(stored.evidence, document_id=document_id))
+        pointer = replace(stored.evidence, document_id=document_id)
+        evidence.append(pointer)
+        leaves.append(
+            MemoryBlockLeaf(line, pointer, scope, stored.fact.visibility, stored.fact.known_by, scope.rewrite_revision)
+        )
         size += len(line) + (len(lines) > 1)
         if len(lines) >= limit:
             break
-    return MemoryBlock("\n".join(lines), tuple(evidence), channel)
+    return MemoryBlock("\n".join(lines), tuple(evidence), channel, tuple(leaves))
 
 
 def read_episodic_block(
@@ -147,7 +152,7 @@ def read_episodic_block(
         for memory_id in search_fact_ids(db, scope, query)
         if (stored := eligible_fact(db, scope, memory_id)) is not None
     ]
-    return _fact_block(facts, "episodic", limit=min(6, limit), max_chars=max_chars)
+    return _fact_block(facts, "episodic", scope=scope, limit=min(6, limit), max_chars=max_chars)
 
 
 def ranked_fact_block(db: sqlite3.Connection, scope: MemoryReadScope, document_ids: list[str]) -> MemoryBlock:
@@ -163,7 +168,7 @@ def ranked_fact_block(db: sqlite3.Connection, scope: MemoryReadScope, document_i
             stored = eligible_fact(db, scope, int(row[0]))
             if stored:
                 facts.append((stored, document_id))
-    return _fact_block(facts, "recall", max_chars=HINDSIGHT_CONTEXT_MAX_CHARS)
+    return _fact_block(facts, "recall", scope=scope, max_chars=HINDSIGHT_CONTEXT_MAX_CHARS)
 
 
 def validate_memory_blocks(
@@ -205,6 +210,7 @@ def validate_memory_blocks(
                 _fact_block(
                     ranked.get(block.channel, []),
                     block.channel,
+                    scope=scope,
                     max_chars=HINDSIGHT_CONTEXT_MAX_CHARS if block.channel == "recall" else EPISODIC_CONTEXT_MAX_CHARS,
                 )
             )

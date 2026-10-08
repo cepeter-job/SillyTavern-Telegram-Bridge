@@ -189,6 +189,7 @@ def regenerate_edited_turn(
         ),
         session_summary=memory_prompt.summary,
         scene_context=memory_prompt.scene,
+        memory_prompt=memory_prompt,
         defer_compaction=True,
         narrative_context=narrative_context_for_session(
             db, chat_id, session_id, "story", through_rowid=max(0, int(user_rowid) - 1)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from functools import partial
 
+from bridge.context_selection_store import prepare_context_selection
 from bridge.hindsight_endpoint import prepare_hindsight_endpoint
 from bridge.hindsight_recall_runtime import HindsightRecallRuntime
 from bridge.memory import get_session_summary, purge_hindsight_session
@@ -44,4 +45,7 @@ def build_memory_service(
         queue_session_cleanup=queue_session_memory_cleanup,
         purge_session_memory=partial(purge_hindsight_session, app_settings=app_settings),
         search_backend=partial(recall_memory_results, app_settings=app_settings, remote_recall=remote_recall),
+        select_context=partial(
+            prepare_context_selection, app_settings=app_settings, validate_blocks=validate_memory_blocks
+        ),
     ), runtime

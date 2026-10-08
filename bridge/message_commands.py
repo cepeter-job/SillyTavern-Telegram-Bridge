@@ -180,9 +180,6 @@ def generate_and_store_reply(
         )
         with perf_span("memory_context", app_settings=app_settings):
             memory_prompt = memory_service.prompt_context(db, chat_id, session, fields, text)
-        memory_context = memory_prompt.recall
-        episodic_context = memory_prompt.episodic
-        session_summary = memory_prompt.summary
         npc_context = npc_service.context_for_prompt(
             db,
             chat_id,
@@ -200,14 +197,15 @@ def generate_and_store_reply(
             fields,
             text,
             history_rows,
-            memory_context=memory_context,
-            episodic_context=episodic_context,
+            memory_context=memory_prompt.recall,
+            episodic_context=memory_prompt.episodic,
             npc_context=npc_context,
             simulation_context=story_simulation_context(
                 db, chat_id, session_id, memory_prompt.scope, through_rowid=None
             ),
-            session_summary=session_summary,
+            session_summary=memory_prompt.summary,
             scene_context=memory_prompt.scene,
+            memory_prompt=memory_prompt,
             rag_context=rag_service.context_for_prompt(db, chat_id, text, rag_bundle),
             group_context=group_context,
             narrative_context=narrative_context_for_session(db, chat_id, session_id, "story"),

@@ -7,7 +7,7 @@ import sqlite3
 from typing import Any
 
 from bridge.limits import SUMMARY_MAX_CHARS
-from bridge.memory_contracts import MemoryBlock, MemoryEvidence, MemoryReadScope
+from bridge.memory_contracts import MemoryBlock, MemoryBlockLeaf, MemoryEvidence, MemoryReadScope
 from bridge.memory_fact_store import classified_audience, digest_value
 from bridge.memory_store import request_source_cutoff
 from bridge.narrative_repository import load_narrative_clock
@@ -142,6 +142,7 @@ def read_artifact_block(
     evidence_digest = digest_value([digest, blocks])
     lines: list[str] = []
     evidence: list[MemoryEvidence] = []
+    leaves: list[MemoryBlockLeaf] = []
     used = 0
     for index, item in enumerate(blocks):
         pointer = MemoryEvidence(
@@ -163,7 +164,10 @@ def read_artifact_block(
         used += len(text) + bool(lines)
         lines.append(text)
         evidence.append(pointer)
-    return MemoryBlock("\n".join(lines), tuple(evidence), kind)
+        leaves.append(
+            MemoryBlockLeaf(text, pointer, scope, item["visibility"], tuple(item["known_by"]), scope.rewrite_revision)
+        )
+    return MemoryBlock("\n".join(lines), tuple(evidence), kind, tuple(leaves))
 
 
 def read_summary_block(db: sqlite3.Connection, scope: MemoryReadScope) -> MemoryBlock:

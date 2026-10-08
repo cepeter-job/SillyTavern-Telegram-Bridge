@@ -17,15 +17,32 @@ from bridge.sqlite_store import write_transaction
 
 
 class MemoryClaim(Protocol):
-    chat_id: str
-    session_id: str
-    session_created_at: float
-    layer: str
-    token: str
-    version: int
-    target_id: int
-    rewrite_identity: int
-    purge_epoch: int
+    @property
+    def chat_id(self) -> str: ...
+
+    @property
+    def session_id(self) -> str: ...
+
+    @property
+    def session_created_at(self) -> float: ...
+
+    @property
+    def layer(self) -> str: ...
+
+    @property
+    def token(self) -> str: ...
+
+    @property
+    def version(self) -> int: ...
+
+    @property
+    def target_id(self) -> int: ...
+
+    @property
+    def rewrite_identity(self) -> int: ...
+
+    @property
+    def purge_epoch(self) -> int: ...
 
 
 def _digest(role: str, content: str) -> str:

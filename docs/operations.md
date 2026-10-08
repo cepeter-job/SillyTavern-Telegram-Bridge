@@ -89,6 +89,30 @@ substitute for checking an authentication, credit or model-availability error.
 See [provider diagnostics](configuration.md#provider-diagnostics-and-catalog-maintenance)
 for the difference between model discovery, manual probes and runtime health.
 
+### Structured runtime logs
+
+The runtime writes bounded JSON Lines to its configured log and to stderr
+(systemd's journal). Records carry a UTC timestamp, level, event name and safe
+metadata. Existing log calls retain their message templates, not arbitrary
+arguments; exception diagnostics include code locations, not exception messages,
+source lines or local variables. Configured credentials and authorization tokens
+are redacted. Do not add prompts, replies, private plans or credentials to logs.
+
+`SILLYTAVERN_LOG_LEVEL` accepts `DEBUG`, `INFO` (default), `WARNING` or `ERROR`.
+`SILLYTAVERN_LOG_MAX_MIB` accepts 1–100 (default 10), and
+`SILLYTAVERN_LOG_BACKUPS` accepts 1–10 (default 5). Restart after changing them.
+The default retains one active file and five backups: approximately 60 MiB in
+all, plus at most one bounded record per file. Files are created privately,
+including during rotation. Journal retention is controlled separately by the
+host's journald settings, not these options.
+
+Chat and session references are pseudonyms derived locally from the bot token;
+they remain stable across restarts but change when that credential rotates.
+They support troubleshooting, not access control. Diagnostics are best effort:
+a failed runtime write does not change a saved story or provider outcome.
+Higher log levels omit lower-level events and therefore produce incomplete
+troubleshooting timelines. Keep `INFO` for ordinary operation.
+
 ### Memory OOM diagnostics
 
 OOM means out of memory. RSS is the amount of physical RAM currently attributed

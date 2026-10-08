@@ -55,13 +55,18 @@ async function renderDirector() {
       });
       mutations.push(control);return control;
     }
-    const intro=card('Current direction',el('span',{class:'badge director-private'},'Private plans'),
+    const directionActive=data.direction_status==='active';
+    const directionInactive=Boolean(data.direction)&&!directionActive;
+    const directionTitle=directionActive?'Current direction':directionInactive?'Last accepted direction (inactive)':'Last accepted direction';
+    const intro=card(directionTitle,el('span',{class:'badge director-private'},'Private plans'),
       el('p',{class:'muted'},'These are hidden plans, not story facts or character knowledge.'),
       el('p',{class:'director-direction'},data.direction||'No accepted direction yet.'),
       el('div',{class:'director-meta'},el('p',{},'Phase: '+label(data.phase)),
         el('p',{},'Scene: '+(data.scene.scene_id||'Not initialized')+' · Thread: '+(data.scene.thread_id||'Not set')),
         el('p',{},'Viewpoint: '+(data.scene.viewpoint||'Not set')+' · '+(data.scene.pov||'POV not set'))));
     intro.classList.add('director-overview');
+    if(directionInactive)intro.append(feedback('This saved direction is not currently used. Its continuity or scene changed, or it expired.','warning'));
+    if(data.narrative_current===false)intro.append(feedback('Narrative continuity is not current. Director planning waits for reconciliation.','warning'));
     if(data.degraded)intro.append(feedback('Director planning is degraded. Review the latest decision for details.','warning'));
     if(!data.mutable)intro.append(feedback('This story is closing or has ended. Director Room is read-only.','warning'));
     const decisions=data.history.map(item=>{

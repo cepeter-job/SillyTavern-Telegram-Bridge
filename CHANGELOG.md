@@ -6,6 +6,8 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 
 ### Maintenance
 
+- Use the licensed, SHA-pinned Gitleaks GitHub Action for commit-range scanning alongside the existing full-history secret-scan gate; disable finding comments, SARIF uploads and Action summaries.
+
 - Consolidate fragmented one-test and simulation-review test modules into topical owners without removing coverage, move reused Character/Codex/NPC/provider-budget fixtures into canonical test-support modules, and retire PR-number/Codex-review naming.
 - Audit regression-test size and source-inspection patterns; share identical boundary-test helpers while retaining their assertions, and use short parameter IDs for oversized provider-health fixtures.
 - Run Python regression/coverage and Mini App smoke as independent CI jobs. Preserve the protected `test` check as a strict final gate over both jobs and the existing security/static checks; publish JUnit, timings and diagnostic artifacts.
@@ -25,6 +27,9 @@ All notable changes to **SillyTavern Telegram Bridge** are documented here.
 - Supply bounded optional canonical context to ordinary, image, edited, regenerated and continued replies, Light Novel choices, Director and epilogue generation. Character scope excludes private offscreen tracker facts.
 
 ### Fixed
+
+- Show whether a saved Director direction is active or inactive in Telegram and the Mini App, and warn when Narrative continuity is not current; preserve inactive plans for editing without treating them as current guidance.
+- Make `/clear` remove next-scene directions and persistent Director objectives instead of saving the command as literal guidance. Preserve actor, session and revision guards.
 
 - Regenerate malformed JSON/schema output once for Summary, Scene and Episodes from canonical inputs, without replaying failed model text or weakening audience validation. Disable narrative stop sequences for these JSON tasks. Preserve stale-source/lease fences, prior accepted state and independently valid partial NPC tracker publication.
 - Replace generic extraction `work_failed` with bounded safe format/audience/NPC codes and opaque session/target log correlation, without logging raw exceptions or story text. Keep unknown failures generic and preserve the autonomous retry ceiling for all new codes. No source replay, tracker reset, database migration or provider/model change.

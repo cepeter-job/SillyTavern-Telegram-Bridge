@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ast
 import importlib.util
-import re
 import subprocess
 import sys
 import tomllib
@@ -444,13 +443,20 @@ def test_type_target_count_cli_reports_current_surface():
 
 
 def test_ci_has_sha_pinned_secret_scan_job():
+    """Licensed Action reporting must not replace the required full-history scan."""
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    assert "  secret-scan:" in workflow
-    assert "fetch-depth: 0" in workflow
-    match = re.search(r"gitleaks/gitleaks-action@([0-9a-f]{40})(?:\s|$)", workflow)
-    assert match is not None
-    assert "gitleaks/gitleaks-action@v" not in workflow
-    assert match.group(1) != "ff98106e4c7b2bc287b24eaf42907196329070c7"
+    scan = workflow.split("  secret-scan:", 1)[1].split("\n  dependency-audit:", 1)[0]
+    assert "fetch-depth: 0" in scan and "persist-credentials: false" in scan
+    assert "gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e" in scan
+    assert "GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}" in scan
+    assert "GITLEAKS_CONFIG: .gitleaks.toml" in scan and 'GITLEAKS_VERSION: "8.30.1"' in scan
+    assert all(f'GITLEAKS_ENABLE_{key}: "false"' in scan for key in ("COMMENTS", "UPLOAD_ARTIFACT", "SUMMARY"))
+    assert "gitleaks_8.30.1_linux_x64.tar.gz" in scan
+    assert "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb" in scan
+    assert "sha256sum --check" in scan and 'gitleaks" git' in scan
+    assert "--log-opts=--all" in scan and "--config=.gitleaks.toml" in scan
+    assert "--gitleaks-ignore-path=.gitleaksignore" in scan
+    assert "--redact" in scan and "--exit-code=1" in scan
 
 
 def test_operations_docs_describe_generated_typed_surface_not_stale_fixed_count():

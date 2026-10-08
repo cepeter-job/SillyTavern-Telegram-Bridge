@@ -28,11 +28,19 @@ job is added, update both `test.needs` and the checker's required job list. The
 checker deliberately rejects incomplete dependency sets instead of silently
 accepting a reduced gate.
 
+The licensed Gitleaks Action requires the repository or organization Actions secret
+`GITLEAKS_LICENSE`. Its token has only `contents: read` and `pull-requests: read`
+(to discover PR commits), with no comment permission. The Action's scan is limited
+to the event's commit range, so the additional SHA-256-verified CLI scan retains
+`--log-opts=--all`, `.gitleaks.toml`, `.gitleaksignore`, redaction and failure on
+findings. Both scans must succeed; neither license failure nor a scan error falls
+back to a green result.
+
 | Job | Scope | Retained evidence |
 | --- | --- | --- |
 | `python-tests` | Complete pytest discovery, at most four workers, resource warnings as errors, whole-application statement and branch coverage, security coverage floors | `application-coverage`: coverage JSON/XML, JUnit XML, pytest log with the 20 slowest tests |
 | `miniapp-smoke` | Focused DOM regressions and loopback integration, plus pinned Chromium and WebKit tests of accepted-response loss, polling recovery, native dialogs, focus and narrow viewports | `miniapp-smoke`: DOM, integration and browser logs, browser HTML report and failure traces/screenshots |
-| `secret-scan` | Repository history secret scan | Action result and logs |
+| `secret-scan` | SHA-pinned licensed Gitleaks Action v3.0.0 (commit-range scan) plus full-history CLI v8.30.1 scan with SHA-256-verified binary; both use repository config/ignore file | Missing/invalid organization license, findings, scanner errors or integrity mismatch fail the required job; comments, SARIF uploads and Action summaries disabled |
 | `dependency-audit` | Both complete hash-locked runtime and development dependency sets | Action result and logs |
 | `static-analysis` | Dependency lock consistency, module-size ratchet, reference evidence, architecture policy, leak scan, Ruff, and mypy | `memory-leak-scan`: leak scan and module reference JSON |
 | `test` | Strict aggregate of the five jobs above | Table of every dependency result in the job summary |
@@ -44,6 +52,16 @@ retain credentials. Actions remain pinned to complete commit SHAs; Python and DO
 tooling continue to use the checked-in locks. Browser tooling has a separate npm
 lock under `tests/miniapp-browser/`; its Playwright version pins engine revisions.
 Both engines run sequentially against a fresh isolated loopback fixture per test.
+
+`setup-uv` and `setup-node` already cache lockfile-keyed Python and npm downloads.
+`miniapp-smoke` also caches Chromium and WebKit binaries in
+`~/.cache/ms-playwright`, keyed by runner OS, architecture and the locked
+`tests/miniapp-browser/package-lock.json` (Playwright pins the browser
+revisions). The SHA-pinned cache action is best-effort: every run still invokes
+`playwright install --with-deps chromium webkit` to install system libraries
+and repair missing browser binaries. Caches never skip tests or security scans.
+Playwright cautions that browser cache restore can cost about as much as a
+download; compare cold and warm `miniapp-smoke` runs before keeping this cache.
 Only the external provider response is synthetic; the summary handler, utility
 executor, API adapter and SQLite records are real. Browser emulation does not
 claim native Telegram Android/iOS acceptance. See

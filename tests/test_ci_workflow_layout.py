@@ -174,6 +174,29 @@ def test_miniapp_smoke_stays_a_required_job_with_its_locked_harness():
     assert "MINIAPP_JSDOM_ROOT" in smoke
 
 
+def test_playwright_cache_is_lock_scoped_without_skipping_browser_dependencies():
+    jobs = workflow_documents()["ci.yml"]["jobs"]
+    smoke_steps = jobs["miniapp-smoke"]["steps"]
+    cache = next(step for step in smoke_steps if step.get("id") == "playwright-browsers-cache")
+    assert cache["uses"] == "actions/cache@caa296126883cff596d87d8935842f9db880ef25"
+    assert cache["with"]["path"] == "~/.cache/ms-playwright"
+    key = cache["with"]["key"]
+    assert "runner.os" in key and "runner.arch" in key
+    assert "hashFiles('tests/miniapp-browser/package-lock.json')" in key
+    assert "restore-keys" not in cache["with"]
+    install = next(step for step in smoke_steps if step.get("name", "").startswith("Install pinned Chromium"))
+    assert smoke_steps.index(cache) < smoke_steps.index(install)
+    assert "if" not in install
+    assert "install --with-deps chromium webkit" in install["run"]
+    report = next(step for step in smoke_steps if step.get("name") == "Report browser cache hit")
+    assert "steps.playwright-browsers-cache.outputs.cache-hit" in report["env"]["PLAYWRIGHT_CACHE_HIT"]
+    node = next(step for step in smoke_steps if step.get("uses", "").startswith("actions/setup-node@"))
+    assert node["with"]["cache"] == "npm"
+    for name in ("python-tests", "miniapp-smoke", "dependency-audit", "static-analysis"):
+        uv = next(step for step in jobs[name]["steps"] if step.get("uses", "").startswith("astral-sh/setup-uv@"))
+        assert uv["with"]["enable-cache"] is True
+
+
 def test_advisory_workflows_are_not_part_of_the_protected_gate():
     aggregate_needs = set(workflow_jobs()[AGGREGATE][1]["needs"])
     for job in ADVISORY_JOBS:

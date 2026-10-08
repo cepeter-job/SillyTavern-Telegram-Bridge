@@ -1,8 +1,6 @@
 """Isolated installer trust regressions: pinned signers and SSH server keys."""
 
 import subprocess
-from pathlib import Path
-
 from test_installer import ROOT, _bootstrap_installer_fixture, inputs
 
 
@@ -11,7 +9,7 @@ def test_install_signer_path_backfills_old_env_without_touching_secrets(tmp_path
 
     home, _source, env, _units = inputs(tmp_path)
     env.parent.mkdir(parents=True)
-    original = "LLM_API_KEY='$(touch /tmp/install-must-not-execute)'\\n# preserved\\n"
+    original = "LLM_API_KEY='$(touch /tmp/install-must-not-execute)'\n# preserved\n"
     env.write_text(original, encoding="utf-8")
     env.chmod(0o600)
     signers = home / ".config/sillytavern-telegram/trusted-maintainers"
@@ -31,7 +29,7 @@ def test_install_signer_path_preserves_preconfigured_custom_trust(tmp_path):
 
     home, _source, env, _units = inputs(tmp_path)
     env.parent.mkdir(parents=True)
-    env.write_text("SILLYTAVERN_UPDATE_ALLOWED_SIGNERS=~/operator-keys\\nSECRET=keep\\n")
+    env.write_text("SILLYTAVERN_UPDATE_ALLOWED_SIGNERS=~/operator-keys\nSECRET=keep\n")
     original = env.read_bytes()
     assert ensure_install_update_signer_path(env, home, home / "default-signers") == home / "operator-keys"
     assert env.read_bytes() == original
@@ -44,7 +42,7 @@ def _use_real_ssh_keygen(tmp_path):
     real_keygen = shutil.which("ssh-keygen")
     assert real_keygen
     wrapper = tmp_path / "bin/ssh-keygen"
-    wrapper.write_text("#!/bin/sh\\nexec " + shlex.quote(real_keygen) + ' "$@"\\n', encoding="utf-8")
+    wrapper.write_text("#!/bin/sh\nexec " + shlex.quote(real_keygen) + ' "$@"\n', encoding="utf-8")
     wrapper.chmod(0o755)
 
 
@@ -53,7 +51,7 @@ def test_install_adds_pinned_github_host_once_and_preserves_other_hosts(tmp_path
     _use_real_ssh_keygen(tmp_path)
     known_hosts = home / ".ssh/known_hosts"
     known_hosts.parent.mkdir()
-    other_host = "example.test ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\\n"
+    other_host = "example.test ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n"
     known_hosts.write_text(other_host, encoding="utf-8")
     known_hosts.chmod(0o644)
 
@@ -81,7 +79,7 @@ def test_installer_refuses_conflicting_github_ssh_host_without_overwrite(tmp_pat
     record = re.search(r"^TRUST_LINE='([^']+)'$", (ROOT / "install.sh").read_text(), re.MULTILINE)
     assert record is not None
     other_key = record.group(1).split()[3]
-    content = f"github.com ssh-ed25519 {other_key}\\n"
+    content = f"github.com ssh-ed25519 {other_key}\n"
     known_hosts.write_text(content, encoding="utf-8")
     result = subprocess.run(
         ["/bin/bash", str(script), "--unsafe-main", "--no-deps", "--no-start"],

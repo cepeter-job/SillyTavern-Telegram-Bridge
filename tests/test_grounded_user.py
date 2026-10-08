@@ -208,7 +208,7 @@ def test_grounded_user_toggle_and_settings_reset(context, monkeypatch):
 
 def test_session_deletion_removes_grounded_user_metadata(context):
     from bridge.grounded_user_settings import grounded_user_key
-    from bridge.metadata import get_meta
+    from bridge.metadata import get_meta, set_meta
     from bridge.session_core import create_session, delete_session_data
 
     db, active, ctx = context
@@ -219,6 +219,7 @@ def test_session_deletion_removes_grounded_user_metadata(context):
         session_id="grounded-delete",
         app_settings=ctx.app_settings,
     )
+    set_meta(db, "active_session:chat", active["session_id"])
     update_session(db, "chat", target["session_id"], grounded_user="on")
     assert get_meta(db, grounded_user_key("chat", target["session_id"]), "") == "on"
 

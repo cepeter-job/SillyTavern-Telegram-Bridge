@@ -220,6 +220,8 @@ def delete_session_data(
         if session_has_active_jobs(db, chat_id, target_session_id):
             return False, "session has active jobs"
         with write_transaction(db):
+            if target_session_id == get_meta(db, f"active_session:{chat_id}", "default"):
+                return False, "active session"
             if not claim_operation(db, operation_id, "session_delete", time.time()):
                 return False, "already processed"
             if load_session_row(db, chat_id, target_session_id) is None:

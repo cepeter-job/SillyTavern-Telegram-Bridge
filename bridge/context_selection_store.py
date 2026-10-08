@@ -6,10 +6,24 @@ import sqlite3
 from collections.abc import Callable
 from dataclasses import replace
 
+from bridge.context_compaction import context_history_candidate_limit
 from bridge.context_selection import context_selection_mode, context_slice_enabled, select_memory_blocks
 from bridge.memory_contracts import ContextBlockSelection, MemoryBlock, MemoryPromptContext, MemoryReadScope
 from bridge.port_contracts import ValidateMemoryBlocks
 from bridge.settings import AppSettings
+
+
+def _history_snapshot(db: sqlite3.Connection, scope: MemoryReadScope, limit: int) -> tuple[tuple[int, str, str], ...]:
+    """Ephemeral canonical source tuples, ordered exactly like the history loader."""
+    rows = db.execute(
+        "SELECT rowid,role,content FROM messages WHERE chat_id=? AND session_id=? "
+        "ORDER BY created_at DESC,rowid DESC LIMIT ?",
+        (scope.chat_id, scope.session_id, limit),
+    )
+    try:
+        return tuple((int(rowid), str(role), str(content)) for rowid, role, content in reversed(rows.fetchall()))
+    finally:
+        rows.close()
 
 
 def _summary_coverage_valid(db: sqlite3.Connection, context: MemoryPromptContext) -> bool:
@@ -102,9 +116,17 @@ def prepare_context_selection(
     if scope is None:
         return replace(context, selection_reason="invalid_scope")
     baseline_blocks = context.baseline_blocks
+    history_source_rows: tuple[tuple[int, str, str], ...] = ()
+    history_limit = min(256, context_history_candidate_limit(app_settings=app_settings)) if app_settings else 0
 
     def guard() -> str:
-        return _guard_reason(db, scope, baseline_blocks, resolve_current_scope, validate_blocks)
+        reason = _guard_reason(db, scope, baseline_blocks, resolve_current_scope, validate_blocks)
+        if reason or not history_source_rows:
+            return reason
+        try:
+            return "source_changed" if _history_snapshot(db, scope, history_limit) != history_source_rows else ""
+        except sqlite3.Error:
+            return "ambiguous"
 
     context = replace(context, selection_guard=guard)
     reason = guard()
@@ -122,6 +144,8 @@ def prepare_context_selection(
         try:
             coverage_valid = _summary_coverage_valid(db, context)
             history_reason = "ambiguous" if coverage_valid else "incomplete_coverage"
+            if coverage_valid and history_limit:
+                history_source_rows = _history_snapshot(db, scope, history_limit)
         except Exception:
             history_reason = "ambiguous"
         # Accepted source coverage and an audience label do not establish which facts,
@@ -134,5 +158,6 @@ def prepare_context_selection(
         selection=candidate,
         selection_reason=candidate.reason,
         selection_coverage_valid=coverage_valid,
+        selection_history_source_rows=history_source_rows,
         selection_guard=guard,
     )

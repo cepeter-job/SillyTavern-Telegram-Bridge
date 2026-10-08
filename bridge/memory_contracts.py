@@ -103,6 +103,8 @@ class MemoryPromptContext:
     selection_reason: str = "off"
     selection_coverage_valid: bool = False
     selection_guard: Callable[[], str] | None = field(default=None, compare=False, repr=False)
+    selection_query: str = field(default="", compare=False, repr=False)
+    selection_history_source_rows: tuple[tuple[int, str, str], ...] = field(default=(), compare=False, repr=False)
 
 
 class SelectMemoryContext(Protocol):

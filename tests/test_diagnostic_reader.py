@@ -174,3 +174,47 @@ def test_start_only_has_unknown_usage_not_a_zero_cost_success(tmp_path):
     assert result["usage"]["input_tokens"] is None
     assert result["usage"]["complete"] is False
     assert result["usage_by_purpose"][0]["purpose"] == "summary"
+
+
+def test_reader_rejects_special_files_hardlinks_and_foreign_owners(tmp_path, monkeypatch):
+    import os
+    import stat
+    from types import SimpleNamespace
+
+    from bridge.diagnostic_reader import read_events
+
+    path = tmp_path / "runtime.log"
+    os.mkfifo(path)
+    assert read_events(path, chat_id="11", session_id="a")["events"] == []
+    path.unlink()
+    write(path, record())
+    other = tmp_path / "linked.log"
+    os.link(path, other)
+    assert read_events(path, chat_id="11", session_id="a")["events"] == []
+    other.unlink()
+    monkeypatch.setattr(
+        os, "fstat", lambda _fd: SimpleNamespace(st_mode=stat.S_IFREG | 0o600, st_nlink=1, st_uid=os.getuid() + 1)
+    )
+    assert read_events(path, chat_id="11", session_id="a")["events"] == []
+
+
+def test_reader_rejects_invalid_shapes_and_timezone_free_timestamps(tmp_path):
+    from bridge.diagnostic_reader import read_events
+
+    path = tmp_path / "runtime.log"
+    invalid = [
+        [],
+        {},
+        {**record(), "event": []},
+        {**record(), "event": "Bad event"},
+        {**record(), "level": []},
+        {**record(), "level": "INVALID"},
+        {**record(), "timestamp": "x" * 41},
+        {**record(), "timestamp": "2026-10-08T06:00:00"},
+        {**record(), "timestamp": "not-a-date"},
+    ]
+    write(path, *invalid, record())
+    result = read_events(path, chat_id="11", session_id="a")
+    assert len(result["events"]) == 1
+    assert result["skipped_records"] == len(invalid)
+    assert read_events(path, chat_id="11", session_id="a", level="ERROR")["events"] == []

@@ -133,6 +133,7 @@ def _submit_tracked_future(
     label: str, function: Callable[P, T], *args: P.args, **kwargs: P.kwargs
 ) -> concurrent.futures.Future[T] | None:
     queued_at = time.monotonic()
+    function = bind_worker(function)
     with _BACKGROUND_STATE_LOCK:
         if not _BACKGROUND_ACCEPTING:
             event("background.rejected", label=label, reason="shutdown")
@@ -368,7 +369,7 @@ def submit_chat_background(
         should_start = chat_id not in _CHAT_ACTIVE
         if should_start:
             _CHAT_ACTIVE.add(chat_id)
-    event("background.queued", **{**worker_identity(function), "label": label})
+    event("background.queued", level=logging.INFO, exc_info=False, **{**worker_identity(function), "label": label})
     if should_start:
         _start_next_chat_job(chat_id)
     return True

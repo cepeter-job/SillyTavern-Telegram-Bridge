@@ -111,3 +111,20 @@ def test_queue_binding_assigns_a_distinct_worker_id_and_preserves_it():
         assert worker_identity(bind_worker(bound)) == current
     assert bound() == current
     assert diagnostic_context() == {}
+
+
+def test_actual_executor_assigns_child_worker_identity(monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from bridge import background
+    from bridge.diagnostic_events import diagnostic_context, diagnostic_scope
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        monkeypatch.setattr(background, "_executor_for", lambda _label: executor)
+        monkeypatch.setattr(background, "_BACKGROUND_ACCEPTING", True)
+        with diagnostic_scope(request_id="tg-parent", worker_id="parent-worker"):
+            future = background._submit_tracked_future("test", diagnostic_context)
+        child = future.result(timeout=5)
+    assert child["request_id"] == "tg-parent"
+    assert child["worker_id"] != "parent-worker"
+    assert diagnostic_context() == {}

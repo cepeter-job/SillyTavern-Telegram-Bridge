@@ -130,3 +130,41 @@ def test_background_future_preserves_scope_and_releases_it(monkeypatch):
             future = background._submit_tracked_future("test", diagnostic_context)
         assert future.result(timeout=5)["request_id"] == "tg-9"
         assert executor.submit(diagnostic_context).result(timeout=5) == {}
+
+
+def test_provider_cannot_inherit_another_sessions_job_or_request(caplog):
+    seen = []
+
+    def backend(*_args, **_kwargs):
+        seen.append(diagnostic_context())
+        return "reply"
+
+    with (
+        caplog.at_level(logging.INFO),
+        diagnostic_scope(
+            request_id="other-request", job_id=77, worker_id="other-worker", chat_id="22", session_id="other"
+        ),
+    ):
+        ProviderPort(backend).for_usage("11", "saved", "summary").generate("", "model", [])
+    assert seen[0]["request_id"] != "other-request"
+    assert "job_id" not in seen[0]
+    assert "worker_id" not in seen[0]
+    assert seen[0]["chat_ref"] == scope_reference("chat", "11")
+    assert seen[0]["session_ref"] == scope_reference("session", "saved")
+    assert diagnostic_context() == {}
+
+
+def test_failed_provider_attempt_survives_warning_only_logging(caplog):
+    import pytest
+
+    from bridge.provider_errors import ProviderRequestError
+
+    def backend(*_args, **_kwargs):
+        raise TimeoutError("PRIVATE_TIMEOUT")
+
+    with caplog.at_level(logging.WARNING), pytest.raises(ProviderRequestError):
+        ProviderPort(backend).for_usage("11", "saved", "summary").generate("", "model", [])
+    failed = events(caplog, "provider.finish")
+    assert len(failed) == 1
+    assert failed[0]["status"] == "failed"
+    assert failed[0]["reason"] == "timeout"

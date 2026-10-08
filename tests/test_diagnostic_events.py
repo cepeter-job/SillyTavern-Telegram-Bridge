@@ -89,8 +89,6 @@ def test_logging_failure_does_not_break_work(monkeypatch):
 
 
 def test_error_event_preserves_code_locations_without_exception_content(caplog):
-    import json
-    import logging
 
     from bridge.diagnostic_events import event
     from bridge.diagnostic_logging import DiagnosticFormatter

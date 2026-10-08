@@ -11,7 +11,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
 
-from bridge.diagnostic_events import diagnostic_context, diagnostic_scope, new_request_id
+from bridge.diagnostic_events import clean_fields, diagnostic_context, diagnostic_scope, new_request_id
 from bridge.diagnostic_events import event as diagnostic_event
 from bridge.port_contracts import CancellationEvent, ProviderGenerate, ProviderPolicy
 from bridge.provider_errors import (
@@ -146,8 +146,16 @@ class ProviderPort:
             "purpose": scope.purpose if scope is not None else "unscoped",
         }
         if scope is not None:
-            identity.update(chat_id=scope.chat_id, session_id=scope.session_id)
-        with diagnostic_scope(inherit=True, **identity):
+            identity.update(clean_fields({"chat_id": scope.chat_id, "session_id": scope.session_id}))
+        parent = diagnostic_context()
+        matching = all(
+            key not in parent or parent[key] == value
+            for key, value in identity.items()
+            if key in {"chat_ref", "session_ref"}
+        )
+        if not matching:
+            identity["request_id"] = new_request_id("provider")
+        with diagnostic_scope(inherit=matching, **identity):
             return self._generate_call(
                 api_key,
                 model,
@@ -341,7 +349,7 @@ class ProviderPort:
             )
             diagnostic_event(
                 "provider.finish",
-                level=logging.INFO,
+                level=logging.WARNING if status == "failed" else logging.INFO,
                 exc_info=bool(error_fields),
                 provider=observed_provider,
                 model=observed_model_id,

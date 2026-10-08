@@ -113,6 +113,50 @@ a failed runtime write does not change a saved story or provider outcome.
 Higher log levels omit lower-level events and therefore produce incomplete
 troubleshooting timelines. Keep `INFO` for ordinary operation.
 
+### Session troubleshooting and export
+
+Open the Mini App's **System** page, then **Troubleshooting diagnostics**.
+Choose **Load diagnostics** to read recent events for the active story. Loading
+is manual: there is no log polling service or additional provider request.
+Filter by request ID, model-call purpose, or minimum severity. **Trace** clears
+the purpose/severity filters and shows related retained events for that request.
+**Export diagnostics** saves the same authorized, sanitized JSON view. A stale
+session view is rejected; refresh System after switching stories.
+
+The default view returns at most 200 events (the API permits 1–500). Reads scan
+at most 2 MiB in total, no more than 256 KiB from each of the active file and ten
+numbered rotations. Earlier events may be absent even when rotation files exist.
+Legacy free-form messages, other sessions, private plans, prompts, replies,
+credentials, server paths, and database payloads are excluded from export.
+The existing Telegram Mini App authentication is required; there is no new API
+key and no client-selectable owner or file path.
+
+Use `request_id` to follow an operation, `job_id` for durable Telegram work,
+`worker_id` for an executor invocation, and `call_id` plus `attempt` for model
+calls. Recovered memory uses its own source/rewrite-bound identity rather than
+pretending to know the original Telegram request. `purpose` identifies the model
+role; `phase=json_repair` and `phase=tracker_repair` identify corrective calls.
+Fallback events include the previous/next model and why fallback was selected
+or suppressed. A provider success records a returned response, not necessarily
+a valid Director decision or an accepted tracker update; inspect subsequent
+validation and publication events.
+
+**Unfinished in window** means a provider start has no matching finish in the
+retained view. It may still be running, have been interrupted, or have its finish
+omitted by the read window or filters. It does not prove a crash. Missing token
+usage remains unknown, never zero. Usage subtotals include reported failed and
+fallback attempts in the displayed window, not the account's complete billing.
+Tracker publication marked `staged` means the write is still inside its caller's
+transaction; it is not a durable-commit claim. Background-worker success means
+the callable returned; consult the specific job/decision outcome as well.
+
+Structured exceptions retain code locations, not exception messages, source
+lines, or local variables. Third-party free-form records omit message details.
+Server-side logging remains available in the configured log and journal for
+unscoped startup, polling, and infrastructure incidents excluded from a story's
+export. Review even sanitized exports before posting them publicly: provider
+names, model IDs, timing, and operational identifiers are still metadata.
+
 ### Memory OOM diagnostics
 
 OOM means out of memory. RSS is the amount of physical RAM currently attributed

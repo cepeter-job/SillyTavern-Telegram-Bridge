@@ -7,6 +7,7 @@ split, rename or added advisory file cannot silently change what protects `main`
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -172,6 +173,54 @@ def test_miniapp_smoke_stays_a_required_job_with_its_locked_harness():
     assert "node --experimental-vm-modules tools/miniapp_ui_smoke.mjs" in smoke
     assert "npm ci --prefix tests/miniapp-ui" in smoke
     assert "MINIAPP_JSDOM_ROOT" in smoke
+
+
+@pytest.mark.parametrize(
+    ("event_name", "actor", "head_repository", "licensed_expected"),
+    [
+        ("push", "cepeter", None, True),
+        ("push", "dependabot[bot]", None, False),
+        ("pull_request", "cepeter", "cepeter-job/SillyTavern-Telegram-Bridge", True),
+        ("pull_request", "contributor", "contributor/SillyTavern-Telegram-Bridge", False),
+        ("pull_request", "cepeter", "cepeter/SillyTavern-Telegram-Bridge", False),
+        ("pull_request", "dependabot[bot]", "cepeter-job/SillyTavern-Telegram-Bridge", False),
+    ],
+)
+def test_secret_scanning_routes_events_without_requiring_unavailable_secrets(
+    event_name, actor, head_repository, licensed_expected
+):
+    """Fork/Dependabot checks must reach the secret-free full-history scan."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("workflow boolean predicate replay requires Node")
+    github = {
+        "event_name": event_name,
+        "actor": actor,
+        "repository": "cepeter-job/SillyTavern-Telegram-Bridge",
+        "event": {"pull_request": {"head": {"repo": {"full_name": head_repository}}}},
+    }
+    steps = workflow_documents()["ci.yml"]["jobs"]["secret-scan"]["steps"]
+    selected = [
+        next(step for step in steps if step.get("uses", "").startswith("gitleaks/gitleaks-action@")),
+        next(step for step in steps if step.get("name") == "Scan repository history for secrets"),
+    ]
+    # The workflow uses only boolean/string operators shared by GitHub and JS.
+    # Evaluate its actual predicates against independent event fixtures.
+    predicates = [step.get("if", "true").removeprefix("${{").removesuffix("}}").strip() for step in selected]
+    program = (
+        "const vm = require('node:vm');"
+        "const [conditions, github] = JSON.parse(process.argv[1]);"
+        "console.log(JSON.stringify(conditions.map(condition => "
+        "vm.runInNewContext(condition, {github}, {timeout:1000}))));"
+    )
+    replay = subprocess.run(
+        [node, "-e", program, json.dumps([predicates, github])],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert json.loads(replay.stdout) == [licensed_expected, True]
 
 
 def test_playwright_cache_is_lock_scoped_without_skipping_browser_dependencies():

@@ -150,6 +150,8 @@ def choose_context_messages(
         # These estimates describe a never-dispatched, role-reframed candidate.
         # Source content is retained, but narrative equivalence is unverified.
         history_tokens = estimate_message_tokens(preview, chars_per_token=chars_per_token)
+        if history_reason == "selected" and history_tokens >= original:
+            history_tokens, reframed, history_reason = original, 0, "no_savings"
         metrics["history_shadow_reason"] = history_reason
         metrics["history_shadow_candidate_tokens"] = history_tokens
         metrics["history_shadow_reframed_turns"] = reframed

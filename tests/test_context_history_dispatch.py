@@ -93,3 +93,17 @@ def test_off_mode_strips_internal_source_markers_without_changing_text():
     assert result == stripped(messages)
     assert metrics["reason"] == "off"
     assert "history_shadow_candidate_tokens" not in metrics
+
+
+def test_model_specific_token_ratio_never_reports_a_negative_saving_as_selected():
+    settings = make_test_settings(environ={"SILLYTAVERN_CONTEXT_SELECTION_MODE": "shadow"})
+    original = prepare_messages()
+    result, metrics = choose_context_messages(
+        original, app_settings=settings, chars_per_token=1.0, input_budget_tokens=8000
+    )
+    assert result == stripped(original)
+    assert metrics["history_shadow_candidate_tokens"] <= metrics["original_tokens"]
+    if metrics["history_shadow_reason"] == "selected":
+        assert metrics["history_shadow_candidate_tokens"] < metrics["original_tokens"]
+    else:
+        assert metrics["history_shadow_reframed_turns"] == 0

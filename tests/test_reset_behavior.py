@@ -24,6 +24,7 @@ import bridge.memory_curator as _m_memory_curator
 import bridge.message_commands as _m_message_commands
 import bridge.session_naming as _m_session_naming
 from bridge.episodic_memory import store_episodic_memory
+from bridge.response_delivery import TelegramDeletionReport, delete_tracked_panel_messages
 
 
 class ResetBehaviorTests(SettingsTestCase):
@@ -83,11 +84,12 @@ class ResetBehaviorTests(SettingsTestCase):
     def test_confirmed_reset_sends_visible_completion_message(self):
         sent = []
         removed = []
+        answers = []
 
-        def original_answer(*_args, **_kwargs):
-            return None
+        def original_answer(*args, **_kwargs):
+            answers.append(args[2])
 
-        _owner_conversation_callbacks.reset_session = lambda *_args, **_kwargs: None
+        _owner_conversation_callbacks.reset_session = lambda *_args, **_kwargs: TelegramDeletionReport(3, 2, 1)
         _owner_conversation_callbacks.send_text = lambda _token, _chat, text: sent.append(text) or []
         _owner_conversation_callbacks.remove_inline_keyboard = lambda _db, _token, callback: removed.append(callback)
         callback = {"id": "callback-1", "message": {"message_id": 10, "chat": {"id": "chat"}}}
@@ -109,11 +111,14 @@ class ResetBehaviorTests(SettingsTestCase):
         self.assertEqual(
             sent,
             [
-                "Reset complete. The active session was cleared. Hindsight cleanup is queued and will "
-                "retry in the background."
+                "Reset complete. The active session was cleared. "
+                "Telegram cleanup: 2/3 tracked messages deleted. 1 could not be removed. "
+                "Older or untracked Telegram messages may remain. "
+                "Hindsight cleanup is queued and will retry in the background."
             ],
         )
         self.assertEqual(removed, [callback])
+        self.assertEqual(answers, ["Story reset; Telegram cleanup incomplete"])
 
     def test_reset_clears_episodic_memories(self):
         store_episodic_memory(
@@ -168,7 +173,7 @@ class ResetBehaviorTests(SettingsTestCase):
             deleted.append(payload["message_id"])
 
         with patch.object(_m_message_commands, "telegram_request", side_effect=delete):
-            _m_message_commands.reset_session(
+            result = _m_message_commands.reset_session(
                 self.db,
                 "token",
                 "chat",
@@ -178,6 +183,54 @@ class ResetBehaviorTests(SettingsTestCase):
             )
         self.assertEqual(_m_session_naming.get_meta(self.db, curator_key, ""), "")
         self.assertEqual(deleted, [41, 42])
+        self.assertEqual(result, TelegramDeletionReport(attempted=2, deleted=2, failed=0))
+
+    def test_reset_keeps_local_clear_when_telegram_refuses_deletion(self):
+        from unittest.mock import patch
+
+        self.db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_id,created_at) "
+            "VALUES(?,?,'user','old input',49,1)",
+            ("chat", self.session["session_id"]),
+        )
+        self.db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_ids,created_at) "
+            "VALUES(?,?,'assistant','old reply','[50]',1)",
+            ("chat", self.session["session_id"]),
+        )
+        self.db.commit()
+        attempted = []
+
+        def refuse(_token, _method, payload):
+            attempted.append(payload["message_id"])
+            raise RuntimeError("private Telegram API error must not be logged")
+
+        with (
+            patch.object(_m_message_commands, "telegram_request", side_effect=refuse),
+            self.assertLogs(level="WARNING") as logs,
+        ):
+            report = _m_message_commands.reset_session(
+                self.db,
+                "token",
+                "chat",
+                self.session,
+                memory_service=make_test_memory_service(),
+                npc_service=make_test_npc_service(),
+            )
+        self.assertEqual(attempted, [49, 50])
+        self.assertEqual(report, TelegramDeletionReport(attempted=2, deleted=0, failed=2))
+        self.assertEqual(self.db.execute("SELECT COUNT(*) FROM messages").fetchone()[0], 0)
+        logged = " ".join(logs.output)
+        self.assertIn("failed=2", logged)
+        self.assertIn("error_types=RuntimeError", logged)
+        self.assertNotIn("private Telegram API error", logged)
+        self.assertNotIn("chat", logged)
+
+    def test_reset_telegram_cleanup_with_no_tracked_messages(self):
+        requests = []
+        report = delete_tracked_panel_messages("token", "chat", [], request=lambda *args: requests.append(args))
+        self.assertEqual(report, TelegramDeletionReport(attempted=0, deleted=0, failed=0))
+        self.assertEqual(requests, [])
 
 
 class NarrativeResetTests(SettingsTestCase):

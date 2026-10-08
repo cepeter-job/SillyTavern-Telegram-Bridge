@@ -69,6 +69,7 @@ from bridge.reply_history import load_history_rows
 from bridge.request_types import PreparedMessage, RequestContext
 from bridge.reset_panel import reset_confirmation_request
 from bridge.response_delivery import (
+    TelegramDeletionReport,
     collect_session_telegram_ids,
     delete_tracked_panel_messages,
     queue_user_quote_tts,
@@ -97,7 +98,7 @@ def reset_session(
     *,
     memory_service: MemoryService,
     npc_service: NpcService,
-) -> None:
+) -> TelegramDeletionReport | None:
     guard_story_reset(db, chat_id, session["session_id"])
     if db.in_transaction:
         raise RuntimeError("Reset cannot join a caller transaction")
@@ -120,11 +121,11 @@ def reset_session(
         clear_narrative_story_state(db, chat_id, session["session_id"])
         old_choice_panels = reset_conversation(db, chat_id, session["session_id"])
         set_operation_phase(db, operation_id, "reset", "local_committed")
-    delete_tracked_panel_messages(
-        token, chat_id, sorted(set(telegram_ids + old_choice_panels)), request=telegram_request
-    )
+    telegram_ids.extend(old_choice_panels)
+    deletion = delete_tracked_panel_messages(token, chat_id, sorted(set(telegram_ids)), request=telegram_request)
     record_operation(db, operation_id, "reset")
     optimize_database(db)
+    return deletion
 
 
 def send_pending_input_message(
@@ -132,8 +133,7 @@ def send_pending_input_message(
 ) -> None:
     message_ids = send_text(token, chat_id, text)
     existing = state.get("prompt_message_ids") or []
-    if isinstance(existing, (int, str)):
-        existing = [existing]
+    existing = [existing] if isinstance(existing, (int, str)) else existing
     state["prompt_message_ids"] = list(existing) + list(message_ids or [])
     set_meta(db, meta_key, json.dumps(state))
 

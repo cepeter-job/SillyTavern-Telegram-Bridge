@@ -9,6 +9,7 @@ import re
 import sqlite3
 from collections.abc import Callable
 from functools import partial as _partial
+from typing import NamedTuple
 
 from bridge.background import submit_background
 from bridge.closed_session_guard import story_mutation_message
@@ -454,10 +455,34 @@ def _send_preview(
         _send_reply_chunk(token, chat_id, chunk, acknowledged)
 
 
-def delete_tracked_panel_messages(token: str, chat_id: str, message_ids: list, *, request: Callable) -> None:
-    """Best-effort removal of already recorded panels after an atomic reset."""
+class TelegramDeletionReport(NamedTuple):
+    """Counts for best-effort Telegram cleanup; local reset is already committed."""
+
+    attempted: int
+    deleted: int
+    failed: int
+
+
+def delete_tracked_panel_messages(
+    token: str, chat_id: str, message_ids: list[int], *, request: Callable
+) -> TelegramDeletionReport:
+    """Attempt each tracked message once; report failures without undoing reset."""
+    deleted = 0
+    failures: set[str] = set()
     for message_id in message_ids:
         try:
             request(token, "deleteMessage", {"chat_id": chat_id, "message_id": message_id})
-        except Exception:
-            logging.info("Could not delete reset choice panel")
+            deleted += 1
+        except Exception as exc:
+            # Exception classes are safe to log; do not log chat IDs, tokens or API error bodies.
+            failures.add(type(exc).__name__)
+    failed = len(message_ids) - deleted
+    if failed:
+        logging.warning(
+            "Telegram reset cleanup incomplete: deleted=%d attempted=%d failed=%d error_types=%s",
+            deleted,
+            len(message_ids),
+            failed,
+            ",".join(sorted(failures)),
+        )
+    return TelegramDeletionReport(attempted=len(message_ids), deleted=deleted, failed=failed)

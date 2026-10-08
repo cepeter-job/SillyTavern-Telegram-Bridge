@@ -45,7 +45,7 @@ def handle_reset_callback(
             answer_callback(token, str(callback.get("id", "")), "Unknown reset action")
             return True
         try:
-            reset_session(
+            deletion = reset_session(
                 db,
                 token,
                 chat_id,
@@ -59,13 +59,25 @@ def handle_reset_callback(
             answer_callback(token, str(callback.get("id", "")), "Local reset failed")
             send_text(token, chat_id, "The local reset could not complete. Please retry.")
             return True
-        answer_callback(token, str(callback.get("id", "")), "Reset complete")
+        if deletion is None:
+            telegram_status = "Telegram deletion status unavailable (reset already processed). "
+        else:
+            telegram_status = f"Telegram cleanup: {deletion.deleted}/{deletion.attempted} tracked messages deleted. "
+            if deletion.failed:
+                telegram_status += f"{deletion.failed} could not be removed. "
+        answer_callback(
+            token,
+            str(callback.get("id", "")),
+            "Story reset; Telegram cleanup incomplete" if deletion and deletion.failed else "Reset complete",
+        )
         remove_inline_keyboard(db, token, callback)
         send_text(
             token,
             chat_id,
             "Reset complete. The active session was cleared. "
-            "Hindsight cleanup is queued and will retry in the background.",
+            + telegram_status
+            + "Older or untracked Telegram messages may remain. "
+            + "Hindsight cleanup is queued and will retry in the background.",
         )
         return True
     return False

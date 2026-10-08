@@ -188,8 +188,11 @@ receive HTTP 410 with guidance about automatic native fact indexing. Local curat
 editing, saved reviewed items and native accepted facts remain available.
 
 Tracked Telegram message and panel IDs are captured before reset removes local
-rows, then deleted best-effort after the local commit. Telegram failures do not
-restore a session; durable Telegram deletion retries are outside this checkpoint.
+rows, then deleted best-effort after the local commit. The confirmation reports
+tracked deletion attempts and failures; aggregate error-class logs omit chat IDs
+and Telegram error bodies. Telegram failures do not restore a session; durable
+Telegram deletion retries are outside this checkpoint. Telegram cannot remove
+messages outside its deletion limits, and reset does not erase the Telegram chat.
 
 ## Facts-only Hindsight and local branch readiness (migration 28)
 

@@ -165,8 +165,8 @@ def test_extraction_failure_does_not_break_continuity_summary(synthetic_settings
                 app_settings=synthetic_settings,
             )
         assert summary == "Continuity survives."
-        assert calls[:-1] == ["summary:chat:s1"] * 8
-        assert calls[-1] != "summary:chat:s1"
+        assert calls[:-2] == ["summary:chat:s1"] * 8
+        assert calls[-2:] == ["episodic:chat:s1"] * 2
         assert next_source_segment(db, "chat", "s1", "episodes") == source
         assert read_episodic_memories(db, "chat", "s1") == []
     finally:

@@ -227,6 +227,7 @@ def test_summary_reuses_accepted_checkpoint_after_failure_and_rewrite(db, tmp_pa
         "Tower reached.",
         "Mira secretly hides the key.",
         "Old ending.",
+        "Old ending.",  # One bounded format regeneration of the same canonical source.
         "Old ending.",
         "Replacement ending.",
     ]

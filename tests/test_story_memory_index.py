@@ -63,7 +63,8 @@ def test_worker_accepts_source_facts_atomically_and_restart_indexes_without_extr
 def test_parser_failure_does_not_ack_source(db, reply):
     append(db)
     provider = make_test_provider_port(generate_backend=lambda *a, **k: reply)
-    assert run(db, "episodes", provider_port=provider) == "work_failed"
+    expected = "malformed_json" if reply == "not json" else "invalid_shape"
+    assert run(db, "episodes", provider_port=provider) == expected
     assert next_source_segment(db, "c", "s", "episodes") is not None
     assert db.execute("SELECT count(*) FROM episodic_memories").fetchone()[0] == 0
 
@@ -212,7 +213,7 @@ def test_unclassified_or_malformed_audience_never_acknowledges_native_source(db,
     append(db)
     response = {"kind": "fact", "importance": 0.9, "summary": "A secret silver key", **classification}
     provider = make_test_provider_port(generate_backend=lambda *a, **k: json.dumps([response]))
-    assert run(db, "episodes", provider_port=provider) == "work_failed"
+    assert run(db, "episodes", provider_port=provider) == "invalid_audience"
     assert next_source_segment(db, "c", "s", "episodes") is not None
     assert db.execute("SELECT count(*) FROM memory_fact_provenance").fetchone()[0] == 0
 

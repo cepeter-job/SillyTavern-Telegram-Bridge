@@ -140,6 +140,36 @@ def test_claim_replaced_during_repair_never_publishes(session_db, layer, valid):
     )
 
 
+@pytest.mark.parametrize(
+    "layer,payload",
+    [
+        ("scene", {"state": [], "blocks": [{"text": "secret", "visibility": "shared", "known_by": ["Alice"]}]}),
+        ("summary", {"blocks": [{"text": "", "visibility": "shared", "known_by": ["Alice"]}]}),
+    ],
+)
+def test_mixed_schema_and_audience_failure_never_regenerates(session_db, layer, payload):
+    settings, db, session = session_db
+    add(db)
+    calls = []
+
+    def generate(*args, **kwargs):
+        calls.append(1)
+        return json.dumps(payload)
+
+    claim = claim_jobs(db, layers=(layer,))[0]
+    result = run_memory_claim(
+        db,
+        claim,
+        session,
+        {"name": "Alice"},
+        provider_port=make_test_provider_port(generate_backend=generate),
+        app_settings=settings,
+    )
+    assert result == "invalid_audience"
+    assert calls == [1]
+    assert db.execute("SELECT covered_id FROM memory_layer_state WHERE layer=?", (layer,)).fetchone() == (0,)
+
+
 def test_unknown_provider_exception_stays_generic_without_secret_log(session_db, caplog):
     settings, db, session = session_db
     add(db)

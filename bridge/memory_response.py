@@ -7,27 +7,12 @@ import json
 from collections.abc import Callable
 from typing import Any, TypeVar
 
+from bridge.json_fences import unfence_json
+from bridge.memory_fact_store import classified_audience
+from bridge.memory_retry import MEMORY_RESPONSE_ERRORS
+
 T = TypeVar("T")
 
-_ERROR_CODES = {
-    "episodic memory response is not valid JSON": "malformed_json",
-    "episodic memory response must be a JSON array": "invalid_shape",
-    "Classified memory response must be a JSON object": "invalid_shape",
-    "Memory classification requires at most 32 explicit blocks": "invalid_shape",
-    "Classified memory blocks require text": "invalid_shape",
-    "Classified memory text must be bounded and nonempty": "invalid_shape",
-    "Classified memory exceeds the artifact bound": "invalid_shape",
-    "Classified summary requires bounded, nonempty output": "invalid_shape",
-    "Scene extraction requires an explicit state object": "invalid_shape",
-    "Scene extraction requires valid state": "invalid_shape",
-    "Memory classification must explicitly name shared or restricted visibility": "invalid_audience",
-    "Memory audience must contain character names": "invalid_audience",
-    "Restricted memory requires an identified character": "invalid_audience",
-    "Shared memory cannot carry a conflicting restricted audience": "invalid_audience",
-    "NPC extractor returned malformed output": "invalid_npc_output",
-    "NPC extractor returned malformed NPC output": "invalid_npc_output",
-}
-RESPONSE_FAILURE_CODES = frozenset(_ERROR_CODES.values())
 _REPAIRABLE = {"malformed_json", "invalid_shape"}
 _REPAIR_INSTRUCTION = (
     "The previous response did not satisfy the JSON format contract. Re-extract from the same canonical source "
@@ -48,13 +33,27 @@ def memory_failure_code(error: Exception) -> str:
         return "malformed_json"
     if isinstance(error, ValueError):
         # Exact parser-owned literals only: never persist arbitrary provider text.
-        return _ERROR_CODES.get(str(error), "work_failed")
+        return MEMORY_RESPONSE_ERRORS.get(str(error), "work_failed")
     return "work_failed"
 
 
 def memory_scope_reference(chat_id: str, session_id: str, created_at: float) -> str:
     value = json.dumps([chat_id, session_id, created_at], separators=(",", ":"))
     return hashlib.sha256(value.encode()).hexdigest()[:16]
+
+
+def _reject_supplied_audience_conflicts(raw: str) -> None:
+    # Schema validation can fail before it reaches audience fields. Never regenerate
+    # a parseable conflicting audience just because another field is malformed.
+    try:
+        payload = json.loads(unfence_json(raw.strip()))
+    except json.JSONDecodeError:
+        return
+    items = payload.get("blocks", []) if isinstance(payload, dict) else payload
+    if isinstance(items, list):
+        for item in items:
+            if isinstance(item, dict):
+                classified_audience(item.get("visibility"), item.get("known_by"))
 
 
 def generate_memory_response(
@@ -75,6 +74,7 @@ def generate_memory_response(
     except ValueError as error:
         if memory_failure_code(error) not in _REPAIRABLE:
             raise
+        _reject_supplied_audience_conflicts(raw)
     if source_valid is not None and not source_valid():
         raise MemorySourceChanged
     # Reuse canonical inputs, not the failed output (which may contain injected instructions).

@@ -15,7 +15,7 @@ RECENT_SOURCE = (
 )
 RETRY_ALLOWED = (
     "(layer='hindsight' OR NOT (attempts>=:failure_limit AND last_error IN "
-    "('work_failed','retain_failed','malformed_json','invalid_shape','invalid_audience','invalid_npc_output')))"
+    "('work_failed','rate_limit','retain_failed','malformed_json','invalid_shape','invalid_audience','invalid_npc_output')))"
 )
 MODE_ENABLED = (
     "(layer NOT IN ('hindsight','curator') OR "

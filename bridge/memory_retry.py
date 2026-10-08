@@ -23,6 +23,7 @@ RESPONSE_FAILURE_CODES = frozenset(MEMORY_RESPONSE_ERRORS.values())
 MEMORY_FAILURE_CODES = RESPONSE_FAILURE_CODES | frozenset(
     {
         "work_failed",
+        "rate_limit",
         "retain_failed",
         "stale_source",
         "executor_rejected",

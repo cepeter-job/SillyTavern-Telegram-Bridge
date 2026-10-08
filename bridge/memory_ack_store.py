@@ -109,7 +109,7 @@ def summary_ack_has_accepted_source(db: sqlite3.Connection, claim: MemoryClaim) 
     ).fetchone()
     if state is None:
         return False
-    covered, floor, rewrite, purge, draft, draft_source = state
+    covered, floor, _rewrite, purge, draft, draft_source = state
     if floor > covered or covered > claim.target_id:
         return False
     source_rows = db.execute(
@@ -137,12 +137,15 @@ def summary_ack_has_accepted_source(db: sqlite3.Connection, claim: MemoryClaim) 
     last_document = ""
     for rowid, role, text in source_rows:
         cursor = 0
+        # A suffix rewrite preserves still-valid, previously accepted prefix
+        # segments from an older revision; never require all prefix revisions
+        # to equal the newest layer revision.
         parts = db.execute(
             "SELECT document_id,start_offset,end_offset,source_digest FROM memory_segments "
             "WHERE chat_id=? AND session_id=? AND session_created_at=? AND layer='summary' "
-            "AND start_id=? AND end_id=? AND valid=1 AND rewrite_identity=? AND purge_epoch=? "
+            "AND start_id=? AND end_id=? AND valid=1 AND purge_epoch=? "
             "ORDER BY start_offset,end_offset",
-            (claim.chat_id, claim.session_id, claim.session_created_at, rowid, rowid, rewrite, purge),
+            (claim.chat_id, claim.session_id, claim.session_created_at, rowid, rowid, purge),
         )
         try:
             seen = False

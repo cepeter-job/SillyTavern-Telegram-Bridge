@@ -175,14 +175,44 @@ def test_provider_can_disable_stream_usage_extension_without_fake_counts(tmp_pat
     assert records[0].total_tokens is None
 
 
-def test_failed_continuation_marks_coverage_incomplete(tmp_path, monkeypatch):
-    first = io.BytesIO(
-        b'{"choices":[{"message":{"content":"First"},"finish_reason":"length"}],"usage":{"prompt_tokens":10,"completion_tokens":2}}'
-    )
-    port, records, _ = setup(tmp_path, monkeypatch, [first])
+@pytest.mark.parametrize("streaming", [False, True])
+def test_failed_continuation_open_marks_coverage_incomplete_once(tmp_path, monkeypatch, streaming):
+    event = {
+        "choices": [{"delta" if streaming else "message": {"content": "First"}, "finish_reason": "length"}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 2},
+    }
+    first = stream(event) if streaming else io.BytesIO(json.dumps(event).encode())
+    port, records, requests = setup(tmp_path, monkeypatch, [first], streaming=streaming)
     assert port.generate("key", "p::m", []) == "First"
+    assert len(requests) == len(records[0].readings) == 2
     assert sum(u.total_tokens or 0 for u in records[0].readings) == 12
-    assert not all(u.complete for u in records[0].readings)
+    assert records[0].readings[1].total_tokens is None
+    assert not records[0].readings[1].complete
+
+
+@pytest.mark.parametrize("streaming", [False, True])
+def test_oversized_continuation_records_one_reading_and_keeps_reported_usage(tmp_path, monkeypatch, streaming):
+    from bridge.limits import PROVIDER_TEXT_RESPONSE_MAX_BYTES
+
+    event = {
+        "choices": [{"delta" if streaming else "message": {"content": "First"}, "finish_reason": "length"}],
+        "usage": {"prompt_tokens": 10, "completion_tokens": 2},
+    }
+    first = stream(event) if streaming else io.BytesIO(json.dumps(event).encode())
+    if streaming:
+        partial = {"choices": [], "usage": {"prompt_tokens": 20, "completion_tokens": 3}}
+        raw = b"data: " + json.dumps(partial).encode() + b"\n\n" + b": " + b"x" * (300 * 1024)
+    else:
+        raw = b" " * (PROVIDER_TEXT_RESPONSE_MAX_BYTES + 1)
+    second = io.BytesIO(raw)
+    port, records, requests = setup(tmp_path, monkeypatch, [first, second], streaming=streaming)
+
+    assert port.generate("key", "p::m", []) == "First"
+    assert first.closed and second.closed
+    assert len(requests) == len(records[0].readings) == 2
+    assert records[0].readings[0].total_tokens == 12
+    assert records[0].readings[1].total_tokens == (23 if streaming else None)
+    assert not records[0].readings[1].complete
 
 
 def test_openai_stream_without_terminal_event_keeps_usage_partial(tmp_path, monkeypatch):

@@ -3,6 +3,7 @@ from settings_test_support import SettingsTestCase
 
 ensure_application_extensions()
 
+import io
 import json
 import os
 import threading
@@ -15,46 +16,26 @@ from bridge.model_router import ModelRoute
 from bridge.provider_port import ProviderPort
 
 
-class _FakeResponse:
+class _FakeResponse(io.BytesIO):
     def __init__(self, payload, status=200):
-        self.payload = payload
+        super().__init__(json.dumps(payload).encode())
         self.status = status
 
-    def __enter__(self):
-        return self
 
-    def __exit__(self, *_args):
-        return False
-
-    def read(self, size=-1):
-        raw = json.dumps(self.payload).encode()
-        return raw if size < 0 else raw[:size]
-
-
-class _RawResponse:
+class _RawResponse(io.BytesIO):
     def __init__(self, raw, status=200):
-        self.raw = raw
+        super().__init__(raw)
         self.status = status
         self.read_sizes = []
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_args):
-        return False
-
     def read(self, size=-1):
         self.read_sizes.append(size)
-        return self.raw if size < 0 else self.raw[:size]
+        return super().read(size)
 
 
-class _FakeStreamResponse(_FakeResponse):
+class _FakeStreamResponse(io.BytesIO):
     def __init__(self, lines):
-        super().__init__(None)
-        self.lines = [line.encode("utf-8") for line in lines]
-
-    def __iter__(self):
-        return iter(self.lines)
+        super().__init__("".join(lines).encode("utf-8"))
 
 
 class _CancelAfterLineStreamResponse(_FakeStreamResponse):
@@ -62,12 +43,16 @@ class _CancelAfterLineStreamResponse(_FakeStreamResponse):
         super().__init__(lines)
         self.cancel_event = cancel_event
         self.cancel_after_index = cancel_after_index
+        self.lines_read = 0
 
-    def __iter__(self):
-        for index, line in enumerate(self.lines):
-            yield line
-            if index == self.cancel_after_index:
-                self.cancel_event.set()
+    def readline(self, size=-1):
+        # Fire after the preceding line has been processed, as the old iterator did.
+        if self.lines_read == self.cancel_after_index + 1:
+            self.cancel_event.set()
+        line = super().readline(size)
+        if line:
+            self.lines_read += 1
+        return line
 
 
 class GenerationContinuationTests(SettingsTestCase):

@@ -387,3 +387,44 @@ helper attempts count as provider work, including incomplete usage, and
 leave durable coverage/invalidation unchanged unless accepted by the
 canonical source/checkpoint publisher. This reduces runaway repair costs;
 it does **not** establish narrative equivalence or 30% story-token savings.
+
+## Continuity-closure and budgeted quality preflight
+
+The separate `bridge/context_continuity_proof.py` checks **opaque,
+synthetic-only** witness graphs for each proposed removed source row.
+The conservative structural contract requires:
+- exact session incarnation, source revision and branch boundaries;
+- accepted source coverage with no pending summary invalidation;
+- a retained witness for every required fact, causal edge, promise,
+  negation, reader-knowledge distinction and branch boundary;
+- exact source hashes, a closed and acyclic dependency graph, and
+  audience/reader authorization without implicitly sharing secrets.
+
+This is a negative safety gate, not a generative proof: synthetic
+witnesses may claim to encode meaning they do not in fact preserve.
+A passing synthetic structural manifest always returns
+`native_causal_proof=false` and `activation_allowed=false`. The
+native canonical repository does not yet issue authoritative per-turn
+causal/knowledge closure receipts, and no live dialogue pruning has
+been enabled. Never infer native proof from an LLM assertion.
+
+`tools/context_quality_preflight.py` is a pure zero-network decision
+helper for the frozen native replay report. It refuses to authorize
+paid matched trials without independently verified native continuity
+proofs, an explicit selected model, matching settings, bounded
+request/input/output/cost allowances, and an eligible candidate.
+The existing native six-case replay estimates **0% additional story
+input reduction**; the separate eight-case shadow-framing study
+estimates **6.25% aggregate/7.55% weighted**, both below the 30%
+provider-measured target. Its current output therefore reports
+`trial_ready=false`, `activation_allowed=false`, and
+`provider_requests=0`. This avoids spending model tokens to
+"validate" a candidate that cannot currently pass the gate.
+
+The existing offline observation validator still requires matched
+model/settings and prompt hashes, logical provider-reported input for
+every story/helper/repair/fallback attempt (including failed calls
+and cached input), accepted work and a separate blinded human review.
+Synthetic review attestations or output hashes are not independent
+provider verification. Do not mark narrative equivalence complete
+without real paired model outputs and an authorized reviewer.

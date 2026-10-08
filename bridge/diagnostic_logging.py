@@ -13,7 +13,7 @@ from io import TextIOWrapper
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from bridge.diagnostic_events import clean_fields, diagnostic_context
+from bridge.diagnostic_events import clean_fields, diagnostic_context, exception_metadata
 
 _SOURCE_ROOT = Path(os.path.abspath(__file__)).parent
 _SECRET_NAME = re.compile(r"token|secret|password|credential|api.?key|authorization", re.I)
@@ -92,21 +92,27 @@ class DiagnosticFormatter(logging.Formatter):
             else:
                 data["message"] = "[non-text log]"
             data["line"] = record.lineno
+        details = getattr(record, "diagnostic_exception", {})
         if record.exc_info and record.exc_info[0]:
-            data["error_type"] = record.exc_info[0].__name__[:80]
-            frames = []
-            tb = record.exc_info[2]
-            while tb is not None:
-                frames.append(
+            details = exception_metadata(record.exc_info[0], record.exc_info[2])
+        if isinstance(details, dict):
+            kind = details.get("error_type")
+            if isinstance(kind, str):
+                data["error_type"] = self.redact(kind)[:80]
+            frames = details.get("traceback")
+            if isinstance(frames, list):
+                data["traceback"] = [
                     {
-                        "file": Path(tb.tb_frame.f_code.co_filename).name[:80],
-                        "function": tb.tb_frame.f_code.co_name[:80],
-                        "line": tb.tb_lineno,
+                        "file": self.redact(Path(frame["file"]).name)[:80],
+                        "function": self.redact(frame["function"])[:80],
+                        "line": frame["line"],
                     }
-                )
-                frames = frames[-12:]
-                tb = tb.tb_next
-            data["traceback"] = frames
+                    for frame in frames[-12:]
+                    if isinstance(frame, dict)
+                    and isinstance(frame.get("file"), str)
+                    and isinstance(frame.get("function"), str)
+                    and type(frame.get("line")) is int
+                ]
         # Recheck safe metadata too: a credential could appear in a model name.
         for key, value in data.items():
             if isinstance(value, str):

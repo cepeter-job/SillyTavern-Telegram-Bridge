@@ -7,10 +7,13 @@ import hmac
 import logging
 import re
 import secrets
+import sys
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import wraps
+from pathlib import Path
+from types import TracebackType
 from typing import ParamSpec, TypeVar
 
 P = ParamSpec("P")
@@ -143,13 +146,32 @@ def new_request_id(prefix: str = "request") -> str:
     return f"{prefix}-{secrets.token_hex(8)}"
 
 
+def exception_metadata(error_type: type[BaseException] | None, tb: TracebackType | None) -> dict[str, object]:
+    """Snapshot only code locations; never retain an exception, traceback, frame or locals."""
+    if error_type is None:
+        return {}
+    frames: list[dict[str, object]] = []
+    while tb is not None:
+        frames.append(
+            {
+                "file": Path(tb.tb_frame.f_code.co_filename).name[:80],
+                "function": tb.tb_frame.f_code.co_name[:80],
+                "line": tb.tb_lineno,
+            }
+        )
+        frames = frames[-12:]
+        tb = tb.tb_next
+    return {"error_type": error_type.__name__[:80], "traceback": frames}
+
+
 def event(name: str, *, level: int = logging.INFO, exc_info: bool = False, **fields: object) -> None:
     """Diagnostics are best effort and never change the application's outcome."""
     global _DROPPED
     values = {**diagnostic_context(), **clean_fields(fields)}
     values["event"] = name if _NAME.fullmatch(name) else "diagnostic.invalid_event"
     try:
-        _LOG.log(level, values["event"], extra={"diagnostic_fields": values}, exc_info=exc_info)
+        details = exception_metadata(sys.exc_info()[0], sys.exc_info()[2]) if exc_info else {}
+        _LOG.log(level, values["event"], extra={"diagnostic_fields": values, "diagnostic_exception": details})
     except Exception:
         # A broken/custom handler must not fail a generation or worker.
         _DROPPED += 1

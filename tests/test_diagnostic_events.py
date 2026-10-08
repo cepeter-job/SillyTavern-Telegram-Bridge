@@ -99,8 +99,36 @@ def test_error_event_preserves_code_locations_without_exception_content(caplog):
         except RuntimeError:
             event("diagnostic.error", level=logging.ERROR, exc_info=True)
     record = caplog.records[-1]
-    assert record.exc_info is not None
+    assert "PRIVATE_EXCEPTION_BODY" not in caplog.text
+    assert record.exc_info is None
+    assert record.diagnostic_exception["error_type"] == "RuntimeError"
     result = json.loads(DiagnosticFormatter().format(record))
     assert result["error_type"] == "RuntimeError"
     assert result["traceback"][-1]["function"] == "test_error_event_preserves_code_locations_without_exception_content"
     assert "PRIVATE_EXCEPTION_BODY" not in json.dumps(result)
+
+
+def test_exception_events_do_not_retain_frame_locals(caplog):
+    import gc
+    import weakref
+
+    from bridge.diagnostic_events import event
+
+    class PrivatePayload:
+        pass
+
+    def emit():
+        payload = PrivatePayload()
+        reference = weakref.ref(payload)
+        try:
+            raise RuntimeError("PRIVATE_ERROR")
+        except RuntimeError:
+            event("diagnostic.failure", level=logging.ERROR, exc_info=True)
+        return reference
+
+    with caplog.at_level(logging.ERROR):
+        reference = emit()
+    gc.collect()
+    assert reference() is None
+    assert caplog.records[-1].exc_info is None
+    assert "PRIVATE_ERROR" not in caplog.text

@@ -21,17 +21,17 @@ class FakeResponse(io.BytesIO):
         super().__init__(json.dumps(data).encode())
 
 
-def routed_provider(tmp_path, monkeypatch, payloads):
+def routed_provider(tmp_path, monkeypatch, payloads, *, provider="openrouter", host="openrouter.ai"):
     settings = make_test_settings(
-        environ={"TEST_MEMORY_KEY": "synthetic-key", "SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": "openrouter.ai"},
+        environ={"TEST_MEMORY_KEY": "synthetic-key", "SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": host},
         home=tmp_path,
     )
     spec = {
         "transport": "openai_compatible",
-        "api_endpoint": "https://openrouter.ai/api/v1",
+        "api_endpoint": "https://" + host + "/api/v1",
         "api_key_env": "TEST_MEMORY_KEY",
     }
-    router = type("Router", (), {"route": lambda _self, _: ModelRoute("openrouter", "test/model", spec)})()
+    router = type("Router", (), {"route": lambda _self, _: ModelRoute(provider, "test/model", spec)})()
     requests = []
 
     def fake_urlopen(request, timeout, *, environ=None):
@@ -109,3 +109,49 @@ def test_adaptive_summary_output_budget_never_reduces_or_exceeds_bounded_allocat
     assert summary_output_budget(small) == 1200
     assert summary_output_budget(large) == 4096
     assert 1200 <= summary_output_budget({"blocks": [{"text": "X" * 4200}]}) <= 4096
+
+
+def test_nanogpt_structured_helper_adds_json_object_only_for_compatible_endpoint(tmp_path, monkeypatch):
+    payloads = [
+        {"choices": [{"message": {"content": '{"blocks":[]}'}, "finish_reason": "stop"}]},
+        {"choices": [{"message": {"content": "Ordinary story response"}, "finish_reason": "stop"}]},
+    ]
+    port, sent = routed_provider(tmp_path, monkeypatch, payloads, provider="nano-gpt", host="nano-gpt.com")
+    assert generate_memory_response(
+        port.generate,
+        "",
+        "nano-gpt::test/model",
+        [{"role": "system", "content": "Return JSON"}, {"role": "user", "content": "Synthetic"}],
+        parser=parse_classified_response,
+        session_id="synthetic",
+        settings={"max_tokens": 1200},
+    ) == {"blocks": []}
+    assert (
+        port.generate(
+            "",
+            "nano-gpt::test/model",
+            [{"role": "user", "content": "Ordinary story response"}],
+            session_id="story",
+            settings={"max_tokens": 1200},
+            force_non_stream=True,
+        )
+        == "Ordinary story response"
+    )
+    assert sent[0]["response_format"] == {"type": "json_object"}
+    assert "response_format" not in sent[1]
+
+
+def test_json_mode_is_never_implicitly_used_for_other_openai_providers(tmp_path, monkeypatch):
+    port, sent = routed_provider(
+        tmp_path, monkeypatch, [{"choices": [{"message": {"content": '{"blocks":[]}'}, "finish_reason": "stop"}]}]
+    )
+    assert generate_memory_response(
+        port.generate,
+        "",
+        "openrouter::test/model",
+        [{"role": "system", "content": "Return JSON"}],
+        parser=parse_classified_response,
+        session_id="synthetic",
+        settings={"max_tokens": 1200},
+    ) == {"blocks": []}
+    assert "response_format" not in sent[0]

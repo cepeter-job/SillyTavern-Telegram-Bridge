@@ -428,3 +428,13 @@ and cached input), accepted work and a separate blinded human review.
 Synthetic review attestations or output hashes are not independent
 provider verification. Do not mark narrative equivalence complete
 without real paired model outputs and an authorized reviewer.
+
+
+For the explicitly verified NanoGPT HTTPS chat route, structured helpers
+also send `response_format: {"type":"json_object"}` to request valid JSON
+syntax. This capability was confirmed with one 80-token-capped, synthetic
+GLM-5.2 request (HTTP 200, parseable JSON, 30 input / 6 output tokens).
+It is **not** sent to normal roleplay requests or to unverified OpenRouter
+routes. The response still passes the same strict block, visibility,
+audience, source revision, and durable publication validation: syntactic
+JSON does not establish that a scene or summary is complete or truthful.

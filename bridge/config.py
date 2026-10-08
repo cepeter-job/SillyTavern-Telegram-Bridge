@@ -22,3 +22,10 @@ GENERATION_DEFAULTS = {
 
 
 STT_DEFAULT_MODEL = "base"
+
+
+def structured_json_options(settings: dict[str, object], provider: str, endpoint: str) -> dict[str, object]:
+    """Enable verified JSON syntax mode only for NanoGPT JSON-helper requests."""
+    if settings.get("json_once") is True and provider == "nano-gpt" and endpoint.startswith("https://nano-gpt.com/"):
+        return {"response_format": {"type": "json_object"}}
+    return {}

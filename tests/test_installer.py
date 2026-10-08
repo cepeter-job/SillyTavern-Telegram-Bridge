@@ -224,14 +224,14 @@ def _bootstrap_installer_fixture(tmp_path):
     executable(
         "ssh-keygen",
         'if [ "${1:-}" = -lf ]; then\n'
-        '  input=$(cat)\n'
+        "  input=$(cat)\n"
         '  case "$input" in\n'
         '    *IOMqqnkVzrm0*) echo "256 SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU github.com (ED25519)" ;;\n'
         '    *) echo "256 SHA256:Au9pahLKr9Wj1ayrHyXAZEO48y/xuVY88dk6zATqYqU cepeter-release-signing (ED25519)" ;;\n'
-        '  esac\n'
+        "  esac\n"
         'elif [ "${1:-}" = -F ]; then\n'
-        '  exit 1\n'
-        'fi\nexit 0\n',
+        "  exit 1\n"
+        "fi\nexit 0\n",
     )
     executable(
         "git",

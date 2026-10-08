@@ -7,6 +7,11 @@ REPO_URL="https://github.com/cepeter/SillyTavern-Telegram-Bridge.git"
 TRUST_LINE='cepeter namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA+L6kUwaC94495CdAyZWyocRT5u951D4YnXhtceVKky cepeter-release-signing-2026-10-04'
 TRUST_FINGERPRINT='SHA256:Au9pahLKr9Wj1ayrHyXAZEO48y/xuVY88dk6zATqYqU'
 DEFAULT_SIGNERS="$HOME/.config/sillytavern-telegram/trusted-maintainers"
+# Pinned GitHub Ed25519 host key from https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
+# This is SSH *server* identity, unrelated to the maintainer release-signing key.
+GITHUB_HOST_LINE='github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl'
+GITHUB_HOST_FINGERPRINT='SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU'
+GITHUB_HOST_PUBLIC='AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl'
 
 usage() {
   cat <<'HELP'
@@ -23,6 +28,7 @@ auto-detects Linux/system dependencies and an existing SillyTavern installation.
   --replace-service        Back up and replace an existing custom bridge unit.
   --release TAG            Clone and verify one signed release tag (advanced/bootstrap).
   --allowed-signers PATH   Externally trusted SSH allowed-signers file used by --release.
+  --no-github-known-hosts  Do not configure GitHub's pinned SSH host key.
   --unsafe-main            Explicitly clone unsigned development main (advanced only).
   --env-file PATH          Choose the private .env location.
   --configure              Run guided configuration after preparing files (TTY required).
@@ -33,6 +39,8 @@ and zypper. Existing SillyTavern Node/npm state is detected but never modified.
 The normal guided path installs the pinned maintainer key using trust-on-first-use
 from this installer. Use --allowed-signers with an independently provisioned file
 when an independent first-key verification boundary is required.
+GitHub's published, pinned SSH host key is also added to ~/.ssh/known_hosts
+without ssh-keyscan. This does not create an SSH account/authentication key.
 HELP
 }
 
@@ -47,11 +55,16 @@ INTERACTIVE=0
 CONFIGURE=0
 REPAIR_DEPS=0
 RELEASE=""
+GITHUB_KNOWN_HOSTS=1
 ALLOWED_SIGNERS_EXPLICIT=0
 if [[ -n "${SILLYTAVERN_UPDATE_ALLOWED_SIGNERS:-}" ]]; then
   ALLOWED_SIGNERS_EXPLICIT=1
 fi
 ALLOWED_SIGNERS="${SILLYTAVERN_UPDATE_ALLOWED_SIGNERS:-$DEFAULT_SIGNERS}"
+# An explicit relative trust path must keep its meaning after cd to the source.
+if [[ "$ALLOWED_SIGNERS" != /* ]]; then
+  ALLOWED_SIGNERS="$PWD/$ALLOWED_SIGNERS"
+fi
 ENV_FILE="${SILLYTAVERN_ENV_FILE:-$HOME/.local/share/sillytavern-telegram/.env}"
 OS_RELEASE_FILE="${SILLYTAVERN_INSTALL_OS_RELEASE_FILE:-/etc/os-release}"
 ORIGINAL_ARGC=$#
@@ -77,6 +90,7 @@ while (($#)); do
       ALLOWED_SIGNERS_EXPLICIT=1
       ;;
     --unsafe-main) UNSAFE_MAIN=1;;
+    --no-github-known-hosts) GITHUB_KNOWN_HOSTS=0;;
     --env-file)
       shift
       [[ $# -gt 0 ]] || { echo 'Missing env path' >&2; exit 2; }
@@ -327,6 +341,10 @@ ensure_trust_file() {
     }
     return
   fi
+  if [[ -L "$ALLOWED_SIGNERS" ]]; then
+    echo "Refusing symbolic-link trust file: $ALLOWED_SIGNERS" >&2
+    exit 1
+  fi
   if [[ -e "$ALLOWED_SIGNERS" ]]; then
     validate_default_trust "$ALLOWED_SIGNERS" || {
       echo "Existing trust file does not contain the pinned maintainer fingerprint; refusing to overwrite: $ALLOWED_SIGNERS" >&2
@@ -348,6 +366,56 @@ ensure_trust_file() {
     exit 1
   }
   echo "Trust file installed: $ALLOWED_SIGNERS ($TRUST_FINGERPRINT)"
+}
+
+# GitHub's host identity is pinned at install time: never accept an unverified
+# network scan, touch other hosts, or replace a conflicting GitHub identity.
+ensure_github_known_host() {
+  local ssh_dir="$HOME/.ssh" known_hosts="$HOME/.ssh/known_hosts"
+  local printed_fingerprint entries existing
+  printed_fingerprint=$(printf '%s\n' "$GITHUB_HOST_LINE" | ssh-keygen -lf - 2>/dev/null) || {
+    echo 'Cannot inspect the pinned GitHub host key.' >&2
+    exit 1
+  }
+  [[ "$printed_fingerprint" == *"$GITHUB_HOST_FINGERPRINT"* ]] || {
+    echo 'The pinned GitHub host key has an unexpected fingerprint.' >&2
+    exit 1
+  }
+  if [[ -L "$ssh_dir" || ( -e "$ssh_dir" && ! -d "$ssh_dir" ) ]]; then
+    echo "Refusing unsafe SSH directory: $ssh_dir" >&2
+    exit 1
+  fi
+  if [[ -L "$known_hosts" || ( -e "$known_hosts" && ! -f "$known_hosts" ) ]]; then
+    echo "Refusing unsafe SSH known-hosts file: $known_hosts" >&2
+    exit 1
+  fi
+  mkdir -p -- "$ssh_dir"
+  chmod 700 -- "$ssh_dir"
+  if [[ -f "$known_hosts" ]]; then
+    entries=$(ssh-keygen -F github.com -f "$known_hosts" 2>/dev/null || true)
+    if printf '%s\n' "$entries" | grep -Eq '^@revoked[[:space:]]'; then
+      echo 'GitHub has an explicitly revoked host entry; not changing known_hosts.' >&2
+      exit 1
+    fi
+    # ssh-keygen -F also resolves hashed hostnames in existing known_hosts.
+    existing=$(printf '%s\n' "$entries" | awk '$2 == "ssh-ed25519" { print $3 }')
+    if [[ -n "$existing" ]]; then
+      if [[ "$existing" != "$GITHUB_HOST_PUBLIC" ]]; then
+        echo 'GitHub Ed25519 host key differs from the pinned key; not changing known_hosts.' >&2
+        exit 1
+      fi
+      chmod 600 -- "$known_hosts"
+      return
+    fi
+  fi
+  # Preserve existing entries (including other key algorithms and hashed hosts).
+  # The leading newline also handles existing files without a final newline.
+  if [[ -s "$known_hosts" ]]; then
+    printf '\n' >> "$known_hosts"
+  fi
+  printf '%s\n' "$GITHUB_HOST_LINE" >> "$known_hosts"
+  chmod 600 -- "$known_hosts"
+  echo "Pinned GitHub SSH host key installed: $known_hosts ($GITHUB_HOST_FINGERPRINT)"
 }
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
@@ -391,7 +459,9 @@ cd -- "$SOURCE"
   exit 1
 }
 
-if ((INTERACTIVE)) && ((ALLOWED_SIGNERS_EXPLICIT == 0)); then
+# Check explicitly provisioned trust files even on non-interactive installs.
+# The effective .env path is reconciled after prepare; never replace a custom one.
+if ((ALLOWED_SIGNERS_EXPLICIT)); then
   ensure_trust_file
 fi
 
@@ -440,6 +510,18 @@ ARGS=(--source "$SOURCE" --home "$HOME" --env "$ENV_FILE" --unit-dir "${XDG_CONF
 if ((REPLACE)); then ARGS+=(--replace-unit); fi
 
 "$PY" -m bridge.install_support prepare "${ARGS[@]}"
+# Backfill the update signer setting in older .env files without evaluating them.
+# Existing configured custom signer paths are not overwritten or auto-provisioned.
+EFFECTIVE_SIGNERS=$("$PY" -m bridge.installer_trust signer-path --env "$ENV_FILE" --home "$HOME" --signers-path "$ALLOWED_SIGNERS")
+[[ -n "$EFFECTIVE_SIGNERS" ]] || { echo 'Unable to resolve release signer configuration.' >&2; exit 1; }
+if [[ "$EFFECTIVE_SIGNERS" == "$ALLOWED_SIGNERS" ]]; then
+  ensure_trust_file
+else
+  echo "Custom update signer file preserved: $EFFECTIVE_SIGNERS"
+fi
+if ((GITHUB_KNOWN_HOSTS)); then
+  ensure_github_known_host
+fi
 CHECK_STATUS=0
 "$PY" -m bridge.install_support check "${ARGS[@]}" || CHECK_STATUS=$?
 

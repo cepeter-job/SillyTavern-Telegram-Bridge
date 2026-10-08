@@ -209,6 +209,29 @@ For an existing installation that trusts the pre-0.3 signer, complete the
 [public-key rotation step](operations.md#upgrading-to-the-03-release-signer) before
 updating. The installer will not replace your existing trust file automatically.
 
+### Automatic update trust and SSH known hosts
+
+On every installer run, including non-interactive upgrades, the installer verifies
+or creates the default `~/.config/sillytavern-telegram/trusted-maintainers` file.
+Older private `.env` files missing `SILLYTAVERN_UPDATE_ALLOWED_SIGNERS`
+receive the default setting without rewriting unrelated values or secrets.
+An operator-configured trust path remains untouched. An existing trust file that
+does not authorize the pinned signer is **not** replaced; handle signer rotation
+separately through the trusted-key runbook.
+
+The installer also adds **GitHub's published Ed25519 SSH server host key** to
+`~/.ssh/known_hosts` using a pinned fingerprint, rather than trusting the
+network response from `ssh-keyscan`. It preserves other known hosts, including
+hashed entries and keys of other algorithms. If the existing GitHub Ed25519
+host key differs or an entry is revoked, installation stops for manual review.
+Existing symlink targets are never overwritten. The SSH identity setup works
+without network access, does not configure an SSH private key and does not
+switch this installer's HTTPS Git remote to SSH.
+
+To leave `known_hosts` unchanged (for example if your SSH trust is managed
+centrally), run `./install.sh --no-github-known-hosts` with your normal options.
+The release-signing trust setup remains enabled.
+
 ## Advanced / development installation
 
 ### Independently trusted bootstrap

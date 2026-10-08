@@ -229,8 +229,12 @@ them to force an update. The updater requires:
 - Git, `ssh-keygen`, `systemctl`, `systemd-run` and the configured user service.
 
 The installer prepares the standard trust file at
-`~/.config/sillytavern-telegram/trusted-maintainers`. For manual setup, the current
-public signer record is:
+`~/.config/sillytavern-telegram/trusted-maintainers`, even on non-interactive
+reinstalls, and backfills a missing path in older `.env` files. It never
+overwrites an existing custom trust file or rotates an unknown signer silently.
+This is **release-signing trust**; GitHub's separate, pinned SSH **server**
+identity goes into `~/.ssh/known_hosts` unless `--no-github-known-hosts` is used.
+For manual setup, the current public signer record is:
 
 ```text
 cepeter namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA+L6kUwaC94495CdAyZWyocRT5u951D4YnXhtceVKky cepeter-release-signing-2026-10-04

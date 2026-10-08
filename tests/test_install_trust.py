@@ -59,7 +59,9 @@ def test_install_adds_pinned_github_host_once_and_preserves_other_hosts(tmp_path
     for _ in range(2):
         result = subprocess.run(
             ["/bin/bash", str(script), "--unsafe-main", "--no-deps", "--no-start"],
-            env=env, capture_output=True, text=True,
+            env=env,
+            capture_output=True,
+            text=True,
         )
         assert result.returncode == 0, result.stderr
     content = known_hosts.read_text(encoding="utf-8")
@@ -84,7 +86,9 @@ def test_installer_refuses_conflicting_github_ssh_host_without_overwrite(tmp_pat
     known_hosts.write_text(content, encoding="utf-8")
     result = subprocess.run(
         ["/bin/bash", str(script), "--unsafe-main", "--no-deps", "--no-start"],
-        env=env, capture_output=True, text=True,
+        env=env,
+        capture_output=True,
+        text=True,
     )
     assert result.returncode != 0
     assert "differs from the pinned key" in result.stderr
@@ -101,7 +105,9 @@ def test_installer_does_not_follow_known_hosts_symlinks(tmp_path):
     (ssh_dir / "known_hosts").symlink_to(target)
     result = subprocess.run(
         ["/bin/bash", str(script), "--unsafe-main", "--no-deps", "--no-start"],
-        env=env, capture_output=True, text=True,
+        env=env,
+        capture_output=True,
+        text=True,
     )
     assert result.returncode != 0
     assert "unsafe SSH known-hosts file" in result.stderr
@@ -112,10 +118,10 @@ def test_installer_can_skip_github_known_hosts_setup(tmp_path):
     script, home, _git_log, env = _bootstrap_installer_fixture(tmp_path)
     result = subprocess.run(
         ["/bin/bash", str(script), "--unsafe-main", "--no-deps", "--no-start", "--no-github-known-hosts"],
-        env=env, capture_output=True, text=True,
+        env=env,
+        capture_output=True,
+        text=True,
     )
     assert result.returncode == 0, result.stderr
     assert not (home / ".ssh").exists()
     assert (home / ".config/sillytavern-telegram/trusted-maintainers").is_file()
-
-

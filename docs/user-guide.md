@@ -763,9 +763,17 @@ Configure an image provider first, then open `/imagine`:
 - **Current Scene** uses the latest saved assistant turn and structured scene
   state to prepare a visual prompt with Utility, then calls the image model.
 - **Custom Prompt** asks you to type a one-off image description.
-- **Options** contains the session-scoped image settings: **Realism / Anime**,
+- **Options** contains the session-scoped image settings: **Realism / Anime / Manhwa**,
   image model, and size. The style checkmark shows the saved selection; Realism
   is the default and applies to both generation buttons.
+
+Select **Manhwa** for Korean-webtoon art direction with automatic quality cues:
+crisp linework, rich cel shading, polished detail and balanced lighting. These
+instructions accompany both Current Scene and Custom Prompt requests, including
+character-reference requests. Custom Prompt does not add a Utility rewrite or
+extra image call. Style/quality instructions consume part of the model's prompt
+budget; the input hint reserves that space. They guide rendering but do not
+guarantee output quality or resolution, which still depend on the image model.
 
 If the catalog supplies valid text and reference targets, **Auto** uses the active
 character PNG as one visual reference when available; otherwise it uses the text

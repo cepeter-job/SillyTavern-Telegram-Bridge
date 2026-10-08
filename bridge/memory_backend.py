@@ -476,7 +476,6 @@ def _retain_with_client(
     content: str,
     context: str,
     kind: str,
-    log_message: str,
     *,
     app_settings: AppSettings,
     generation_tags: tuple[str, ...] = (),
@@ -501,7 +500,7 @@ def _retain_with_client(
             )
             return True
     except Exception:
-        logging.warning(log_message, chat_id, exc_info=True)
+        logging.warning("Hindsight native fact retain unavailable for chat %s", chat_id, exc_info=True)
         return False
 
 

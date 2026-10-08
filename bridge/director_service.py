@@ -11,6 +11,8 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from bridge.context_compaction import budget_chat_messages
+from bridge.diagnostic_events import event
+from bridge.diagnostic_operations import observe_boundary
 from bridge.director_cadence import DIRECTOR_LEASE_SECONDS, director_event_key, director_interval
 from bridge.director_contracts import DirectorProposal, DirectorProposalError, parse_director_proposal
 from bridge.director_goal_repository import store_director_goal
@@ -104,6 +106,7 @@ def _record_failure(
                     reason=message,
                     created_at=time.time(),
                 )
+    event("director.rejected", chat_id=chat, session_id=session, revision=revision, status="rejected", reason=category)
     if detail:
         logging.warning("Director update not published: %s (%s)", category, detail)
     else:
@@ -114,6 +117,7 @@ def _record_failure(
 class DirectorService:
     """One validated planning authority, shared by automatic and user-invoked controls."""
 
+    @observe_boundary("director.reassessment", decision=True)
     def reassess(
         self,
         db: sqlite3.Connection,
@@ -351,6 +355,7 @@ class DirectorService:
             with write_transaction(db):
                 release_director_run(db, chat_id, session_id, token)
 
+    @observe_boundary("director.manual_direction", decision=True)
     def accept_manual_direction(
         self,
         db: sqlite3.Connection,
@@ -430,6 +435,7 @@ class DirectorService:
                 decision_id, expected_revision, "user", "accepted", "Manual direction updated.", proposal
             )
 
+    @observe_boundary("director.manual_transition", decision=True)
     def accept_manual_transition(
         self,
         db: sqlite3.Connection,

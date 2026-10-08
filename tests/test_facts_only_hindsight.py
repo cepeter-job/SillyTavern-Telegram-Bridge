@@ -108,15 +108,7 @@ def test_generic_retain_rejects_non_native_calls_before_client_creation(db, monk
     monkeypatch.setattr(memory_backend, "hindsight_client", lambda **k: pytest.fail("Raw client constructed"))
     with pytest.raises(ValueError, match="native"):
         memory_backend._retain_with_client(
-            "c",
-            "s",
-            "historical",
-            "Mira",
-            "Transcript",
-            "Transcript",
-            kind,
-            "%s",
-            app_settings=make_test_settings(),
+            "c", "s", "historical", "Mira", "Transcript", "Transcript", kind, app_settings=make_test_settings()
         )
 
 

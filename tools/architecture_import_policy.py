@@ -1,6 +1,7 @@
 """Explicit dependency allowlists for low-level bridge owners."""
 
 LOW_LEVEL_IMPORTS = {
+    "bridge.diagnostic_operations": frozenset({"bridge.diagnostic_events"}),
     "bridge.npc_rollback": frozenset({"bridge.npc_repository", "bridge.repository_contracts"}),
     "bridge.token_usage_schema": frozenset(),
     "bridge.token_usage": frozenset(
@@ -225,7 +226,11 @@ LOW_LEVEL_IMPORTS = {
     "bridge.topic_scope": frozenset(),
     "bridge.limits": frozenset(),
     "bridge.config": frozenset({"bridge.limits"}),
-    "bridge.background": frozenset({"bridge.limits"}),
-    "bridge.runtime_logging": frozenset({"bridge.settings"}),
+    "bridge.diagnostic_events": frozenset(),
+    "bridge.diagnostic_logging": frozenset({"bridge.diagnostic_events"}),
+    "bridge.diagnostic_workers": frozenset({"bridge.diagnostic_events"}),
+    "bridge.diagnostic_reader": frozenset({"bridge.diagnostic_events"}),
+    "bridge.background": frozenset({"bridge.limits", "bridge.diagnostic_events", "bridge.diagnostic_workers"}),
+    "bridge.runtime_logging": frozenset({"bridge.settings", "bridge.diagnostic_events", "bridge.diagnostic_logging"}),
     "bridge.sqlite_store": frozenset({"bridge.limits", "bridge.settings", "bridge.schema", "bridge.scheduler_safety"}),
 }

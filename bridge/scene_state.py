@@ -15,6 +15,8 @@ import sqlite3
 
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.delivery_port import DeliveryPort
+from bridge.diagnostic_events import event
+from bridge.diagnostic_operations import observe_boundary
 from bridge.extension_context import PostRetainContext
 from bridge.extension_registry import extension_registry_snapshot as _extension_registry_snapshot
 from bridge.extension_registry import register_command_route as _register_command_route
@@ -119,6 +121,7 @@ def clear_scene_state(db: sqlite3.Connection, chat_id: str, session_id: str) -> 
         retire_derived_layer(db, chat_id, session_id, "scene")
 
 
+@observe_boundary("scene.extraction")
 def extract_scene_segment(
     db, chat_id, session, character_name, previous, source, *, provider_port, app_settings, api_key=""
 ):
@@ -227,7 +230,14 @@ def refresh_scene_state_now(
             restore=lambda payload, through: restore_derived(db, chat_id, session_id, "scene", payload, through),
             through_id=through_rowid,
         )
-    except Exception:
+    except Exception as exc:
+        event(
+            "scene.refresh_failed",
+            chat_id=chat_id,
+            session_id=session_id,
+            status="failed",
+            error_type=type(exc).__name__,
+        )
         logging.warning("Scene-state extraction failed for %s/%s", chat_id, session_id, exc_info=True)
     state, _through = get_scene_state(db, chat_id, session_id)
     return state or None

@@ -59,14 +59,10 @@ def run_fact_index(db, claim, fields, *, app_settings):
             fact.fact.summary,
             "Locally accepted native story fact; audience is enforced by SQLite",
             "native_fact",
-            "Hindsight native fact retain unavailable for chat %s",
             app_settings=app_settings,
             generation_tags=tuple(
                 memory_backend.hindsight_generation_tags(
-                    claim.chat_id,
-                    claim.session_id,
-                    claim.session_created_at,
-                    claim.purge_epoch,
+                    claim.chat_id, claim.session_id, claim.session_created_at, claim.purge_epoch
                 )
             ),
         )

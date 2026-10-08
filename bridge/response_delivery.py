@@ -14,6 +14,8 @@ from bridge.background import submit_background
 from bridge.closed_session_guard import story_mutation_message
 from bridge.delivery_progress import DeliveryFailure, DeliveryTargetExpired, checkpoint, prepare_progress
 from bridge.delivery_repository import clear_progress
+from bridge.diagnostic_events import event
+from bridge.diagnostic_operations import observe_boundary
 from bridge.expressions import deliver_expression
 from bridge.metadata import get_meta
 from bridge.settings import AppSettings
@@ -321,6 +323,7 @@ def queue_user_quote_tts(
     return True
 
 
+@observe_boundary("delivery.reply")
 def send_reply(
     token: str,
     chat_id: str,
@@ -354,11 +357,13 @@ def send_reply(
         except Exception as exc:
             raise DeliveryFailure("Reply committed; delivery checkpoint could not be prepared") from exc
         if complete:
+            event("delivery.already_complete", source_message_id=assistant_rowid)
             return
     chunks = _roleplay_reply_chunks(transport_text)
     visible_text = "".join(chunk_text for chunk_text, _ in chunks)
 
     def acknowledged(message_id: int) -> None:
+        event("delivery.chunk_acknowledged", message_id=message_id, source_message_id=assistant_rowid)
         message_ids.append(message_id)
         if db is not None and assistant_rowid is not None:
             checkpoint(
@@ -398,6 +403,7 @@ def send_reply(
                 expected_payload=progress_payload,
             )
     except DeliveryFailure:
+        event("delivery.incomplete", status="failed", source_message_id=assistant_rowid)
         raise
     except Exception as exc:
         if db is None or assistant_rowid is None:

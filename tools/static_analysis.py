@@ -29,7 +29,6 @@ STATIC_TARGETS: tuple[str, ...] = (
     "bridge/session_service.py",
 )
 
-
 REPOSITORY_TARGETS: tuple[str, ...] = (
     "bridge/ending_repository.py",
     "bridge/narrative_arc_repository.py",
@@ -222,6 +221,7 @@ PURE_CONTRACT_IMPORTS = {
 }
 SERVICE_CONTRACT_IMPORTS = frozenset(
     {
+        "bridge.diagnostic_events",
         "bridge.port_contracts",
         "bridge.provider_errors",
         "bridge.request_types",

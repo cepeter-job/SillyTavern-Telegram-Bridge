@@ -11,6 +11,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Generic, TypeVar
 
+from bridge.diagnostic_events import clean_fields, diagnostic_scope, event
+from bridge.diagnostic_workers import bind_worker
 from bridge.performance import operation_scope, perf_span, performance_enabled
 from bridge.settings import AppSettings
 
@@ -45,6 +47,31 @@ class DatabaseConnectionGate(Generic[T]):
             connection = self._initialize(path)
             self._ready_paths.add(path)
             return connection
+
+
+def _job_identity(db: sqlite3.Connection, job_id: int) -> dict[str, object]:
+    """Read existing durable identity; neither retain payloads nor trust dispatcher scope."""
+    identity: dict[str, object] = {"job_id": int(job_id), "request_id": f"job-{job_id}", "source": "durable_worker"}
+    try:
+        row = db.execute(
+            "SELECT update_id,chat_id,session_id,kind,attempts FROM jobs WHERE job_id=?", (int(job_id),)
+        ).fetchone()
+        if row:
+            update_id, chat_id, session_id, kind, attempts = row
+            count = max(0, int(attempts or 0))
+            identity.update(
+                chat_id=str(chat_id),
+                session_id=str(session_id),
+                kind=str(kind),
+                attempt=count + 1,
+                recovered=count > 0,
+            )
+            if int(update_id) >= 0:
+                identity.update(request_id=f"tg-{int(update_id)}", update_id=int(update_id))
+    except (sqlite3.Error, ValueError, TypeError):
+        # Minimal/partially initialized stores must retain the original worker behavior.
+        pass
+    return clean_fields(identity)
 
 
 class DurableWorkerGuard:
@@ -99,12 +126,15 @@ class DurableWorkerGuard:
                     database_path,
                     timeout=10.0,
                 )
-                connection.execute(
+                cursor = connection.execute(
                     "UPDATE jobs SET state='queued', last_error=?, updated_at=? "
                     "WHERE job_id=? AND state IN ('queued','scheduled')",
                     (last_error, time.time(), int(job_id)),
                 )
                 connection.commit()
+                rowcount = getattr(cursor, "rowcount", None)
+                outcome = {"accepted": rowcount > 0} if type(rowcount) is int else {}
+                event("job.requeue", job_id=int(job_id), reason="database_locked", **outcome)
                 logging.warning(
                     "Requeued durable job %s after transient DB startup failure",
                     job_id,
@@ -120,6 +150,7 @@ class DurableWorkerGuard:
                 if connection is not None:
                     connection.close()
 
+        event("job.recovery_deferred", level=logging.WARNING, job_id=int(job_id), reason="database_locked")
         logging.error(
             "Durable job %s remains recoverable on restart after DB startup failure",
             job_id,
@@ -132,6 +163,7 @@ class DurableWorkerGuard:
         worker: Callable[..., T],
     ) -> Callable[..., T]:
         database_path = self._database_path(db)
+        identity = _job_identity(db, int(job_id))
         app_settings = self._app_settings
         observed = app_settings is not None and performance_enabled(app_settings=app_settings)
         queued_at = None
@@ -148,18 +180,26 @@ class DurableWorkerGuard:
 
         @functools.wraps(worker)
         def guarded_worker(*worker_args: Any) -> T:
-            try:
-                if app_settings is not None and observed:
-                    with operation_scope(int(job_id), app_settings=app_settings, queued_at=queued_at):
-                        with perf_span("operation_execution", app_settings=app_settings):
-                            return worker(*worker_args)
-                return worker(*worker_args)
-            except BaseException as exc:
-                self._requeue(
-                    int(job_id),
-                    exc,
-                    database_path,
-                )
-                raise
+            with diagnostic_scope(inherit=False, **identity):
+                started = time.monotonic()
+                status = "failed"
+                event("job.worker_start")
+                try:
+                    if app_settings is not None and observed:
+                        with operation_scope(int(job_id), app_settings=app_settings, queued_at=queued_at):
+                            with perf_span("operation_execution", app_settings=app_settings):
+                                result = worker(*worker_args)
+                    else:
+                        result = worker(*worker_args)
+                    status = "succeeded"
+                    return result
+                except BaseException as exc:
+                    event("job.worker_error", level=logging.WARNING, error_type=type(exc).__name__, exc_info=True)
+                    self._requeue(int(job_id), exc, database_path)
+                    raise
+                finally:
+                    event(
+                        "job.worker_finish", status=status, elapsed_ms=max(0, int((time.monotonic() - started) * 1000))
+                    )
 
-        return guarded_worker
+        return bind_worker(guarded_worker, identity=identity)

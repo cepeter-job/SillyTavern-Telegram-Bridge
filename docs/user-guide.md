@@ -439,6 +439,20 @@ checks, with stage, progress, completed steps and still-pending steps; its lates
 check link is internal. Physical outcomes and progress are not granted merely
 because a check succeeded. Private NPC agendas remain in their existing owners.
 
+Tracker publication reuses an established task/quest ID for punctuation-only
+variants only when the objective matches (case/whitespace normalized) and plot
+links do not conflict. Ambiguous matches reject the whole publication without
+accepting a source receipt or partial updates. It does not merge paraphrased
+objectives, sum progress, or rename existing history.
+
+Completed steps are removed from pending steps when their text matches after
+case/whitespace and terminal `.`, `!`, `?` normalization. Paraphrases still need
+source-backed extraction; the extractor receives completed-step context and is
+asked to return a revised pending list. Full numerical progress alone never
+marks a task completed. The named player is not added as an inventory item.
+These safeguards apply to future publications; they do not automatically merge
+legacy duplicates or purge previously accepted inventory/history.
+
 ### Make a check manually
 
 Use an explicit domain, difficulty and attempted action:

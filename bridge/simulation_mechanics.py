@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from bridge.simulation_consistency import reconcile_task_steps, resolve_named_identity
 from bridge.simulation_repository import list_states, load_state, store_state
 from bridge.simulation_values import integer as _int
 from bridge.simulation_values import key as _key
@@ -207,6 +208,8 @@ class SimulationMechanics:
         payload: dict[str, Any],
         source_rowid: int,
         now: float,
+        *,
+        user_name: str = "",
     ) -> None:
         raw = payload.get("actor")
         if not raw:
@@ -217,9 +220,13 @@ class SimulationMechanics:
             record_key = f"user:{name}"
             current = load_state(db, chat_id, session_id, _ACTOR_KIND, record_key)
             entries = current[0].get("entries", []) if current else []
+            adds = raw.get(f"{name}_add", [])
+            if name == "inventory" and _key(user_name):
+                # The actor owns inventory; the actor identity is not an inventory object.
+                adds = [entry for entry in adds if _key(entry.get("name")) != _key(user_name)]
             updated = {
                 "collection": name,
-                "entries": _merge_named_entries(entries, raw.get(f"{name}_add"), raw.get(f"{name}_remove")),
+                "entries": _merge_named_entries(entries, adds, raw.get(f"{name}_remove")),
             }
             self._store(db, chat_id, session_id, _ACTOR_KIND, record_key, updated, source_rowid, now)
 
@@ -247,8 +254,8 @@ class SimulationMechanics:
             key = _key(display)
             if not key:
                 continue
-            current = load_state(db, chat_id, session_id, kind, key)
-            value: dict[str, Any] = dict(current[0]) if current else {"display_name": display}
+            key, current = resolve_named_identity(db, chat_id, session_id, kind, key, item)
+            value: dict[str, Any] = current if current is not None else {"display_name": display}
             for field in fields:
                 if field not in item:
                     continue
@@ -268,4 +275,6 @@ class SimulationMechanics:
                     )
                 else:
                     value[field] = _text(raw_value, 1000)
+            if kind == "task":
+                reconcile_task_steps(value)
             self._store(db, chat_id, session_id, kind, key, value, source_rowid, now)

@@ -203,3 +203,38 @@ def test_classified_failure_does_not_bypass_autonomous_retry_limit(session_db, c
     )
     db.commit()
     assert claim_jobs(db, layers=("summary",), autonomous=True) == []
+
+
+def test_explicit_manual_parked_summary_catches_up_from_accepted_source_only(session_db):
+    """A parked error can be resumed explicitly; no automatic retry or coverage reset."""
+    settings, db, session = session_db
+    add(db, "Verified story event.")
+    db.execute("UPDATE memory_jobs SET attempts=313,last_error='work_failed',next_attempt_at=0 WHERE layer='summary'")
+    db.execute("UPDATE memory_layer_state SET invalidated_from_id=1 WHERE layer='summary'")
+    db.commit()
+    assert claim_jobs(db, layers=("summary",), autonomous=True) == []
+    claim = claim_jobs(db, layers=("summary",), autonomous=False)[0]
+    assert claim.layer == "summary"
+    calls = []
+
+    def fake_provider(*_args, **_kwargs):
+        calls.append(True)
+        return '{"blocks":[{"text":"Verified story event.","visibility":"shared","known_by":[]}]}'
+
+    result = run_memory_claim(
+        db,
+        claim,
+        session,
+        {"name": "Alice"},
+        provider_port=make_test_provider_port(generate_backend=fake_provider),
+        app_settings=settings,
+    )
+    assert result == "complete"
+    assert len(calls) == 1
+    row = db.execute(
+        "SELECT dirty_version=completed_version,last_error,attempts FROM memory_jobs WHERE layer='summary'"
+    ).fetchone()
+    assert row == (1, "", 0)
+    assert db.execute(
+        "SELECT covered_id,invalidated_from_id FROM memory_layer_state WHERE layer='summary'"
+    ).fetchone() == (claim.target_id, None)

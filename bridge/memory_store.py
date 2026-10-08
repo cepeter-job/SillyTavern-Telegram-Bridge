@@ -33,9 +33,9 @@ from bridge.memory_attempt_store import (
     resolve_archival_attempt as resolve_archival_attempt,
 )
 from bridge.memory_contracts import MemoryReadScope
+from bridge.memory_queue import ACK_GUARD, CLAIM_SELECTION, queue_parameters
 from bridge.memory_queue import AUTO_FAILURE_LIMIT as AUTO_FAILURE_LIMIT
 from bridge.memory_queue import AUTO_IDLE_SECONDS as AUTO_IDLE_SECONDS
-from bridge.memory_queue import CLAIM_SELECTION, queue_parameters
 from bridge.memory_retry import CONFIGURATION_RETRY_SECONDS, MEMORY_FAILURE_CODES
 from bridge.sqlite_store import write_transaction
 
@@ -187,12 +187,12 @@ def acknowledge_job(db: sqlite3.Connection, claim: MemoryClaim) -> bool:
     with write_transaction(db):
         accepted = bool(
             db.execute(
-                "UPDATE memory_jobs SET completed_version=?,lease_token='',lease_deadline=0,"
+                "UPDATE memory_jobs SET completed_version=?,lease_token='',lease_deadline=0,"  # noqa: S608 -- fixed internal SQL with audited summary ACK predicate
                 "attempts=0,last_error='',next_attempt_at=0 WHERE chat_id=? AND session_id=? "
                 "AND session_created_at=? AND layer=? AND lease_token=? AND claimed_version=? "
                 "AND EXISTS(SELECT 1 FROM memory_layer_state l WHERE l.chat_id=memory_jobs.chat_id "
                 "AND l.session_id=memory_jobs.session_id AND l.session_created_at=memory_jobs.session_created_at "
-                "AND l.layer=memory_jobs.layer AND l.rewrite_identity=? AND l.purge_epoch=?)",
+                f"AND l.layer=memory_jobs.layer AND l.rewrite_identity=? AND l.purge_epoch=? {ACK_GUARD})",
                 (claim.version, *_scope(claim), claim.rewrite_identity, claim.purge_epoch),
             ).rowcount
         )

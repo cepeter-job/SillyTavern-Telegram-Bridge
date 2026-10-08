@@ -1,4 +1,4 @@
-"""Shared durable-memory readiness predicates and read-only backlog counters."""
+"""Shared durable-memory queue readiness, acceptance predicates and counters."""
 
 import sqlite3
 import time
@@ -64,3 +64,10 @@ def queue_counters(db: sqlite3.Connection, *, now: float | None = None) -> dict[
         -1 if unknown else max(0, round((now - oldest) * 1000)) if oldest is not None else 0
     )
     return result
+
+
+ACK_GUARD = (
+    "AND (memory_jobs.layer!='summary' OR NOT EXISTS(SELECT 1 FROM messages m "
+    "WHERE m.chat_id=memory_jobs.chat_id AND m.session_id=memory_jobs.session_id "
+    "AND m.id>l.covered_id AND m.id<=memory_jobs.claimed_target_id))"
+)

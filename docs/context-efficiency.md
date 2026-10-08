@@ -321,3 +321,46 @@ The existing native full-story evaluator and separate provider-accounting,
 human-review and staged-activation gates remain authoritative; no history
 pruning or paid/live request is enabled by the study. The 30% goal remains
 unmet and uncertain rather than forcing a weaker prompt.
+
+
+## Summary recovery preflight — read-only before signed rollout
+
+The durable Summary, Scene and Episodes extractor format-recovery changes landed
+in PR #428, but merging that code does **not** process live backlog. The
+separately maintained `tools/inspect_summary_recovery.py` provides a
+content-free operator preflight for a *local* bridge SQLite database:
+
+```bash
+python tools/inspect_summary_recovery.py \
+  --database "$HOME/.local/share/sillytavern-telegram/scripts/sillytavern_telegram.sqlite3"
+```
+
+The utility opens SQLite with `mode=ro`, makes **no network or model calls**,
+and does not print chat IDs, session IDs, provider text, prompts or story
+contents. It reports current summary invalidation and coverage-lag counts,
+parked/backoff/leased/inactive/eligible job counts, separately due manual claims,
+maximum attempts and allowlisted internal error-code counts. Unknown raw errors
+are grouped as `other`, never serialized.
+
+`summary.catchup_complete` means only that this **advisory read-only
+snapshot** found no invalidated or unprocessed summary source, and no pending
+summary jobs for existing session incarnations. It is not a sufficient condition
+for history pruning, semantic/causal closure or quality approval.
+`approval_ready` stays false until those independent checks occur.
+
+The ACK guard also refuses to complete a Summary job when canonical rows from
+the existing accepted coverage boundary through the claimed target remain
+unprocessed. The accepted publisher must advance durable source coverage before
+the scheduler clears invalidation. It allows actual deleted-row gaps without
+inventing missing text, and preserves the session/lease/revision fences.
+
+Some older jobs have exhausted autonomous retries: a restart by itself **will
+not** safely unpark them. After a verified SSH-signed deployment, an explicitly
+approved, budget-bounded operator invocation of the existing manual summary
+worker can retry canonical source parts under the same lease and publication
+fences. Each failed JSON response may cause one additional repair request.
+Record all such input and any model fallbacks as real helper work. Never set
+`invalidated_from_id`, `covered_id`, `attempts`, or `completed_version`
+directly to invent successful coverage, and do not force an unbounded replay.
+Compare the inspector output before and after the controlled catch-up and only
+claim recovery when the accepted checkpoint and source evidence agree.

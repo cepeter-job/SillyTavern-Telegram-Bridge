@@ -6,6 +6,7 @@ import sqlite3
 import time
 
 from bridge.composition import BridgeServices
+from bridge.diagnostic_events import diagnostic_scope, event
 from bridge.job_repository import store_processed_update
 from bridge.meta_repository import store_meta_value
 from bridge.sqlite_store import write_transaction
@@ -24,9 +25,40 @@ def complete_update(
 
     with write_transaction(db):
         write()
+    event("telegram.update_acknowledged", update_id=update_id)
 
 
 def route_update(
+    services: BridgeServices,
+    db: sqlite3.Connection,
+    fields: dict,
+    update: dict,
+    offset: int,
+    permitted: frozenset[str],
+) -> int:
+    update_id = int(update["update_id"])
+    with diagnostic_scope(inherit=False, request_id=f"tg-{update_id}", update_id=update_id, source="telegram"):
+        started = time.monotonic()
+        status = "failed"
+        error_fields: dict[str, object] = {}
+        event("telegram.update_received")
+        try:
+            result = _route_update(services, db, fields, update, offset, permitted)
+            status = "succeeded"
+            return result
+        except BaseException as exc:
+            error_fields["error_type"] = type(exc).__name__
+            raise
+        finally:
+            event(
+                "telegram.update_finish",
+                status=status,
+                elapsed_ms=max(0, int((time.monotonic() - started) * 1000)),
+                **error_fields,
+            )
+
+
+def _route_update(
     services: BridgeServices,
     db: sqlite3.Connection,
     fields: dict,
@@ -41,6 +73,7 @@ def route_update(
         "SELECT 1 FROM processed_updates WHERE update_id=?",
         (update_id,),
     ).fetchone():
+        event("telegram.update_duplicate")
         complete_update(db, update_id, next_offset)
         return next_offset
 

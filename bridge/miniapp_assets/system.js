@@ -1,6 +1,7 @@
 import {api,state,createSessionScope,registerPage,navigate,openChat} from './app.js';
 import {el,card,button,empty,confirmAction,notice} from './ui.js';
 import {icon} from './icons.js';
+import {diagnosticsCard} from './diagnostics.js';
 function healthCard(iconName,title,...children) {
   const view=card(title,...children),heading=view.querySelector('h2'),mark=icon(iconName);
   mark.classList.add('health-icon');mark.dataset.healthIcon=iconName;
@@ -167,7 +168,6 @@ async function dashboard() {
   return el('div',{class:'dashboard-layout','data-session-id':String(session.session_id)},toolbar,sessionCard,
     sessionTools,quickActions,storyActions,recent,setup,health);
 }
-
 function storyTrackerSummary(trackers,session) {
   if(!trackers?.session?.session_id||String(trackers.session.session_id)!==String(session.session_id))return 'Tracker summary unavailable';
   const keys=['relationships','agendas','inventory','skills','conditions','factions','quests','tasks','checks'];
@@ -210,6 +210,7 @@ async function renderSystem() {
     if(!operations.jobs.length)history.append(empty('No recent operations.'));
     root.replaceChildren(card('System',el('p',{class:'muted'},'Runtime status is observed, not inferred from installed files.'),button('Refresh status',load,'secondary')),details(data),
       memoryDiagnosticsCard(memoryDetail?.summary||data.memory_diagnostics||{},memoryDetail),
+      diagnosticsCard(data.session),
       card('Verified update',el('p',{},data.automatic_update_trust_configured?'A public release trust file is configured. The updater still verifies signatures and deployment safety.':'Automatic update trust is not configured. Add the independently obtained public release key and external allowed-signers path in .env, then rerun install.sh.'),button('Review latest release',review)),history);
   }
   async function review() {

@@ -15,6 +15,7 @@ from typing import TextIO
 
 from bridge.diagnostic_events import clean_fields, diagnostic_context
 
+_SOURCE_ROOT = Path(os.path.abspath(__file__)).parent
 _SECRET_NAME = re.compile(r"token|secret|password|credential|api.?key|authorization", re.I)
 _AUTH = re.compile(r"(?i)(?:bearer|basic|tma)\s+[^\s,;]+")
 _QUERY = re.compile(
@@ -58,13 +59,17 @@ class DiagnosticFormatter(logging.Formatter):
         return _JWT.sub("[redacted token]", value)
 
     def format(self, record: logging.LogRecord) -> str:
+        # Only bridge call sites are subject to the mandatory static-template
+        # inventory. A third-party/root caller can already have interpolated
+        # arbitrary dialogue into record.msg, so never copy its text or name.
+        trusted_source = Path(os.path.abspath(record.pathname)).is_relative_to(_SOURCE_ROOT)
         data: dict[str, object] = {
             "schema": 1,
             "timestamp": datetime.fromtimestamp(record.created, UTC)
             .isoformat(timespec="milliseconds")
             .replace("+00:00", "Z"),
             "level": record.levelname,
-            "logger": self.redact(record.name)[:100],
+            "logger": self.redact(record.name)[:100] if trusted_source else "external",
             **diagnostic_context(),
         }
         fields = getattr(record, "diagnostic_fields", None)
@@ -78,9 +83,14 @@ class DiagnosticFormatter(logging.Formatter):
             )
         else:
             data["event"] = "runtime.log"
-            # Legacy arguments may be response bodies or exceptions. Preserve the
-            # call-site template; structured events carry safe dynamic metadata.
-            data["message"] = self.redact(record.msg)[:1024] if isinstance(record.msg, str) else "[non-text log]"
+            # Bridge legacy arguments are deliberately omitted; CI inventories
+            # each production template and rejects dynamic/preformatted calls.
+            if not trusted_source:
+                data["message"] = "[external log details omitted]"
+            elif isinstance(record.msg, str):
+                data["message"] = self.redact(record.msg)[:1024]
+            else:
+                data["message"] = "[non-text log]"
             data["line"] = record.lineno
         if record.exc_info and record.exc_info[0]:
             data["error_type"] = record.exc_info[0].__name__[:80]

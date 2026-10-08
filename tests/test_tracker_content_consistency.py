@@ -458,11 +458,13 @@ def test_completed_step_does_not_remove_distinct_long_pending_step():
             "chat",
             "s1",
             {
-                "tasks": [{
-                    "id": "archive-visit",
-                    "completed_steps": [completed],
-                    "pending_steps": [unfinished, completed + " !"],
-                }]
+                "tasks": [
+                    {
+                        "id": "archive-visit",
+                        "completed_steps": [completed],
+                        "pending_steps": [unfinished, completed + " !"],
+                    }
+                ]
             },
             source_rowid=source,
         )

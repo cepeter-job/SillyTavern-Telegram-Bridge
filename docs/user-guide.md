@@ -200,8 +200,13 @@ try the matching recovery action first.
 Reset clears variants, failed turns, summaries, curated/episodic memory, NPC state
 and old choices, including tracker values and recorded checks. It also clears narrative scenes, threads and derived planning
 state, without changing your saved personal defaults. It attempts to remove
-tracked Telegram conversation messages;
-Telegram may refuse old messages or deletions without sufficient permissions.
+tracked Telegram conversation messages after the local reset is committed.
+The completion message reports how many tracked messages were deleted and how
+many failed. Telegram may refuse old messages (typically after 48 hours) or
+messages the bot is not permitted to delete; untracked messages, the `/reset`
+command and the new confirmation/status messages may remain. `/reset` does not
+delete the Telegram chat itself. Failed Telegram deletions do not restore the
+cleared story, and they are not retried automatically.
 
 Delete an **inactive** session through `/session`. Sessions with running or
 queued work cannot be deleted. When required Hindsight cleanup cannot be

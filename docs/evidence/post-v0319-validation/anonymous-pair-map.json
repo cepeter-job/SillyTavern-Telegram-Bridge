@@ -1,0 +1,233 @@
+{
+  "schema_version": 1,
+  "pairs": {
+    "pair-1236f8506cb4": {
+      "trial": "writer_continuity",
+      "case": "attempted_action",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-48b887ada698": {
+      "trial": "writer_continuity",
+      "case": "promise_negation",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-03cb3e378f38": {
+      "trial": "writer_continuity",
+      "case": "reader_boundary",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-3870e15fd3b0": {
+      "trial": "writer_continuity",
+      "case": "quiet_handoff",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-d9b528d9ca56": {
+      "trial": "writer_continuity",
+      "case": "ensemble_offscreen",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-a071cda173e0": {
+      "trial": "writer_continuity",
+      "case": "magical_continuity",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-25d9ea4bc0e3": {
+      "trial": "writer_continuity",
+      "case": "branch_boundary",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-e5c343dd964a": {
+      "trial": "writer_continuity",
+      "case": "indonesian_continuity",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-134d6e73e23b": {
+      "trial": "writer_dialogue",
+      "case": "attempted_action",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-525e9639f9a0": {
+      "trial": "writer_dialogue",
+      "case": "promise_negation",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-0c4c0e79467e": {
+      "trial": "writer_dialogue",
+      "case": "reader_boundary",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-8c4dfec623df": {
+      "trial": "writer_dialogue",
+      "case": "quiet_handoff",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-16275b12d0f8": {
+      "trial": "writer_dialogue",
+      "case": "ensemble_offscreen",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-b79f7befc52f": {
+      "trial": "writer_dialogue",
+      "case": "magical_continuity",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-bae595a99008": {
+      "trial": "writer_dialogue",
+      "case": "branch_boundary",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-e5db988cec4f": {
+      "trial": "writer_dialogue",
+      "case": "indonesian_continuity",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-79945a3878c9": {
+      "trial": "writer_ensemble",
+      "case": "attempted_action",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-35ecdc264159": {
+      "trial": "writer_ensemble",
+      "case": "promise_negation",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-dc7156510d4e": {
+      "trial": "writer_ensemble",
+      "case": "reader_boundary",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-d7eae261f251": {
+      "trial": "writer_ensemble",
+      "case": "quiet_handoff",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-f7c2ba3447c0": {
+      "trial": "writer_ensemble",
+      "case": "ensemble_offscreen",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-b037daad8f09": {
+      "trial": "writer_ensemble",
+      "case": "magical_continuity",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-60b52dfae886": {
+      "trial": "writer_ensemble",
+      "case": "branch_boundary",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-3e9e7c528d1b": {
+      "trial": "writer_ensemble",
+      "case": "indonesian_continuity",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-67b721873c83": {
+      "trial": "writer_magical_realism",
+      "case": "attempted_action",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-c4e16b768c1f": {
+      "trial": "writer_magical_realism",
+      "case": "promise_negation",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-dff1190abf78": {
+      "trial": "writer_magical_realism",
+      "case": "reader_boundary",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-3239f9158b63": {
+      "trial": "writer_magical_realism",
+      "case": "quiet_handoff",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-7a250b382683": {
+      "trial": "writer_magical_realism",
+      "case": "ensemble_offscreen",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-9e7815d5832e": {
+      "trial": "writer_magical_realism",
+      "case": "magical_continuity",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-87bc78c37718": {
+      "trial": "writer_magical_realism",
+      "case": "branch_boundary",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-f5863fdcd848": {
+      "trial": "writer_magical_realism",
+      "case": "indonesian_continuity",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-aecfb9489b7d": {
+      "trial": "hybrid_history",
+      "case": "unique_dialogue",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-dd0282235a1f": {
+      "trial": "hybrid_history",
+      "case": "commitment_dense",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-1a98cc71dd57": {
+      "trial": "hybrid_history",
+      "case": "indonesian",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-86618ba285ae": {
+      "trial": "hybrid_history",
+      "case": "unsupported_script",
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "pair-c4e69d8fb8a6": {
+      "trial": "hybrid_history",
+      "case": "short_history",
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "pair-c903b2c1f988": {
+      "trial": "hybrid_history",
+      "case": "large_character_card",
+      "A": "baseline",
+      "B": "candidate"
+    }
+  }
+}

@@ -37,3 +37,7 @@ The first command runs six deterministic native-worker fixtures with unique dial
 Live diagnostic estimates use **history only plus candidate reference overhead**, not a reconstructed full production prompt. Synthetic estimates include their declared protected card/system payloads. Neither is provider-reported usage; neither constitutes a voice/readability or semantic-quality pass. Original no-savings controls and failed gates remain in every report. Output files must be new paths; prior evidence cannot be overwritten by the CLI.
 
 The follow-up approval work is a separately declared matched provider experiment and calibrated blinded narrative review, with representative sessions and all helper/review costs accounted. Production prompts remain unchanged until those independent gates are satisfied.
+
+## Completed v0.3.019 pilot
+
+The [bounded post-release experiment](evidence/post-v0319-validation/RESULTS.md) measured aggregate synthetic story input of 23,620 baseline versus 19,629 candidate tokens (16.90% reduction), retaining all six cases and no-savings controls. It did not meet the 30% aggregate target. The read-only live samples both kept full history, and independent human review plus total accepted-work/helper accounting remain open. Runtime activation is still prohibited. These measurements evaluate this release snapshot, not subsequent independent selector proposals.

@@ -175,14 +175,13 @@ class ImageGenerationTests(SettingsTestCase):
                 )
 
     def test_provider_prompt_too_long_error_becomes_safe_model_specific_value_error(self):
+        body = io.BytesIO(b'{"error":"provider-specific internal prompt text","code":"prompt_too_long"}')
+        errors = []
+
         def fake_urlopen(request, timeout, *, environ=None):
-            raise urllib.error.HTTPError(
-                request.full_url,
-                400,
-                "Bad Request",
-                {},
-                io.BytesIO(b'{"error":"provider-specific internal prompt text","code":"prompt_too_long"}'),
-            )
+            error = urllib.error.HTTPError(request.full_url, 400, "Bad Request", {}, body)
+            errors.append(error)
+            raise error
 
         _m_image_generation.strict_urlopen = fake_urlopen
         with patch.dict(os.environ, {"SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": "images.example"}):
@@ -193,6 +192,8 @@ class ImageGenerationTests(SettingsTestCase):
                     "1024x1024",
                     app_settings=self.app_settings_builder.build(),
                 )
+        self.assertTrue(body.closed)
+        self.assertIs(errors[0].fp, body)
 
     def test_generate_image_http_429_becomes_sanitized_provider_request_error(self):
         def fake_urlopen(request, timeout, *, environ=None):
@@ -221,6 +222,28 @@ class ImageGenerationTests(SettingsTestCase):
         self.assertEqual(error.retry_after, 37.0)
         self.assertNotIn("provider internal secret", str(error))
         self.assertNotIn("provider-secret-reason", str(error))
+
+    def test_edit_image_prompt_too_long_closes_http_response(self):
+        body = io.BytesIO(b'{"code":"prompt_too_long"}')
+        errors = []
+
+        def fake_urlopen(request, timeout, *, environ=None):
+            error = urllib.error.HTTPError(request.full_url, 422, "private reason", {}, body)
+            errors.append(error)
+            raise error
+
+        _m_image_generation.strict_urlopen = fake_urlopen
+        with patch.dict(os.environ, {"SILLYTAVERN_PROVIDER_ALLOWED_HOSTS": "images.example"}):
+            with self.assertRaisesRegex(ValueError, "step-image-edit-2.*too long"):
+                _m_image_generation.edit_image(
+                    self._step_route(),
+                    "a prompt",
+                    ImageReference(b"PNG", "image/png", "Mira.png"),
+                    "1024x1024",
+                    app_settings=self.app_settings_builder.build(),
+                )
+        self.assertTrue(body.closed)
+        self.assertIs(errors[0].fp, body)
 
     def test_edit_image_timeout_becomes_sanitized_provider_request_error(self):
         _m_image_generation.strict_urlopen = lambda *args, **kwargs: (_ for _ in ()).throw(TimeoutError("secret"))

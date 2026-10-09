@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import io
 import json
 import logging
 import math
@@ -173,7 +172,6 @@ def _provider_prompt_too_long(exc: urllib.error.HTTPError) -> bool:
         raw = exc.read(8193)
     except OSError:
         return False
-    exc.fp = io.BytesIO(raw)
     if len(raw) > 8192:
         return False
     try:
@@ -269,10 +267,15 @@ def edit_image(
         with strict_urlopen(request, timeout=180, environ=app_settings.environ) as response:
             raw_response = response.read(IMAGE_JSON_MAX_BYTES + 1)
     except Exception as exc:
-        if isinstance(exc, urllib.error.HTTPError) and _provider_prompt_too_long(exc):
-            raise ValueError(
-                f"Image prompt for {route.model} is too long for the provider; shorten it and retry"
-            ) from None
+        if isinstance(exc, urllib.error.HTTPError):
+            try:
+                prompt_too_long = _provider_prompt_too_long(exc)
+            finally:
+                exc.close()
+            if prompt_too_long:
+                raise ValueError(
+                    f"Image prompt for {route.model} is too long for the provider; shorten it and retry"
+                ) from None
         normalized = normalize_provider_exception(exc, route.selection)
         if normalized is not None:
             raise normalized from None
@@ -307,8 +310,15 @@ def generate_image(
         with strict_urlopen(request, timeout=180, environ=app_settings.environ) as response:
             raw_response = response.read(IMAGE_JSON_MAX_BYTES + 1)
     except Exception as exc:
-        if isinstance(exc, urllib.error.HTTPError) and _provider_prompt_too_long(exc):
-            raise ValueError(f"Image prompt for {model} is too long for the provider; shorten it and retry") from None
+        if isinstance(exc, urllib.error.HTTPError):
+            try:
+                prompt_too_long = _provider_prompt_too_long(exc)
+            finally:
+                exc.close()
+            if prompt_too_long:
+                raise ValueError(
+                    f"Image prompt for {model} is too long for the provider; shorten it and retry"
+                ) from None
         normalized = normalize_provider_exception(exc, f"{provider_id}::{model}")
         if normalized is not None:
             raise normalized from None

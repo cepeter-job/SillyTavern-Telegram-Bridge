@@ -46,3 +46,13 @@ def test_native_only_decision_retains_readonly_preview_and_human_review_gates():
     assert "Pure/read-only" in text
     assert "must never silently rename or reinterpret" in text
     assert "independent blinded human review" in text
+
+def test_release_v0320_keeps_historical_v0319():
+    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert text.count("## [0.3.020] - 2026-10-09") == 1
+    assert text.index("## [0.3.020]") < text.index("## [0.3.019]")
+    current = text.split("## [0.3.020]", 1)[1].split("## [0.3.019]", 1)[0]
+    assert "20%" in current
+    assert "independent blinded human narrative review" in current
+    assert "signature or deployment confirmation" in current
+    assert "**Release commit:** `4e3b31af8c6f8c9f81d97cf09051a2ba31477b03`" in text

@@ -1,0 +1,63 @@
+# Python 3.15 migration — experimental validation
+
+**Production remains on Python 3.11.** The existing installer, main CI checks,
+release process, service, and Python 3.11 hash-locked dependencies remain unchanged.
+
+## Compatibility checkpoint: October 9, 2026
+
+The current CI, installer, pyproject.toml and hashed dependency locks target
+Python 3.11. Python 3.15.0 stable was released October 9, 2026.
+
+In a temporary Linux x86-64 clone, uv installed CPython **3.15.0rc2**.
+Installing the existing full requirements.lock failed: the pinned
+**ctranslate2==4.8.2** does not offer a CPython cp315 wheel.
+ctranslate2 is a native dependency of faster-whisper, so voice-transcription
+support cannot be declared compatible. This is a **production blocker**.
+
+Core-only dependency resolution (omitting faster-whisper) can identify more
+independent issues, but it is **not** a supported installation and must never
+be used to deploy the live bridge.
+
+## Nonblocking CI experiment
+
+The [experimental workflow](../.github/workflows/python315-experimental.yml)
+does not participate in required Python 3.11 CI or alter existing lockfiles.
+
+1. Resolve a fresh, hashed full Python 3.15 lock into runner temporary storage;
+   install all packages and import critical integrations. Failure is retained
+   as evidence. Do not silently downgrade native packages.
+2. Independently resolve temporary 3.11 and 3.15 *core-only* dependency locks
+   and run synthetic/offline context selection, compaction and benchmark tests.
+3. Compare interpreter work for context-token estimation, provenance-preserving
+   memory deduplication, JSON serialization, and SQLite context lookup.
+   The benchmark uses invented text, no provider calls, and no production data.
+4. Store exact interpreter version, JIT status, median CPU/wall time, batch p95,
+   and process peak resident memory as short-lived CI artifacts.
+
+These timings **do not measure** Telegram response latency, AI provider
+generation, story quality, or token savings. The CPython JIT is experimental
+and requires a separate JIT-enabled build and comparison.
+
+To run the offline benchmark in a disposable environment where dependencies
+are installed:
+
+    python tools/benchmark_python_runtime.py --samples 15 --iterations 100
+
+## Promotion criteria and rollback
+
+- [ ] Full runtime and test dependencies install from reviewed, verifiable
+      hash-locked resolutions on stable Python 3.15, including faster-whisper
+      and ctranslate2 native extensions.
+- [ ] Complete suite, CI type/security/lint checks and Telegram integration
+      tests pass under 3.15 without weakening Python 3.11 coverage.
+- [ ] Hindsight, NanoGPT/OpenAI, voice and image paths, SQLite migrations,
+      director/miniapp, reset and narrative causal continuity validated.
+- [ ] Matched workloads on the same hardware show meaningful local CPU benefit
+      (initial target at least 5%), no more than 5% RSS or end-to-end p95
+      latency regression, and no functional or story-quality regression.
+      Offline microbenchmarks alone do not satisfy this gate.
+- [ ] A separate production virtual environment, backup and canary are ready.
+      Keep Python 3.11 as an immediate rollback option.
+
+**Decision:** Do not change installer defaults, deploy Python 3.15, or restart
+the live service until every promotion criterion has evidence.

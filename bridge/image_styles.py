@@ -9,8 +9,8 @@ IMAGE_STYLE_OPTIONS = (("realism", "Realism"), ("anime", "Anime"), ("manhwa", "M
 _STYLE_PROMPT_PREFIXES = {
     "realism": "Style: Realism, photorealistic detail, natural textures; override source medium. ",
     "anime": (
-        "Style: Anime, 2D illustration, clean linework, cel shading, polished detail, "
-        "balanced lighting; override source medium. "
+        "Style: Anime, semi-realistic 2D art, clean linework, soft gradient cel shading, "
+        "luminous eyes, glossy hair, smooth skin, vivid colors; override source medium. "
     ),
     # Leave scene room beside the identity directive on 512-character reference models.
     "manhwa": (

@@ -1,8 +1,10 @@
 # Paired full-story context efficiency checkpoint
 
+> **Goal updated 2026-10-09:** Require ≥20% measured matched aggregate story input reduction and lower aggregate accepted-work input, without relaxing native source, audience, branch or independent human-quality gates. The v1 fixture and experiments remain preserved at their original 30% historical target. This synthetic tool never authorizes production pruning.
+
 `tools/evaluate_context_efficiency.py` builds a paired, synthetic full-story
 prompt replay. Its default mode performs zero network requests and does not
-execute a model. The 30% input-token reduction is a **goal**, never an offline
+execute a model. The 20% input-token reduction is a **goal**, never an offline
 result. Estimated tokens, reported provider usage and human narrative review
 are separate report fields.
 
@@ -26,7 +28,7 @@ synthetic placeholder, not a provider recommendation or a live routing choice.
 
 ## What the replay compares
 
-The frozen `tests/fixtures/story_memory/context_efficiency_v1.json` captures
+The current versioned `tests/fixtures/story_memory/context_efficiency_v2.json` captures
 character instructions, session instructions, response language, author note,
 scene state, narrative policy, group speaker policy, current input and recent
 transcript. Its six cases and their workload weights are declared before any
@@ -71,7 +73,7 @@ endings survive. A failed invariant blocks readiness even if accounting shows
 large savings. The fixture is deliberately small and is not representative
 model-quality or deployment evidence. The native frozen replay currently has
 **zero estimated reduction**: its baseline is already fused. This is a valid
-no-savings result, not evidence that a 30% target was achieved. The audience
+no-savings result, not evidence that a 20% target was achieved. The audience
 case asks about Mira's private recognition phrase, which Rowan does not know;
 its exact private canary is checked against every emitted prompt.
 
@@ -142,7 +144,7 @@ separate from final transport estimates and provider usage. Persisted selection
 metrics contain only bounded counts, flags and fixed reason codes; no new prompt
 text, source IDs or private facts are saved in these fields.
 
-This change leaves live activation off. The 30% provider-input target,
+This change leaves live activation off. The 20% provider-input target,
 representative paired model evaluation, blinded narrative review, and any
 history substitution remain open gates in issue #421. Paid evaluation requires
 separate approval of endpoint, model, current prices and request/token/cost caps.
@@ -288,7 +290,7 @@ python tools/evaluate_context_efficiency.py \
 
 `decision.approval_ready` stays false until the supplied matched observations
 have complete known usage, accepted outputs, preserved prompt invariants, at
-least 30% reduction in aggregate/weighted story input and total accepted-work
+least 20% reduction in aggregate/weighted story input and total accepted-work
 input, and no candidate regression on any human-rated axis for any case. This
 is conservative readiness for this synthetic checkpoint. It is not automatic
 deployment approval, independent evidence of a genuine blinded process, or a
@@ -330,7 +332,7 @@ reader boundaries, repeated/negated lines, long-range commitments, continuation
 protection, source rewrites, and unchanged off/shadow dispatch. This is a
 preparation for separately approved model and blinded narrative comparisons,
 not a certificate of narrative equivalence or permission to enable.
-The 30% provider-measured goal, holistic helper cost and quality release gates
+The 20% provider-measured goal, holistic helper cost and quality release gates
 remain open until representative matched evidence and explicit rollout approval.
 
 
@@ -355,7 +357,7 @@ a blinded narrative comparison. Reframing dialogue into a quoted user payload
 might alter model interpretation even if every source byte is recoverable.
 The existing native full-story evaluator and separate provider-accounting,
 human-review and staged-activation gates remain authoritative; no history
-pruning or paid/live request is enabled by the study. The 30% goal remains
+pruning or paid/live request is enabled by the study. The 20% goal remains
 unmet and uncertain rather than forcing a weaker prompt.
 
 
@@ -422,7 +424,7 @@ previous output allowance; a large prior summary remains bound, and
 helper attempts count as provider work, including incomplete usage, and
 leave durable coverage/invalidation unchanged unless accepted by the
 canonical source/checkpoint publisher. This reduces runaway repair costs;
-it does **not** establish narrative equivalence or 30% story-token savings.
+it does **not** establish narrative equivalence or 20% story-token savings.
 
 ## Continuity-closure and budgeted quality preflight
 
@@ -451,7 +453,7 @@ proofs, an explicit selected model, matching settings, bounded
 request/input/output/cost allowances, and an eligible candidate.
 The existing native six-case replay estimates **0% additional story
 input reduction**; the separate eight-case shadow-framing study
-estimates **6.25% aggregate/7.55% weighted**, both below the 30%
+estimates **6.25% aggregate/7.55% weighted**, both below the 20%
 provider-measured target. Its current output therefore reports
 `trial_ready=false`, `activation_allowed=false`, and
 `provider_requests=0`. This avoids spending model tokens to

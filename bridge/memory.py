@@ -281,7 +281,6 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
     settings.update(
         {
             "temperature": 0.2,
-            "max_tokens": summary_output_budget(previous),
             "reasoning_budget": utility_reasoning_for_session(db, chat_id, session["session_id"]),
         }
     )
@@ -309,6 +308,7 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
     if eligible and not continuing:
         origin, digest = current_through, digest_value(previous["blocks"])
     prompt_previous = {"blocks": previous.get("blocks", [])} if continuing else {"blocks": []} if eligible else previous
+    settings["max_tokens"] = summary_output_budget(prompt_previous)
     length_contract = summary_length_contract(prompt_previous)
     window_contract = (
         " The prior classified Summary window is already accepted and will be archived verbatim "

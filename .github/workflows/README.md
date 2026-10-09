@@ -87,9 +87,8 @@ tests continue to run.
 
 `python-test-shards` runs four independent GitHub-hosted jobs. The lightweight
 `tools.pytest_shard` plugin collects the full suite before selecting a deterministic
-whole-file subset. CI supplies the reviewed `tools/pytest_shard_timings.json`
-profile to distribute repeatedly costly files using duration hints. The plugin
-preserves collection order and xdist's `--dist=loadfile` fixture locality. Each job has at most four workers;
+whole-file subset, balanced by collected case count. It preserves collection order
+and xdist's `--dist=loadfile` fixture locality. Each job has at most four workers;
 that is separate from the four-machine CI matrix. Do not run all sixteen workers
 concurrently on the shared local VPS.
 
@@ -98,22 +97,20 @@ JUnit XML and log. The existing required `python-tests` job rejects any unsucces
 shard, verifies that all four inventories agree and that their selected union runs
 every collected test exactly once without splitting files, and requires readable,
 nonempty coverage data from every shard before combining it. This includes rejecting
-an empty SQLite database that Coverage.py would otherwise initialize. The unchanged global and security-module floors apply to this
-combined report. Individual partial reports use a zero floor because no subset can
+an empty SQLite database that Coverage.py would otherwise initialize. The unchanged
+global and security-module floors apply to this combined report. Individual partial
+reports use a zero floor because no subset can
 cover the full application by itself; they cannot bypass the required combined gate.
 
-The profile records four completed runs sampled on 2026-10-09 and seven slow files.
-Samples sum only the phases printed in the existing duration logs, so they are
-censored lower bounds, not complete file runtimes. Unprofiled files use a heuristic
-0.1 seconds per collected case. Growing files scale their median duration hint;
-shrinking files retain the recorded floor because setup/subprocess work can remain.
-Without a profile, the plugin retains its original case-count allocation.
-
-Hints affect placement only. Refresh them from completed-run evidence when the
-slowest files change; there is no remote timing lookup or timing cache. Complete
-discovery, disjoint whole-file execution, and combined coverage remain the correctness
-checks. Compare exact-head hosted job and step timings before claiming speedup;
-startup, runner variation, and the slowest indivisible file can limit scaling.
+A duration-hint prototype evaluated on 2026-10-09 did not demonstrate a runtime
+benefit: the Python test-and-coverage path took 290 seconds in the
+[trial](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/actions/runs/37876749578),
+versus 252 seconds in the preceding
+[control](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/actions/runs/37876235967).
+Individual test times also varied, so this does not establish that the allocator
+caused the difference. The prototype was removed; collected case counts remain
+the scheduling input. Compare complete exact-head job and step measurements before
+changing allocation. Startup and the slowest indivisible file can limit scaling.
 
 `setup-uv` and `setup-node` already cache lockfile-keyed Python and npm downloads.
 `miniapp-smoke` also caches Chromium and WebKit binaries in

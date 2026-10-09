@@ -61,7 +61,6 @@ jobs:
         run: >-
           python -X dev -W error::ResourceWarning -m pytest -q
           -p tools.pytest_shard --shard-index="$SHARD_INDEX" --shard-count=4
-          --shard-timings=tools/pytest_shard_timings.json
           --shard-manifest=shard-manifest.json -n auto --maxprocesses=4 --dist=loadfile
           --cov --cov-fail-under=0
           --cov-report=json:coverage.json --cov-report=xml:coverage.xml

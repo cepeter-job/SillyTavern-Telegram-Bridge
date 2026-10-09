@@ -172,7 +172,7 @@ jobs:
           echo "ba4bed1ba346b916890b76d9e320451420aa69f6408997d33c66482eeae3d575  Python-3.15.0.tar.xz" | sha256sum -c -
           tar xf "Python-3.15.0.tar.xz"
           cd "Python-3.15.0"
-          ./configure --prefix="$RUNNER_TEMP/cpython-315-final" --disable-test-modules > "$RUNNER_TEMP/python315-configure.log" 2>&1
+          CFLAGS='-O1 -g0' ./configure --prefix="$RUNNER_TEMP/cpython-315-final" --disable-test-modules > "$RUNNER_TEMP/python315-configure.log" 2>&1
           make -j2 > "$RUNNER_TEMP/python315-build.log" 2>&1
           make install > "$RUNNER_TEMP/python315-install.log" 2>&1
           "$RUNNER_TEMP/cpython-315-final/bin/python3.15" -c \

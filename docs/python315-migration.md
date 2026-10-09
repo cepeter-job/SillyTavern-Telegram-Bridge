@@ -11,18 +11,18 @@ JIT gains on generic interpreter benchmarks do not imply proportional improvemen
 Telegram or provider latency. The JIT is not part of every Python build; it must be
 built with JIT support and reported as enabled before comparing JIT timings.
 
-On 2026-10-09, a wheel-only resolution of the current \`requirements.txt\` for
+On 2026-10-09, a wheel-only resolution of the current `requirements.txt` for
 Linux x86-64 / Python 3.15 failed because PyYAML had no usable wheel. Other native
 dependency wheels (for example CTranslate2, PyAV, NumPy, tokenizers) also need
 verification. A resolver result is not proof of runtime or service compatibility.
 
 ## Stage 1: optional compatibility workflow
 
-The separate \`python315-compat.yml\` workflow is intentionally non-blocking.
+The separate `python315-compat.yml` workflow is intentionally non-blocking.
 It checks syntax, resolves separate SHA-256-hashed *Python 3.15* runtime and
 development locks using binary distributions only, checks imports and the entire
 test suite, then runs the offline synthetic CPU/RSS benchmark if resolution succeeds.
-It does **not** change \`requirements.lock\` or \`requirements-dev.lock\` for 3.11.
+It does **not** change `requirements.lock` or `requirements-dev.lock` for 3.11.
 Inspect the job logs and artifact: a non-blocking check is **not** a passing gate
 when setup, resolution, installation, tests or benchmarking fail.
 
@@ -37,7 +37,7 @@ Use one *idle* Linux x86-64 host and one code revision, with separate environmen
 Run the normal validated Python 3.11 environment first. Only run Python 3.15 after
 wheels, hashes, imports and test suite pass under that interpreter.
 
-\`\`\`sh
+```sh
 # In a clean staging checkout (never the live bridge environment).
 uv venv --python 3.11 /tmp/sttb-benchmark-py311
 uv pip install --python /tmp/sttb-benchmark-py311/bin/python --require-hashes -r requirements-dev.lock
@@ -60,7 +60,7 @@ uv pip check --python /tmp/sttb-benchmark-py315/bin/python
   --iterations 300 --warmup 40 --output /tmp/sttb-benchmark-315.json
 /tmp/sttb-benchmark-py311/bin/python tools/compare_python_runtime.py \
   /tmp/sttb-benchmark-311.json /tmp/sttb-benchmark-315.json
-\`\`\`
+```
 
 The benchmark uses synthetic character/card/history inputs through the real prompt
 assembly/compaction and Telegram formatting code. It measures isolated wall time,
@@ -70,7 +70,7 @@ A/B runs on the same host to reduce thermal, load and cache confounders.
 A comparison result is a **local CPU candidate gate only**, never production approval.
 
 For a JIT comparison, independently provision a reviewed Python 3.15 JIT build
-and confirm \`jit.available=true\` and \`jit.enabled=true\` in the benchmark
+and confirm `jit.available=true` and `jit.enabled=true` in the benchmark
 metadata. Do not claim a JIT benchmark from ordinary Python 3.15.
 
 ## Stage 3: mandatory production promotion gates

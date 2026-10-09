@@ -144,3 +144,87 @@ jobs:
           path: runtime-benchmarks/*.json
           if-no-files-found: ignore
           retention-days: 14
+
+  # Expensive, manually dispatched FINAL-release compatibility experiment.
+  # The full native suite is NOT green until faster-whisper/ctranslate2 installs.
+  stable-final-core-regression:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install pinned uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+          enable-cache: true
+      - name: Build verified upstream CPython 3.15.0 FINAL outside repository
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cpython-315-source"
+          cd "$RUNNER_TEMP/cpython-315-source"
+          curl --proto '=https' --tlsv1.2 --fail --location --retry 2 --silent --show-error \
+            "https://www.python.org/ftp/python/3.15.0/Python-3.15.0.tar.xz" -o "Python-3.15.0.tar.xz"
+          echo "ba4bed1ba346b916890b76d9e320451420aa69f6408997d33c66482eeae3d575  Python-3.15.0.tar.xz" | sha256sum -c -
+          tar xf "Python-3.15.0.tar.xz"
+          cd "Python-3.15.0"
+          ./configure --prefix="$RUNNER_TEMP/cpython-315-final" --disable-test-modules > "$RUNNER_TEMP/python315-configure.log" 2>&1
+          make -j2 > "$RUNNER_TEMP/python315-build.log" 2>&1
+          make install > "$RUNNER_TEMP/python315-install.log" 2>&1
+          "$RUNNER_TEMP/cpython-315-final/bin/python3.15" -c \
+            'import sys, ssl, sqlite3, lzma, bz2; assert sys.version_info[:3] == (3,15,0) and sys.version_info.releaselevel == "final"; print(sys.version)'
+          echo "STTB_FINAL_PY315=$RUNNER_TEMP/cpython-315-final/bin/python3.15" >> "$GITHUB_ENV"
+      - name: Resolve and install temporary hash-locked core and dev dependencies
+        run: |
+          set -euo pipefail
+          grep -v '^faster-whisper' requirements.txt > "$RUNNER_TEMP/python315-core-only.txt"
+          uv pip compile "$RUNNER_TEMP/python315-core-only.txt" requirements-dev.txt \
+            --python-version 3.15 --generate-hashes --output-file "$RUNNER_TEMP/python315-core-dev.lock"
+          uv venv --python "$STTB_FINAL_PY315" .venv315-stable-core
+          .venv315-stable-core/bin/python -VV
+          uv pip install --python .venv315-stable-core/bin/python \
+            --require-hashes -r "$RUNNER_TEMP/python315-core-dev.lock"
+          uv pip check --python .venv315-stable-core/bin/python
+          .venv315-stable-core/bin/python -c \
+            'import ssl, sqlite3, httpx, pytest, aiohttp, yaml; print("core_and_dev_imports_pass")'
+      - name: Provisional full test discovery without native voice module
+        id: core-suite
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          .venv315-stable-core/bin/python -X dev -W error::ResourceWarning \
+            -m pytest -q -n auto --maxprocesses=4 --dist=loadfile \
+            --cov=bridge --cov-fail-under=0 \
+            --cov-report=json:python315-stable-coverage.json \
+            --cov-report=xml:python315-stable-coverage.xml \
+            --junitxml=python315-stable-junit.xml \
+            --durations=20 --durations-min=1 \
+            2>&1 | tee python315-stable-pytest.log
+      - name: Record stable runtime gate without granting promotion
+        if: always()
+        env:
+          PROVISIONAL_SUITE_RESULT: ${{ steps.core-suite.outcome }}
+        run: |
+          echo "Python 3.15.0 FINAL — isolated core-plus-dev suite" >> "$GITHUB_STEP_SUMMARY"
+          echo "Provisional (no faster-whisper): $PROVISIONAL_SUITE_RESULT" >> "$GITHUB_STEP_SUMMARY"
+          echo "Full runtime native dependency gate remains BLOCKED until ctranslate2 cp315 wheel exists." >> "$GITHUB_STEP_SUMMARY"
+          echo "Source build is not PGO or JIT optimized; do not compare its CPU time to a production interpreter." >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$PROVISIONAL_SUITE_RESULT" != "success" ]]; then
+            echo "::warning title=Provisional Python 3.15 final tests failed::Review JUnit and logs; migration remains blocked"
+          fi
+      - name: Upload core-only final-release regression evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: python315-final-core-regression
+          path: |
+            python315-stable-pytest.log
+            python315-stable-junit.xml
+            python315-stable-coverage.json
+            python315-stable-coverage.xml
+          if-no-files-found: ignore
+          retention-days: 14

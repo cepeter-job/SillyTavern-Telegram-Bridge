@@ -140,5 +140,5 @@ input-token reduction. The report always leaves `provider_savings_fraction`,
 
 The next decision is based on observed prompt shape: verify genuine structural
 redundancy and provider cache behavior before proposing a guarded change. This
-profiler by itself cannot close #421's 30% matched-provider and independent
+profiler by itself cannot close #421's 20% matched-provider and independent
 narrative-quality gates.

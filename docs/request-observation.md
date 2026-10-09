@@ -106,7 +106,7 @@ successful Telegram delivery or an accepted-work accounting result.
 
 ## Issue #421 remains open
 
-The feature is instrumentation, not a 30% reduction. Collect representative
+The feature is instrumentation, not a 20% reduction. Collect representative
 ordinary traffic only after deliberate activation, then determine whether stable
 structure or verified redundancy warrants a separately reviewed optimization.
 Keep pruning off, preserve failed research evidence, and require complete matched

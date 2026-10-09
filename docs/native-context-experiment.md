@@ -80,3 +80,5 @@ files. No API credentials or production transcript is written to any artifact.
 
 A passing source reconstruction test, a >=30% measured reduction, and a passing
 machine review are separate results. None enables production history pruning.
+
+This describes the **original frozen v1 experiment** and its historical 30% gate. Future separately predeclared matched trials use the current **20% target** (effective 2026-10-09) plus complete accepted-work and independent human-review gates; the original evidence is never re-scored in place.

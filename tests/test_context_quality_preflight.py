@@ -102,3 +102,30 @@ def test_offline_preflight_output_contains_no_prompts_or_story_data():
     assert "PRIVATE CANARY" not in str(result)
     assert result["provider_requests"] == 0
     assert result["trial_ready"] is False
+
+
+def test_newly_predeclared_twenty_percent_target_accepts_25_pct_estimate_for_efficiency_only():
+    proposal = report()
+    proposal["target"]["reduction_fraction"] = 0.20
+    proposal["estimated"]["aggregate_story_input"]["reduction_fraction"] = 0.25
+    verdict = evaluate_quality_preflight(proposal, closure(), budget())
+    assert "candidate_savings_below_target" not in verdict["blocking_reasons"]
+    assert "native_causal_proof_missing" in verdict["blocking_reasons"]
+    assert verdict["trial_ready"] is False
+
+
+def test_frozen_thirty_percent_preflight_stays_at_30_and_never_relabels_the_historical_plan():
+    proposal = report()
+    proposal["estimated"]["aggregate_story_input"]["reduction_fraction"] = 0.25
+    verdict = evaluate_quality_preflight(proposal, closure(), budget())
+    assert "candidate_savings_below_target" in verdict["blocking_reasons"]
+    assert verdict["trial_ready"] is False
+
+
+def test_preflight_rejects_any_target_below_current_policy_floor():
+    proposal = report()
+    proposal["target"]["reduction_fraction"] = 0.01
+    proposal["estimated"]["aggregate_story_input"]["reduction_fraction"] = 0.25
+    verdict = evaluate_quality_preflight(proposal, closure(), budget())
+    assert "invalid_plan" in verdict["blocking_reasons"]
+    assert not verdict["trial_ready"]

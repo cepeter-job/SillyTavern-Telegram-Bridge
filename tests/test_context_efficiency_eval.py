@@ -86,12 +86,12 @@ def test_default_cli_builds_actual_story_prompts_without_measured_claim(tmp_path
     result, report = run_cli(tmp_path)
     assert result.returncode == 0, result.stderr
     assert report["mode"] == "offline_plan"
-    frozen = ROOT / "tests/fixtures/story_memory/context_efficiency_v1.json"
+    frozen = ROOT / "tests/fixtures/story_memory/context_efficiency_v2.json"
     assert report["fixture_sha256"] == hashlib.sha256(frozen.read_bytes()).hexdigest()
     assert report["network"]["requests"] == 0
     assert report["model_evaluation"]["status"] == "not_executed"
     assert report["narrative_quality"]["status"] == "human_review_required"
-    assert report["target"]["reduction_fraction"] == 0.30
+    assert report["target"]["reduction_fraction"] == 0.20
     assert report["target"]["status"] == "goal_only"
     assert report["decision"]["approval_ready"] is False
     assert report["measured"]["aggregate_story_input"] is None

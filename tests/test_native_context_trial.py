@@ -116,3 +116,21 @@ def test_failed_judgment_does_not_erase_known_matched_story_measurements():
     assert not report["accounting"]["complete"]
     assert report["accounting"]["all_physical_input_tokens"] == 2200
     assert report["production_activation_allowed"] is False
+
+
+def test_new_plan_20_percent_target_is_distinct_from_frozen_30_percent_default():
+    plan, state = sample()
+    state["attempts"][1]["usage"]["input_tokens"] = 750
+    assert summarize_trial(plan, state)["matched_target_met"] is False
+    plan["target_reduction_fraction"] = 0.20
+    report = summarize_trial(plan, state)
+    assert report["matched_target_met"] is True
+    assert report["human_approved"] is False
+    assert report["production_activation_allowed"] is False
+
+
+def test_new_native_target_below_20_percent_is_not_accepted():
+    plan, state = sample()
+    plan["target_reduction_fraction"] = 0.05
+    with pytest.raises(ValueError, match="target"):
+        summarize_trial(plan, state)

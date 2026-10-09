@@ -163,6 +163,12 @@ jobs:
       matrix:
         browser: [chromium, webkit]
     runs-on: ubuntu-latest
+    # Official Playwright 1.63.0 Noble image, pinned to its OCI index digest.
+    # Browser binaries and WebKit/Chromium OS libraries are baked into the image.
+    # Avoid long, unreliable Azure apt downloads from playwright install --with-deps.
+    container:
+      image: mcr.microsoft.com/playwright@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --ipc=host
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -208,24 +214,29 @@ jobs:
       - name: Install locked development-only real browser tooling
         run: npm ci --prefix tests/miniapp-browser --include=dev --ignore-scripts --no-audit --no-fund
 
-      - name: Cache Playwright Chromium and WebKit binaries
-        id: playwright-browsers-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-browsers-${{ runner.os }}-${{ runner.arch }}-${{ matrix.browser }}-${{ hashFiles('tests/miniapp-browser/package-lock.json') }}
-
-      - name: Install pinned Chromium and WebKit engines and system dependencies
+      - name: Verify image-bundled Playwright browsers
         env:
           BROWSER_ENGINE: ${{ matrix.browser }}
-        run: node tests/miniapp-browser/node_modules/@playwright/test/cli.js install --with-deps "$BROWSER_ENGINE"
-
-      - name: Report browser cache hit
-        env:
-          PLAYWRIGHT_CACHE_HIT: ${{ steps.playwright-browsers-cache.outputs.cache-hit }}
         run: |
-          echo "### Playwright browsers" >> "$GITHUB_STEP_SUMMARY"
-          echo "Cache hit: ${PLAYWRIGHT_CACHE_HIT:-false}" >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          test "$PLAYWRIGHT_BROWSERS_PATH" = "/ms-playwright"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const pkg = require('./tests/miniapp-browser/node_modules/@playwright/test/package.json');
+          if (pkg.version !== '1.63.0') {
+            throw new Error('Playwright package version does not match pinned image');
+          }
+          const browsers = require('./tests/miniapp-browser/node_modules/@playwright/test');
+          const engine = process.env.BROWSER_ENGINE;
+          if (!['chromium', 'webkit'].includes(engine)) {
+            throw new Error('Unexpected browser matrix value');
+          }
+          const binary = browsers[engine].executablePath();
+          if (!binary.startsWith('/ms-playwright/') || !fs.existsSync(binary)) {
+            throw new Error('Expected version-matched preinstalled Playwright engine is absent');
+          }
+          console.log('Verified bundled Playwright ' + pkg.version + ' engine ' + engine);
+          NODE
 
       - name: Exercise real browser recovery and mobile interaction
         env:

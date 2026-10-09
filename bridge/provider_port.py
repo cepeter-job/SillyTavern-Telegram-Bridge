@@ -74,12 +74,17 @@ def normalize_provider_exception(error: BaseException, model: str) -> ProviderRe
         return ProviderRequestError(model, error.category, error.status, retry_after=error.retry_after)
     if isinstance(error, urllib.error.HTTPError):
         try:
-            status = int(error.code)
-        except (TypeError, ValueError):
-            return None
-        headers = error.headers
-        delay = parse_retry_after(headers.get("Retry-After")) if headers is not None else None
-        return ProviderRequestError(model, provider_category_for_status(status), status, retry_after=delay)
+            try:
+                status = int(error.code)
+            except (TypeError, ValueError):
+                return None
+            headers = error.headers
+            delay = parse_retry_after(headers.get("Retry-After")) if headers is not None else None
+            return ProviderRequestError(model, provider_category_for_status(status), status, retry_after=delay)
+        finally:
+            # HTTPError owns a response stream, even when constructed with fp=None
+            # on Python 3.15. Sanitization must not leave that stream for GC.
+            error.close()
     if isinstance(error, (TimeoutError, socket.timeout)):
         return ProviderRequestError(model, "timeout")
     if isinstance(error, urllib.error.URLError):

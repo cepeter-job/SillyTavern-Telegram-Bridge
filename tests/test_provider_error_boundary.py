@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import socket
 import urllib.error
 from email.message import Message
@@ -16,6 +17,35 @@ def http_error(status: int) -> urllib.error.HTTPError:
         Message(),
         None,
     )
+
+
+def test_provider_normalization_closes_owned_http_response_body():
+    from bridge.provider_errors import ProviderRequestError
+
+    body = io.BytesIO(b"secret raw response")
+    source = urllib.error.HTTPError(
+        "https://provider.example/private", 429, "private error", {"Retry-After": "37"}, body
+    )
+    port = make_test_provider_port(generate_backend=lambda *_a, **_k: (_ for _ in ()).throw(source))
+
+    with pytest.raises(ProviderRequestError) as raised:
+        port.generate("", "provider::model", [])
+
+    assert body.closed
+    assert raised.value.status == 429
+    assert raised.value.retry_after == 37
+    assert "secret raw response" not in str(raised.value)
+
+
+def test_invalid_http_status_still_closes_owned_response_body():
+    from bridge.provider_port import normalize_provider_exception
+
+    body = io.BytesIO(b"private")
+    source = urllib.error.HTTPError("https://provider.example/private", 503, "private", {}, body)
+    source.code = "not-a-status"
+
+    assert normalize_provider_exception(source, "provider::model") is None
+    assert body.closed
 
 
 @pytest.mark.parametrize(

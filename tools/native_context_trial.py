@@ -63,16 +63,6 @@ def summarize_trial(plan: dict, state: dict) -> dict:
     Missing/failed work is never dropped from the denominator. Missing usage is
     unknown rather than zero. Generation input includes logical cache-hit tokens.
     """
-    # Legacy frozen v1 trial plans omitted the target and remain evaluated
-    # against their original 30% gate. New plans must declare a target of
-    # at least the policy floor (20%), before any provider dispatch.
-    declared_target = plan.get("target_reduction_fraction", 0.30)
-    if (
-        type(declared_target) not in (float, int)
-        or not math.isfinite(declared_target)
-        or not 0.20 <= declared_target <= 1.0
-    ):
-        raise ValueError("invalid_native_trial_target")
     attempts = state.get("attempts", [])
     if not isinstance(attempts, list) or any(not isinstance(item, dict) for item in attempts):
         raise ValueError("invalid_native_trial_attempts")
@@ -210,9 +200,7 @@ def summarize_trial(plan: dict, state: dict) -> dict:
             "review_cost_split_sensitivity": {v: totals[v] + shared_review_half for v in VARIANTS} if matched else None,
             "review_overhead_is_offline_evaluation_not_runtime": True,
         },
-        "matched_target_met": (
-            reduction is not None and reduction >= declared_target and totals["candidate"] < totals["baseline"]
-        ),
+        "matched_target_met": reduction is not None and reduction >= 0.3 and totals["candidate"] < totals["baseline"],
         "automated_review_passed": bool(reviews_ok and matched and complete),
         "native_source_retention_verified": all(
             case.get("proof", {}).get("all_source_evidence_preserved") is True for case in cases

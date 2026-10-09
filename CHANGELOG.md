@@ -11,7 +11,7 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 ### Quality-gated context objective (issue #421, 2026-10-09)
 
 - Lower the **current new-trial** provider-reported story input-reduction objective from 30% to **20%**, retaining complete accepted-work accounting, source/reader/causal proof, independent blinded narrative quality and production approval gates.
-- Introduce a separately versioned v2 synthetic replay fixture so historical v1 trial plans, signed releases and original 30% evidence remain untouched. Evaluation preflight follows the target predeclared by a plan (never below 20%); native v1 plans without a target retain the historical 30% default.
+- Introduce a separately versioned v2 synthetic replay fixture so historical v1 trial plans, signed releases and original 30% evidence remain untouched. Evaluation preflight follows a newly predeclared target (never below 20%); the frozen native-v1 trial runner and its original 30% protocol hash stay byte-for-byte unchanged.
 - Keep context pruning and final-request observation **off** until signed deployment and explicit opt-in. A merged commit or this changelog is not a published release.
 
 ## [0.3.019] - 2026-10-09

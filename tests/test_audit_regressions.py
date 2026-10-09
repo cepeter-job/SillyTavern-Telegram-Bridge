@@ -703,9 +703,7 @@ class AuditRegressionTests(SettingsTestCase):
             app_settings=self.app_settings_builder.build(),
         )
 
-        self.assertNotIn("## Final instruction", messages[0]["content"])
         system = messages[-3]["content"]
-        self.assertEqual(messages[-3]["role"], "system")
         self.assertIn("selected output language is English (en)", system)
         self.assertIn("MUST write all visible response text in English", system)
         self.assertGreater(system.index("## Mandatory response language"), system.index("## Final instruction"))

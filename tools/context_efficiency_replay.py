@@ -143,8 +143,8 @@ def build_replay(*, model=None, max_output_tokens=None):
                         "selection": selection,
                         "invariants": invariants,
                     }
-                system_preserved = (
-                    variants["baseline"]["messages"][0]["content"] == variants["candidate"]["messages"][0]["content"]
+                system_preserved = system_messages(variants["baseline"]["messages"]) == system_messages(
+                    variants["candidate"]["messages"]
                 )
                 variants["candidate"]["invariants"]["paired_system_content_preserved"] = system_preserved
                 variants["candidate"]["invariants"]["satisfied"] &= system_preserved
@@ -185,8 +185,41 @@ def build_replay(*, model=None, max_output_tokens=None):
     return fixture, rows, json_hash(identity)
 
 
+def system_messages(messages):
+    """Preserve every system message, including native post-history policies."""
+    return [message["content"] for message in messages if message["role"] == "system"]
+
+
+def post_history_invariants(messages, fixture):
+    post = fixture["fields"]["post_history_instructions"]
+    if not post:
+        return True, True
+    matches = [
+        (index, message["content"])
+        for index, message in enumerate(messages)
+        if message["role"] == "system" and post in message["content"]
+    ]
+    if len(matches) != 1 or matches[0][1].count(post) != 1:
+        return False, False
+    index, content = matches[0]
+    history_end = max(
+        (i for i, message in enumerate(messages[:-1]) if message["role"] in {"user", "assistant"}),
+        default=0,
+    )
+    placement = history_end < index < len(messages) - 1
+    native_markers = (
+        "## Narrative Policy",
+        "## Telegram Roleplay Output Contract",
+        "## Canonical story state",
+        "## Mandatory response language",
+    )
+    positions = [content.find(marker) for marker in native_markers]
+    precedence = content.find(post) < positions[0] and positions == sorted(set(positions))
+    return placement, precedence
+
+
 def check_invariants(messages, capture, fixture):
-    system = messages[0]["content"]
+    systems = system_messages(messages)
     mandatory = [
         fixture["fields"][key]
         for key in ("system_prompt", "description", "personality", "scenario", "post_history_instructions")
@@ -198,10 +231,13 @@ def check_invariants(messages, capture, fixture):
         fixture["contexts"]["narrative_context"],
         "Mandatory response language",
         "Light Novel response contract",
+        "## Telegram Roleplay Output Contract",
+        "## Canonical story state",
     ]
-    missing = [item for item in mandatory if item not in system]
+    missing = [item for item in mandatory if not any(item in system for system in systems)]
+    placement, precedence = post_history_invariants(messages, fixture)
     current = format_user_dialogue_action(capture["user_text"])
-    current_preserved = current in messages[-1]["content"]
+    current_preserved = messages[-1]["role"] == "user" and current in messages[-1]["content"]
     available = Counter((m["role"], m["content"]) for m in messages[1:-1])
     required = Counter(
         (role, format_user_dialogue_action(text) if role == "user" else text)
@@ -211,7 +247,14 @@ def check_invariants(messages, capture, fixture):
     wire_text = json.dumps(messages, ensure_ascii=False).casefold()
     canary_excluded = all(canary.casefold() not in wire_text for canary in fixture["forbidden_prompt_canaries"])
     return {
-        "satisfied": not missing and current_preserved and history_preserved and canary_excluded,
+        "satisfied": not missing
+        and current_preserved
+        and history_preserved
+        and canary_excluded
+        and placement
+        and precedence,
+        "post_history_placement_preserved": placement,
+        "native_policy_precedence_preserved": precedence,
         "forbidden_canary_excluded": canary_excluded,
         "mandatory_instructions_preserved": not missing,
         "current_input_preserved": current_preserved,

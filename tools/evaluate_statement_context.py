@@ -30,16 +30,26 @@ from bridge.user_dialogue import format_user_dialogue_action  # noqa: E402
 from tools.hybrid_context_fixture import native_fixture  # noqa: E402
 
 CASES = (
-    "unique_dialogue", "commitment_dense", "indonesian",
-    "unsupported_script", "short_history", "large_character_card",
+    "unique_dialogue",
+    "commitment_dense",
+    "indonesian",
+    "unsupported_script",
+    "short_history",
+    "large_character_card",
 )
 CODE_FILES = (
-    "bridge/context_hybrid_sources.py", "bridge/context_hybrid_types.py",
-    "bridge/context_hybrid_policy.py", "bridge/context_hybrid_shadow.py",
-    "bridge/context_statement_policy.py", "bridge/context_statement_shadow.py",
-    "bridge/context_selection_runtime.py", "bridge/context_selection_store.py",
-    "bridge/memory_contracts.py", "bridge/generation.py",
-    "tools/hybrid_context_fixture.py", "tools/evaluate_statement_context.py",
+    "bridge/context_hybrid_sources.py",
+    "bridge/context_hybrid_types.py",
+    "bridge/context_hybrid_policy.py",
+    "bridge/context_hybrid_shadow.py",
+    "bridge/context_statement_policy.py",
+    "bridge/context_statement_shadow.py",
+    "bridge/context_selection_runtime.py",
+    "bridge/context_selection_store.py",
+    "bridge/memory_contracts.py",
+    "bridge/generation.py",
+    "tools/hybrid_context_fixture.py",
+    "tools/evaluate_statement_context.py",
 )
 
 
@@ -52,10 +62,7 @@ class _NoPersona:
 
 
 def implementation_digest() -> str:
-    return digest_value({
-        name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
-        for name in CODE_FILES
-    })
+    return digest_value({name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in CODE_FILES})
 
 
 def _synthetic_messages(db, scope, rows, settings, variant="unique_dialogue") -> list[dict]:
@@ -76,9 +83,11 @@ def _synthetic_messages(db, scope, rows, settings, variant="unique_dialogue") ->
         app_settings=settings,
     )
     session = {
-        "persona_id": "", "response_language": "auto",
+        "persona_id": "",
+        "response_language": "auto",
         "system_prompt": "Continue chronological causality; do not retcon.",
-        "model_id": "m", "world_file": "",
+        "model_id": "m",
+        "world_file": "",
         "author_note": "Maintain already established commitments and reader knowledge.",
         "grounded_user": "off",
     }
@@ -92,9 +101,12 @@ def _synthetic_messages(db, scope, rows, settings, variant="unique_dialogue") ->
         else "Describe the turquoise astrolabe without choosing my next action."
     )
     return build_chat_messages(
-        session, fields, user_text,
+        session,
+        fields,
+        user_text,
         [(role, text) for _, role, text in rows],
-        persona_service=_NoPersona(), session_summary=summary,
+        persona_service=_NoPersona(),
+        session_summary=summary,
         app_settings=settings,
         memory_prompt=MemoryPromptContext(scope=scope, selection_mode="shadow"),
         defer_compaction=True,
@@ -113,7 +125,9 @@ def build_report(directory: Path) -> dict:
     cases = []
     for variant in CASES:
         db, scope, _, rows = native_fixture(
-            directory, count=8 if variant == "short_history" else 44, variant=variant,
+            directory,
+            count=8 if variant == "short_history" else 44,
+            variant=variant,
         )
         try:
             messages = _synthetic_messages(db, scope, rows, load_app_settings({}, home=directory), variant)
@@ -122,17 +136,20 @@ def build_report(directory: Path) -> dict:
             current = evaluate_statement_shadow(db, scope, messages, query=query)
             baseline = current.metrics["baseline_tokens"]
             history_only = sum(8 + (len(text) + 3) // 4 for _, _, text in rows)
-            cases.append({
-                "case_id": variant, "weight": 1 / len(CASES),
-                "source_rows": len(rows),
-                "fixed_prompt_tokens": baseline - history_only,
-                "old_hybrid": {
-                    "candidate_status": old.metrics["candidate_status"],
-                    "candidate_tokens": old.metrics["candidate_tokens"],
-                    "estimated_reduction_fraction": old.metrics["estimated_reduction_fraction"],
-                },
-                **current.metrics,
-            })
+            cases.append(
+                {
+                    "case_id": variant,
+                    "weight": 1 / len(CASES),
+                    "source_rows": len(rows),
+                    "fixed_prompt_tokens": baseline - history_only,
+                    "old_hybrid": {
+                        "candidate_status": old.metrics["candidate_status"],
+                        "candidate_tokens": old.metrics["candidate_tokens"],
+                        "estimated_reduction_fraction": old.metrics["estimated_reduction_fraction"],
+                    },
+                    **current.metrics,
+                }
+            )
         finally:
             db.close()
     baseline = sum(item["baseline_tokens"] for item in cases)
@@ -140,10 +157,13 @@ def build_report(directory: Path) -> dict:
     old_candidate = sum(item["old_hybrid"]["candidate_tokens"] for item in cases)
     return {
         "type": "native_statement_shadow_complete_prompt",
-        "schema_version": 1, "implementation_sha256": implementation_digest(),
-        "provider_requests": 0, "production_database_writes": 0,
+        "schema_version": 1,
+        "implementation_sha256": implementation_digest(),
+        "provider_requests": 0,
+        "production_database_writes": 0,
         "production_activation_allowed": False,
-        "semantic_continuity_proven": False, "provider_measured_reduction": None,
+        "semantic_continuity_proven": False,
+        "provider_measured_reduction": None,
         "estimated": {
             "complete_prompt_baseline_tokens": baseline,
             "complete_prompt_candidate_tokens": candidate,
@@ -182,7 +202,8 @@ def build_live_metadata(database: Path, settings) -> dict:
             raise ValueError("statement_live_scope_bound")
         for ordinal, (chat, sid, character) in enumerate(scoped):
             fallback = {
-                "sample": ordinal + 1, "candidate_status": "fallback",
+                "sample": ordinal + 1,
+                "candidate_status": "fallback",
                 "reason": "native_proof_unavailable",
                 "estimated_reduction_fraction": 0.0,
                 "production_activation_allowed": False,
@@ -195,8 +216,7 @@ def build_live_metadata(database: Path, settings) -> dict:
                 fields = card_fields(read_png_chara(card), app_settings=settings)
                 scope = resolve_memory_scope(db, chat, {"session_id": sid}, fields)
                 raw = db.execute(
-                    "SELECT role,content FROM messages WHERE chat_id=? AND session_id=? "
-                    "ORDER BY created_at,id LIMIT ?",
+                    "SELECT role,content FROM messages WHERE chat_id=? AND session_id=? ORDER BY created_at,id LIMIT ?",
                     (chat, sid, MAX_HISTORY_ROWS + 1),
                 ).fetchall()
                 if scope is None or not raw or len(raw) > MAX_HISTORY_ROWS:
@@ -213,21 +233,27 @@ def build_live_metadata(database: Path, settings) -> dict:
                 query = next((text for role, text in reversed(raw) if role == "user"), "")
                 whole = evaluate_hybrid_shadow(db, scope, messages, query=query)
                 detail = evaluate_statement_shadow(db, scope, messages, query=query)
-                samples.append({
-                    "sample": ordinal + 1, "source_rows": len(raw),
-                    "old_hybrid_reason": whole.metrics["reason"],
-                    "old_hybrid_estimated_reduction_fraction": whole.metrics["estimated_reduction_fraction"],
-                    **detail.metrics,
-                })
+                samples.append(
+                    {
+                        "sample": ordinal + 1,
+                        "source_rows": len(raw),
+                        "old_hybrid_reason": whole.metrics["reason"],
+                        "old_hybrid_estimated_reduction_fraction": whole.metrics["estimated_reduction_fraction"],
+                        **detail.metrics,
+                    }
+                )
             except (ValueError, TypeError, KeyError, OSError, sqlite3.Error):
                 samples.append(fallback)
         if db.total_changes:
             raise ValueError("statement_metadata_must_be_readonly")
     return {
         "type": "read_only_live_history_only_metadata",
-        "schema_version": 1, "implementation_sha256": implementation_digest(),
-        "provider_requests": 0, "production_database_writes": 0,
-        "production_transcript_exported": False, "production_activation_allowed": False,
+        "schema_version": 1,
+        "implementation_sha256": implementation_digest(),
+        "provider_requests": 0,
+        "production_database_writes": 0,
+        "production_transcript_exported": False,
+        "production_activation_allowed": False,
         "provider_measured_reduction": None,
         "denominator": "History and source-backed reference; fixed live prompts unavailable in this mode.",
         "cases": samples,
@@ -249,9 +275,7 @@ def main() -> int:
 
         environ = dict(os.environ)
         bootstrap_environment(environ)
-        report = build_live_metadata(
-            args.database, load_app_settings(environ, home=Path.home())
-        )
+        report = build_live_metadata(args.database, load_app_settings(environ, home=Path.home()))
     else:
         with tempfile.TemporaryDirectory(prefix="statement-shadow-native-") as temp:
             report = build_report(Path(temp))
@@ -260,11 +284,17 @@ def main() -> int:
         os.chmod(args.output, 0o600)
         json.dump(report, file, ensure_ascii=False, indent=2, allow_nan=False)
         file.write("\n")
-    print(json.dumps({
-        "type": report["type"], "cases": len(report["cases"]),
-        "provider_requests": 0, "estimated": report.get("estimated"),
-        "production_activation_allowed": False,
-    }))
+    print(
+        json.dumps(
+            {
+                "type": report["type"],
+                "cases": len(report["cases"]),
+                "provider_requests": 0,
+                "estimated": report.get("estimated"),
+                "production_activation_allowed": False,
+            }
+        )
+    )
     return 0
 
 

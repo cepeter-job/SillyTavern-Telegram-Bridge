@@ -108,8 +108,9 @@ def test_statement_candidate_rejected_by_dispatch_in_every_mode(story, tmp_path,
     assert packet.metrics["candidate_status"] == "preview"
     settings = load_app_settings({"SILLYTAVERN_CONTEXT_SELECTION_MODE": mode}, home=tmp_path)
     with pytest.raises(ValueError, match="shadow-only"):
-        choose_context_messages(packet.candidate_messages, app_settings=settings,
-                                chars_per_token=4, input_budget_tokens=100000)
+        choose_context_messages(
+            packet.candidate_messages, app_settings=settings, chars_per_token=4, input_budget_tokens=100000
+        )
 
 
 def test_short_history_never_claims_savings(tmp_path):

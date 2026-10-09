@@ -69,7 +69,10 @@ def test_one_word_choice_keeps_referent_from_previous_assistant():
     )
     # Real reply role would be user. The policy additionally checks that its
     # preceding turn was an assistant and protects that referent in full.
-    rows = rows[:6] + (replace(rows[6], role="assistant"), replace(rows[7], role="user")) + rows[8:]
+    mutable = list(rows)
+    mutable[6] = replace(mutable[6], role="assistant")
+    mutable[7] = replace(mutable[7], role="user")
+    rows = tuple(mutable)
     result = select_statement_spans(rows, "door", HybridOptions())
     recorded = {index for index, _ in result.selected}
     assert 6 in recorded and 7 in recorded

@@ -298,7 +298,7 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
     rollover = continuing or eligible
     if eligible and not continuing:
         origin, digest = current_through, digest_value(previous["blocks"])
-    prompt_previous = {"blocks": previous.get("blocks", [])} if rollover else previous
+    prompt_previous = {"blocks": previous.get("blocks", [])} if continuing else {"blocks": []} if eligible else previous
     length_contract = summary_length_contract(prompt_previous)
     window_contract = (
         " The prior classified Summary window is already accepted and will be archived verbatim "

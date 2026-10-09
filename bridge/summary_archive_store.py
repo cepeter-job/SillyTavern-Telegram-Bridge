@@ -10,7 +10,7 @@ import json
 import sqlite3
 from typing import Any
 
-from bridge.memory_artifact_store import load_artifact_classification, parse_classified_blocks
+from bridge.memory_artifact_store import load_artifact_classification, parse_classified_blocks, read_artifact_block
 from bridge.memory_contracts import (
     MemoryBlock,
     MemoryBlockLeaf,
@@ -180,3 +180,26 @@ def read_summary_archive(
         leaves.append(MemoryBlockLeaf(text, evidence, scope, visibility, known_by, scope.rewrite_revision))
         used += len(text) + (len(lines) > 1)
     return MemoryBlock("\n".join(lines), tuple(pointers), "summary", tuple(leaves))
+
+
+def read_summary_block(
+    db: sqlite3.Connection,
+    scope: MemoryReadScope,
+    query: str = "",
+    *,
+    required_evidence: tuple[MemoryEvidence, ...] | None = None,
+) -> MemoryBlock:
+    """Rehydrate active classified Summary plus authorized archive within one cap."""
+    from bridge.limits import SUMMARY_MAX_CHARS
+
+    current = read_artifact_block(db, scope, "summary", required_evidence=required_evidence)
+    room = SUMMARY_MAX_CHARS - len(current.text) - bool(current.text)
+    archived = read_summary_archive(
+        db, scope, query, required_evidence=required_evidence, max_chars=min(6000, max(0, room))
+    )
+    return MemoryBlock(
+        "\n".join(filter(None, (current.text, archived.text))),
+        current.evidence + archived.evidence,
+        "summary",
+        current.leaves + archived.leaves,
+    )

@@ -7,11 +7,12 @@ from dataclasses import replace
 from typing import Literal
 
 from bridge.limits import EPISODIC_CONTEXT_MAX_CHARS, HINDSIGHT_CONTEXT_MAX_CHARS
-from bridge.memory_artifact_store import read_artifact_block, read_summary_block
+from bridge.memory_artifact_store import read_artifact_block
 from bridge.memory_contracts import MemoryBlock, MemoryBlockLeaf, MemoryEvidence, MemoryReadScope
 from bridge.memory_fact_store import StoredMemoryFact, index_fact_is_current, load_current_fact, normalize_principals
 from bridge.memory_search_store import MAX_SEARCH_CANDIDATES, search_fact_ids
 from bridge.memory_store import external_memory_boundary, request_source_cutoff
+from bridge.summary_archive_store import read_summary_block
 
 
 def resolve_memory_scope(

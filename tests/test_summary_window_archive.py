@@ -9,8 +9,8 @@ from test_story_memory_scope import append, scope
 from test_story_memory_scope import db as db
 
 from bridge import memory
-from bridge.memory_artifact_store import read_summary_block
 from bridge.provider_port import ProviderPort
+from bridge.summary_archive_store import read_summary_block
 
 SESSION = {"session_id": "s", "model_id": "m"}
 CREDENTIALS = {
@@ -73,6 +73,8 @@ def test_rollover_archives_exact_accepted_prior_and_continues_canonical_source(d
     assert len(calls) == 1
     instructions = calls[0][0]["content"]
     assert "archived" in instructions.casefold() and "only" in instructions.casefold()
+    assert calls[0][-1]["content"].startswith('Previous classified summary:\n{"blocks": []}')
+    assert CREDENTIALS["private_mira"][:55] not in calls[0][-1]["content"]
 
     archive = db.execute(
         "SELECT through_rowid,source_document_id,blocks_json FROM summary_archive_windows "

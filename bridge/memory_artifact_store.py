@@ -170,27 +170,9 @@ def read_artifact_block(
     return MemoryBlock("\n".join(lines), tuple(evidence), kind, tuple(leaves))
 
 
-def read_summary_block(
-    db: sqlite3.Connection,
-    scope: MemoryReadScope,
-    query: str = "",
-    *,
-    required_evidence: tuple[MemoryEvidence, ...] | None = None,
-) -> MemoryBlock:
-    """Rehydrate current and authorized historical windows within one cap."""
-    from bridge.summary_archive_store import read_summary_archive
-
-    current = read_artifact_block(db, scope, "summary", required_evidence=required_evidence)
-    room = SUMMARY_MAX_CHARS - len(current.text) - bool(current.text)
-    archived = read_summary_archive(
-        db, scope, query, required_evidence=required_evidence, max_chars=min(6000, max(0, room))
-    )
-    return MemoryBlock(
-        "\n".join(filter(None, (current.text, archived.text))),
-        current.evidence + archived.evidence,
-        "summary",
-        current.leaves + archived.leaves,
-    )
+def read_summary_block(db: sqlite3.Connection, scope: MemoryReadScope) -> MemoryBlock:
+    """Read the current classified Summary window only (compatibility adapter)."""
+    return read_artifact_block(db, scope, "summary")
 
 
 def read_scene_block(db: sqlite3.Connection, scope: MemoryReadScope) -> MemoryBlock:

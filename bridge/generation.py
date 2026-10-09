@@ -228,18 +228,19 @@ def build_chat_messages(
     if author_note:
         system += f"\n\n## Author's Note\n{replace_macros(author_note, fields, user_name, app_settings=app_settings)}"
     post_history = replace_macros(fields["post_history_instructions"], fields, user_name, app_settings=app_settings)
-    if post_history:
-        system += f"\n\n## Final instruction\n{post_history}"
+    runtime_policy = ""
     if narrative_context:
-        system += (
+        runtime_policy += (
             "\n\n## Narrative Policy\nThese session settings govern viewpoint, focus and user agency. "
             "Preserve established character and world facts without retconning.\n" + narrative_context
         )
     grounded_policy = grounded_user_policy(session.get("grounded_user"))
     if grounded_policy:
-        system += "\n\n## Grounded User Policy\n" + grounded_policy
-    system += "\n\n" + _ROLEPLAY_OUTPUT_CONTRACT + "\n\n" + SIMULATION_OUTPUT_POLICY
-    system += "\n\n## Mandatory response language\n" + language_instruction
+        runtime_policy += "\n\n## Grounded User Policy\n" + grounded_policy
+    runtime_policy += "\n\n" + _ROLEPLAY_OUTPUT_CONTRACT + "\n\n" + SIMULATION_OUTPUT_POLICY
+    runtime_policy += "\n\n## Mandatory response language\n" + language_instruction
+    if not post_history:
+        system += runtime_policy
     messages: list[dict] = [{"role": "system", "content": system, "_context_optional": system_optional}]
     if not history and fields["first_mes"]:
         messages.append(
@@ -249,6 +250,20 @@ def build_chat_messages(
             }
         )
     messages.extend(history)
+    if post_history:
+        # Keep card guidance after history, with native contracts following it
+        # exactly once. The current user turn remains last for every adapter.
+        messages.append(
+            {
+                "role": "system",
+                "content": (
+                    f"## Final instruction\n{post_history}\n\n"
+                    "Native session, speaker, user-agency, state and output policies "
+                    "override conflicting character-card guidance." + runtime_policy
+                ),
+                "_context_optional": [],
+            }
+        )
     if normalize_response_language(language_value) != "auto":
         messages.append({"role": "system", "content": "## Runtime output constraint\n" + language_instruction})
     user_content = ""

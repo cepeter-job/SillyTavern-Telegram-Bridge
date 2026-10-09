@@ -217,8 +217,17 @@ def _merge_system_prompt_file(result: dict[str, dict[str, str]], path: Path) -> 
 def _merge_system_prompt_json(result: dict[str, dict[str, str]], path: Path) -> None:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        logging.warning("Could not read System Prompt catalog %s", path, exc_info=True)
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        logging.warning("Could not read System Prompt catalog %s", path)
+        return
+    if isinstance(raw, dict) and ("prompts" in raw or "prompt_order" in raw):
+        # These reserved keys identify a modular export, including malformed
+        # exports. Never turn its auxiliary strings into selectable prompts.
+        logging.warning(
+            "Skipping unsupported SillyTavern Chat Completion preset %s; "
+            "use a native TXT or simple JSON System Prompt instead",
+            panel_label(path.name, 64),
+        )
         return
     if isinstance(raw, list) and all(isinstance(item, str) for item in raw):
         result[path.stem] = {"name": _prompt_catalog_label(path.stem), "prompt": "\n".join(raw)}
@@ -244,8 +253,8 @@ def _merge_system_prompt_json(result: dict[str, dict[str, str]], path: Path) -> 
 def _merge_system_prompt_text(result: dict[str, dict[str, str]], path: Path) -> None:
     try:
         prompt = path.read_text(encoding="utf-8")
-    except OSError:
-        logging.warning("Could not read System Prompt text file %s", path, exc_info=True)
+    except (OSError, UnicodeError):
+        logging.warning("Could not read System Prompt text file %s", path)
         return
     if prompt.strip():
         result[path.stem] = {"name": _prompt_catalog_label(path.stem), "prompt": prompt}

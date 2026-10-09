@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "scope": "Synthetic fixtures; no provider results or measured quality claims.",
+  "cases": [
+    {
+      "id": "attempted_action",
+      "card": {
+        "name": "Rowan",
+        "description": "A recurring station character with established duties and limits.",
+        "scenario": "Ari and Rowan are in a station office. Rowan guards a locked cupboard."
+      },
+      "history": [
+        {
+          "role": "assistant",
+          "content": "The cupboard is locked."
+        },
+        {
+          "role": "assistant",
+          "content": "Rowan has not handed Ari the cupboard key."
+        }
+      ],
+      "user_text": "I reach toward Rowan's key ring.",
+      "narrative_settings": {},
+      "response_language": "auto",
+      "required_facts": [
+        "The cupboard is locked.",
+        "Rowan has not handed Ari the cupboard key."
+      ],
+      "forbidden_inferences": [
+        "Ari already possesses the key",
+        "Ari voluntarily attacks Rowan"
+      ],
+      "review_focus": "Resolve the stated attempt without granting automatic success or choosing a new user action."
+    },
+    {
+      "id": "promise_negation",
+      "card": {
+        "name": "Rowan",
+        "description": "A recurring station character with established duties and limits.",
+        "scenario": "Rowan and Ari made a limited agreement at the station."
+      },
+      "history": [
+        {
+          "role": "assistant",
+          "content": "Rowan promised to meet Ari at the north gate before dawn."
+        },
+        {
+          "role": "assistant",
+          "content": "Rowan did not promise to give Ari the sealed letter."
+        }
+      ],
+      "user_text": "I ask Rowan to explain the agreement again.",
+      "narrative_settings": {},
+      "response_language": "auto",
+      "required_facts": [
+        "Rowan promised to meet Ari at the north gate before dawn.",
+        "Rowan did not promise to give Ari the sealed letter."
+      ],
+      "forbidden_inferences": [
+        "Rowan promised to surrender the letter",
+        "The meeting was at the south gate"
+      ],
+      "review_focus": "Keep the promise and its explicit negation distinct."
+    },
+    {
+      "id": "reader_boundary",
+      "card": {
+        "name": "Mara",
+        "description": "A recurring station character with established duties and limits.",
+        "scenario": "Mara is speaking to Ari; Rowan has gone upstairs. Mara cannot read minds."
+      },
+      "history": [
+        {
+          "role": "assistant",
+          "content": "Only Rowan saw the changed train schedule."
+        },
+        {
+          "role": "assistant",
+          "content": "Mara has not been told about the schedule change."
+        }
+      ],
+      "user_text": "I ask Mara whether anything has changed.",
+      "narrative_settings": {
+        "pov_mode": "omniscient"
+      },
+      "response_language": "auto",
+      "required_facts": [
+        "Only Rowan saw the changed train schedule.",
+        "Mara has not been told about the schedule change."
+      ],
+      "forbidden_inferences": [
+        "Mara knows the schedule changed without a source",
+        "Ari already learned the schedule change"
+      ],
+      "review_focus": "Preserve the asymmetry between narrator access and character knowledge."
+    },
+    {
+      "id": "quiet_handoff",
+      "card": {
+        "name": "Rowan",
+        "description": "A recurring station character with established duties and limits.",
+        "scenario": "Rowan and Ari are waiting in a quiet station cafe."
+      },
+      "history": [
+        {
+          "role": "assistant",
+          "content": "Rowan has agreed to share the table."
+        },
+        {
+          "role": "assistant",
+          "content": "No urgent threat has been established."
+        }
+      ],
+      "user_text": "I thank Rowan and ask how the morning has been.",
+      "narrative_settings": {},
+      "response_language": "auto",
+      "required_facts": [
+        "Rowan has agreed to share the table.",
+        "No urgent threat has been established."
+      ],
+      "forbidden_inferences": [
+        "A crisis is mandatory",
+        "Ari makes an unrequested promise"
+      ],
+      "review_focus": "Allow ordinary cooperation and a meaningful handoff without compulsory escalation."
+    },
+    {
+      "id": "ensemble_offscreen",
+      "card": {
+        "name": "Rowan",
+        "description": "A recurring station character with established duties and limits.",
+        "scenario": "Ari is absent. Rowan and Mara are negotiating a delayed shipment at the station."
+      },
+      "history": [
+        {
+          "role": "assistant",
+          "content": "Ari is sleeping in another town."
+        },
+        {
+          "role": "assistant",
+          "content": "Rowan owes Mara an explanation for the delay."
+        }
+      ],
+      "user_text": "Follow Rowan and Mara's discussion.",
+      "narrative_settings": {
+        "pov_mode": "omniscient",
+        "user_role": "observer",
+        "scene_focus": "world",
+        "offscreen_policy": "free"
+      },
+      "response_language": "auto",
+      "required_facts": [
+        "Ari is sleeping in another town.",
+        "Rowan owes Mara an explanation for the delay."
+      ],
+      "forbidden_inferences": [
+        "Ari suddenly joins the room",
+        "The scene must immediately return to Ari"
+      ],
+      "review_focus": "Follow the permitted cast without fabricating user participation."
+    },
+    {
+      "id": "magical_continuity",
+      "card": {
+        "name": "Rowan",
+        "description": "A recurring station character with established duties and limits.",
+        "scenario": "In this magical-realist station, rain can affect the old public clock."
+      },
+      "history": [
+        {
+          "role": "assistant",
+          "content": "The public clock loses one minute whenever the station bell rings during rain."
+        },
+        {
+          "role": "assistant",
+          "content": "Neither Ari nor Rowan controls this effect."
+        }
+      ],
+      "user_text": "I ask how travelers keep track of the departure time.",
+      "narrative_settings": {},
+      "response_language": "auto",
+      "required_facts": [
+        "The public clock loses one minute whenever the station bell rings during rain.",
+        "Neither Ari nor Rowan controls this effect."
+      ],
+      "forbidden_inferences": [
+        "Ari can now control time",
+        "A fresh miracle is required in every reply"
+      ],
+      "review_focus": "Develop practical effects of the established phenomenon without granting powers or retconning its rule."
+    },
+    {
+      "id": "branch_boundary",
+      "card": {
+        "name": "Rowan",
+        "description": "A recurring station character with established duties and limits.",
+        "scenario": "This is the current branch of the station story. A discarded alternate branch is not canon."
+      },
+      "history": [
+        {
+          "role": "assistant",
+          "content": "In the current branch, Ari refused the invitation."
+        },
+        {
+          "role": "assistant",
+          "content": "The discarded branch in which Ari accepted is not part of the current story."
+        }
+      ],
+      "user_text": "I ask Rowan what happens after my refusal.",
+      "narrative_settings": {},
+      "response_language": "auto",
+      "required_facts": [
+        "In the current branch, Ari refused the invitation.",
+        "The discarded branch in which Ari accepted is not part of the current story."
+      ],
+      "forbidden_inferences": [
+        "Ari accepted the invitation",
+        "Consequences from the discarded branch already occurred"
+      ],
+      "review_focus": "Use current-branch commitments, not abandoned alternatives."
+    },
+    {
+      "id": "indonesian_continuity",
+      "card": {
+        "name": "Rowan",
+        "description": "A recurring station character with established duties and limits.",
+        "scenario": "Ari dan Rowan sedang berbicara di stasiun."
+      },
+      "history": [
+        {
+          "role": "assistant",
+          "content": "Rowan berjanji menunggu Ari sampai pukul delapan."
+        },
+        {
+          "role": "assistant",
+          "content": "Tiket Ari belum dibayar."
+        }
+      ],
+      "user_text": "Aku menanyakan apakah masih ada waktu untuk membeli tiket.",
+      "narrative_settings": {},
+      "response_language": "id",
+      "required_facts": [
+        "Rowan berjanji menunggu Ari sampai pukul delapan.",
+        "Tiket Ari belum dibayar."
+      ],
+      "forbidden_inferences": [
+        "Tiket Ari sudah dibayar",
+        "Rowan berjanji menunggu sampai pukul sembilan"
+      ],
+      "review_focus": "Keep language and established time/payment state intact."
+    }
+  ]
+}

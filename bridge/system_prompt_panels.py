@@ -43,7 +43,10 @@ def send_system_prompt_menu(
     current_key = _system_prompt_key(current, app_settings=request_context.app_settings)
     labels = dict(system_prompt_choices(app_settings=request_context.app_settings))
     current_label = labels.get(current_key, "off")
-    text = f"System Prompt choice\nCurrent: {current_label}\nChoose a TXT prompt:"
+    text = (
+        f"System Prompt choice\nCurrent: {current_label}\nChoose a TXT or native JSON prompt.\n"
+        "Chat Completion presets are not supported."
+    )
     send_panel_message(
         token,
         chat_id,

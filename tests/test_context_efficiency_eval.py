@@ -100,8 +100,11 @@ def test_default_cli_builds_actual_story_prompts_without_measured_claim(tmp_path
         for variant in case["variants"].values():
             assert variant["invariants"]["satisfied"] is True
             prompt = variant["messages"]
-            assert "Mandatory response language" in prompt[0]["content"]
-            assert "Light Novel response contract" in prompt[0]["content"]
+            systems = [message["content"] for message in prompt if message["role"] == "system"]
+            assert any("Mandatory response language" in content for content in systems)
+            assert variant["invariants"]["post_history_placement_preserved"]
+            assert variant["invariants"]["native_policy_precedence_preserved"]
+            assert any("Light Novel response contract" in content for content in systems)
             assert "required_fact_keys" not in json.dumps(prompt)
             assert variant["estimated_input_tokens"] > 0
             assert all("_context_optional" not in message for message in prompt)

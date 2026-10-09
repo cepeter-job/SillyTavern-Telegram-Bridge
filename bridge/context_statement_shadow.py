@@ -35,8 +35,7 @@ def _summary_excerpt(snapshot: HybridSnapshot, query: str, baseline: list[dict])
     """
     terms = relevance_terms(query)
     fixed = "\n".join(
-        item["content"] for item in baseline
-        if HISTORY_MARKER not in item and isinstance(item.get("content"), str)
+        item["content"] for item in baseline if HISTORY_MARKER not in item and isinstance(item.get("content"), str)
     )
     mandatory = []
     relevant = []
@@ -51,11 +50,11 @@ def _summary_excerpt(snapshot: HybridSnapshot, query: str, baseline: list[dict])
                 relevant.append(record)
     if len(mandatory) > MAX_SUMMARY_REFERENCE_BLOCKS:
         raise ValueError("statement_required_summary_overbound")
-    chosen = mandatory + relevant[:MAX_SUMMARY_REFERENCE_BLOCKS - len(mandatory)]
+    chosen = mandatory + relevant[: MAX_SUMMARY_REFERENCE_BLOCKS - len(mandatory)]
     if not chosen and not fixed:
         newest = snapshot.windows[-1]
         block = newest.blocks[-1]
-        chosen = [(newest.through_rowid, len(newest.blocks)-1, block.text, block.visibility, block.known_by)]
+        chosen = [(newest.through_rowid, len(newest.blocks) - 1, block.text, block.visibility, block.known_by)]
     if len(chosen) > MAX_SUMMARY_REFERENCE_BLOCKS or sum(len(item[2]) for item in chosen) > MAX_SUMMARY_REFERENCE_CHARS:
         raise ValueError("statement_required_summary_overbound")
     return [
@@ -70,18 +69,23 @@ def _candidate_messages(
     plan = select_statement_spans(snapshot.rows, query, options)
     validate_statement_receipts(snapshot.rows, plan)
     sources = [
-        {"turn": index, "role": snapshot.rows[index].role,
-         "spans": [[s.start, s.end, s.text] for s in spans]}
-        for index, spans in plan.selected if index > 0
+        {"turn": index, "role": snapshot.rows[index].role, "spans": [[s.start, s.end, s.text] for s in spans]}
+        for index, spans in plan.selected
+        if index > 0
     ]
     summaries = _summary_excerpt(snapshot, query, baseline)
     reference = {
         "role": "user",
-        "content": _REFERENCE_POLICY + json.dumps({
-            "reference_only": True,
-            "source_statements": sources,
-            "accepted_summaries": summaries,
-        }, ensure_ascii=False, separators=(",", ":")),
+        "content": _REFERENCE_POLICY
+        + json.dumps(
+            {
+                "reference_only": True,
+                "source_statements": sources,
+                "accepted_summaries": summaries,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
         STATEMENT_MARKER: True,
         SHADOW_MARKER: True,
     }
@@ -106,7 +110,10 @@ def _candidate_messages(
 
 
 def evaluate_statement_shadow(
-    db: sqlite3.Connection, scope: MemoryReadScope, messages: list[dict], *,
+    db: sqlite3.Connection,
+    scope: MemoryReadScope,
+    messages: list[dict],
+    *,
     query: str,
     options: HybridOptions | None = None,
     resolve_current_scope: Callable[[], MemoryReadScope | None] | None = None,
@@ -116,19 +123,27 @@ def evaluate_statement_shadow(
     baseline = copy.deepcopy(messages)
     original_tokens = estimate_message_tokens(baseline, chars_per_token=options.chars_per_token)
     metrics: dict[str, object] = {
-        "candidate_status": "fallback", "reason": "native_evidence_missing",
-        "baseline_tokens": original_tokens, "candidate_tokens": original_tokens,
-        "estimated_reduction_fraction": 0.0, "omitted_turns": 0,
+        "candidate_status": "fallback",
+        "reason": "native_evidence_missing",
+        "baseline_tokens": original_tokens,
+        "candidate_tokens": original_tokens,
+        "estimated_reduction_fraction": 0.0,
+        "omitted_turns": 0,
         "retained_turns": sum(HISTORY_MARKER in m for m in baseline),
-        "native_source_verified": False, "source_statement_receipts_verified": False,
-        "semantic_continuity_proven": False, "production_activation_allowed": False,
-        "dispatch_uses_full_history": True, "provider_requests": 0,
+        "native_source_verified": False,
+        "source_statement_receipts_verified": False,
+        "semantic_continuity_proven": False,
+        "production_activation_allowed": False,
+        "dispatch_uses_full_history": True,
+        "provider_requests": 0,
     }
 
     def fallback(reason: str) -> HybridShadowResult:
         metrics.update(
-            candidate_status="fallback", reason=reason,
-            candidate_tokens=original_tokens, omitted_turns=0,
+            candidate_status="fallback",
+            reason=reason,
+            candidate_tokens=original_tokens,
+            omitted_turns=0,
             estimated_reduction_fraction=0.0,
         )
         return HybridShadowResult(copy.deepcopy(baseline), copy.deepcopy(baseline), dict(metrics))
@@ -158,7 +173,8 @@ def evaluate_statement_shadow(
             metrics["native_source_verified"] = False
             return fallback("source_or_summary_changed")
         metrics.update(
-            candidate_status="preview", reason="semantic_review_required",
+            candidate_status="preview",
+            reason="semantic_review_required",
             candidate_tokens=candidate_tokens,
             estimated_reduction_fraction=1 - candidate_tokens / original_tokens,
             source_statement_receipts_verified=True,

@@ -188,7 +188,11 @@ def test_candidate_that_still_requires_compaction_uses_the_baseline(db, tmp_path
 def test_enabled_preserves_images_and_exact_continuation_target(db, tmp_path):
     settings, session, messages = _request(tmp_path, _context("enabled"), mode="enabled", image=True)
     payload, _ = _dispatch(db, settings, session, messages)
-    assert payload[-2] == {"role": "assistant", "content": "Exact ending—"}
+    assistant_index = max(i for i, message in enumerate(payload) if message["role"] == "assistant")
+    assert payload[assistant_index] == {"role": "assistant", "content": "Exact ending—"}
+    assert assistant_index < len(payload) - 2
+    assert payload[-2]["role"] == "system"
+    assert "## Final instruction" in payload[-2]["content"]
     assert payload[-1]["content"][1] == {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAA"}}
     assert payload[-1]["content"][0]["text"].count("Rowan promised to return the key.") == 1
 

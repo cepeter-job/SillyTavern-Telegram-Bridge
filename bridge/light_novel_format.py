@@ -273,8 +273,19 @@ def inline_instruction(count: int, language: str, *, narrative_policy: str = "")
 def add_inline_contract(messages: list[dict], count: int, language: str, *, narrative_policy: str = "") -> list[dict]:
     result = [dict(message) for message in messages]
     instruction = inline_instruction(count, language, narrative_policy=narrative_policy)
-    if result and result[0].get("role") == "system":
-        result[0]["content"] = str(result[0].get("content") or "") + "\n\n" + instruction
+    # A native post-history block must not supersede the response envelope.
+    # Without one, keep the established first-system placement unchanged.
+    target = next(
+        (
+            index
+            for index in range(len(result) - 1, 0, -1)
+            if result[index].get("role") == "system"
+            and str(result[index].get("content") or "").startswith("## Final instruction\n")
+        ),
+        0,
+    )
+    if result and result[target].get("role") == "system":
+        result[target]["content"] = str(result[target].get("content") or "") + "\n\n" + instruction
     else:
         result.insert(0, {"role": "system", "content": instruction})
     return result

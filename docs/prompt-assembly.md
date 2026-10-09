@@ -16,6 +16,8 @@ uses this order:
 2. Recent messages, or the character's opening greeting when history is empty.
 3. The card's post-history instructions, followed by the bridge's narrative,
    user-agency, canonical state, Telegram formatting and language policies.
+   When Light Novel mode is enabled, its response-envelope contract follows these
+   late policies so character guidance cannot override the required structure.
 4. The existing fixed-language reminder, when a response language is selected.
 5. The current user request, including its retrieved context and optional image.
 

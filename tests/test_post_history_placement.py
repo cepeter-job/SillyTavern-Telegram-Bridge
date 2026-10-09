@@ -110,3 +110,20 @@ def test_codex_consolidation_preserves_card_and_native_policy_order(tmp_path, im
     assert "CURRENT USER REQUEST" in inputs[-1]["content"][0]["text"]
     if image:
         assert inputs[-1]["content"][-1] == {"type": "input_image", "image_url": image}
+
+
+@pytest.mark.parametrize("language", ["auto", "en"])
+def test_inline_contract_follows_card_guidance(tmp_path, language):
+    from bridge.light_novel_format import add_inline_contract
+
+    _, messages = build(tmp_path, language=language, history=(("assistant", "EARLIER STORY"),))
+    messages = add_inline_contract(messages, 4, language)
+    tail_index = next(i for i, message in enumerate(messages) if "CARD TAIL" in str(message["content"]))
+    contract_indices = [
+        i for i, message in enumerate(messages) if "Light Novel response contract" in str(message["content"])
+    ]
+    assert contract_indices == [tail_index]
+    assert messages[tail_index]["content"].index("Light Novel response contract") > messages[tail_index][
+        "content"
+    ].index("CARD TAIL")
+    assert messages[-1]["role"] == "user"

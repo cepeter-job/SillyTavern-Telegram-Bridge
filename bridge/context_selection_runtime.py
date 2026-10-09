@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 
 from bridge.context_compaction import estimate_message_tokens
+from bridge.context_hybrid_types import SHADOW_MARKER, public_shadow_metrics
 from bridge.context_selection import (
     CONTEXT_SELECTION_REASONS,
     context_selection_mode,
@@ -101,6 +102,8 @@ def choose_context_messages(
     messages: list[dict], *, app_settings: AppSettings, chars_per_token: float, input_budget_tokens: int
 ) -> tuple[list[dict], dict[str, object]]:
     """Select once; shadow preserves valid baseline bytes, revoked captures stop."""
+    if any(SHADOW_MARKER in message for message in messages):
+        raise ValueError("Hybrid candidate is shadow-only; dispatch the original baseline")
     baseline = [dict(message) for message in messages]
     context = baseline[0].get("_context_selection") if baseline else None
     for message in baseline:
@@ -155,6 +158,28 @@ def choose_context_messages(
         metrics["history_shadow_reason"] = history_reason
         metrics["history_shadow_candidate_tokens"] = history_tokens
         metrics["history_shadow_reframed_turns"] = reframed
+    if mode == "shadow" and callable(probe := getattr(context, "selection_hybrid_shadow", None)):
+        try:
+            observed = probe(messages, chars_per_token)
+            metrics.update(public_shadow_metrics(observed, original))
+        except (ValueError, TypeError, KeyError, RuntimeError, sqlite3.Error):
+            metrics["hybrid_shadow_reason"] = "native_evidence_missing_or_changed"
+            metrics["hybrid_shadow_candidate_tokens"] = original
+            metrics["hybrid_shadow_source_verified"] = False
+            metrics["hybrid_shadow_omitted_turns"] = 0
+            metrics["hybrid_shadow_activation_allowed"] = False
+        # Recheck after the optional observation. A revoked baseline is unsafe
+        # too; retain existing fail-closed dispatch behavior rather than send it.
+        if callable(guard):
+            try:
+                failure = guard()
+            except (ValueError, RuntimeError, sqlite3.Error):
+                failure = "ambiguous"
+            if failure in {"source_changed", "invalid_scope"}:
+                metrics.update(reason=failure, coverage_valid=False)
+                raise ContextSelectionStaleError(metrics)
+            if failure:
+                return baseline, metrics
     if mode == "enabled" and not context_slice_enabled(app_settings, "dedup"):
         if reason in {"off", "selected", "no_savings", "ambiguous"}:
             metrics["reason"] = "not_approved"

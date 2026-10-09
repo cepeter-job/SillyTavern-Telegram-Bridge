@@ -132,6 +132,13 @@ def prepare_context_selection(
     reason = guard()
     if reason:
         return replace(context, selection_reason=reason)
+    if mode == "shadow":
+        from bridge.context_hybrid_shadow import make_hybrid_shadow_probe
+
+        context = replace(
+            context,
+            selection_hybrid_shadow=make_hybrid_shadow_probe(db, scope, context.selection_query, resolve_current_scope),
+        )
     candidate = select_memory_blocks(scope, context.baseline_blocks)
     if candidate.reason in {"invalid_scope", "historical"}:
         return replace(context, selection_reason=candidate.reason)

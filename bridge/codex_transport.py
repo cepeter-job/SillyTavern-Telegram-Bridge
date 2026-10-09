@@ -15,6 +15,7 @@ from bridge.config import GENERATION_DEFAULTS
 from bridge.context_attempt_budget import check_attempt_budget
 from bridge.network_security import strict_urlopen
 from bridge.provider_errors import ProviderTransportError, parse_retry_after, provider_category_for_status
+from bridge.request_observation_context import observed_request, observed_usage_callback
 from bridge.settings import AppSettings
 from bridge.token_usage_values import UsageCallback, UsageCapture
 
@@ -128,7 +129,7 @@ _MAX_STREAM_LINE_BYTES = 256 * 1024
 def _stream_response_text(
     response: Any, *, stream_callback: Any = None, cancel_event: Any = None, usage_callback: UsageCallback | None = None
 ) -> str:
-    with UsageCapture(usage_callback, flavor="openai") as usage:
+    with UsageCapture(observed_usage_callback(usage_callback), flavor="openai") as usage:
         chunks: list[str] = []
         completed = ""
         saw_completion = False
@@ -257,11 +258,20 @@ def generate_codex_response(
             method="POST",
         )
         try:
-            with open_request(
-                request,
-                timeout=240 if request_timeout is None else request_timeout,
-                environ=app_settings.environ,
-            ) as response:
+            with (
+                observed_request(
+                    body,
+                    wire_messages,
+                    selection=context_model or actual_model,
+                    route=endpoint,
+                    transport="openai_codex",
+                    phase="auth_retry" if attempt else "initial",
+                    request_bytes=len(encoded_body),
+                ),
+                open_request(
+                    request, timeout=240 if request_timeout is None else request_timeout, environ=app_settings.environ
+                ) as response,
+            ):
                 output = _stream_response_text(
                     response, stream_callback=stream_callback, cancel_event=cancel_event, usage_callback=usage_callback
                 )

@@ -50,6 +50,12 @@ _TEXT_FIELDS = frozenset(
         "worker_id",
         "phase",
         "operation_id",
+        "profile_request_id",
+        "model_ref",
+        "provider_ref",
+        "transport",
+        "prefix_scope",
+        "section_attribution",
     }
 )
 _NUMBER_FIELDS = frozenset(
@@ -77,9 +83,31 @@ _NUMBER_FIELDS = frozenset(
         "coverage",
         "bytes",
         "dropped",
+        "observation_ordinal",
+        "message_count",
+        "stable_prefix_characters",
+        "profile_sample_count",
+        "instruction_duplicate_groups",
+        "usage_readings",
+        "instruction_characters",
+        "user_characters",
+        "assistant_characters",
+        "tool_characters",
     }
 )
-_BOOL_FIELDS = frozenset({"usage_reported", "usage_complete", "stream_visible", "recovered", "accepted", "retryable"})
+_BOOL_FIELDS = frozenset(
+    {
+        "usage_reported",
+        "usage_complete",
+        "stream_visible",
+        "recovered",
+        "accepted",
+        "retryable",
+        "prefix_observed",
+        "non_text_payload_present",
+        "full_prompt_token_count_known",
+    }
+)
 
 
 def configure_identity(secret: str) -> None:

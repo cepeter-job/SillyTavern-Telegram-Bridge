@@ -7,13 +7,15 @@ import socket
 import threading
 import time
 import urllib.error
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
+from dataclasses import field as data_field
 from functools import partial
 
 from bridge.diagnostic_events import clean_fields, diagnostic_context, diagnostic_scope, new_request_id
 from bridge.diagnostic_events import event as diagnostic_event
-from bridge.port_contracts import CancellationEvent, ProviderGenerate, ProviderPolicy
+from bridge.port_contracts import CancellationEvent, ProviderGenerate, ProviderPolicy, RequestObserver
 from bridge.provider_errors import (
     ProviderRequestError,
     ProviderTransportError,
@@ -105,6 +107,26 @@ def _usage_fields(readings: list[TokenUsage], status: str) -> dict[str, object]:
     return values
 
 
+@contextmanager
+def _observation_scope(
+    observer: RequestObserver | None, scope: object, identity: dict[str, str] | None
+) -> Iterator[None]:
+    reset = None
+    if observer is not None:
+        try:
+            reset = observer.bind(scope, identity)
+        except Exception:
+            diagnostic_event("provider.observation_failed", phase="bind")
+    try:
+        yield
+    finally:
+        if reset is not None:
+            try:
+                reset()
+            except Exception:
+                diagnostic_event("provider.observation_failed", phase="reset")
+
+
 @dataclass(frozen=True)
 class ProviderPort:
     generate_backend: ProviderGenerate
@@ -112,6 +134,18 @@ class ProviderPort:
     usage_scope: UsageScope | None = None
     policy: ProviderPolicy | None = None
     context_observer: Callable[[dict[str, object]], None] | None = None
+    request_observer: RequestObserver | None = data_field(default=None, repr=False, compare=False)
+    profile_identity: dict[str, str] | None = data_field(default=None, repr=False, compare=False)
+
+    def with_request_context(self, messages: list[dict], session: dict) -> ProviderPort:
+        """Bind keyed native identity before finalization removes builder metadata."""
+        if self.request_observer is None:
+            return self
+        try:
+            identity = self.request_observer.profile_identity(messages, session)
+        except Exception:
+            identity = None
+        return replace(self, profile_identity=identity)
 
     def with_context_observer(self, observer: Callable[[dict[str, object]], None]) -> ProviderPort:
         """Bind a pure observer for this one call, including fallback attempts."""
@@ -119,7 +153,14 @@ class ProviderPort:
 
     def for_usage(self, chat_id: str, session_id: str, purpose: str) -> ProviderPort:
         """Bind trusted use-case identity; never infer ownership from provider session strings."""
-        return replace(self, usage_scope=UsageScope(str(chat_id), str(session_id), purpose))
+        same_owner = self.usage_scope is None or (
+            self.usage_scope.chat_id == str(chat_id) and self.usage_scope.session_id == str(session_id)
+        )
+        return replace(
+            self,
+            usage_scope=UsageScope(str(chat_id), str(session_id), purpose),
+            profile_identity=self.profile_identity if same_owner else None,
+        )
 
     def for_purpose(self, purpose: str) -> ProviderPort:
         if self.usage_scope is None:
@@ -155,7 +196,10 @@ class ProviderPort:
         )
         if not matching:
             identity["request_id"] = new_request_id("provider")
-        with diagnostic_scope(inherit=matching, **identity):
+        with (
+            diagnostic_scope(inherit=matching, **identity),
+            _observation_scope(self.request_observer, self.usage_scope, self.profile_identity),
+        ):
             return self._generate_call(
                 api_key,
                 model,

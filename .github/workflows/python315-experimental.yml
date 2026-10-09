@@ -78,8 +78,8 @@ jobs:
             --require-hashes -r "$RUNNER_TEMP/core-py315.lock"
           uv pip check --python .venv311-core/bin/python
           uv pip check --python .venv315-core/bin/python
-          uv pip install --python .venv311-core/bin/python pytest
-          uv pip install --python .venv315-core/bin/python pytest
+          uv pip install --python .venv311-core/bin/python pytest pytest-xdist
+          uv pip install --python .venv315-core/bin/python pytest pytest-xdist
       - name: Run focused offline regression tests
         run: |
           for runtime in .venv311-core .venv315-core; do

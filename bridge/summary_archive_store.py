@@ -59,6 +59,8 @@ def archive_accepted_summary(
     source = load_source(db, str(checkpoint[0])) if checkpoint else None
     if (
         source is None
+        or source.chat_id != chat_id
+        or source.session_id != session_id
         or not source_is_valid(db, source)
         or source.end_id != through
         or source.session_created_at != row[0]
@@ -107,6 +109,7 @@ def read_summary_archive(
         "AND s.session_id=a.session_id AND s.created_at=a.session_created_at "
         "JOIN memory_segments g ON g.document_id=a.source_document_id AND g.valid=1 "
         "AND g.layer='summary' AND g.session_created_at=a.session_created_at "
+        "AND g.chat_id=a.chat_id AND g.session_id=a.session_id "
         "AND g.end_id=a.through_rowid "
         "WHERE a.chat_id=? AND a.session_id=? AND a.session_created_at=? AND a.through_rowid<=?"
     )
@@ -136,7 +139,13 @@ def read_summary_archive(
     required = set(required_evidence) if required_evidence is not None else None
     for through, document_id, digest, encoded in rows:
         source = load_source(db, document_id)
-        if source is None or not source_is_valid(db, source):
+        if (
+            source is None
+            or source.chat_id != scope.chat_id
+            or source.session_id != scope.session_id
+            or source.session_created_at != scope.session_created_at
+            or not source_is_valid(db, source)
+        ):
             continue
         try:
             blocks = parse_classified_blocks(json.loads(encoded))

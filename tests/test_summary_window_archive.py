@@ -318,3 +318,25 @@ def test_archived_source_is_rehydrated_into_actual_prompt_context(db, tmp_path):
     assert "Mira alone knows the hidden silver password." not in bob.summary
     assert "moonstone is important" in mira.summary and "moonstone is important" in bob.summary
     assert mira.evidence and all("PRIVATE_CANARY" not in block.text for block in mira.baseline_blocks)
+
+
+def test_forged_archive_source_owner_cannot_authorize_other_story(db, tmp_path, monkeypatch):
+    settings, _prior, _old = _accept_full_prior(db, tmp_path)
+    append(db, "The moonstone clue is known.")
+    _drive(db, settings, {"blocks": [classified("The moonstone is important.")]})
+    from dataclasses import replace
+
+    import bridge.summary_archive_store as archive
+
+    actual = archive.load_source
+    monkeypatch.setattr(
+        archive,
+        "load_source",
+        lambda connection, document: replace(actual(connection, document), chat_id="not-this-story"),
+    )
+    # Simulate any future source-proof shortcut that considers just the
+    # document hash but not the owner: the archive owner guard must remain.
+    monkeypatch.setattr(archive, "source_is_valid", lambda *_: True)
+    mira = archive.read_summary_block(db, scope(db, "Mira"), query="hidden silver password")
+    assert "Mira alone knows the hidden silver password." not in mira.text
+    assert "moonstone" in mira.text

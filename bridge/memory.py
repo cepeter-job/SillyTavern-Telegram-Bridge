@@ -65,6 +65,7 @@ from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect, write_transaction
 from bridge.summary_block_coalescing import (
+    MAX_ARTIFACT_BLOCKS,
     SUMMARY_AUDIENCE_OUTPUT_CONTRACT,
     coalesce_summary_response,
     summary_length_contract,
@@ -297,7 +298,12 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
         and accepted
         and json.loads(accepted).get("blocks") == previous.get("blocks")
         and current_through > 0
-        and len(current_summary) >= SUMMARY_MAX_CHARS * 4 // 5
+        and (
+            len(current_summary) >= SUMMARY_MAX_CHARS * 4 // 5
+            # A Summary can reach the block cap before its character limit.
+            # Preserve all distinct old blocks as-is in a new archive window.
+            or len(previous["blocks"]) >= MAX_ARTIFACT_BLOCKS - 2
+        )
     )
     rollover = continuing or eligible
     if eligible and not continuing:

@@ -79,8 +79,14 @@ def test_telegram_has_no_application_command_backedge():
 def test_telegram_runtime_requires_download_transport():
     from bridge.composition import TelegramRuntime
 
+    from dataclasses import MISSING
+
     assert "download_file" in TelegramRuntime.__dataclass_fields__
-    assert TelegramRuntime.__dataclass_fields__["download_file"].default.__class__.__name__ == "_MISSING_TYPE"
+    download = TelegramRuntime.__dataclass_fields__["download_file"]
+    # Python 3.15 changed the implementation of MISSING to a public sentinel.
+    # Its identity, rather than its private class name, is the contract.
+    assert download.default is MISSING
+    assert download.default_factory is MISSING
 
 
 def _image_services(download_file, sent):

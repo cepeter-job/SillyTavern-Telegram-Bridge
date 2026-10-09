@@ -94,6 +94,7 @@ from bridge.provider_transport import generate_provider_text
 from bridge.rag_composition import build_rag_service
 from bridge.reference_repository import count_persona_references as _count_persona_references
 from bridge.reference_repository import count_session_messages as _count_session_messages
+from bridge.request_observation import build_request_observer
 from bridge.response_delivery import delete_outgoing_message_row, send_reply
 from bridge.runtime_health import RuntimeHealth
 from bridge.runtime_lifecycle import run_bridge_runtime
@@ -164,14 +165,11 @@ def _load_startup_config(environ) -> AppSettings:
     return settings
 
 
-def _build_startup_services(
-    config: AppSettings,
-    *,
-    model_router: _ModelRouter,
-) -> _BridgeServices:
+def _build_startup_services(config: AppSettings, *, model_router: _ModelRouter) -> _BridgeServices:
     durable_worker_guard = _DurableWorkerGuard(_sqlite_store._lightweight_db_connect, app_settings=config)
     provider = _ProviderPort(
         generate_backend=_partial(generate_provider_text, model_router, app_settings=config),
+        request_observer=build_request_observer(config.environ),
         policy=ProviderExecutionPolicy(
             model_router,
             ProviderRuntimeHealth(store=JsonProviderHealthStore(config.bridge_home / "provider_health.json")),

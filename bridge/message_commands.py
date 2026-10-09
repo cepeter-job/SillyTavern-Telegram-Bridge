@@ -241,6 +241,7 @@ def generate_and_store_reply(
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
     generation_settings = get_generation_settings(db, chat_id, session_id)
+    provider_port = provider_port.with_request_context(messages, session)
     messages = finalize_generation_messages(
         db,
         chat_id,
@@ -269,8 +270,7 @@ def generate_and_store_reply(
         if not preview:
             return
         try:
-            # Only visible output creates a progress message. An assembly can
-            # fit while a later normalized/fallback/recovery attempt cannot.
+            # Later fallback/recovery may exceed budget; create progress only for visible output.
             if stream_message_id is None:
                 sent = telegram_request(token, "sendMessage", {"chat_id": chat_id, "text": preview[-3900:]})
                 stream_message_id = int(sent["message_id"]) if sent.get("message_id") else None

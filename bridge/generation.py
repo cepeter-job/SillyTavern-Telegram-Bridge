@@ -411,6 +411,7 @@ def _generation_generate_rendered_reply(
     )
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
+    provider_port = provider_port.with_request_context(messages, session)
     messages = finalize_generation_messages(
         db,
         chat_id,

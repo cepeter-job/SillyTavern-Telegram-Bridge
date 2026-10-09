@@ -8,6 +8,22 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+## [0.3.020] - 2026-10-09
+
+### Context research and opt-in diagnostics
+
+- Preserve native source/reader verification and the inactive reversible history codec research (#467). The original frozen experiment and failed automated quality results remain unchanged; the codec cannot be dispatched as a production prompt.
+- Add exact source-backed statement-level shadow selection (#475) and retain frozen matched NanoGPT/post-release observations and blinded-review packets (#476).
+- Add metadata-only prefix stability and instruction-duplication profiling (#478), without deleting any character instructions, dialogue, or source evidence.
+- Add the final physical-request observability layer (#480) with request size, prompt-role sizing, provider-reported input/cache/output usage, and retry/continuation accounting across adapters. Opt-in is explicitly required; nothing is recorded automatically by this release until enabled.
+- Lower the **new-trial** efficiency goal under issue #421 from 30% to **20%** (#481), retaining separately versioned evaluations, complete accepted-work accounting, required source and reader/branch causal proof, independent blinded human narrative review and staged production approval.
+
+### Compatibility and security
+
+- No changes to locked runtime dependencies or the persistent database schema since v0.3.019. No automatic story migration, lossless source-authority waiver, or history-pruning activation.
+- Production context selection/pruning remain disabled; request observation defaults to off.
+- Install only as an independently trusted SSH-signed release tag after verifying the official SHA-256 assets. This changelog entry alone is not a signature or deployment confirmation.
+
 ### Quality-gated context objective (issue #421, 2026-10-09)
 
 - Lower the **current new-trial** provider-reported story input-reduction objective from 30% to **20%**, retaining complete accepted-work accounting, source/reader/causal proof, independent blinded narrative quality and production approval gates.

@@ -41,7 +41,7 @@ wheels, hashes, imports and test suite pass under that interpreter.
 # In a clean staging checkout (never the live bridge environment).
 uv venv --python 3.11 /tmp/sttb-benchmark-py311
 uv pip install --python /tmp/sttb-benchmark-py311/bin/python --require-hashes -r requirements-dev.lock
-/tmp/sttb-benchmark-py311/bin/python -m pip check
+uv pip check --python /tmp/sttb-benchmark-py311/bin/python
 /tmp/sttb-benchmark-py311/bin/python tools/benchmark_python_runtime.py \
   --iterations 300 --warmup 40 --output /tmp/sttb-benchmark-311.json
 

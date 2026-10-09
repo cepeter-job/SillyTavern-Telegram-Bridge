@@ -11,8 +11,12 @@ REQUIRED_WORKLOADS = ("prompt_assembly", "prompt_compaction", "telegram_format")
 
 
 def compare_reports(
-    baseline: dict, candidate: dict, *, min_compaction_gain_pct: float = 5.0,
-    max_other_regression_pct: float = 5.0, max_rss_regression_pct: float = 10.0,
+    baseline: dict,
+    candidate: dict,
+    *,
+    min_compaction_gain_pct: float = 5.0,
+    max_other_regression_pct: float = 5.0,
+    max_rss_regression_pct: float = 10.0,
 ) -> dict:
     """A narrow local CPU+RSS gate; not an end-to-end or JIT/quality test."""
     if baseline.get("schema_version") != 1 or candidate.get("schema_version") != 1:
@@ -24,8 +28,11 @@ def compare_reports(
     if baseline["host_class"] != candidate["host_class"]:
         raise ValueError("reports are not from the same host class/kernel")
     for report in (baseline, candidate):
-        if (report["provider_requests_issued"] != 0 or report["production_database_writes"] != 0
-                or report["raw_prompts_exported"] is not False):
+        if (
+            report["provider_requests_issued"] != 0
+            or report["production_database_writes"] != 0
+            or report["raw_prompts_exported"] is not False
+        ):
             raise ValueError("unexpected non-synthetic inputs")
     workloads = {}
     for name in REQUIRED_WORKLOADS:
@@ -48,14 +55,11 @@ def compare_reports(
     rss_change = round(100 * (rss_new / rss_base - 1), 2)
     compaction_gain = -workloads["prompt_compaction"]["change_pct"]
     other_pass = all(
-        workloads[name]["change_pct"] <= max_other_regression_pct
-        for name in ("prompt_assembly", "telegram_format")
+        workloads[name]["change_pct"] <= max_other_regression_pct for name in ("prompt_assembly", "telegram_format")
     )
     return {
         "local_cpu_candidate_pass": (
-            compaction_gain >= min_compaction_gain_pct
-            and other_pass
-            and rss_change <= max_rss_regression_pct
+            compaction_gain >= min_compaction_gain_pct and other_pass and rss_change <= max_rss_regression_pct
         ),
         "compaction_cpu_gain_pct": round(compaction_gain, 2),
         "rss_change_pct": rss_change,

@@ -102,12 +102,14 @@ def _fingerprint_sources() -> str:
 
 def _jit_metadata() -> dict[str, bool]:
     jit = getattr(sys, "_jit", None)
+
     def check(method: str) -> bool:
         function = getattr(jit, method, None)
         try:
             return bool(function()) if callable(function) else False
         except Exception:
             return False
+
     return {"available": check("is_available"), "enabled": check("is_enabled")}
 
 
@@ -163,10 +165,7 @@ def run_benchmark(*, iterations: int, warmup: int) -> dict:
             "prompt_compaction": lambda: prompt(compact=True),
             "telegram_format": telegram,
         }
-        workloads = {
-            key: measure_case(action, iterations=iterations, warmup=warmup)
-            for key, action in cases.items()
-        }
+        workloads = {key: measure_case(action, iterations=iterations, warmup=warmup) for key, action in cases.items()}
 
     maximum_rss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     # Linux reports KiB; macOS reports bytes.

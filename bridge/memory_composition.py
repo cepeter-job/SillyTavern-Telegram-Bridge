@@ -38,6 +38,7 @@ def build_memory_service(
         scoped_recall=partial(recall_scoped_memory, app_settings=app_settings, remote_recall=remote_recall),
         scoped_episodes=read_episodic_block,
         scoped_summary=read_summary_block,
+        scoped_summary_query=read_summary_block,
         scoped_scene=read_scene_block,
         validate_blocks=validate_memory_blocks,
         summary_state=get_session_summary,

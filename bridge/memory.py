@@ -53,6 +53,7 @@ from bridge.memory_backend import recall_memory_results as recall_memory_results
 from bridge.memory_backend import remember_fact as remember_fact
 from bridge.memory_draft_publish import publish_derived, restore_derived
 from bridge.memory_draft_store import run_session_draft
+from bridge.memory_fact_store import digest_value
 from bridge.memory_response import generate_memory_response
 from bridge.memory_service import MemoryService
 from bridge.memory_store import enqueue_memory, retire_derived_layer
@@ -279,13 +280,49 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
             "reasoning_budget": utility_reasoning_for_session(db, chat_id, session["session_id"]),
         }
     )
-    length_contract = summary_length_contract(previous)
+    # When the *accepted* current window reaches capacity, preserve it in
+    # SQLite before replacing it. A partial source draft carries this marker
+    # until the canonical row completes; only then may the hot window switch.
+    origin = previous.get("_summary_rollover_from")
+    digest = previous.get("_summary_rollover_digest")
+    continuing = type(origin) is int and isinstance(digest, str)
+    accepted = previous_classified_artifact(db, chat_id, session["session_id"], "summary")
+    current_summary, current_through = get_session_summary(db, chat_id, session["session_id"])
+    eligible = bool(
+        isinstance(previous.get("blocks"), list)
+        and accepted
+        and json.loads(accepted).get("blocks") == previous.get("blocks")
+        and current_through > 0
+        and len(current_summary) >= SUMMARY_MAX_CHARS * 4 // 5
+    )
+    rollover = continuing or eligible
+    if eligible and not continuing:
+        origin, digest = current_through, digest_value(previous["blocks"])
+    prompt_previous = {"blocks": previous.get("blocks", [])} if rollover else previous
+    length_contract = summary_length_contract(prompt_previous)
+    window_contract = (
+        " The prior classified Summary window is already accepted and will be archived verbatim "
+        "under its existing canonical source checkpoint. Return ONLY the bounded NEW window of "
+        "source-established changes, including fresh facts, exact promises, negations, consequences, "
+        "and explicit corrections to older continuity. Do not repeat the archived old window. "
+        "No previous fact is erased by omitting it from this new window: older facts remain "
+        "available through private-audience-scoped archive recall. "
+        "Preserve visibility and known_by; never grant an unknowing character a private fact. "
+        if rollover and not continuing
+        else (
+            " Earlier Summary remains archived. Return the COMPLETE updated CURRENT window only, "
+            "not historical archived facts; preserve all facts already recorded in the current window. "
+            if continuing
+            else ""
+        )
+    )
     messages = [
         {
             "role": "system",
             "content": (
-                "Compress fictional roleplay continuity into the complete updated JSON object with blocks. "
-                "Preserve locations, characters, relationships, facts, goals and unresolved hooks. "
+                "Compress fictional roleplay continuity into a classified JSON object with blocks. "
+                + window_contract
+                + " Preserve locations, characters, relationships, facts, goals and unresolved hooks. "
                 "Each block requires text, visibility (shared or restricted), and known_by. "
                 "Use at most 32 blocks. Combine related facts only when they share the same visibility and known_by. "
                 + length_contract
@@ -301,7 +338,7 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
             "role": "user",
             "content": (
                 "Previous classified summary:\n"
-                + json.dumps(previous, ensure_ascii=False)
+                + json.dumps(prompt_previous, ensure_ascii=False)
                 + f"\nSource role: {source.role}; message {source.start_id};"
                 + f" offsets {source.start_offset}:{source.end_offset}"
                 + "\n\nCanonical source part:\n"
@@ -312,7 +349,7 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
     mode = context_selection_mode(app_settings)
     if mode == "enabled" and not context_slice_enabled(app_settings, "summary"):
         mode = "off"
-    messages = project_summary_messages(messages, previous, mode=mode)
+    messages = project_summary_messages(messages, prompt_previous, mode=mode)
     model = task_model_for_session(db, chat_id, session, "summary", app_settings=app_settings)
 
     def parse(raw: str) -> dict[str, object]:
@@ -320,6 +357,14 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
         text = "\n".join(block["text"] for block in classified)
         if not text or len(text) > SUMMARY_MAX_CHARS:
             raise ValueError("Classified summary requires bounded, nonempty output")
+        if rollover:
+            # The model never supplies archive authority. These exact values
+            # come from the accepted local publication or its current draft.
+            return {
+                "blocks": classified,
+                "_summary_rollover_from": origin,
+                "_summary_rollover_digest": digest,
+            }
         return {"blocks": classified}
 
     return generate_memory_response(
@@ -330,7 +375,7 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
         parser=parse,
         session_id=f"summary:{chat_id}:{session['session_id']}",
         settings=settings,
-        repair_contract=length_contract,
+        repair_contract=length_contract + window_contract,
     )
 
 

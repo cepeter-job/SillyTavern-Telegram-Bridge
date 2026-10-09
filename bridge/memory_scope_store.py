@@ -7,7 +7,7 @@ from dataclasses import replace
 from typing import Literal
 
 from bridge.limits import EPISODIC_CONTEXT_MAX_CHARS, HINDSIGHT_CONTEXT_MAX_CHARS
-from bridge.memory_artifact_store import read_artifact_block
+from bridge.memory_artifact_store import read_artifact_block, read_summary_block
 from bridge.memory_contracts import MemoryBlock, MemoryBlockLeaf, MemoryEvidence, MemoryReadScope
 from bridge.memory_fact_store import StoredMemoryFact, index_fact_is_current, load_current_fact, normalize_principals
 from bridge.memory_search_store import MAX_SEARCH_CANDIDATES, search_fact_ids
@@ -203,8 +203,10 @@ def validate_memory_blocks(
         channel, stored, document_id = chosen[key]
         ranked[channel].append((stored, document_id))
     for block in blocks:
-        if block.channel in {"summary", "scene"}:
-            validated.append(read_artifact_block(db, scope, block.channel, required_evidence=block.evidence))
+        if block.channel == "summary":
+            validated.append(read_summary_block(db, scope, required_evidence=block.evidence))
+        elif block.channel == "scene":
+            validated.append(read_artifact_block(db, scope, "scene", required_evidence=block.evidence))
         else:
             validated.append(
                 _fact_block(

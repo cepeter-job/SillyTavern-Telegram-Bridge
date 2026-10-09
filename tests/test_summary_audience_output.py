@@ -157,3 +157,34 @@ def test_oversized_block_inventory_receives_explicit_cap_in_single_repair(db, tm
     assert "12,000" in calls[1][0]["content"]
     assert calls[1][1:] == calls[0]
     assert "Source fact 0" not in json.dumps(calls[1])
+
+
+def test_fresh_summary_rollover_uses_new_window_token_budget(db, tmp_path):
+    from test_summary_window_archive import _accept_full_prior
+
+    settings, prior, _old_row = _accept_full_prior(db, tmp_path)
+    assert memory.summary_output_budget(prior) == 4096
+    new_id = append(db, "After the archiving boundary, the messenger discovers a bronze compass.")
+    seen = []
+
+    def generate(_api, _model, messages, **kwargs):
+        seen.append((kwargs["settings"]["max_tokens"], messages))
+        return json.dumps(
+            {"blocks": [{"text": "A bronze compass was discovered.", "visibility": "shared", "known_by": []}]}
+        )
+
+    result = memory.generate_session_summary_result(
+        db,
+        "c",
+        SESSION,
+        force=True,
+        durable=True,
+        max_segments=1,
+        provider_port=ProviderPort(generate),
+        app_settings=settings,
+    )
+    assert result.complete and result.covered_until_rowid == new_id
+    assert len(seen) == 1
+    assert seen[0][0] == memory.summary_output_budget({"blocks": []})
+    assert seen[0][0] < 4096
+    assert db.execute("SELECT COUNT(*) FROM summary_archive_windows").fetchone() == (1,)

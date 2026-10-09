@@ -4,6 +4,7 @@ import logging
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 
 import pytest
 
@@ -76,7 +77,7 @@ def test_parent_label_cannot_break_ordered_admission(isolated_queue):
 
 
 def test_recovered_identity_also_applies_to_outer_worker_events(isolated_queue, caplog):
-    with sqlite3.connect(":memory:") as db:
+    with closing(sqlite3.connect(":memory:")) as db, db:
         db.execute(
             "CREATE TABLE jobs(job_id INTEGER,update_id INTEGER,chat_id TEXT,"
             "session_id TEXT,kind TEXT,attempts INTEGER)"

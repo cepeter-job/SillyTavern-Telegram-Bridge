@@ -4,6 +4,7 @@ import json
 import logging
 import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from types import SimpleNamespace
 
 import pytest
@@ -103,7 +104,7 @@ def test_all_model_roles_are_named_without_fabricating_usage(caplog, purpose):
 def test_durable_worker_reconstructs_identity_instead_of_using_dispatcher_context():
     from bridge.scheduler_safety import DurableWorkerGuard
 
-    with sqlite3.connect(":memory:") as db:
+    with closing(sqlite3.connect(":memory:")) as db, db:
         db.execute(
             "CREATE TABLE jobs(job_id INTEGER,update_id INTEGER,chat_id TEXT,"
             "session_id TEXT,kind TEXT,attempts INTEGER)"

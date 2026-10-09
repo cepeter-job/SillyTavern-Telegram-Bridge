@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 import sqlite3
+from contextlib import closing
 from unittest.mock import patch
 
 import pytest
@@ -76,7 +77,7 @@ def test_collision_retries_without_replacing_mapping(db):
 def test_standalone_mint_is_durable_in_second_connection(db):
     token = tokens.dynamic_callback_token("character", "card.png", "owner", db=db)
     path = db.execute("PRAGMA database_list").fetchone()[2]
-    with sqlite3.connect(path) as other:
+    with closing(sqlite3.connect(path)) as other, other:
         assert tokens.resolve_dynamic_callback_token(token, "character", "owner", db=other) == "card.png"
     assert not db.in_transaction
 

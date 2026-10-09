@@ -160,7 +160,10 @@ jobs:
       - name: Install CPython final source build dependencies on ephemeral runner
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq liblzma-dev
+          sudo apt-get install -y -qq \
+            build-essential libbz2-dev liblzma-dev zlib1g-dev libssl-dev \
+            libffi-dev libsqlite3-dev libreadline-dev libncurses-dev \
+            libgdbm-dev libexpat1-dev libzstd-dev
       - name: Install pinned uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:

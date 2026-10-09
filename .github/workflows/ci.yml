@@ -61,6 +61,7 @@ jobs:
         run: >-
           python -X dev -W error::ResourceWarning -m pytest -q
           -p tools.pytest_shard --shard-index="$SHARD_INDEX" --shard-count=4
+          --shard-timings=tools/pytest_shard_timings.json
           --shard-manifest=shard-manifest.json -n auto --maxprocesses=4 --dist=loadfile
           --cov --cov-fail-under=0
           --cov-report=json:coverage.json --cov-report=xml:coverage.xml
@@ -345,6 +346,18 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Validate all GitHub Actions workflows
+        run: |
+          archive="$RUNNER_TEMP/actionlint_1.7.12_linux_amd64.tar.gz"
+          curl --fail --location --silent --show-error --retry 3 --max-time 90 \
+            --output "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $archive" | sha256sum --check --status
+          tar --no-same-owner -xzf "$archive" -C "$RUNNER_TEMP" actionlint
+          chmod 0755 "$RUNNER_TEMP/actionlint"
+          # Check Actions syntax and expressions independently of runner-installed linters.
+          "$RUNNER_TEMP/actionlint" -shellcheck="" -pyflakes=""
 
       - name: Set up Python 3.11
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7

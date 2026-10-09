@@ -209,10 +209,15 @@ packages, verify downloaded artifact bytes, or query vulnerability advisories.
 Hash-enforced installation, `python -m pip check`, the full tests, and the existing
 `pip-audit` CI job remain separate required evidence. The runtime lock is the
 installation authority; a manifest-only update is not evidence of deployment.
-CI audits both lockfiles using `--require-hashes --disable-pip`: every listed
+CI audits both lockfiles using `--require-hashes --disable-pip --strict`: every listed
 package is checked against advisories without invoking a second resolver. Hash
 verification happens at installation, while `pip check` checks the resulting
 metadata. Audit tools do not prove a dependency is free of unknown vulnerabilities.
+The shared `tools/audit_dependencies.py` coordinator also audits both npm toolchain
+locks with development dependencies included. It attempts every scan after an
+earlier failure and retains per-scan results; unauditable Python packages, findings,
+errors, timeouts, or missing output fail the required check. Dependabot covers both
+`tests/miniapp-ui` and `tests/miniapp-browser` for regular npm updates.
 
 Review GitHub Actions updates as executable dependency changes. Every declared
 external action is pinned to a full commit SHA resolved from its official upstream

@@ -43,8 +43,8 @@ comments, SARIF uploads and Action summaries are disabled.
 | `python-tests` | Complete pytest discovery, at most four workers, resource warnings as errors, whole-application statement and branch coverage, security coverage floors | `application-coverage`: coverage JSON/XML, JUnit XML, pytest log with the 20 slowest tests |
 | `miniapp-smoke` | Focused DOM regressions and loopback integration, plus pinned Chromium and WebKit tests of accepted-response loss, polling recovery, native dialogs, focus and narrow viewports | `miniapp-smoke-chromium` and `miniapp-smoke-webkit`: DOM, integration and browser logs, browser HTML report and failure traces/screenshots |
 | `secret-scan` | Full-history CLI v8.30.1 scan with SHA-256-verified binary on every event; trusted same-repository events also run the SHA-pinned licensed Gitleaks Action v3.0.0 commit-range scan | Findings, scanner errors or integrity mismatch fail the required job; a selected licensed wrapper also requires its organization license |
-| `dependency-audit` | Both complete hash-locked runtime and development dependency sets | Action result and logs |
-| `static-analysis` | Dependency lock consistency, module-size ratchet, reference evidence, architecture policy, leak scan, Ruff, and mypy | `memory-leak-scan`: leak scan and module reference JSON |
+| `dependency-audit` | Complete hash-locked Python runtime/development sets and both npm development toolchains | `dependency-audit`: per-scan reports and JSON/Markdown summaries |
+| `static-analysis` | All workflow syntax/expressions, dependency lock consistency, module-size ratchet, reference evidence, architecture policy, leak scan, Ruff, and mypy | `memory-leak-scan`: leak scan and module reference JSON |
 | `test` | Strict aggregate of the five jobs above | Table of every dependency result in the job summary |
 
 Reports are uploaded even when their producing job fails, when the report exists,
@@ -57,33 +57,70 @@ Both engines run in independent matrix jobs, with one worker per job and a fresh
 isolated loopback fixture per test. DOM checks run once in the Chromium job;
 `miniapp-smoke` succeeds only when both engines and those DOM checks pass.
 
+## Dependency and workflow validation
+
+`tools/audit_dependencies.py` attempts four independent scans: `requirements.lock`,
+the combined `requirements-dev.lock`, `tests/miniapp-ui`, and
+`tests/miniapp-browser`. Python scans use `--require-hashes --disable-pip --strict`;
+the npm scans explicitly include development dependencies and retain the default
+all-severity audit threshold. Each scan has a 90-second timeout. Findings, skipped
+Python dependencies, execution errors, timeouts, and empty results fail the required
+audit, while the remaining scans still run. Reports include every scan's outcome.
+
+The weekly advisory job uses the same coordinator. The weekly run and manual
+dispatches audit `main`; dispatches for other branches are skipped, and only `main`
+runs can update the shared `ci-advisory` issue. Checkout preserves the event's
+audited commit. A missing dependency summary prevents a clean report. The issue
+shows all scan outcomes before bounded excerpts, and the full reports are retained
+in `scheduled-advisory-audit`. Dependabot checks both npm directories every Monday,
+with the same seven-day version-update cooldown and grouped minor/patch policy as
+the existing dependency maintenance.
+
+The required `static-analysis` job runs Actionlint 1.7.12 over all workflow entry
+files. Its binary is SHA-256-verified before execution. This check covers Actions
+syntax, expressions, job dependencies and action inputs; optional ShellCheck and
+Pyflakes integrations are disabled so the result does not depend on unpinned tools
+installed in a runner image. The existing Python linting and behavioral workflow
+tests continue to run.
+
 ## Pytest partitioning and combined coverage
 
 `python-test-shards` runs four independent GitHub-hosted jobs. The lightweight
 `tools.pytest_shard` plugin collects the full suite before selecting a deterministic
-whole-file subset, balanced by collected case count. It preserves collection order
-and xdist's `--dist=loadfile` fixture locality. Each job has at most four workers;
+whole-file subset. CI supplies the reviewed `tools/pytest_shard_timings.json`
+profile to distribute repeatedly costly files using duration hints. The plugin
+preserves collection order and xdist's `--dist=loadfile` fixture locality. Each job has at most four workers;
 that is separate from the four-machine CI matrix. Do not run all sixteen workers
 concurrently on the shared local VPS.
 
 Each shard publishes its raw `.coverage.shard-N` data, full/selected test-ID manifest,
 JUnit XML and log. The existing required `python-tests` job rejects any unsuccessful
 shard, verifies that all four inventories agree and that their selected union runs
-every collected test exactly once without splitting files, then combines the raw
-coverage data. The unchanged global and security-module floors apply to this
+every collected test exactly once without splitting files, and requires readable,
+nonempty coverage data from every shard before combining it. This includes rejecting
+an empty SQLite database that Coverage.py would otherwise initialize. The unchanged global and security-module floors apply to this
 combined report. Individual partial reports use a zero floor because no subset can
 cover the full application by itself; they cannot bypass the required combined gate.
 
-Counts balance scheduling, not measured runtime. Compare exact-head job and step
-timings before claiming speedup; startup and the slowest file can limit scaling.
-No test markers, path filters, coverage omissions or security skips are introduced.
+The profile records four completed runs sampled on 2026-10-09 and seven slow files.
+Samples sum only the phases printed in the existing duration logs, so they are
+censored lower bounds, not complete file runtimes. Unprofiled files use a heuristic
+0.1 seconds per collected case. Growing files scale their median duration hint;
+shrinking files retain the recorded floor because setup/subprocess work can remain.
+Without a profile, the plugin retains its original case-count allocation.
+
+Hints affect placement only. Refresh them from completed-run evidence when the
+slowest files change; there is no remote timing lookup or timing cache. Complete
+discovery, disjoint whole-file execution, and combined coverage remain the correctness
+checks. Compare exact-head hosted job and step timings before claiming speedup;
+startup, runner variation, and the slowest indivisible file can limit scaling.
 
 `setup-uv` and `setup-node` already cache lockfile-keyed Python and npm downloads.
 `miniapp-smoke` also caches Chromium and WebKit binaries in
 `~/.cache/ms-playwright`, keyed by runner OS, architecture and the locked
 `tests/miniapp-browser/package-lock.json` (Playwright pins the browser
 revisions). The SHA-pinned cache action is best-effort: every run still invokes
-`playwright install --with-deps chromium webkit` to install system libraries
+`playwright install --with-deps "$BROWSER_ENGINE"` to install system libraries
 and repair missing browser binaries. Caches never skip tests or security scans.
 Playwright cautions that browser cache restore can cost about as much as a
 download; compare cold and warm `miniapp-smoke` runs before keeping this cache.
@@ -102,6 +139,17 @@ absolute 500-line limit and per-file exceptions still apply when no usable
 revision exists. There are no changed path exclusions from regression coverage.
 
 ## Why this shape
+
+The 2026-10-09 comparison examined current ZeroClaw workflows at
+[`cbe753fbe3226378e0788bfd127ab1350b4c8628`](https://github.com/zeroclaw-labs/zeroclaw/tree/cbe753fbe3226378e0788bfd127ab1350b4c8628/.github/workflows).
+Its [npm advisory workflow](https://github.com/zeroclaw-labs/zeroclaw/blob/cbe753fbe3226378e0788bfd127ab1350b4c8628/.github/workflows/daily-npm-audit.yml)
+and [npm update policy](https://github.com/zeroclaw-labs/zeroclaw/blob/cbe753fbe3226378e0788bfd127ab1350b4c8628/.github/dependabot.yml)
+informed the missing JavaScript dependency maintenance here. Both of this project's
+npm toolchains contain development dependencies, so excluding those packages would
+miss the relevant audit scope. We retained the existing stricter aggregate gate and
+full regression discovery, and added all-workflow validation to the existing static
+job. ZeroClaw's Rust/platform builds, release pipelines, change-filtered skips and
+additional workflow families do not match this Python service's current CI needs.
 
 The 2026-10-06 audit examined ZeroClaw at
 [`e654b4b73f286201166cf574c7fe9ff342d3341d`](https://github.com/zeroclaw-labs/zeroclaw/tree/e654b4b73f286201166cf574c7fe9ff342d3341d).
@@ -133,6 +181,7 @@ out pull-request code and fetches its classifier from the trusted base revision.
 | Bespoke gate | Protected invariant | Origin | Retirement condition |
 | --- | --- | --- | --- |
 | Required `test` aggregate | Every independent CI quality job succeeds before the protected check is green | 2026-10-06 CI/test audit of baseline `7d3a5e4`; former combined browser/Python job | Retire only when an equivalent protected check enforces the complete job set and rejects missing or unexpected skips |
+| Shard evidence | Every collected test executes exactly once in whole-file shards, and every shard supplies usable coverage before combined floors are checked | 2026-10-09 workflow audit of `5cfb6aed`; missing/unreadable coverage and empty SQLite replays | Retire only when an equivalent runner proves complete execution and requires coverage evidence from every shard |
 | Module-size ratchet base | The ratchet compares with a revision the change was reviewed against that also carries `tools/module_size_baseline.json`, so a cap can only shrink relative to a comparable tree | 2026-10-07 workflow audit; reproduced from a push whose pre-push revision predated the baseline file | Retire only when every comparison revision is guaranteed to carry the baseline file, or the tool resolves the reviewed base itself |
 | Advisory `pr-title` | Pull-request titles keep the `type(scope): subject` convention that squash subjects and release grouping rely on | 2026-10-07 workflow audit; `tools/check_pr_title.py` | Promote to a required check by removing `continue-on-error`, or retire if the project adopts a different title policy |
 | Advisory `size-label` | Every pull request carries exactly one canonical `size:*` label for review planning | 2026-10-07 workflow audit; `tools/pr_size_label.py` | Retire if review planning stops using size labels |

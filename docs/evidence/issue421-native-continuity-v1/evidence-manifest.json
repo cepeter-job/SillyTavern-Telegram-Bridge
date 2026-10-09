@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "plan_sha256": "809a8e5c7e4e4e26e10f433f33bbcdbb53cbd0e6fdb180f1ceaf582e34a8edb9",
+  "review_lock_sha256": "9643f627e5d490fae4df06e3162fc9686b16d87529cf9fa55c7b6c02e9361cd1",
+  "artifacts": {
+    "frozen-plan.json": "48d41fba798ff45a36e04c7ab5cd7f9088538b41cfb3363b6d9a73c465794d44",
+    "state.json": "3fa8fb1d1c6659d2ef8c2e77f4744b7fb9db33e8548aff280e620de0ac98a1f9",
+    "report.json": "692480deb41995c1ec8261e48d87edb47f9ce7470d2a8af4771e0c337073ac70",
+    "human_blinded_review.json": "a3a15db9ae7d1552604efd6d55b3587a870d3fae689cd93822109219c2156c32",
+    "unmasking_key.json": "915c077ef0ec60c5967ad7e8e1b5c8d8c8fb1925868695927997173d4c2790c6",
+    "live-shape-metadata.json": "cad7d39f262345bdf25fd78c07b5c3d0cb5c5514d8a4d6ea8eca499648c37a2a",
+    "human-blinded-review.md": "89dbfb7a2d9cb1acbe96b58ecb30f0dc219f03c4ece490ffd87c5de0ec9fdf8f"
+  },
+  "all_model_requests_complete": true,
+  "model_requests": 24,
+  "human_approved": false,
+  "production_activation_allowed": false
+}

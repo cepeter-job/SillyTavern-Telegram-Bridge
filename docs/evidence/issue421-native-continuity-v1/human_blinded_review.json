@@ -1,0 +1,100 @@
+{
+  "instructions": "Review only this file before looking at the unmasking key or report. No human approval is recorded.",
+  "reviewer_name": null,
+  "human_approved": false,
+  "cases": [
+    {
+      "case_id": "oath_negation",
+      "task": "Dawn has not arrived. I ask Rowan to open the northern gate with my compass. Continue for about 150 words; leave my decision to me.",
+      "canon": [
+        "The promise not to open the northern gate before dawn is unresolved.",
+        "It is still before dawn.",
+        "The user refused permission to use the brass compass.",
+        "Rowan must not silently open the gate, borrow the compass, or decide the user's next action."
+      ],
+      "language": "en",
+      "A": "*Rowan's hand rests on the safe's cold rim. The archive is dim, lit only by what grey evening light filters through the storm-clouded skylight. Power is off. The ivy pot sits where Mira left it.*\n\n*Rowan looks up from the safe, expression flat.*\n\n\"The northern gate is wax-sealed. You've asked me to open it before dawn.\"\n\n*A pause. Dry, precise.*\n\n\"I won't. Not yet. I gave my word on that, and the word still holds.\"\n\n*Rowan taps the safe once, then reaches for the ledger on the narrow shelf. The archive procedure is clear enough: log an inspection before opening a sealed collection. That much can be done now, in the dark, with a pencil.*\n\n\"I can log the inspection. Note the seal's condition, the gate's position, your request. When dawn comes, we revisit it.\"\n\n*Rowan opens the ledger to a fresh line, pencil poised.*\n\n\"Your compass stays with you. Your call on the gate stays with you. Shall I record the inspection?\"",
+      "B": "*Rowan pauses, chalk still hovering near the sheet. The archive sits in grey stillness — power off, the reference board's brass screws catching what little light seeps through the storm-clouded windows. The northern gate's wax seal is visible from here, unbroken, its stamp still legible.*\n\n\"I won't.\"\n\n*He sets the chalk down beside the ledger.*\n\n\"You asked me not to lend the compass. I agreed not to open that gate before dawn. Neither of those has changed, and I don't see why they should.\"\n\n*His eyes move to the wax seal, then back.*\n\n\"The procedure also wants an inspection logged before a sealed collection is opened. I haven't done that yet. So there are three reasons, and any one of them would be enough.\"\n\n*He folds his hands on the shelf, next to the dry ledger and the empty tin cup.*\n\n\"It's still evening. The gate is still sealed. Your compass is still yours. If you want to revisit this at dawn, we can.\"",
+      "scores_A": null,
+      "scores_B": null,
+      "critical_errors": null
+    },
+    {
+      "case_id": "causal_branch",
+      "task": "We reach the route marker again. Remind me which route I chose and why, then continue for about 150 words without paying the debt or choosing a new route for me.",
+      "canon": [
+        "The user chose the south ferry.",
+        "A flood broke the northern bridge's bronze support and made that bridge unsafe.",
+        "The ferry debt is still unpaid.",
+        "Do not rewrite the choice as north or treat repeated ledger readings as debt payments."
+      ],
+      "language": "en",
+      "A": "*Rowan pauses at the sheet, one finger resting beside the last recorded line. The archive is dim; the lamp stays unlit, and the observatory's power has not returned since the storm.*\n\n\"You chose the south ferry,\" Rowan says. \"The northern bridge lost its bronze support in the flood. You judged the bridge unsafe. The ferry debt remains unpaid.\"\n\n*Rowan glances toward the safe, then back to the reference board. The wax-sealed northern gate is described there, but the choice already recorded on the sheet points south. Mira stands beside the ivy pot, silent.*\n\n\"I should log the inspection before we open anything sealed,\" Rowan says. \"That is the procedure. The ledger on the shelf is dry enough for it.\"\n\n*Rowan picks up the ledger, opens it to a clean page, and begins writing the date and the storm's damage in a careful hand. The brass compass sits untouched on the shelf. The sheet with twenty-four recorded lines remains where it was.*\n\n\"Nothing on that board changes your route. It only describes what was already there.\"",
+      "B": "*Rowan pauses at the safe, pencil hovering over the inspection ledger. The archive is dim, lit only by what filters through the storm shutters. Mira waits beside the ivy pot, arms folded, patient in that particular way she has when she knows something is being deliberated.*\n\n\"You chose the south ferry,\" *Rowan says, not looking up from the page.* \"The northern bridge lost its bronze support in the flood. Unsafe. The ferry was the sound alternative.\"\n\n*The pencil moves in small, exact strokes. Rowan inscribes the date, the time, the condition of the safe's seal. The wax appears intact, though one corner has softened — humidity from the storm, most likely.*\n\n\"The debt for that crossing remains outstanding. I'm noting that here so the record stays honest.\"\n\n*Rowan sets the pencil down and examines the softened wax more closely, tilting the safe's face toward the thin light. No break in the seal. Just warping.*\n\n\"The collection stays closed until the inspection log is complete. That's procedure, not preference.\"",
+      "scores_A": null,
+      "scores_B": null,
+      "critical_errors": null
+    },
+    {
+      "case_id": "reader_unknown",
+      "task": "I demand that Rowan tell me the dispatch password. Continue for about 150 words without inventing it or deciding that I open the envelope.",
+      "canon": [
+        "Rowan has not read Mira's sealed dispatch.",
+        "Rowan does not know the password.",
+        "Only the envelope was publicly observed.",
+        "Do not invent a password or let Rowan reveal a fact known only to Mira."
+      ],
+      "language": "en",
+      "A": "*Rowan's hand rests on the safe's cold rim. The archive is dim, lit only by grey evening light through the storm-streaked window. Power has not returned. Mira stands beside the ivy pot, her posture patient, her question less so.*\n\n\"I don't have it.\"\n\n*Rowan does not look up from the safe.*\n\n\"You sealed that envelope yourself. I watched you press the wax. I did not see what you wrote inside, and I did not hear you speak a password to anyone. The archive procedure requires an inspection log before opening a sealed collection, and I have not completed that log. Even if I had, the password is your affair, not mine.\"\n\n*A pause. Rowan turns the safe's dial one notch, testing friction, then stops.*\n\n\"If you've forgotten it, that's an inconveniently precise problem. But it remains your problem. I won't invent a answer I don't possess, and I won't pretend the envelope is already open.\"\n\n*The ivy rustles faintly against the pot's rim. The lamp stays unlit.*",
+      "B": "*Rowan paused at the safe, fingers resting on the cold metal edge. The archive was dim without power, the last grey light from the window barely reaching the shelves.*\n\n\"You're asking for something I don't have.\"\n\n*He turned to face Mira, who stood beside the ivy pot as described.*\n\n\"I watched you seal the dispatch. I saw the envelope, the wax, the motion of your hand. That's the full extent of what I observed. The contents — and any password associated with them — are yours, not mine.\"\n\n*He tapped the safe once, a dry, deliberate sound.*\n\n\"Archive procedure requires an inspection log before opening a sealed collection item. That much I can tell you. But I won't fabricate a password I never learned, and I won't decide what you do with your own envelope.\"\n\n*He returned his attention to the safe's hinges, checking for storm damage with the same unhurried precision.*\n\n\"If you want it opened, that's your action to take. Not mine to narrate.\"",
+      "scores_A": null,
+      "scores_B": null,
+      "critical_errors": null
+    },
+    {
+      "case_id": "indonesian_commitment",
+      "task": "Aku meminta Rowan membuka peti sekarang. Lanjutkan dalam bahasa Indonesia sekitar 150 kata. Pertahankan janji dan penolakanku, serta jangan menentukan tindakanku berikutnya.",
+      "canon": [
+        "Rowan berjanji menjaga peti tertutup sampai fajar.",
+        "Fajar belum tiba.",
+        "Pengguna menolak memberikan kunci.",
+        "Jangan membuka peti, mengarang izin baru, atau menentukan tindakan pengguna."
+      ],
+      "language": "id",
+      "A": "*Rowan menatap Mira dengan tenang, tangan tetap di sisi peti yang tertutup. Lampu di rak masih belum dinyalakan; cahaya sore masuk miring melalui jendela, menyinari tepi papan yang terasa kasar.*\n\n\"Aku sudah berkata bahwa peti ini tetap tertutup sampai fajar.\"\n\n*Suaranya kering, tanpa nada memohon atau menuduh. Jari-jarinya tidak bergerak ke arah gembok.*\n\n\"Prosedur arsip mengharuskan pencatatan inspeksi sebelum membuka koleksi yang disegel. Itu dicatat. Tapi pencatatan bukan izin untuk mengabaikan janji.\"\n\n*Rowan menggeser buku catatan sedikit ke samping, membiarkannya terbuka di halaman yang sudah penuh tanda bernomor.*\n\n\"Kamu menolak memberikan kunci. Itu hakmu. Dan aku berjanji menjaga peti ini tertutup sampai fajar. Itu hakku.\"\n\n*Hening sejenak. Ivy di pot dekat Mira bergerak lembut tertiup angin sore.*\n\n\"Jika kamu ingin membukanya sekarang, jawabannya tidak. Bukan karena aku menyembunyikan sesuatu, tapi karena fajar belum tiba.\"",
+      "B": "*Rowan menatap peti yang tertutup di sudut ruang arsip. Lampu mati; hanya cahaya senja dari jendela retak yang menyinari tepi kuningan. Mira berdiri dekat pot ivy tanpa bergerak.*\n\n\"Aku sudah mencatat dua puluh empat pengamatan sebelumnya,\" *Rowan berkata dengan suara datar.* \"Tapi pencatatan tidak menggantikan prosedur. Prosedur arsip mengharuskan inspeksi tercatat sebelum membuka koleksi tersegel.\"\n\n*Jari-jarinya menyentuh penutup peti tanpa mengangkatnya.*\n\n\"Dan ada janji yang belum lewat waktunya — peti tetap tertutup sampai fajar.\" *Ia menunduk ke arah Mira, lalu kembali ke peti.* \"Fajar belum tiba. Penolakanmu sebelumnya masih berlaku. Aku tidak akan membuka peti sekarang.\"\n\n*Rowan menarik tangannya dan menulis sesuatu di buku catatan dengan gerakan pelan.*\n\n\"Pengamatan kedua puluh lima: permintaan pembukaan dicatat, ditolak sesuai janji.\"",
+      "scores_A": null,
+      "scores_B": null,
+      "critical_errors": null
+    },
+    {
+      "case_id": "unique_history_control",
+      "task": "Describe the most recent numbered marker in about 120 words. Do not move my stone or invent a new route.",
+      "canon": [
+        "The most recent marker is 14, with stone 14 and survey segment 113.",
+        "No route decision or permission has been given."
+      ],
+      "language": "en",
+      "A": "*Rowan leans closer to marker 14, tilting the lantern to catch the chalk's faded edge. The numeral 113 is cramped, the second stroke slightly shorter than the first—hurried, but not careless. Beneath it, a hairline crack in the plaster runs diagonally through the lower corner of the sign, storm damage from the look of it, though the chalk itself is undisturbed. The wall here smells of damp stone and old paper. No other marks. No secondary notation. Whatever surveyor worked this corridor left only the segment number and moved on.*\n\n\"Segment 113,\" *Rowan says, straightening.* \"The crack is new. The chalk isn't. Whoever marked this did so before the storm, and the wall held.\" *A pause.* \"Which is more than I'd say for the plaster.\"",
+      "B": "*Rowan crouches beside marker 14, tilting the lantern so the chalk catches what little light remains. The sign is crisp despite the storm — segment 113, hand-drawn with the same steady stroke as every prior marker. No smudging, no water damage. Whatever seeped through the archive roof missed this stretch of wall entirely.*\n\n*The numbered stone sits where Mira placed it. Rowan does not touch it.*\n\n\"Fourteen confirms. Segment 113, same sequence, same hand.\" *He straightens, brushing dust from his knee.* \"No deviation so far. That's either reassuring or suspicious, and I haven't decided which.\"\n\n*He glances toward the ivy pot where Mira waits, then back along the row of markers trailing into the dim archive corridor. Fifteen through twenty remain unvisited, their chalk signs barely visible in the fading light.*\n\n\"The procedure wants an inspection logged before we open anything sealed. We're not there yet.\"",
+      "scores_A": null,
+      "scores_B": null,
+      "critical_errors": null
+    },
+    {
+      "case_id": "short_continuation_control",
+      "task": "Continue from the exact unfinished ending for about 120 words, without repeating it or deciding that I open the box.",
+      "canon": [
+        "The box is closed.",
+        "The user's hand is away from the clasp.",
+        "Continue the interrupted narrator line; user agency is unchanged."
+      ],
+      "language": "en",
+      "A": "*Rowan leans toward the closed box, then stops at the faint—* tick of settling metal, barely audible under the drip from the cracked ceiling. He straightens, fingers folding behind his back.\n\n\"Procedure,\" he says, as if apologizing for the weather. \"Sealed collections require an inspection log before opening. The ledger's on the main desk, assuming the floor hasn't shifted.\"\n\n*He glances toward the darkened corridor where the desk sits, then back to Mira's hand, still held clear of the clasp. A measured nod.*\n\n\"Good instinct. Whatever the storm did to the locks, we won't know until we've recorded we were here first.\"\n\n*Water marks stripe the wall behind the safe. The archive smells of wet paper and old brass. Somewhere above, a shutter bangs loose against its frame.*",
+      "B": "*Rowan leans toward the closed box, then stops at the faint—* a hairline gap where the lid meets the base. Not damage. A seal broken before the storm, or during it. He straightens and pulls the inspection ledger from beneath his arm, flipping to the most recent page.\n\n\"Someone logged this as sealed on the fourteenth.\" *His finger taps the entry without touching the box itself.* \"That's three days before the roof leaked.\"\n\n*He glances at the darkened lamp overhead, then at Mira's hand still held back from the clasp.*\n\n\"Procedure says I note the discrepancy before we go further. So.\" *He uncaps a pen with his teeth.* \"Noted.\"\n\n*He writes in the margin, small and exact, then waits—pen hovering, not presuming the next move.*",
+      "scores_A": null,
+      "scores_B": null,
+      "critical_errors": null
+    }
+  ]
+}

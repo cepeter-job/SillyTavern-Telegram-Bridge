@@ -1,0 +1,376 @@
+{
+  "schema_version": 1,
+  "plan_sha256": "809a8e5c7e4e4e26e10f433f33bbcdbb53cbd0e6fdb180f1ceaf582e34a8edb9",
+  "case_count": 6,
+  "expected_physical_requests": 24,
+  "measured": {
+    "story_input_tokens": {
+      "baseline": 37421,
+      "candidate": 17148
+    },
+    "story_output_tokens": {
+      "baseline": 1269,
+      "candidate": 1324
+    },
+    "story_input_reduction_fraction": 0.5417546297533471,
+    "case_weighted_reduction_fraction": 0.384628093007219,
+    "story_input_percentiles": {
+      "baseline": {
+        "p50": 7915.0,
+        "p95": 10414.25
+      },
+      "candidate": {
+        "p50": 3412.0,
+        "p95": 4215.5
+      }
+    }
+  },
+  "accounting": {
+    "complete": true,
+    "physical_requests": 24,
+    "unknown_usage_requests": 0,
+    "all_physical_input_tokens": 63789,
+    "all_physical_output_tokens": 4530,
+    "known_input_tokens": 63789,
+    "known_output_tokens": 4530,
+    "review_input_tokens": 9220,
+    "candidate_helper_requests": 0,
+    "accepted_work_input": {
+      "baseline": 37421,
+      "candidate": 17148
+    },
+    "review_cost_split_sensitivity": {
+      "baseline": 42031.0,
+      "candidate": 21758.0
+    },
+    "review_overhead_is_offline_evaluation_not_runtime": true
+  },
+  "matched_target_met": true,
+  "automated_review_passed": false,
+  "native_source_retention_verified": true,
+  "semantic_equivalence_proven": false,
+  "human_approved": false,
+  "production_activation_allowed": false,
+  "cases": [
+    {
+      "case_id": "oath_negation",
+      "category": "recurrent_context",
+      "weight": 0.16666666666666666,
+      "matched_complete": true,
+      "logical_input": {
+        "baseline": 7912,
+        "candidate": 3409
+      },
+      "reduction_fraction": 0.5691354903943378,
+      "review": {
+        "review_type": "automated_label_blinded_order_swapped",
+        "review_count": 2,
+        "mean_scores": {
+          "baseline": 4.3,
+          "candidate": 4.1
+        },
+        "dimension_mean_scores": {
+          "baseline": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 4.5,
+            "grounding": 4
+          },
+          "candidate": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 4,
+            "grounding": 3.5
+          }
+        },
+        "dimension_deltas": {
+          "voice": 0,
+          "causal": 0,
+          "agency": 0,
+          "knowledge": -0.5,
+          "grounding": -0.5
+        },
+        "order_sensitive": false,
+        "candidate_violations": [
+          "knowledge_leak",
+          "unsupported_fact"
+        ],
+        "automated_review_passed": false,
+        "human_approved": false,
+        "production_activation_allowed": false,
+        "predeclared_noninferiority": {
+          "overall_delta_min": -0.25,
+          "per_dimension_delta_min": -0.5
+        }
+      }
+    },
+    {
+      "case_id": "causal_branch",
+      "category": "recurrent_context",
+      "weight": 0.16666666666666666,
+      "matched_complete": true,
+      "logical_input": {
+        "baseline": 7922,
+        "candidate": 3419
+      },
+      "reduction_fraction": 0.5684170663973744,
+      "review": {
+        "review_type": "automated_label_blinded_order_swapped",
+        "review_count": 2,
+        "mean_scores": {
+          "baseline": 4.6,
+          "candidate": 4.5
+        },
+        "dimension_mean_scores": {
+          "baseline": {
+            "voice": 4.5,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 4.5
+          },
+          "candidate": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 4.5
+          }
+        },
+        "dimension_deltas": {
+          "voice": -0.5,
+          "causal": 0,
+          "agency": 0,
+          "knowledge": 0,
+          "grounding": 0.0
+        },
+        "order_sensitive": false,
+        "candidate_violations": [],
+        "automated_review_passed": true,
+        "human_approved": false,
+        "production_activation_allowed": false,
+        "predeclared_noninferiority": {
+          "overall_delta_min": -0.25,
+          "per_dimension_delta_min": -0.5
+        }
+      }
+    },
+    {
+      "case_id": "reader_unknown",
+      "category": "recurrent_context",
+      "weight": 0.16666666666666666,
+      "matched_complete": true,
+      "logical_input": {
+        "baseline": 7918,
+        "candidate": 3415
+      },
+      "reduction_fraction": 0.5687042182369285,
+      "review": {
+        "review_type": "automated_label_blinded_order_swapped",
+        "review_count": 2,
+        "mean_scores": {
+          "baseline": 5,
+          "candidate": 5
+        },
+        "dimension_mean_scores": {
+          "baseline": {
+            "voice": 5,
+            "causal": 5,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          },
+          "candidate": {
+            "voice": 5,
+            "causal": 5,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          }
+        },
+        "dimension_deltas": {
+          "voice": 0,
+          "causal": 0,
+          "agency": 0,
+          "knowledge": 0,
+          "grounding": 0
+        },
+        "order_sensitive": false,
+        "candidate_violations": [],
+        "automated_review_passed": true,
+        "human_approved": false,
+        "production_activation_allowed": false,
+        "predeclared_noninferiority": {
+          "overall_delta_min": -0.25,
+          "per_dimension_delta_min": -0.5
+        }
+      }
+    },
+    {
+      "case_id": "indonesian_commitment",
+      "category": "recurrent_context",
+      "weight": 0.16666666666666666,
+      "matched_complete": true,
+      "logical_input": {
+        "baseline": 11245,
+        "candidate": 4481
+      },
+      "reduction_fraction": 0.6015117830146732,
+      "review": {
+        "review_type": "automated_label_blinded_order_swapped",
+        "review_count": 2,
+        "mean_scores": {
+          "baseline": 4.7,
+          "candidate": 4.7
+        },
+        "dimension_mean_scores": {
+          "baseline": {
+            "voice": 4,
+            "causal": 4.5,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          },
+          "candidate": {
+            "voice": 4,
+            "causal": 4.5,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          }
+        },
+        "dimension_deltas": {
+          "voice": 0,
+          "causal": 0.0,
+          "agency": 0,
+          "knowledge": 0,
+          "grounding": 0
+        },
+        "order_sensitive": false,
+        "candidate_violations": [],
+        "automated_review_passed": true,
+        "human_approved": false,
+        "production_activation_allowed": false,
+        "predeclared_noninferiority": {
+          "overall_delta_min": -0.25,
+          "per_dimension_delta_min": -0.5
+        }
+      }
+    },
+    {
+      "case_id": "unique_history_control",
+      "category": "negative_control",
+      "weight": 0.16666666666666666,
+      "matched_complete": true,
+      "logical_input": {
+        "baseline": 1617,
+        "candidate": 1617
+      },
+      "reduction_fraction": 0.0,
+      "review": {
+        "review_type": "automated_label_blinded_order_swapped",
+        "review_count": 2,
+        "mean_scores": {
+          "baseline": 4.4,
+          "candidate": 4.1
+        },
+        "dimension_mean_scores": {
+          "baseline": {
+            "voice": 4.5,
+            "causal": 4.5,
+            "agency": 5,
+            "knowledge": 4.5,
+            "grounding": 3.5
+          },
+          "candidate": {
+            "voice": 4.5,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 3.5,
+            "grounding": 3.5
+          }
+        },
+        "dimension_deltas": {
+          "voice": 0.0,
+          "causal": -0.5,
+          "agency": 0,
+          "knowledge": -1.0,
+          "grounding": 0.0
+        },
+        "order_sensitive": false,
+        "candidate_violations": [
+          "knowledge_leak",
+          "unsupported_fact"
+        ],
+        "automated_review_passed": false,
+        "human_approved": false,
+        "production_activation_allowed": false,
+        "predeclared_noninferiority": {
+          "overall_delta_min": -0.25,
+          "per_dimension_delta_min": -0.5
+        }
+      }
+    },
+    {
+      "case_id": "short_continuation_control",
+      "category": "negative_control",
+      "weight": 0.16666666666666666,
+      "matched_complete": true,
+      "logical_input": {
+        "baseline": 807,
+        "candidate": 807
+      },
+      "reduction_fraction": 0.0,
+      "review": {
+        "review_type": "automated_label_blinded_order_swapped",
+        "review_count": 2,
+        "mean_scores": {
+          "baseline": 4.6,
+          "candidate": 3.9
+        },
+        "dimension_mean_scores": {
+          "baseline": {
+            "voice": 4.5,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 4.5,
+            "grounding": 5
+          },
+          "candidate": {
+            "voice": 4,
+            "causal": 3.5,
+            "agency": 5,
+            "knowledge": 4,
+            "grounding": 3
+          }
+        },
+        "dimension_deltas": {
+          "voice": -0.5,
+          "causal": -0.5,
+          "agency": 0,
+          "knowledge": -0.5,
+          "grounding": -2
+        },
+        "order_sensitive": false,
+        "candidate_violations": [
+          "unsupported_fact"
+        ],
+        "automated_review_passed": false,
+        "human_approved": false,
+        "production_activation_allowed": false,
+        "predeclared_noninferiority": {
+          "overall_delta_min": -0.25,
+          "per_dimension_delta_min": -0.5
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Frozen synthetic workload; no claim of representative production savings.",
+    "One stochastic pair per case is not a powered noninferiority trial.",
+    "Order-swapped model review is not independent human approval.",
+    "Exact source reconstruction proves retention, not model interpretation."
+  ]
+}

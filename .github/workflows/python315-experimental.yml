@@ -1,0 +1,121 @@
+name: Python 3.15 experimental compatibility
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/python315-experimental.yml"
+      - "requirements.txt"
+      - "bridge/**"
+      - "tools/benchmark_python_runtime.py"
+      - "tests/test_benchmark_python_runtime.py"
+      - "docs/python-315-migration.md"
+
+permissions:
+  contents: read
+
+jobs:
+  # Both jobs are deliberately excluded from the Python 3.11 release gate.
+  full-dependency-compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+          enable-cache: true
+      - name: Test complete native dependency install on Python 3.15
+        run: |
+          uv python install 3.15
+          uv venv --python 3.15 .venv315-full
+          .venv315-full/bin/python --version
+          uv pip compile requirements.txt --python-version 3.15 \
+            --generate-hashes --output-file "$RUNNER_TEMP/requirements-py315.lock"
+          uv pip install --python .venv315-full/bin/python \
+            --require-hashes -r "$RUNNER_TEMP/requirements-py315.lock"
+          uv pip check --python .venv315-full/bin/python
+          .venv315-full/bin/python -c "import aiohttp, faster_whisper, hindsight_client, yaml"
+
+  # Core-only excludes voice transcription to isolate independent blockers.
+  # Success here NEVER authorizes deployment or replacement of production locks.
+  core-smoke-and-benchmarks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+          enable-cache: true
+      - name: Prepare isolated Python 3.11 and 3.15 runtimes
+        run: |
+          uv python install 3.11 3.15
+          uv venv --python 3.11 .venv311-core
+          uv venv --python 3.15 .venv315-core
+          .venv311-core/bin/python --version
+          .venv315-core/bin/python --version
+      - name: Resolve temporary, hash-locked core dependencies
+        run: |
+          grep -v '^faster-whisper' requirements.txt > "$RUNNER_TEMP/core-requirements.txt"
+          uv pip compile "$RUNNER_TEMP/core-requirements.txt" --python-version 3.11 \
+            --generate-hashes --output-file "$RUNNER_TEMP/core-py311.lock"
+          uv pip compile "$RUNNER_TEMP/core-requirements.txt" --python-version 3.15 \
+            --generate-hashes --output-file "$RUNNER_TEMP/core-py315.lock"
+          uv pip install --python .venv311-core/bin/python \
+            --require-hashes -r "$RUNNER_TEMP/core-py311.lock"
+          uv pip install --python .venv315-core/bin/python \
+            --require-hashes -r "$RUNNER_TEMP/core-py315.lock"
+          uv pip check --python .venv311-core/bin/python
+          uv pip check --python .venv315-core/bin/python
+          uv pip install --python .venv311-core/bin/python pytest
+          uv pip install --python .venv315-core/bin/python pytest
+      - name: Run focused offline regression tests
+        run: |
+          for runtime in .venv311-core .venv315-core; do
+            "$runtime/bin/python" -m pytest -q \
+              tests/test_benchmark_python_runtime.py \
+              tests/test_context_section_metrics.py \
+              tests/test_context_selection.py \
+              tests/test_context_compaction.py
+          done
+      - name: Compare interpreter-only work using identical synthetic fixtures
+        run: |
+          mkdir -p runtime-benchmarks
+          .venv311-core/bin/python tools/benchmark_python_runtime.py \
+            > runtime-benchmarks/python311.json
+          .venv315-core/bin/python tools/benchmark_python_runtime.py \
+            > runtime-benchmarks/python315.json
+          .venv311-core/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+
+          directory = Path("runtime-benchmarks")
+          old = json.loads((directory / "python311.json").read_text())
+          new = json.loads((directory / "python315.json").read_text())
+          assert old["workload_version"] == new["workload_version"]
+          for name, before in old["cases"].items():
+              after = new["cases"][name]
+              assert before["output_identity"] == after["output_identity"], name
+              gain = 100 * (1 - after["cpu_ns_per_call_median"] / before["cpu_ns_per_call_median"])
+              print(f"{name}: local CPU improvement {gain:+.1f}%")
+          print("NOT end-to-end latency: no Telegram or model calls were made.")
+          PY
+      - name: Retain synthetic benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: python315-experimental-benchmarks
+          path: runtime-benchmarks/*.json
+          if-no-files-found: ignore
+          retention-days: 14

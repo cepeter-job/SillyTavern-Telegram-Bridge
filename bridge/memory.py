@@ -64,7 +64,11 @@ from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
 from bridge.sqlite_store import db_connect, write_transaction
-from bridge.summary_block_coalescing import coalesce_summary_response, summary_length_contract
+from bridge.summary_block_coalescing import (
+    SUMMARY_AUDIENCE_OUTPUT_CONTRACT,
+    coalesce_summary_response,
+    summary_length_contract,
+)
 
 
 def _make_hindsight_stale_guard(
@@ -328,6 +332,8 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
                 + length_contract
                 + " Preserve every fact, negations, promises, causal links and reader knowledge within the limit. "
                 + CLASSIFIED_AUDIENCE_PROMPT
+                + " "
+                + SUMMARY_AUDIENCE_OUTPUT_CONTRACT
                 + " Split public continuity from private facts. Preserve prior audiences unless the new source "
                 "explicitly establishes additional knowledge. Presence never grants private "
                 "thoughts or off-screen facts. "
@@ -375,7 +381,7 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
         parser=parse,
         session_id=f"summary:{chat_id}:{session['session_id']}",
         settings=settings,
-        repair_contract=length_contract + window_contract,
+        repair_contract=length_contract + window_contract + SUMMARY_AUDIENCE_OUTPUT_CONTRACT,
     )
 
 

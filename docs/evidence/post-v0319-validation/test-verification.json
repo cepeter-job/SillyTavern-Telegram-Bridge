@@ -1,0 +1,19 @@
+{
+  "acceptance": {
+    "tests": 179,
+    "passed": true,
+    "command": "pytest tests/test_system_prompt_catalog.py tests/test_post_history_placement.py tests/test_native_writing_profiles.py tests/test_generation_continuation.py tests/test_light_novel_acceptance.py tests/test_simulation_trackers.py tests/test_update_panel.py tests/test_self_update_payload.py"
+  },
+  "evaluation_driver": {
+    "tests": 31,
+    "passed": true,
+    "fake_full_model_posts": 152,
+    "real_provider_calls_in_unit_tests": 0,
+    "command": "pytest tests/test_postrelease_execution.py tests/test_postrelease_report.py tests/test_postrelease_evaluation.py tests/test_native_context_limits.py tests/test_native_context_transport.py"
+  },
+  "counts_overlap_not_additive": true,
+  "human_client_click_acceptance": false,
+  "independent_human_review": false,
+  "frozen_code_hashes_unchanged": true,
+  "frozen_plan_commit": "a05bc9a56cb327c1350c9cadf6702ecef4de4ec8"
+}

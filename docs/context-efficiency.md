@@ -81,6 +81,24 @@ pending invalidation with a still-valid baseline retain the baseline. Shadow
 mode emits only the stable baseline; known revocation also aborts shadow
 rather than permitting stale context through.
 
+## Short-reply Summary reference context
+
+For an ambiguous short user reply (such as a one-word action, agreement,
+refusal, or numbered choice), the Summary helper may read at most the two
+immediately preceding canonical dialogue turns in the **same current story
+incarnation**. The nearest turn must be an assistant response. Context is
+bounded to 3,600 characters and complete turns; oversized turns are omitted
+rather than silently truncated. Session and source-revision proofs are
+checked, including again before a format repair and after model generation.
+
+The preceding dialogue is marked as **reference only** for interpreting what
+the current canonical reply accepts, refuses, or chooses. It is never a new
+accepted source or an automatic audience grant. The same strict Summary
+validators, private-knowledge labels, checkpoint boundaries, 12K character
+cap and single JSON repair remain in force. Canonical history selection stays
+OFF. If the reference is stale or ambiguous, the worker fails closed without
+skipping a source row.
+
 ## Classified Summary windows
 
 Durable Summary now archives a previously **accepted and source-proven** classified

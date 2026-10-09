@@ -154,11 +154,19 @@ def make_hybrid_shadow_probe(
 
         options = HybridOptions(chars_per_token=chars_per_token)
         whole = evaluate_hybrid_shadow(
-            db, scope, messages, query=query, options=options,
+            db,
+            scope,
+            messages,
+            query=query,
+            options=options,
             resolve_current_scope=resolve_current_scope,
         ).metrics
         statements = evaluate_statement_shadow(
-            db, scope, messages, query=query, options=options,
+            db,
+            scope,
+            messages,
+            query=query,
+            options=options,
             resolve_current_scope=resolve_current_scope,
         ).metrics
         return {

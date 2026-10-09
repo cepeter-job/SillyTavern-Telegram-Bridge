@@ -81,6 +81,10 @@ python tools/postrelease_report.py --plan docs/evidence/post-v0319-validation/fr
 
 The runner is POSIX-specific because it uses file locking. Snapshot file hashes and the request/usage audit are retained. Any new sampling, model, prompt or judge procedure requires a new frozen experiment, not an alteration of these observations.
 
+### Frozen-generation checkout
+
+The exact v0.3.019-generation code and all completed evidence are preserved at commit `f35e2090d584a99c10fab8bbca6c3ecbb55a3175` (the pre-inference protocol itself was committed at `a05bc9a56cb327c1350c9cadf6702ecef4de4ec8`). Later `main` commits, including the separately merged statement-selector PR #475, are **not** covered by these model measurements. Use that pinned checkpoint—not a later working tree—when reconstructing original generation payloads. The saved runner deliberately rejects a frozen plan when its source-file hashes no longer match. Do not rewrite those hashes or restart the already-completed trial to bypass that check. Offline reporting from the recorded observations requires no provider request.
+
 ## Remaining gates
 
 Independent blinded human review, actual client-button acceptance, representative production causal-continuity evidence and lower total story-plus-helper accepted-work input are not completed here. The completed experiments provide evidence for those decisions, not permission to bypass them.

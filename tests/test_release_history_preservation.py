@@ -47,6 +47,7 @@ def test_native_only_decision_retains_readonly_preview_and_human_review_gates():
     assert "must never silently rename or reinterpret" in text
     assert "independent blinded human review" in text
 
+
 def test_release_v0320_keeps_historical_v0319():
     text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     assert text.count("## [0.3.020] - 2026-10-09") == 1

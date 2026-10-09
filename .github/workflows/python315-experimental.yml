@@ -2,6 +2,12 @@ name: Python 3.15 experimental compatibility
 
 on:
   workflow_dispatch:
+    inputs:
+      trace_resource_allocations:
+        description: "Include resource allocation stacks in Python 3.15 warning diagnostics"
+        required: false
+        type: boolean
+        default: false
   pull_request:
     paths:
       - ".github/workflows/python315-experimental.yml"
@@ -204,8 +210,15 @@ jobs:
       - name: Provisional full test discovery without native voice module
         id: core-suite
         continue-on-error: true
+        env:
+          TRACE_RESOURCE_ALLOCATIONS: ${{ inputs.trace_resource_allocations || 'false' }}
         run: |
           set -euo pipefail
+          if [[ "$TRACE_RESOURCE_ALLOCATIONS" == "true" ]]; then
+            # Environment propagation traces allocations inside xdist workers too.
+            export PYTHONTRACEMALLOC=8
+            echo "Tracing resource allocation sites in all pytest worker processes."
+          fi
           .venv315-stable-core/bin/python -X dev -W error::ResourceWarning \
             -m pytest -q -n auto --maxprocesses=4 --dist=loadfile \
             --cov=bridge --cov-fail-under=0 \

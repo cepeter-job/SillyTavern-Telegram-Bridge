@@ -60,6 +60,23 @@ The experimental workflow now includes a manually dispatched
 4. Retains results for 14 days. These are **provisional core-only results**
    and do NOT establish the full voice transcription and native-extension gate.
 
+### Locating remaining SQLite resource owners
+
+The core-only Python 3.15 final run can report a leaked SQLite connection
+*during a different test* from the one that created it, since finalizers run
+when the garbage collector executes. Do not assume the failing test owns the
+connection merely because it received the warning.
+
+For a targeted diagnostic run, manually dispatch **Python 3.15 experimental
+compatibility** with the optional `trace_resource_allocations` input enabled.
+Only the manually dispatched final-core regression uses this input. It sets
+`PYTHONTRACEMALLOC=8` for the pytest parent and all xdist workers, so
+`ResourceWarning` includes an **Object allocated at** stack where Python
+allocated the unclosed connection or HTTP response. Inspect the retained
+`python315-final-core-regression` logs and fix the actual connection owner.
+This is intentionally opt-in because allocation tracking increases runtime
+and memory usage; leave it off for routine CI.
+
 This locally compiled release is not a like-for-like PGO/JIT performance
 build. Do not compare its benchmark timings with production or interpret its
 test success as better end-to-end latency. The source fingerprint used is

@@ -236,7 +236,9 @@ def test_playwright_cache_is_lock_scoped_without_skipping_browser_dependencies()
     install = next(step for step in smoke_steps if step.get("name", "").startswith("Install pinned Chromium"))
     assert smoke_steps.index(cache) < smoke_steps.index(install)
     assert "if" not in install
-    assert "install --with-deps chromium webkit" in install["run"]
+    assert 'install --with-deps "$BROWSER_ENGINE"' in install["run"]
+    assert install["env"]["BROWSER_ENGINE"] == "${{ matrix.browser }}"
+    assert jobs["miniapp-smoke"]["strategy"]["matrix"]["browser"] == ["chromium", "webkit"]
     report = next(step for step in smoke_steps if step.get("name") == "Report browser cache hit")
     assert "steps.playwright-browsers-cache.outputs.cache-hit" in report["env"]["PLAYWRIGHT_CACHE_HIT"]
     node = next(step for step in smoke_steps if step.get("uses", "").startswith("actions/setup-node@"))

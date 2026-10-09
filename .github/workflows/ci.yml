@@ -17,7 +17,11 @@ defaults:
     shell: bash
 
 jobs:
-  python-tests:
+  python-test-shards:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -49,13 +53,93 @@ jobs:
       - name: Validate dependency environment
         run: python -m pip check
 
-      - name: Run full test suite with resource warnings as errors
+      - name: Run pytest shard
+        env:
+          SHARD_INDEX: ${{ matrix.shard }}
+          COVERAGE_FILE: .coverage.shard-${{ matrix.shard }}
+        # Only combined coverage is compared with the whole-suite floor.
         run: >-
-          python -X dev -W error::ResourceWarning -m pytest -q -n auto --maxprocesses=4 --dist=loadfile
-          --cov --cov-report=term-missing:skip-covered
+          python -X dev -W error::ResourceWarning -m pytest -q
+          -p tools.pytest_shard --shard-index="$SHARD_INDEX" --shard-count=4
+          --shard-manifest=shard-manifest.json -n auto --maxprocesses=4 --dist=loadfile
+          --cov --cov-fail-under=0
           --cov-report=json:coverage.json --cov-report=xml:coverage.xml
           --junitxml=pytest-results.xml --durations=20 --durations-min=1
           2>&1 | tee pytest.log
+
+      - name: Publish pytest shard evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pytest-shard-${{ matrix.shard }}
+          include-hidden-files: true
+          path: |
+            .coverage.shard-${{ matrix.shard }}
+            shard-manifest.json
+            pytest-results.xml
+            pytest.log
+          if-no-files-found: error
+          retention-days: 14
+
+  python-tests:
+    needs: [python-test-shards]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+          enable-cache: true
+          cache-dependency-glob: |
+            requirements.lock
+            requirements-dev.lock
+
+      - name: Install locked runtime dependencies
+        run: uv pip install --system --python python --require-hashes -r requirements.lock
+
+      - name: Install development test tooling
+        run: uv pip install --system --python python --require-hashes -r requirements-dev.lock
+
+      - name: Validate dependency environment
+        run: python -m pip check
+
+      - name: Require successful execution of every shard
+        env:
+          SHARD_RESULT: ${{ needs.python-test-shards.result }}
+        run: |
+          if [ "$SHARD_RESULT" != "success" ]; then
+            echo "Pytest shards did not all succeed: $SHARD_RESULT"
+            exit 1
+          fi
+
+      - name: Download all pytest shard evidence
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: pytest-shard-*
+          path: shard-reports
+          merge-multiple: false
+
+      - name: Verify complete disjoint test inventory
+        run: python tools/check_pytest_shards.py shard-reports --shards=4
+
+      - name: Combine whole-application coverage and enforce original floor
+        run: |
+          python -m coverage combine --keep shard-reports/pytest-shard-*
+          python -m coverage json -o coverage.json
+          python -m coverage xml -o coverage.xml
+          python -m coverage report
 
       - name: Check security-critical coverage
         run: python tools/check_security_coverage.py coverage.json
@@ -65,15 +149,19 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: application-coverage
+          include-hidden-files: true
           path: |
             coverage.json
             coverage.xml
-            pytest-results.xml
-            pytest.log
+            shard-reports/
           if-no-files-found: warn
           retention-days: 14
 
   miniapp-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -106,8 +194,10 @@ jobs:
             tests/miniapp-ui/package-lock.json
             tests/miniapp-browser/package-lock.json
       - name: Install locked DOM test tooling
+        if: ${{ matrix.browser == 'chromium' }}
         run: npm ci --prefix tests/miniapp-ui --include=dev --ignore-scripts --no-audit --no-fund
       - name: Exercise Mini App pages and session safety
+        if: ${{ matrix.browser == 'chromium' }}
         env:
           MINIAPP_JSDOM_ROOT: ${{ github.workspace }}/tests/miniapp-ui
           PYTHON: python
@@ -123,10 +213,12 @@ jobs:
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-browsers-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tests/miniapp-browser/package-lock.json') }}
+          key: playwright-browsers-${{ runner.os }}-${{ runner.arch }}-${{ matrix.browser }}-${{ hashFiles('tests/miniapp-browser/package-lock.json') }}
 
       - name: Install pinned Chromium and WebKit engines and system dependencies
-        run: node tests/miniapp-browser/node_modules/@playwright/test/cli.js install --with-deps chromium webkit
+        env:
+          BROWSER_ENGINE: ${{ matrix.browser }}
+        run: node tests/miniapp-browser/node_modules/@playwright/test/cli.js install --with-deps "$BROWSER_ENGINE"
 
       - name: Report browser cache hit
         env:
@@ -138,13 +230,14 @@ jobs:
       - name: Exercise real browser recovery and mobile interaction
         env:
           PYTHON: python
-        run: npm test --prefix tests/miniapp-browser 2>&1 | tee miniapp-browser.log
+          BROWSER_ENGINE: ${{ matrix.browser }}
+        run: npm test --prefix tests/miniapp-browser -- --project="$BROWSER_ENGINE" 2>&1 | tee miniapp-browser.log
 
       - name: Publish Mini App smoke log
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: miniapp-smoke
+          name: miniapp-smoke-${{ matrix.browser }}
           path: |
             miniapp-ui*.log
             miniapp-browser.log

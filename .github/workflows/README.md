@@ -8,7 +8,7 @@ tests and the size ratchet.
 
 | File | Trigger | Jobs | Protected |
 | --- | --- | --- | --- |
-| `ci.yml` | `pull_request`; `push` to `main` | `python-tests`, `miniapp-smoke`, `secret-scan`, `dependency-audit`, `static-analysis`, `test` | Yes: the `test` aggregate is the branch-protected check |
+| `ci.yml` | `pull_request`; `push` to `main` | `python-test-shards`, `python-tests`, `miniapp-smoke`, `secret-scan`, `dependency-audit`, `static-analysis`, `test` | Yes: the `test` aggregate is the branch-protected check |
 | `pr-title.yml` | `pull_request` lifecycle | `pr-title` | No, advisory |
 | `pr-size-labeler.yml` | `pull_request_target` lifecycle | `size-label` | No, advisory |
 | `scheduled-audit.yml` | weekly schedule; manual dispatch | `advisory-audit` | No, advisory |
@@ -41,7 +41,7 @@ comments, SARIF uploads and Action summaries are disabled.
 | Job | Scope | Retained evidence |
 | --- | --- | --- |
 | `python-tests` | Complete pytest discovery, at most four workers, resource warnings as errors, whole-application statement and branch coverage, security coverage floors | `application-coverage`: coverage JSON/XML, JUnit XML, pytest log with the 20 slowest tests |
-| `miniapp-smoke` | Focused DOM regressions and loopback integration, plus pinned Chromium and WebKit tests of accepted-response loss, polling recovery, native dialogs, focus and narrow viewports | `miniapp-smoke`: DOM, integration and browser logs, browser HTML report and failure traces/screenshots |
+| `miniapp-smoke` | Focused DOM regressions and loopback integration, plus pinned Chromium and WebKit tests of accepted-response loss, polling recovery, native dialogs, focus and narrow viewports | `miniapp-smoke-chromium` and `miniapp-smoke-webkit`: DOM, integration and browser logs, browser HTML report and failure traces/screenshots |
 | `secret-scan` | Full-history CLI v8.30.1 scan with SHA-256-verified binary on every event; trusted same-repository events also run the SHA-pinned licensed Gitleaks Action v3.0.0 commit-range scan | Findings, scanner errors or integrity mismatch fail the required job; a selected licensed wrapper also requires its organization license |
 | `dependency-audit` | Both complete hash-locked runtime and development dependency sets | Action result and logs |
 | `static-analysis` | Dependency lock consistency, module-size ratchet, reference evidence, architecture policy, leak scan, Ruff, and mypy | `memory-leak-scan`: leak scan and module reference JSON |
@@ -53,7 +53,30 @@ a test log with `tee` cannot hide the test command's failure. Checkouts do not
 retain credentials. Actions remain pinned to complete commit SHAs; Python and DOM
 tooling continue to use the checked-in locks. Browser tooling has a separate npm
 lock under `tests/miniapp-browser/`; its Playwright version pins engine revisions.
-Both engines run sequentially against a fresh isolated loopback fixture per test.
+Both engines run in independent matrix jobs, with one worker per job and a fresh
+isolated loopback fixture per test. DOM checks run once in the Chromium job;
+`miniapp-smoke` succeeds only when both engines and those DOM checks pass.
+
+## Pytest partitioning and combined coverage
+
+`python-test-shards` runs four independent GitHub-hosted jobs. The lightweight
+`tools.pytest_shard` plugin collects the full suite before selecting a deterministic
+whole-file subset, balanced by collected case count. It preserves collection order
+and xdist's `--dist=loadfile` fixture locality. Each job has at most four workers;
+that is separate from the four-machine CI matrix. Do not run all sixteen workers
+concurrently on the shared local VPS.
+
+Each shard publishes its raw `.coverage.shard-N` data, full/selected test-ID manifest,
+JUnit XML and log. The existing required `python-tests` job rejects any unsuccessful
+shard, verifies that all four inventories agree and that their selected union runs
+every collected test exactly once without splitting files, then combines the raw
+coverage data. The unchanged global and security-module floors apply to this
+combined report. Individual partial reports use a zero floor because no subset can
+cover the full application by itself; they cannot bypass the required combined gate.
+
+Counts balance scheduling, not measured runtime. Compare exact-head job and step
+timings before claiming speedup; startup and the slowest file can limit scaling.
+No test markers, path filters, coverage omissions or security skips are introduced.
 
 `setup-uv` and `setup-node` already cache lockfile-keyed Python and npm downloads.
 `miniapp-smoke` also caches Chromium and WebKit binaries in

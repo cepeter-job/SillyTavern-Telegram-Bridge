@@ -3,8 +3,8 @@
 import logging
 import sqlite3
 import threading
-from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 
 import pytest
 

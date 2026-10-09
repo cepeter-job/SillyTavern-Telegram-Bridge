@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 
 from bridge.context_hybrid_shadow import evaluate_hybrid_shadow
-from bridge.context_hybrid_types import HISTORY_MARKER, SHADOW_MARKER
+from bridge.context_hybrid_types import SHADOW_MARKER
 from bridge.context_selection_runtime import choose_context_messages
 from bridge.context_statement_shadow import STATEMENT_MARKER, evaluate_statement_shadow
 from bridge.memory_scope_store import resolve_memory_scope

@@ -94,12 +94,19 @@ def top_level_functions(source: str | Path) -> set[str]:
 
 def referenced_globals(source: str, filename: str) -> set[str]:
     table = symtable.symtable(source, filename, "exec")
+    # Python 3.15's deferred-annotation compiler may expose an internal
+    # global to symtable that is absent from the author-written AST.
+    # Never exempt an explicit reference to that name in real source code.
+    source_names = {node.id for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Name)}
     result: set[str] = set()
 
     def walk(node):
         for symbol in node.get_symbols():
+            name = symbol.get_name()
+            if name == "__conditional_annotations__" and name not in source_names:
+                continue
             if symbol.is_referenced() and symbol.is_global():
-                result.add(symbol.get_name())
+                result.add(name)
         for child in node.get_children():
             walk(child)
 

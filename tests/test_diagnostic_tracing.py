@@ -3,8 +3,8 @@
 import json
 import logging
 import sqlite3
-from contextlib import closing
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from types import SimpleNamespace
 
 import pytest

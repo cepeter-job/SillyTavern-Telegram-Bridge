@@ -150,13 +150,22 @@ def make_hybrid_shadow_probe(
     """Runtime captures no candidate body: only content-free metrics leave this closure."""
 
     def probe(messages: list[dict], chars_per_token: float) -> dict[str, object]:
-        return evaluate_hybrid_shadow(
-            db,
-            scope,
-            messages,
-            query=query,
-            options=HybridOptions(chars_per_token=chars_per_token),
+        from bridge.context_statement_shadow import evaluate_statement_shadow
+
+        options = HybridOptions(chars_per_token=chars_per_token)
+        whole = evaluate_hybrid_shadow(
+            db, scope, messages, query=query, options=options,
             resolve_current_scope=resolve_current_scope,
         ).metrics
+        statements = evaluate_statement_shadow(
+            db, scope, messages, query=query, options=options,
+            resolve_current_scope=resolve_current_scope,
+        ).metrics
+        return {
+            **whole,
+            "statement_candidate_tokens": statements["candidate_tokens"],
+            "statement_reason": statements["reason"],
+            "statement_source_verified": statements["source_statement_receipts_verified"],
+        }
 
     return probe

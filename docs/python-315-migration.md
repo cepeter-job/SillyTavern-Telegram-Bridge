@@ -43,6 +43,32 @@ are installed:
 
     python tools/benchmark_python_runtime.py --samples 15 --iterations 100
 
+## Manual stable-release regression gate (Issue #487)
+
+The experimental workflow now includes a manually dispatched
+`stable-final-core-regression` job (it does not run on every PR). This job:
+
+1. Downloads the **official Python 3.15.0 final source tarball**, checks
+   its SHA-256 against the value published on python.org, and builds it into
+   the temporary GitHub runner directory (never on the live VPS).
+2. Resolves and installs a **temporary, hash-locked** core + development
+   dependency set for 3.15 with `faster-whisper` explicitly excluded
+   because `ctranslate2` currently lacks a compatible wheel.
+3. Runs full pytest discovery with up to four isolated workers and records
+   JUnit, coverage and captured output. If tests fail, the job displays a
+   warning; the failure is not an authorization to drop regression tests.
+4. Retains results for 14 days. These are **provisional core-only results**
+   and do NOT establish the full voice transcription and native-extension gate.
+
+This locally compiled release is not a like-for-like PGO/JIT performance
+build. Do not compare its benchmark timings with production or interpret its
+test success as better end-to-end latency. The source fingerprint used is
+`ba4bed1ba346b916890b76d9e320451420aa69f6408997d33c66482eeae3d575`
+for the official 3.15.0 XZ archive.
+
+See [promotion tracking issue #487](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/issues/487)
+for the native wheel blocker and remaining acceptance gates.
+
 ## Promotion criteria and rollback
 
 - [ ] Full runtime and test dependencies install from reviewed, verifiable

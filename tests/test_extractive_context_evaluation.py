@@ -133,3 +133,24 @@ def test_live_local_core_reconstruction_keeps_private_sources_local(tmp_path):
     assert report["production_database_writes"] == 0
     assert "PRIVATE_HYBRID_CANARY" not in json.dumps(report)
     assert hashlib.sha256(database.read_bytes()).hexdigest() == before
+
+
+def test_committed_screening_checkpoint_is_hash_bound_and_not_approved():
+    import hashlib
+    from pathlib import Path
+
+    root = Path(__file__).parents[1] / "docs/evidence/issue421-extractive-v2"
+    assert (root / "manifest.json").exists(), "screening manifest not recorded"
+    manifest = json.loads((root / "manifest.json").read_text())
+    for name, digest in manifest["artifacts"].items():
+        assert hashlib.sha256((root / name).read_bytes()).hexdigest() == digest
+    checkpoint = json.loads((root / "checkpoint.json").read_text())
+    assert checkpoint["decision"] == "reject_for_provider_trial"
+    assert checkpoint["provider_requests"] == 0
+    assert checkpoint["independent_human_review_complete"] is False
+    assert checkpoint["production_activation_allowed"] is False
+    synthetic = json.loads((root / "synthetic.json").read_text())
+    local = json.loads((root / "local-core.json").read_text())
+    assert checkpoint["implementation_sha256"] == synthetic["implementation_sha256"] == local["implementation_sha256"]
+    assert synthetic["estimated"]["aggregate_reduction_fraction"] < 0.30
+    assert local["complete_live_prompt_captured"] is False

@@ -103,7 +103,31 @@ def public_shadow_metrics(observed: dict, baseline_tokens: int) -> dict[str, obj
         or type(observed.get("native_source_verified")) is not bool
     ):
         raise ValueError("hybrid_shadow_diagnostics_invalid")
+    extras: dict[str, object] = {}
+    if "statement_candidate_tokens" in observed:
+        reason = observed.get("statement_reason")
+        value = observed.get("statement_candidate_tokens")
+        source = observed.get("statement_source_verified")
+        allowed = SHADOW_REASONS | {
+            "existing_shadow_candidate",
+            "source_or_required_evidence_unavailable",
+            "source_or_summary_changed",
+        }
+        if (
+            reason not in allowed
+            or type(value) is not int
+            or not 0 <= value <= baseline_tokens
+            or type(source) is not bool
+        ):
+            raise ValueError("statement_shadow_metrics_invalid")
+        extras = {
+            "hybrid_statement_reason": reason,
+            "hybrid_statement_candidate_tokens": value,
+            "hybrid_statement_source_verified": source,
+            "hybrid_statement_activation_allowed": False,
+        }
     return {
+        **extras,
         "hybrid_shadow_reason": observed["reason"],
         "hybrid_shadow_candidate_tokens": observed["candidate_tokens"],
         "hybrid_shadow_omitted_turns": observed["omitted_turns"],

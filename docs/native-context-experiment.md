@@ -14,6 +14,12 @@ before each experimental model request. A caller-provided boolean or summary is
 not a substitute for canonical sources. An altered scope, missing source interval,
 changed source or malformed dictionary fails closed.
 
+**Production dispatch fence:** the standard context-selection runtime rejects any
+`_history_codec`-marked candidate in `off`, `shadow`, and `enabled` modes,
+including while ordinary baseline dispatch remains operational. The codec may
+be used for explicit offline replay only; source reconstruction is not
+authorization for model use.
+
 **What this proves:** exact retention of the original causal evidence, including
 facts and negations not recognized by an extractor. **What it does not prove:**
 that a stochastic model will interpret the representation identically, that a

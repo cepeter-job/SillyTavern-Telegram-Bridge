@@ -104,6 +104,9 @@ def choose_context_messages(
     """Select once; shadow preserves valid baseline bytes, revoked captures stop."""
     if any(SHADOW_MARKER in message for message in messages):
         raise ValueError("Hybrid candidate is shadow-only; dispatch the original baseline")
+    # Native dictionary packets are research-only, even when mode is off.
+    if any("_history_codec" in message for message in messages):
+        raise ValueError("Native history codec is evaluation-only; dispatch the original baseline")
     baseline = [dict(message) for message in messages]
     context = baseline[0].get("_context_selection") if baseline else None
     for message in baseline:

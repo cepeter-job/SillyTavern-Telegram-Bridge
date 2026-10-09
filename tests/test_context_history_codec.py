@@ -161,3 +161,22 @@ def test_critical_repeated_refusals_remain_separate_events_with_distinct_speaker
     assert sum(m["role"] == "assistant" and "That refusal" in m["content"] for m in decoded) == 11
     for i, message in enumerate(decoded[1:-1]):
         assert f"At observation {i}," in message["content"]
+
+
+@pytest.mark.parametrize("mode", ["off", "shadow", "enabled"])
+def test_native_codec_candidate_is_rejected_before_dispatch_in_all_modes(tmp_path, mode):
+    from bridge.context_selection_runtime import choose_context_messages
+    from bridge.settings import load_app_settings
+
+    baseline = prompt()
+    candidate, metadata = pack_history(baseline)
+    assert metadata["encoded_turns"] > 0
+    assert any("_history_codec" in message for message in candidate)
+    settings = load_app_settings({"SILLYTAVERN_CONTEXT_SELECTION_MODE": mode}, home=tmp_path)
+    with pytest.raises(ValueError, match="evaluation-only"):
+        choose_context_messages(
+            candidate,
+            app_settings=settings,
+            chars_per_token=4,
+            input_budget_tokens=100000,
+        )

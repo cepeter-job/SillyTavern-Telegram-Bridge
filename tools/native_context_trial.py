@@ -176,7 +176,13 @@ def summarize_trial(plan: dict, state: dict) -> dict:
             "story_input_tokens": totals if matched else None,
             "story_output_tokens": outputs if matched else None,
             "story_input_reduction_fraction": reduction,
-            "case_weighted_reduction_fraction": sum(row["weight"] * row["reduction_fraction"] for row in per_case)
+            # Preserve the original frozen 3.11 evidence byte-for-byte.
+            # Interpreter versions can differ by 1 ULP when accumulating
+            # weighted fractions; 15 decimals gives a stable report without
+            # altering raw counts, narrative decisions, or approval flags.
+            "case_weighted_reduction_fraction": round(
+                sum(row["weight"] * row["reduction_fraction"] for row in per_case), 15
+            )
             if matched
             else None,
             "story_input_percentiles": {

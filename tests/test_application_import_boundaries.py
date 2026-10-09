@@ -165,6 +165,15 @@ def _owner_index() -> dict[str, list[str]]:
     return owners
 
 
+def test_referenced_globals_ignores_only_synthetic_annotation_symbols():
+    source = "from __future__ import annotations\ndef make(value: MissingType) -> str:\n    return value\n"
+    assert "__conditional_annotations__" not in referenced_globals(source, "synthetic_annotations.py")
+    assert "MissingType" in referenced_globals(source, "synthetic_annotations.py")
+
+    explicit = "def make():\n    return __conditional_annotations__\n"
+    assert "__conditional_annotations__" in referenced_globals(explicit, "explicit_reference.py")
+
+
 class ApplicationImportBoundaryTests(SettingsTestCase):
     def test_application_modules_import_without_runtime(self):
         for filename in APPLICATION_BOUNDARY_FILES:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import MISSING
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -78,8 +79,6 @@ def test_telegram_has_no_application_command_backedge():
 
 def test_telegram_runtime_requires_download_transport():
     from bridge.composition import TelegramRuntime
-
-    from dataclasses import MISSING
 
     assert "download_file" in TelegramRuntime.__dataclass_fields__
     download = TelegramRuntime.__dataclass_fields__["download_file"]

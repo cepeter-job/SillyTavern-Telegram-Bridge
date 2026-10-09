@@ -56,7 +56,10 @@ _CONTROL = {
 _AGENCY = (
     "Never invent the user's dialogue, thoughts, intentions, emotional conclusions, commitments, "
     "or consequential actions. A narrative viewpoint does not transfer control of the user to the narrator. "
-    "Preserve established events and distinguish plans from committed facts."
+    "Preserve established events and distinguish plans from committed facts. "
+    "Treat unquoted descriptions of user speech (e.g., 'I thank them') as completed user acts. "
+    "Do not script, restage, or paraphrase a new user line. "
+    "Only the user's exact quoted words are established; continue with AI-controlled characters."
 )
 
 

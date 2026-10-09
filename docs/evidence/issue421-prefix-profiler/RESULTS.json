@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "type": "prefix_profiler_structural_validation_not_savings_trial",
+  "source_base": "e4be1f0a2c326f76b29ba13edacec5d548a1660c",
+  "source_sha256": {
+    "bridge/prompt_prefix_profile.py": "3273bc115b288a6eff94e8eefb37abcb0711ef6d073c217b7ff20642203fcc84",
+    "bridge/prompt_profile_snapshot.py": "aae2eb4d9a2d83acdf12e1c9d1fe2a0adf689767188e59c9606e9f6c86ecac0b",
+    "tools/profile_prompt_prefix.py": "1210baf2376d10be01a89117604f4d464c3a803b5121891ec75b2c6106284c46",
+    "tools/prompt_prefix_demo.py": "36f7ec01ebb3835bbe1816358392b3950ececa143058006ead1310982f94b574"
+  },
+  "synthetic_native_demo": [
+    {
+      "retained_samples": 4,
+      "stable_prefix_messages": 1,
+      "stable_prefix_characters": 1037,
+      "text_tokens_estimate_sum": 2798,
+      "duplicate_groups": 0,
+      "variable_summary_sections": 0
+    },
+    {
+      "retained_samples": 4,
+      "stable_prefix_messages": 0,
+      "stable_prefix_characters": 896,
+      "text_tokens_estimate_sum": 2816,
+      "duplicate_groups": 0,
+      "variable_summary_sections": 1
+    },
+    {
+      "retained_samples": 4,
+      "stable_prefix_messages": 3,
+      "stable_prefix_characters": 1099,
+      "text_tokens_estimate_sum": 2860,
+      "duplicate_groups": 1,
+      "variable_summary_sections": 0
+    }
+  ],
+  "synthetic_window_stress": {
+    "observations": 240,
+    "retained_samples": 48,
+    "evicted_samples": 192,
+    "retained_fingerprint_units": 2112,
+    "tracemalloc_current_bytes": 420220,
+    "tracemalloc_peak_bytes": 434083,
+    "elapsed_seconds_under_tracemalloc": 0.5811,
+    "is_process_RSS": false,
+    "is_performance_guarantee": false
+  },
+  "archived_synthetic": {
+    "source": "docs/evidence/post-v0319-validation/provider-requests.jsonl",
+    "observations": 12,
+    "cohorts": 6,
+    "subset": "hybrid_history/story only; excludes other original model requests",
+    "input_tokens_reconciled": 43249,
+    "cached_input_tokens_reconciled": 10619,
+    "unknown_input_observations": 0,
+    "instruction_duplicate_groups": 0,
+    "payload_hashes_verified": true,
+    "not_new_provider_measurements": true
+  },
+  "provider_requests_issued": 0,
+  "production_database_writes": 0,
+  "prompt_mutations": 0,
+  "optimization_authorized": false,
+  "live_traffic_captured": false,
+  "provider_savings_fraction": null,
+  "cache_hit_rate_prediction": null
+}

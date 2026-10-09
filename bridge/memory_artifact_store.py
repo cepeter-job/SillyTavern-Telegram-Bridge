@@ -171,6 +171,7 @@ def read_artifact_block(
 
 
 def read_summary_block(db: sqlite3.Connection, scope: MemoryReadScope) -> MemoryBlock:
+    """Read the current classified Summary window only (compatibility adapter)."""
     return read_artifact_block(db, scope, "summary")
 
 

@@ -164,6 +164,10 @@ def accept_draft_part(
             return False
         if complete:
             publish(payload, source.end_id)
+            if claim.layer == "summary" and "_summary_rollover_from" in payload:
+                # Rollover provenance is one-publication metadata, never part of
+                # the next active current-window accumulator or checkpoint JSON.
+                serialized = _serialize({"blocks": payload["blocks"]})
             if completed_payload is not None:
                 serialized = _serialize(completed_payload)
         db.execute(

@@ -12,6 +12,7 @@ from bridge.npc_types import NpcExtractionGroup, NpcOperation
 from bridge.simulation_narrative import canonicalize_narrative_links
 from bridge.simulation_projection import is_managed_field
 from bridge.simulation_service import SimulationService
+from bridge.summary_archive_store import archive_accepted_summary
 
 
 @observe_boundary("tracker.publication", success="staged")
@@ -31,6 +32,8 @@ def publish_simulation(db, chat_id, session_id, payload, through, *, primary_nam
 @observe_boundary("memory.publication", success="staged")
 def publish_derived(db, chat_id, session_id, layer, payload, through):
     if layer == "summary":
+        if "_summary_rollover_from" in payload:
+            archive_accepted_summary(db, chat_id, session_id, payload)
         text = "\n".join(block["text"] for block in payload["blocks"])
         db.execute(
             "INSERT OR REPLACE INTO session_summaries VALUES(?,?,?,?,?)",

@@ -70,6 +70,7 @@ def generate_memory_response(
     session_id: str,
     settings: dict[str, Any],
     source_valid: Callable[[], bool] | None = None,
+    repair_contract: str = "",
 ) -> T:
     with diagnostic_scope(request_id=diagnostic_context().get("request_id") or new_request_id("memory")):
         options = dict(settings, stop_sequences="", json_once=True)
@@ -90,7 +91,10 @@ def generate_memory_response(
             raise MemorySourceChanged
         # Reuse canonical inputs, never echo the rejected output into a repair prompt.
         repair_messages = [dict(message) for message in messages]
-        repair_messages.insert(0, {"role": "system", "content": _REPAIR_INSTRUCTION})
+        repair_messages.insert(
+            0,
+            {"role": "system", "content": _REPAIR_INSTRUCTION + (" " + repair_contract if repair_contract else "")},
+        )
         with diagnostic_scope(phase="json_repair"):
             event("memory.response_repair_start")
             try:

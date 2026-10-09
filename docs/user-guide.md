@@ -108,7 +108,8 @@ confirmation apply to the new story.
 | Change the reply language or save generation settings | `/language` or `/preset` |
 | Change the Persona, lorebooks, prompt or Author's Note | `/persona`, `/world`, `/systemprompt`, `/note` |
 | Inspect the assembled prompt and context budget | `/prompt` |
-| Open action-check controls | `/check` |\n| Record a d20 result for an explicit action | `/check stealth 12 cross the courtyard` |
+| Open action-check controls | `/check` |
+| Record a d20 result for an explicit action | `/check stealth 12 cross the courtyard` |
 | Find every command and its accepted arguments | `/help` |
 
 `/help` is the canonical command reference. Management commands such as
@@ -180,9 +181,11 @@ exactly-once delivery through every interruption.
 
 ### Streaming and long replies
 
-With streaming enabled, a temporary preview updates during generation. The bridge
-removes it when the completed reply is ready and splits long messages at natural
-breaks within Telegram's length limit.
+With streaming enabled, a temporary preview updates during generation. When the
+completed reply is ready, the bridge edits and reuses the preview as the first
+final message. If the preview is missing, it sends a new message instead. Long
+replies are split at natural breaks within Telegram's length limit, with any
+remaining chunks sent separately.
 
 If the provider reports an output-token limit, the bridge can make up to three
 automatic continuation requests. These can consume additional tokens. `/continue`
@@ -292,7 +295,8 @@ rolls NPC state back to the applicable revision before regeneration.
 | Summaries, memory/NPC/scene refresh, optimizer and ranking | Utility-model work. |
 | Story tracker extraction | Shares the existing NPC Utility call; upgrading older sessions can replay available history. |
 | Automatic action adjudication | One bounded Utility or Director request before an eligible new turn; the bridge itself generates the random number. |
-| `/check` panel | Changes Auto/Director/Manual locally and reads recent saved checks without a model request. |\n| Explicit `/check <domain> <DC> <action>` | A local d20 roll and saved receipt, with no model request. |
+| `/check` panel | Changes Auto/Director/Manual locally and reads recent saved checks without a model request. |
+| Explicit `/check <domain> <DC> <action>` | A local d20 roll and saved receipt, with no model request. |
 | Narrative continuity | A bounded Utility reconciliation after committed replies; older or edited history can need more than one batch. |
 | Current Scene image | Utility preparation of the visual prompt, then an image-provider request. |
 | AI Director | One planning call on an event or cadence threshold, with at most one repair for malformed version-1 output. Groups reuse the accepted plan without another planning call. |
@@ -408,14 +412,9 @@ the result before narration. Routine dialogue and feasible everyday actions
 should receive no roll. A successful roll never grants consent, chooses another
 character’s decisions or makes an impossible action possible.
 
-The default is **auto** (Utility). These session-scoped commands show or change it:
-
-```text
-/check mode
-/check mode auto
-/check mode director
-/check mode manual
-```
+The default is **auto** (Utility). Open `/check` and choose **Auto**, **Director**
+or **Manual** using the panel buttons to change this session's mode. Typed
+`/check mode ...` commands do not change the mode.
 
 Director mode uses the configured Director route instead of Utility; it does not
 add a second model call or turn Director plans into established evidence. Manual
@@ -737,8 +736,9 @@ force a stale badge back into view. The
 `/persona` uses native SillyTavern Persona settings and avatars. A new Persona
 requires an existing native avatar; fresh installations include a starter avatar.
 The active Persona and those referenced by other sessions cannot be deleted.
-If none is selected, the bridge tries the native default or a sole available
-Persona, then falls back to a generic label.
+New sessions inherit a valid, explicitly configured native default Persona.
+If no Persona is selected, the bridge uses the configured generic user name; it
+does not automatically select a sole available Persona.
 
 `/world` selects one or more native lorebooks. Telegram imports accept World Info
 JSON in `{ "entries": { ... } }` form, up to 10 MB, without overwriting an existing

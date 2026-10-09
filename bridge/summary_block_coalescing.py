@@ -24,6 +24,20 @@ SUMMARY_PRESSURE_CHARS = SUMMARY_MAX_CHARS * 4 // 5
 SUMMARY_SHORT_LENGTH_CONTRACT = (
     f"Their combined block text including newline separators must be at most {SUMMARY_MAX_CHARS:,} characters. "
 )
+
+# Concrete, mutually exclusive examples help JSON-only utility models avoid
+# internally contradictory audience fields. These are *format*, not story facts.
+# Persisted classification still goes through the unchanged fail-closed validator.
+SUMMARY_AUDIENCE_OUTPUT_CONTRACT = (
+    "AUDIENCE OUTPUT SHAPES (examples are syntax only, never story facts): "
+    '{"text":"The bell rings.","visibility":"shared","known_by":[]} '
+    'or {"text":"Ada privately hides the map.","visibility":"restricted","known_by":["Ada"]}. '
+    "Decide knowers from canonical source evidence first. A nonempty known_by MUST use restricted "
+    "visibility, never shared. A shared block MUST have known_by=[], even when its text names people. "
+    "Every restricted block requires at least one source-supported named knower; never infer others. "
+    "If private knowers cannot be grounded, never expose the fact as shared. "
+    "Check each block against these exclusive patterns before sending JSON."
+)
 SUMMARY_COMPACTION_CONTRACT = (
     "Complete updated summary JSON must contain no more than 32 classified blocks. "
     f"Their combined text including newline separators must be at most {SUMMARY_MAX_CHARS:,} characters; "

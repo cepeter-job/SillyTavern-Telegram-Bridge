@@ -29,8 +29,8 @@
   "independent_human_adjudication": "pending_external_human",
   "quality_improvement_proven": false,
   "production_activation_allowed": false,
-  "review_packet_status": "Generated on VPS and integrity-audited, not yet uploaded to GitHub due interrupted VPS remote connection",
+  "review_packet_status": "Generated from the completed 32-call journal, integrity-checked, and included in PR #482 as six blinded public artifacts",
   "raw_evidence_status": "Retained in private journaling directory on VPS; no attempt replayed",
-  "identity_map_status": "Private 0600 on VPS, not included in PR",
+  "identity_map_status": "Retained privately with 0600 permissions on VPS; not published in PR",
   "comparison": "Only the appended agency policy clause changed, all other request contents matched within paired cases"
 }

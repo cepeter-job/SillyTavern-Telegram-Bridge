@@ -9,7 +9,7 @@ from bridge.context_selection_store import prepare_context_selection
 from bridge.hindsight_endpoint import prepare_hindsight_endpoint
 from bridge.hindsight_recall_runtime import HindsightRecallRuntime
 from bridge.memory import get_session_summary, purge_hindsight_session
-from bridge.memory_artifact_store import read_scene_block, read_summary_block
+from bridge.memory_artifact_store import read_scene_block
 from bridge.memory_backend import recall_memory_results, recall_scoped_memory
 from bridge.memory_retirement_store import queue_session_memory_cleanup
 from bridge.memory_scope_runtime import resolve_session_memory_scope
@@ -17,6 +17,7 @@ from bridge.memory_scope_store import read_episodic_block, validate_memory_block
 from bridge.memory_service import MemoryService
 from bridge.port_contracts import GroupStateRead, RetainSessionMemory
 from bridge.settings import AppSettings
+from bridge.summary_archive_store import read_summary_block
 
 
 def build_memory_service(
@@ -38,6 +39,7 @@ def build_memory_service(
         scoped_recall=partial(recall_scoped_memory, app_settings=app_settings, remote_recall=remote_recall),
         scoped_episodes=read_episodic_block,
         scoped_summary=read_summary_block,
+        scoped_summary_query=read_summary_block,
         scoped_scene=read_scene_block,
         validate_blocks=validate_memory_blocks,
         summary_state=get_session_summary,

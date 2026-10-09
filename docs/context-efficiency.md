@@ -81,6 +81,24 @@ pending invalidation with a still-valid baseline retain the baseline. Shadow
 mode emits only the stable baseline; known revocation also aborts shadow
 rather than permitting stale context through.
 
+## Classified Summary windows
+
+Durable Summary now archives a previously **accepted and source-proven** classified
+window when its text reaches 80% of the 12,000-character cap. A new, bounded
+window then records changes established by subsequent canonical source parts.
+Each archive window retains its original text, restricted/shared classification,
+accepted source checkpoint and digest in SQLite. It is invalidated on relevant
+story rewrites, deletion, purges and manual Summary replacement.
+
+Only authorized, query-relevant archived blocks are brought back into a bounded
+story prompt, and every pointer is checked again against its canonical source
+and reader scope. Archives do **not** justify removing dialogue from history or
+guarantee perfect semantic extraction from new source text. Historical facts not
+selected for a particular prompt remain stored and can be recalled later.
+This solves the fixed active-window capacity bottleneck without activating
+context history pruning. Real provider quality and source-coverage validation
+remain independent gates for issue #421.
+
 ## Runtime controls and remaining gates
 
 `SILLYTAVERN_CONTEXT_SELECTION_MODE` defaults to `off`. Unknown values also

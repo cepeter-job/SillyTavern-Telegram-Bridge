@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
+from bridge.memory_contracts import (
+    MemoryBlock,
+    MemoryReadScope,
+    MemorySearchResult,
+    SelectMemoryContext,
+    expand_memory_query,
+)
 from bridge.memory_contracts import MemoryPromptContext as MemoryPromptContext
-from bridge.memory_contracts import MemoryReadScope, MemorySearchResult, SelectMemoryContext, expand_memory_query
 from bridge.port_contracts import (
     PurgeSessionMemory,
     QueueSessionMemoryCleanup,
@@ -37,6 +44,7 @@ class MemoryService:
     queue_session_cleanup: QueueSessionMemoryCleanup
     search_backend: SearchMemory | None = None
     select_context: SelectMemoryContext | None = None
+    scoped_summary_query: Callable[[sqlite3.Connection, MemoryReadScope, str], MemoryBlock] | None = None
 
     def search(
         self,
@@ -88,7 +96,11 @@ class MemoryService:
             context = MemoryPromptContext()
             return self.select_context(db, context, resolve_current_scope) if self.select_context else context
         # Capture local evidence before slow recall, then revalidate every returned pointer.
-        summary = self.scoped_summary(db, scope)
+        summary = (
+            self.scoped_summary_query(db, scope, query)
+            if self.scoped_summary_query is not None
+            else self.scoped_summary(db, scope)
+        )
         scene = self.scoped_scene(db, scope)
         expanded_query = expand_memory_query(query, scope.principals, scene.text)
         episodes = self.scoped_episodes(db, scope, expanded_query)

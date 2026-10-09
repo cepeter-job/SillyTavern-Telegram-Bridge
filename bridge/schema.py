@@ -26,6 +26,7 @@ from bridge.narrative_runtime_schema import migrate_narrative_history_revisions
 from bridge.narrative_schema import migrate_narrative_engine_foundation
 from bridge.queue_timestamp_schema import migrate_queue_timestamps
 from bridge.simulation_schema import migrate_simulation_trackers, retire_prompt_tracker_bootstrap
+from bridge.summary_archive_schema import migrate_summary_window_archive
 from bridge.token_usage_schema import migrate_token_usage
 from bridge.transcript_schema import migrate_message_identity
 
@@ -399,10 +400,7 @@ def migrate_episodic_memory_layer(db: sqlite3.Connection) -> None:
         created_at REAL NOT NULL
     )""")
     db.execute(
-        """
-        CREATE INDEX IF NOT EXISTS episodic_memories_session_idx
-        ON episodic_memories(chat_id, session_id, importance)
-        """
+        "CREATE INDEX IF NOT EXISTS episodic_memories_session_idx ON episodic_memories(chat_id, session_id, importance)"
     )
 
 
@@ -481,6 +479,7 @@ def migrate_npc_bank_core(db: sqlite3.Connection) -> None:
     )""")
 
 
+# Stable SQLite migrations are append-only; deployed history is never rewritten.
 SCHEMA_MIGRATIONS = (
     _Migration(1, "initial_schema", _create_initial_schema),
     _Migration(2, "conversation_modes", migrate_conversation_modes),
@@ -513,6 +512,7 @@ SCHEMA_MIGRATIONS = (
     _Migration(29, "natural_action_adjudication", migrate_action_adjudication),
     _Migration(30, "autonomous_memory_backlog_guard", migrate_memory_retry_guard),
     _Migration(31, "memory_pending_job_origin", migrate_queue_timestamps),
+    _Migration(32, "classified_summary_window_archive", migrate_summary_window_archive),
 )
 
 

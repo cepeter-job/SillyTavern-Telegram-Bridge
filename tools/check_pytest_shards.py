@@ -7,6 +7,9 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from coverage import CoverageData
+from coverage.exceptions import CoverageException
+
 
 def check_manifests(root: Path, *, expected_shards: int) -> int:
     manifests = sorted(root.glob("pytest-shard-*/shard-manifest.json"))
@@ -45,6 +48,22 @@ def check_manifests(root: Path, *, expected_shards: int) -> int:
     return len(inventory)
 
 
+def check_coverage_files(root: Path, *, expected_shards: int) -> None:
+    for index in range(1, expected_shards + 1):
+        path = root / f"pytest-shard-{index}" / f".coverage.shard-{index}"
+        if not path.is_file() or path.stat().st_size == 0:
+            raise ValueError(f"missing or empty coverage data: {path}")
+        data = CoverageData(basename=str(path))
+        try:
+            data.read()
+            if not data.measured_files():
+                raise ValueError("no measured files")
+        except (ValueError, TypeError, OSError, CoverageException) as error:
+            raise ValueError(f"unreadable or empty coverage data: {path}: {error}") from error
+        finally:
+            data.close()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("reports", type=Path)
@@ -52,7 +71,8 @@ def main() -> int:
     args = parser.parse_args()
     try:
         check_manifests(args.reports, expected_shards=args.shards)
-    except (ValueError, KeyError, TypeError, OSError) as error:
+        check_coverage_files(args.reports, expected_shards=args.shards)
+    except (ValueError, KeyError, TypeError, OSError, CoverageException) as error:
         print(f"Invalid pytest shard evidence: {error}")
         return 1
     return 0

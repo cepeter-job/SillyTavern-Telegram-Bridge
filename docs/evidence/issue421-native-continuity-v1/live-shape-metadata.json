@@ -1,0 +1,28 @@
+{
+  "type": "read_only_production_history_shape_only",
+  "provider_requests": 0,
+  "production_transcript_exported": false,
+  "not_a_matched_full_story_input_measurement": true,
+  "scopes": [
+    {
+      "history_turns": 0,
+      "source_characters": 0,
+      "encoded_turns": 0,
+      "dictionary_entries": 0,
+      "reason": "no_savings",
+      "estimated_history_only_input_before": 16,
+      "estimated_history_only_input_after": 16,
+      "estimated_history_only_reduction_fraction": 0.0
+    },
+    {
+      "history_turns": 73,
+      "source_characters": 82611,
+      "encoded_turns": 0,
+      "dictionary_entries": 0,
+      "reason": "no_savings",
+      "estimated_history_only_input_before": 21312,
+      "estimated_history_only_input_after": 21312,
+      "estimated_history_only_reduction_fraction": 0.0
+    }
+  ]
+}

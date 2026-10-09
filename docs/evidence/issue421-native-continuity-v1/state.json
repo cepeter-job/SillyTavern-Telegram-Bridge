@@ -1,0 +1,870 @@
+{
+  "schema_version": 1,
+  "plan_sha256": "809a8e5c7e4e4e26e10f433f33bbcdbb53cbd0e6fdb180f1ceaf582e34a8edb9",
+  "attempts": [
+    {
+      "attempt_id": "oath_negation:generate:baseline",
+      "case_id": "oath_negation",
+      "kind": "generation",
+      "variant": "baseline",
+      "status": "complete",
+      "request_sha256": "d4637565703936a48d05a12cb8e75ad99d0b5142bf87cf8db1fff167fa0ad545",
+      "request_bytes": 40858,
+      "output_cap": 1000,
+      "attempt_sha256": "091843f5b5e8bdcde4fa9491b8e7b302696bec475926a51e0276ef18f8fe9207",
+      "output": "*Rowan's hand rests on the safe's cold rim. The archive is dim, lit only by what grey evening light filters through the storm-clouded skylight. Power is off. The ivy pot sits where Mira left it.*\n\n*Rowan looks up from the safe, expression flat.*\n\n\"The northern gate is wax-sealed. You've asked me to open it before dawn.\"\n\n*A pause. Dry, precise.*\n\n\"I won't. Not yet. I gave my word on that, and the word still holds.\"\n\n*Rowan taps the safe once, then reaches for the ledger on the narrow shelf. The archive procedure is clear enough: log an inspection before opening a sealed collection. That much can be done now, in the dark, with a pencil.*\n\n\"I can log the inspection. Note the seal's condition, the gate's position, your request. When dawn comes, we revisit it.\"\n\n*Rowan opens the ledger to a fresh line, pencil poised.*\n\n\"Your compass stays with you. Your call on the gate stays with you. Shall I record the inspection?\"",
+      "usage": {
+        "input_tokens": 7912,
+        "output_tokens": 220,
+        "cached_tokens": 3,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop"
+    },
+    {
+      "attempt_id": "oath_negation:generate:candidate",
+      "case_id": "oath_negation",
+      "kind": "generation",
+      "variant": "candidate",
+      "status": "complete",
+      "request_sha256": "ffb34129aef94b4fe487efff944b409772493f2b6d831a3a4d35d41ae495f5ce",
+      "request_bytes": 17576,
+      "output_cap": 1000,
+      "attempt_sha256": "619e79b3cb944cae8fdbdcffc3efd3fb95f6016e3341a95a9498696074b891a7",
+      "output": "*Rowan pauses, chalk still hovering near the sheet. The archive sits in grey stillness — power off, the reference board's brass screws catching what little light seeps through the storm-clouded windows. The northern gate's wax seal is visible from here, unbroken, its stamp still legible.*\n\n\"I won't.\"\n\n*He sets the chalk down beside the ledger.*\n\n\"You asked me not to lend the compass. I agreed not to open that gate before dawn. Neither of those has changed, and I don't see why they should.\"\n\n*His eyes move to the wax seal, then back.*\n\n\"The procedure also wants an inspection logged before a sealed collection is opened. I haven't done that yet. So there are three reasons, and any one of them would be enough.\"\n\n*He folds his hands on the shelf, next to the dry ledger and the empty tin cup.*\n\n\"It's still evening. The gate is still sealed. Your compass is still yours. If you want to revisit this at dawn, we can.\"",
+      "usage": {
+        "input_tokens": 3409,
+        "output_tokens": 208,
+        "cached_tokens": 4,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop"
+    },
+    {
+      "attempt_id": "short_continuation_control:generate:candidate",
+      "case_id": "short_continuation_control",
+      "kind": "generation",
+      "variant": "candidate",
+      "status": "complete",
+      "request_sha256": "7b6c4d1a499ec5bf873cc2e61015310d086b76cf36528f018284f39ce303a8fa",
+      "request_bytes": 4486,
+      "output_cap": 1000,
+      "attempt_sha256": "5f4c2ca977a0a6c63f01e2c51b3ef41caa0016686fd03e83ef82c67957694183",
+      "output": "*Rowan leans toward the closed box, then stops at the faint—* a hairline gap where the lid meets the base. Not damage. A seal broken before the storm, or during it. He straightens and pulls the inspection ledger from beneath his arm, flipping to the most recent page.\n\n\"Someone logged this as sealed on the fourteenth.\" *His finger taps the entry without touching the box itself.* \"That's three days before the roof leaked.\"\n\n*He glances at the darkened lamp overhead, then at Mira's hand still held back from the clasp.*\n\n\"Procedure says I note the discrepancy before we go further. So.\" *He uncaps a pen with his teeth.* \"Noted.\"\n\n*He writes in the margin, small and exact, then waits—pen hovering, not presuming the next move.*",
+      "usage": {
+        "input_tokens": 807,
+        "output_tokens": 171,
+        "cached_tokens": 3,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop"
+    },
+    {
+      "attempt_id": "short_continuation_control:generate:baseline",
+      "case_id": "short_continuation_control",
+      "kind": "generation",
+      "variant": "baseline",
+      "status": "complete",
+      "request_sha256": "7b6c4d1a499ec5bf873cc2e61015310d086b76cf36528f018284f39ce303a8fa",
+      "request_bytes": 4486,
+      "output_cap": 1000,
+      "attempt_sha256": "5c4b37c4e8a4cb26f5597434354b34756866ea4754ad2eb1c1af869512c1dffd",
+      "output": "*Rowan leans toward the closed box, then stops at the faint—* tick of settling metal, barely audible under the drip from the cracked ceiling. He straightens, fingers folding behind his back.\n\n\"Procedure,\" he says, as if apologizing for the weather. \"Sealed collections require an inspection log before opening. The ledger's on the main desk, assuming the floor hasn't shifted.\"\n\n*He glances toward the darkened corridor where the desk sits, then back to Mira's hand, still held clear of the clasp. A measured nod.*\n\n\"Good instinct. Whatever the storm did to the locks, we won't know until we've recorded we were here first.\"\n\n*Water marks stripe the wall behind the safe. The archive smells of wet paper and old brass. Somewhere above, a shutter bangs loose against its frame.*",
+      "usage": {
+        "input_tokens": 807,
+        "output_tokens": 173,
+        "cached_tokens": 806,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop"
+    },
+    {
+      "attempt_id": "unique_history_control:generate:baseline",
+      "case_id": "unique_history_control",
+      "kind": "generation",
+      "variant": "baseline",
+      "status": "complete",
+      "request_sha256": "b80ab77b77bf2c1fe7e4b3e37451223e7d2050c635dc89c4ddb366c4c06ceaf1",
+      "request_bytes": 8561,
+      "output_cap": 1000,
+      "attempt_sha256": "e9ae8824825183beb09fe8a897dc24c46dccf7c76dbcb54851a14e0dd5076620",
+      "output": "*Rowan leans closer to marker 14, tilting the lantern to catch the chalk's faded edge. The numeral 113 is cramped, the second stroke slightly shorter than the first—hurried, but not careless. Beneath it, a hairline crack in the plaster runs diagonally through the lower corner of the sign, storm damage from the look of it, though the chalk itself is undisturbed. The wall here smells of damp stone and old paper. No other marks. No secondary notation. Whatever surveyor worked this corridor left only the segment number and moved on.*\n\n\"Segment 113,\" *Rowan says, straightening.* \"The crack is new. The chalk isn't. Whoever marked this did so before the storm, and the wall held.\" *A pause.* \"Which is more than I'd say for the plaster.\"",
+      "usage": {
+        "input_tokens": 1617,
+        "output_tokens": 173,
+        "cached_tokens": 3,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop"
+    },
+    {
+      "attempt_id": "unique_history_control:generate:candidate",
+      "case_id": "unique_history_control",
+      "kind": "generation",
+      "variant": "candidate",
+      "status": "complete",
+      "request_sha256": "b80ab77b77bf2c1fe7e4b3e37451223e7d2050c635dc89c4ddb366c4c06ceaf1",
+      "request_bytes": 8561,
+      "output_cap": 1000,
+      "attempt_sha256": "806b84ca1ba5417b00bd9074f0a1713566c28a7498ee4ee4af2780deeb365d25",
+      "output": "*Rowan crouches beside marker 14, tilting the lantern so the chalk catches what little light remains. The sign is crisp despite the storm — segment 113, hand-drawn with the same steady stroke as every prior marker. No smudging, no water damage. Whatever seeped through the archive roof missed this stretch of wall entirely.*\n\n*The numbered stone sits where Mira placed it. Rowan does not touch it.*\n\n\"Fourteen confirms. Segment 113, same sequence, same hand.\" *He straightens, brushing dust from his knee.* \"No deviation so far. That's either reassuring or suspicious, and I haven't decided which.\"\n\n*He glances toward the ivy pot where Mira waits, then back along the row of markers trailing into the dim archive corridor. Fifteen through twenty remain unvisited, their chalk signs barely visible in the fading light.*\n\n\"The procedure wants an inspection logged before we open anything sealed. We're not there yet.\"",
+      "usage": {
+        "input_tokens": 1617,
+        "output_tokens": 199,
+        "cached_tokens": 1616,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop"
+    },
+    {
+      "attempt_id": "causal_branch:generate:candidate",
+      "case_id": "causal_branch",
+      "kind": "generation",
+      "variant": "candidate",
+      "status": "complete",
+      "request_sha256": "d00e94b283f7c4d78632c1fb3682a78f0988fb80d2ff65cb3c8b68b5db6ea2a7",
+      "request_bytes": 17637,
+      "output_cap": 1000,
+      "attempt_sha256": "0dc4953f0540550e0827628529f36b1308c5ca6bdab7a8a2e0834e77417f3632",
+      "output": "*Rowan pauses at the sheet, one finger resting beside the last recorded line. The archive is dim; the lamp stays unlit, and the observatory's power has not returned since the storm.*\n\n\"You chose the south ferry,\" Rowan says. \"The northern bridge lost its bronze support in the flood. You judged the bridge unsafe. The ferry debt remains unpaid.\"\n\n*Rowan glances toward the safe, then back to the reference board. The wax-sealed northern gate is described there, but the choice already recorded on the sheet points south. Mira stands beside the ivy pot, silent.*\n\n\"I should log the inspection before we open anything sealed,\" Rowan says. \"That is the procedure. The ledger on the shelf is dry enough for it.\"\n\n*Rowan picks up the ledger, opens it to a clean page, and begins writing the date and the storm's damage in a careful hand. The brass compass sits untouched on the shelf. The sheet with twenty-four recorded lines remains where it was.*\n\n\"Nothing on that board changes your route. It only describes what was already there.\"",
+      "usage": {
+        "input_tokens": 3419,
+        "output_tokens": 223,
+        "cached_tokens": 1233,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop"
+    },
+    {
+      "attempt_id": "causal_branch:generate:baseline",
+      "case_id": "causal_branch",
+      "kind": "generation",
+      "variant": "baseline",
+      "status": "complete",
+      "request_sha256": "d1adf3a43d8fb13a55da99dadabb6780572736cc82603222b1091584f4656100",
+      "request_bytes": 40919,
+      "output_cap": 1000,
+      "attempt_sha256": "16816757e86b5f2128383a2c6e4d0b2e7c9ecab7ed9e5ee96714809004e27062",
+      "output": "*Rowan pauses at the safe, pencil hovering over the inspection ledger. The archive is dim, lit only by what filters through the storm shutters. Mira waits beside the ivy pot, arms folded, patient in that particular way she has when she knows something is being deliberated.*\n\n\"You chose the south ferry,\" *Rowan says, not looking up from the page.* \"The northern bridge lost its bronze support in the flood. Unsafe. The ferry was the sound alternative.\"\n\n*The pencil moves in small, exact strokes. Rowan inscribes the date, the time, the condition of the safe's seal. The wax appears intact, though one corner has softened — humidity from the storm, most likely.*\n\n\"The debt for that crossing remains outstanding. I'm noting that here so the record stays honest.\"\n\n*Rowan sets the pencil down and examines the softened wax more closely, tilting the safe's face toward the thin light. No break in the seal. Just warping.*\n\n\"The collection stays closed until the inspection log is complete. That's procedure, not preference.\"",
+      "usage": {
+        "input_tokens": 7922,
+        "output_tokens": 218,
+        "cached_tokens": 2377,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop"
+    },
+    {
+      "attempt_id": "indonesian_commitment:generate:baseline",
+      "case_id": "indonesian_commitment",
+      "kind": "generation",
+      "variant": "baseline",
+      "status": "complete",
+      "request_sha256": "f836d37cf7a4a9b0370513a67972c4f7554ff31b6f0d943cb359af3e93b57314",
+      "request_bytes": 40132,
+      "output_cap": 1000,
+      "attempt_sha256": "3443cd771447a5b824cc364a30c259dda3cb67eb54e9241b2d85073dba085a5f",
+      "output": "*Rowan menatap peti yang tertutup di sudut ruang arsip. Lampu mati; hanya cahaya senja dari jendela retak yang menyinari tepi kuningan. Mira berdiri dekat pot ivy tanpa bergerak.*\n\n\"Aku sudah mencatat dua puluh empat pengamatan sebelumnya,\" *Rowan berkata dengan suara datar.* \"Tapi pencatatan tidak menggantikan prosedur. Prosedur arsip mengharuskan inspeksi tercatat sebelum membuka koleksi tersegel.\"\n\n*Jari-jarinya menyentuh penutup peti tanpa mengangkatnya.*\n\n\"Dan ada janji yang belum lewat waktunya — peti tetap tertutup sampai fajar.\" *Ia menunduk ke arah Mira, lalu kembali ke peti.* \"Fajar belum tiba. Penolakanmu sebelumnya masih berlaku. Aku tidak akan membuka peti sekarang.\"\n\n*Rowan menarik tangannya dan menulis sesuatu di buku catatan dengan gerakan pelan.*\n\n\"Pengamatan kedua puluh lima: permintaan pembukaan dicatat, ditolak sesuai janji.\"",
+      "usage": {
+        "input_tokens": 11245,
+        "output_tokens": 274,
+        "cached_tokens": 3,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop"
+    },
+    {
+      "attempt_id": "indonesian_commitment:generate:candidate",
+      "case_id": "indonesian_commitment",
+      "kind": "generation",
+      "variant": "candidate",
+      "status": "complete",
+      "request_sha256": "23bef2cf09ed4148e9eb4f239429f7412289269067290df49e433feebbc7c3a6",
+      "request_bytes": 17477,
+      "output_cap": 1000,
+      "attempt_sha256": "6304b0466a1e7ed8461bb1cd9e0c5bb056b5444d86735cb6116493db5d4fb098",
+      "output": "*Rowan menatap Mira dengan tenang, tangan tetap di sisi peti yang tertutup. Lampu di rak masih belum dinyalakan; cahaya sore masuk miring melalui jendela, menyinari tepi papan yang terasa kasar.*\n\n\"Aku sudah berkata bahwa peti ini tetap tertutup sampai fajar.\"\n\n*Suaranya kering, tanpa nada memohon atau menuduh. Jari-jarinya tidak bergerak ke arah gembok.*\n\n\"Prosedur arsip mengharuskan pencatatan inspeksi sebelum membuka koleksi yang disegel. Itu dicatat. Tapi pencatatan bukan izin untuk mengabaikan janji.\"\n\n*Rowan menggeser buku catatan sedikit ke samping, membiarkannya terbuka di halaman yang sudah penuh tanda bernomor.*\n\n\"Kamu menolak memberikan kunci. Itu hakmu. Dan aku berjanji menjaga peti ini tertutup sampai fajar. Itu hakku.\"\n\n*Hening sejenak. Ivy di pot dekat Mira bergerak lembut tertiup angin sore.*\n\n\"Jika kamu ingin membukanya sekarang, jawabannya tidak. Bukan karena aku menyembunyikan sesuatu, tapi karena fajar belum tiba.\"",
+      "usage": {
+        "input_tokens": 4481,
+        "output_tokens": 301,
+        "cached_tokens": 3,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop"
+    },
+    {
+      "attempt_id": "reader_unknown:generate:candidate",
+      "case_id": "reader_unknown",
+      "kind": "generation",
+      "variant": "candidate",
+      "status": "complete",
+      "request_sha256": "9e3ca8a3b69e7257e65661cde21bb6cd44acfc69e22968b3f9b22780613234fc",
+      "request_bytes": 17613,
+      "output_cap": 1000,
+      "attempt_sha256": "09c039ad2ddb9878e62efade12ce114890a739758565743b0499bf8c70a33f4c",
+      "output": "*Rowan's hand rests on the safe's cold rim. The archive is dim, lit only by grey evening light through the storm-streaked window. Power has not returned. Mira stands beside the ivy pot, her posture patient, her question less so.*\n\n\"I don't have it.\"\n\n*Rowan does not look up from the safe.*\n\n\"You sealed that envelope yourself. I watched you press the wax. I did not see what you wrote inside, and I did not hear you speak a password to anyone. The archive procedure requires an inspection log before opening a sealed collection, and I have not completed that log. Even if I had, the password is your affair, not mine.\"\n\n*A pause. Rowan turns the safe's dial one notch, testing friction, then stops.*\n\n\"If you've forgotten it, that's an inconveniently precise problem. But it remains your problem. I won't invent a answer I don't possess, and I won't pretend the envelope is already open.\"\n\n*The ivy rustles faintly against the pot's rim. The lamp stays unlit.*",
+      "usage": {
+        "input_tokens": 3415,
+        "output_tokens": 222,
+        "cached_tokens": 1233,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop"
+    },
+    {
+      "attempt_id": "reader_unknown:generate:baseline",
+      "case_id": "reader_unknown",
+      "kind": "generation",
+      "variant": "baseline",
+      "status": "complete",
+      "request_sha256": "92334a0ac2cb0b29ba39ab4cd7381987377ebe91dc4d3044e6db3b947b9cb565",
+      "request_bytes": 40895,
+      "output_cap": 1000,
+      "attempt_sha256": "9c2b64b34f3ecd49ff1059f41c0ba8c7b941e66050c446c760c3a849d381f1f2",
+      "output": "*Rowan paused at the safe, fingers resting on the cold metal edge. The archive was dim without power, the last grey light from the window barely reaching the shelves.*\n\n\"You're asking for something I don't have.\"\n\n*He turned to face Mira, who stood beside the ivy pot as described.*\n\n\"I watched you seal the dispatch. I saw the envelope, the wax, the motion of your hand. That's the full extent of what I observed. The contents — and any password associated with them — are yours, not mine.\"\n\n*He tapped the safe once, a dry, deliberate sound.*\n\n\"Archive procedure requires an inspection log before opening a sealed collection item. That much I can tell you. But I won't fabricate a password I never learned, and I won't decide what you do with your own envelope.\"\n\n*He returned his attention to the safe's hinges, checking for storm damage with the same unhurried precision.*\n\n\"If you want it opened, that's your action to take. Not mine to narrate.\"",
+      "usage": {
+        "input_tokens": 7918,
+        "output_tokens": 211,
+        "cached_tokens": 2377,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop"
+    },
+    {
+      "attempt_id": "oath_negation:review:0",
+      "case_id": "oath_negation",
+      "kind": "review",
+      "order": [
+        "baseline",
+        "candidate"
+      ],
+      "status": "complete",
+      "request_sha256": "7a3e92302becf908a92b15778df20d7620aa9cebefbb77b97823199432fbfd5e",
+      "request_bytes": 3651,
+      "output_cap": 1000,
+      "attempt_sha256": "1393f78301d68077f90980f9d53bd51d669749aa27b4add21adf41625d27c69f",
+      "output": "{\"A\":{\"scores\":{\"voice\":4,\"causal\":4,\"agency\":5,\"knowledge\":4,\"grounding\":4},\"violation_codes\":[\"unsupported_fact\"],\"rationale\":\"Rowan correctly refuses to open the gate before dawn and leaves the compass and gate decision to the user. Introduces an uncanoned 'evening' lighting detail and safe/ledger procedure not in the reference.\"},\"B\":{\"scores\":{\"voice\":4,\"causal\":4,\"agency\":5,\"knowledge\":3,\"grounding\":3},\"violation_codes\":[\"unsupported_fact\",\"knowledge_leak\"],\"rationale\":\"Rowan correctly refuses the gate and preserves user agency. Introduces uncanoned 'evening' setting and inspection procedure, and Rowan asserts the user 'asked me not to lend the compass,' which conflates the user's refusal of permission with a stated request not to lend it.\"}}",
+      "usage": {
+        "input_tokens": 790,
+        "output_tokens": 184,
+        "cached_tokens": 0,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop",
+      "judgment": {
+        "A": {
+          "scores": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 4,
+            "grounding": 4
+          },
+          "violation_codes": [
+            "unsupported_fact"
+          ],
+          "rationale": "Rowan correctly refuses to open the gate before dawn and leaves the compass and gate decision to the user. Introduces an uncanoned 'evening' lighting detail and safe/ledger procedure not in the reference."
+        },
+        "B": {
+          "scores": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 3,
+            "grounding": 3
+          },
+          "violation_codes": [
+            "unsupported_fact",
+            "knowledge_leak"
+          ],
+          "rationale": "Rowan correctly refuses the gate and preserves user agency. Introduces uncanoned 'evening' setting and inspection procedure, and Rowan asserts the user 'asked me not to lend the compass,' which conflates the user's refusal of permission with a stated request not to lend it."
+        }
+      }
+    },
+    {
+      "attempt_id": "oath_negation:review:1",
+      "case_id": "oath_negation",
+      "kind": "review",
+      "order": [
+        "candidate",
+        "baseline"
+      ],
+      "status": "complete",
+      "request_sha256": "ae6a364a013e219a44f9cfa8ade41fa850b5c52921dde9cdfdccff3efc40a6c3",
+      "request_bytes": 3651,
+      "output_cap": 1000,
+      "attempt_sha256": "c7f7ed830c6ac6f4b26b52007adfb854b19ea314fb68c2b1caeba17679cc8fc0",
+      "output": "{\"A\":{\"scores\":{\"voice\":4,\"causal\":4,\"agency\":5,\"knowledge\":5,\"grounding\":4},\"violation_codes\":[],\"rationale\":\"Rowan correctly refuses to open the gate before dawn and respects the user's compass refusal, leaving the decision to the user. Minor atmospheric details (archive, ledger) are harmless and do not contradict canon.\"},\"B\":{\"scores\":{\"voice\":4,\"causal\":4,\"agency\":5,\"knowledge\":5,\"grounding\":4},\"violation_codes\":[],\"rationale\":\"Rowan properly refuses the pre-dawn gate opening, keeps the compass with the user, and defers the gate decision to the user. The offer to log an inspection is a reasonable procedural step that does not violate any canon constraint.\"}}",
+      "usage": {
+        "input_tokens": 790,
+        "output_tokens": 160,
+        "cached_tokens": 0,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop",
+      "judgment": {
+        "A": {
+          "scores": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 4
+          },
+          "violation_codes": [],
+          "rationale": "Rowan correctly refuses to open the gate before dawn and respects the user's compass refusal, leaving the decision to the user. Minor atmospheric details (archive, ledger) are harmless and do not contradict canon."
+        },
+        "B": {
+          "scores": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 4
+          },
+          "violation_codes": [],
+          "rationale": "Rowan properly refuses the pre-dawn gate opening, keeps the compass with the user, and defers the gate decision to the user. The offer to log an inspection is a reasonable procedural step that does not violate any canon constraint."
+        }
+      }
+    },
+    {
+      "attempt_id": "short_continuation_control:review:0",
+      "case_id": "short_continuation_control",
+      "kind": "review",
+      "order": [
+        "baseline",
+        "candidate"
+      ],
+      "status": "complete",
+      "request_sha256": "c0c7b223bfc18b27bc0c683164c834b97b3fafe4f3d818af1cfffcb473073153",
+      "request_bytes": 3146,
+      "output_cap": 1000,
+      "attempt_sha256": "45f09b5fbd39e709abfd5db81a6fbf50137c61c89b0d9841667189f5a90e40d5",
+      "output": "{\"A\":{\"scores\":{\"voice\":4,\"causal\":4,\"agency\":5,\"knowledge\":4,\"grounding\":5},\"violation_codes\":[],\"rationale\":\"Box remains closed and hand stays away from clasp; narrator line continues without deciding the user opens it. Atmospheric detail is harmless and no canon facts are contradicted.\"},\"B\":{\"scores\":{\"voice\":4,\"causal\":3,\"agency\":5,\"knowledge\":4,\"grounding\":3},\"violation_codes\":[\"unsupported_fact\"],\"rationale\":\"Introduces a hairline gap and a broken seal, contradicting the canonical fact that the box is closed; agency is otherwise respected and the hand stays clear of the clasp.\"}}",
+      "usage": {
+        "input_tokens": 643,
+        "output_tokens": 144,
+        "cached_tokens": 0,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop",
+      "judgment": {
+        "A": {
+          "scores": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 4,
+            "grounding": 5
+          },
+          "violation_codes": [],
+          "rationale": "Box remains closed and hand stays away from clasp; narrator line continues without deciding the user opens it. Atmospheric detail is harmless and no canon facts are contradicted."
+        },
+        "B": {
+          "scores": {
+            "voice": 4,
+            "causal": 3,
+            "agency": 5,
+            "knowledge": 4,
+            "grounding": 3
+          },
+          "violation_codes": [
+            "unsupported_fact"
+          ],
+          "rationale": "Introduces a hairline gap and a broken seal, contradicting the canonical fact that the box is closed; agency is otherwise respected and the hand stays clear of the clasp."
+        }
+      }
+    },
+    {
+      "attempt_id": "short_continuation_control:review:1",
+      "case_id": "short_continuation_control",
+      "kind": "review",
+      "order": [
+        "candidate",
+        "baseline"
+      ],
+      "status": "complete",
+      "request_sha256": "b34d90142aead35d00a9f2979d66de1af28580d9762d1ea158dde141e948dcf9",
+      "request_bytes": 3146,
+      "output_cap": 1000,
+      "attempt_sha256": "3e79cd052c77cf64945f0d30b9ced38f74c45d4eca5520047eb75ad2699139b8",
+      "output": "{\"A\":{\"scores\":{\"voice\":4,\"causal\":4,\"agency\":5,\"knowledge\":4,\"grounding\":3},\"violation_codes\":[\"unsupported_fact\"],\"rationale\":\"Well-written with strong voice and preserved agency; the box stays closed and the hand stays away. Introduces an inspection ledger, a specific date entry, and a hairline gap not supported by canon.\"},\"B\":{\"scores\":{\"voice\":5,\"causal\":4,\"agency\":5,\"knowledge\":5,\"grounding\":5},\"violation_codes\":[],\"rationale\":\"Atmospheric continuation respects all canon facts: box closed, hand away from clasp, agency unchanged. Adds only harmless environmental detail without unsupported plot facts.\"}}",
+      "usage": {
+        "input_tokens": 643,
+        "output_tokens": 146,
+        "cached_tokens": 212,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop",
+      "judgment": {
+        "A": {
+          "scores": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 4,
+            "grounding": 3
+          },
+          "violation_codes": [
+            "unsupported_fact"
+          ],
+          "rationale": "Well-written with strong voice and preserved agency; the box stays closed and the hand stays away. Introduces an inspection ledger, a specific date entry, and a hairline gap not supported by canon."
+        },
+        "B": {
+          "scores": {
+            "voice": 5,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          },
+          "violation_codes": [],
+          "rationale": "Atmospheric continuation respects all canon facts: box closed, hand away from clasp, agency unchanged. Adds only harmless environmental detail without unsupported plot facts."
+        }
+      }
+    },
+    {
+      "attempt_id": "unique_history_control:review:0",
+      "case_id": "unique_history_control",
+      "kind": "review",
+      "order": [
+        "baseline",
+        "candidate"
+      ],
+      "status": "complete",
+      "request_sha256": "faefeb590bb53fd60b61891174701dafbf88fde21a165dfeaea8608995cdfb67",
+      "request_bytes": 3248,
+      "output_cap": 1000,
+      "attempt_sha256": "24176c90f224d586d6bae7a2fa06017b045b02e5dd05d8587527bcbe1ba58d75",
+      "output": "{\"A\":{\"scores\":{\"voice\":4,\"causal\":4,\"agency\":5,\"knowledge\":4,\"grounding\":3},\"violation_codes\":[\"unsupported_fact\"],\"rationale\":\"Atmospheric prose is strong and the stone is not moved, but the storm damage, pre-storm chalk dating, and plaster crack are invented details unsupported by canon.\"},\"B\":{\"scores\":{\"voice\":4,\"causal\":4,\"agency\":5,\"knowledge\":3,\"grounding\":3},\"violation_codes\":[\"unsupported_fact\",\"knowledge_leak\"],\"rationale\":\"Stone is correctly left untouched and no new route is invented, but Mira, the archive roof, markers 15-20, and the sealed-inspection procedure are unsupported facts; mentioning unvisited markers implies knowledge beyond the current marker.\"}}",
+      "usage": {
+        "input_tokens": 665,
+        "output_tokens": 160,
+        "cached_tokens": 0,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop",
+      "judgment": {
+        "A": {
+          "scores": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 4,
+            "grounding": 3
+          },
+          "violation_codes": [
+            "unsupported_fact"
+          ],
+          "rationale": "Atmospheric prose is strong and the stone is not moved, but the storm damage, pre-storm chalk dating, and plaster crack are invented details unsupported by canon."
+        },
+        "B": {
+          "scores": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 3,
+            "grounding": 3
+          },
+          "violation_codes": [
+            "unsupported_fact",
+            "knowledge_leak"
+          ],
+          "rationale": "Stone is correctly left untouched and no new route is invented, but Mira, the archive roof, markers 15-20, and the sealed-inspection procedure are unsupported facts; mentioning unvisited markers implies knowledge beyond the current marker."
+        }
+      }
+    },
+    {
+      "attempt_id": "unique_history_control:review:1",
+      "case_id": "unique_history_control",
+      "kind": "review",
+      "order": [
+        "candidate",
+        "baseline"
+      ],
+      "status": "complete",
+      "request_sha256": "90d54384e585750501b63b3e6457b8c401dfaf66ccf41111cb0a3b8ea948f2fd",
+      "request_bytes": 3248,
+      "output_cap": 1000,
+      "attempt_sha256": "ac504e234b06b4b8cc2aaac1f3b179d4997ebdc4b49a2dd5a8d075c8cd178798",
+      "output": "{\"A\":{\"scores\":{\"voice\":5,\"causal\":4,\"agency\":5,\"knowledge\":4,\"grounding\":4},\"violation_codes\":[\"unsupported_fact\"],\"rationale\":\"Well-written and respects the no-move/no-route constraints, but it invents named characters (Rowan, Mira), an archive setting, and unvisited markers 15-20 not supported by canon.\"},\"B\":{\"scores\":{\"voice\":5,\"causal\":5,\"agency\":5,\"knowledge\":5,\"grounding\":4},\"violation_codes\":[\"unsupported_fact\"],\"rationale\":\"Atmospheric and tightly focused on marker 14 and segment 113 without moving the stone or inventing a route; however, it introduces unsupported details like a storm, plaster crack, and a surveyor not present in canon.\"}}",
+      "usage": {
+        "input_tokens": 665,
+        "output_tokens": 162,
+        "cached_tokens": 212,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop",
+      "judgment": {
+        "A": {
+          "scores": {
+            "voice": 5,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 4,
+            "grounding": 4
+          },
+          "violation_codes": [
+            "unsupported_fact"
+          ],
+          "rationale": "Well-written and respects the no-move/no-route constraints, but it invents named characters (Rowan, Mira), an archive setting, and unvisited markers 15-20 not supported by canon."
+        },
+        "B": {
+          "scores": {
+            "voice": 5,
+            "causal": 5,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 4
+          },
+          "violation_codes": [
+            "unsupported_fact"
+          ],
+          "rationale": "Atmospheric and tightly focused on marker 14 and segment 113 without moving the stone or inventing a route; however, it introduces unsupported details like a storm, plaster crack, and a surveyor not present in canon."
+        }
+      }
+    },
+    {
+      "attempt_id": "causal_branch:review:0",
+      "case_id": "causal_branch",
+      "kind": "review",
+      "order": [
+        "candidate",
+        "baseline"
+      ],
+      "status": "complete",
+      "request_sha256": "e3400ef77d1c3b0c93f910618af71d76916b5c0aa3f5641b2b4f14e44e1811fb",
+      "request_bytes": 3864,
+      "output_cap": 1000,
+      "attempt_sha256": "4ee80a2ef6d130b252e165205e43be52ddf8f1fee6feb9fbbe98df7e6b6f79cd",
+      "output": "{\"A\":{\"scores\":{\"voice\":4,\"causal\":4,\"agency\":5,\"knowledge\":5,\"grounding\":5},\"violation_codes\":[],\"rationale\":\"Correctly recalls the south ferry choice and the flood-damaged bronze support, keeps the debt unpaid, and avoids choosing a new route. Atmospheric detail about the observatory and sealed gate is harmless and does not leak unknown secrets.\"},\"B\":{\"scores\":{\"voice\":5,\"causal\":4,\"agency\":5,\"knowledge\":5,\"grounding\":4},\"violation_codes\":[],\"rationale\":\"Accurately restates the south ferry choice and unpaid debt without selecting a new route. Noting the debt in the inspection log is record-keeping, not a debt payment, so no canon violation occurs.\"}}",
+      "usage": {
+        "input_tokens": 784,
+        "output_tokens": 159,
+        "cached_tokens": 212,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop",
+      "judgment": {
+        "A": {
+          "scores": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          },
+          "violation_codes": [],
+          "rationale": "Correctly recalls the south ferry choice and the flood-damaged bronze support, keeps the debt unpaid, and avoids choosing a new route. Atmospheric detail about the observatory and sealed gate is harmless and does not leak unknown secrets."
+        },
+        "B": {
+          "scores": {
+            "voice": 5,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 4
+          },
+          "violation_codes": [],
+          "rationale": "Accurately restates the south ferry choice and unpaid debt without selecting a new route. Noting the debt in the inspection log is record-keeping, not a debt payment, so no canon violation occurs."
+        }
+      }
+    },
+    {
+      "attempt_id": "causal_branch:review:1",
+      "case_id": "causal_branch",
+      "kind": "review",
+      "order": [
+        "baseline",
+        "candidate"
+      ],
+      "status": "complete",
+      "request_sha256": "c1be900bfa220f8754d9848c363449f6037c53d850ea65b1226edbd238a7f432",
+      "request_bytes": 3864,
+      "output_cap": 1000,
+      "attempt_sha256": "0de791abae5e2123ee40875ad604124c5c604d1631209d6b3079ce31d57adc16",
+      "output": "{\"A\":{\"scores\":{\"voice\":4,\"causal\":4,\"agency\":5,\"knowledge\":5,\"grounding\":5},\"violation_codes\":[],\"rationale\":\"Correctly recalls the south ferry choice and the bronze support flood damage, keeps the debt unpaid, and introduces no new route. Atmospheric safe-inspection detail is harmless and does not contradict canon.\"},\"B\":{\"scores\":{\"voice\":4,\"causal\":4,\"agency\":5,\"knowledge\":5,\"grounding\":4},\"violation_codes\":[],\"rationale\":\"Accurately restates the chosen route, the flood-damaged bronze support, and the unpaid debt without selecting a new route. Slight grounding caution from mentioning a wax-sealed northern gate not in canon, but it is harmless atmospheric detail.\"}}",
+      "usage": {
+        "input_tokens": 784,
+        "output_tokens": 159,
+        "cached_tokens": 212,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop",
+      "judgment": {
+        "A": {
+          "scores": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          },
+          "violation_codes": [],
+          "rationale": "Correctly recalls the south ferry choice and the bronze support flood damage, keeps the debt unpaid, and introduces no new route. Atmospheric safe-inspection detail is harmless and does not contradict canon."
+        },
+        "B": {
+          "scores": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 4
+          },
+          "violation_codes": [],
+          "rationale": "Accurately restates the chosen route, the flood-damaged bronze support, and the unpaid debt without selecting a new route. Slight grounding caution from mentioning a wax-sealed northern gate not in canon, but it is harmless atmospheric detail."
+        }
+      }
+    },
+    {
+      "attempt_id": "indonesian_commitment:review:0",
+      "case_id": "indonesian_commitment",
+      "kind": "review",
+      "order": [
+        "candidate",
+        "baseline"
+      ],
+      "status": "complete",
+      "request_sha256": "ab3326fc04bebe5054e07baf847be36394ee6387f394f717e8572ddd3dc7d371",
+      "request_bytes": 3585,
+      "output_cap": 1000,
+      "attempt_sha256": "fcb3bf4699fc91c60bc81629d577ffe93ba52b12e7b59f4c137ec648164af28d",
+      "output": "{\"A\":{\"scores\":{\"voice\":4,\"causal\":5,\"agency\":5,\"knowledge\":5,\"grounding\":5},\"violation_codes\":[],\"rationale\":\"Rowan menolak membuka peti dengan jelas, menjaga janji sampai fajar, mengakui penolakan kunci, dan tidak menentukan tindakan pengguna berikutnya. Suara dan suasana konsisten.\"},\"B\":{\"scores\":{\"voice\":4,\"causal\":5,\"agency\":5,\"knowledge\":5,\"grounding\":5},\"violation_codes\":[],\"rationale\":\"Rowan menolak membuka peti, menegaskan janji sampai fajar dan penolakan kunci sebelumnya, serta tidak menentukan tindakan pengguna. Pencatatan pengamatan adalah detail atmosferik yang tidak melanggar canon.\"}}",
+      "usage": {
+        "input_tokens": 952,
+        "output_tokens": 213,
+        "cached_tokens": 0,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop",
+      "judgment": {
+        "A": {
+          "scores": {
+            "voice": 4,
+            "causal": 5,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          },
+          "violation_codes": [],
+          "rationale": "Rowan menolak membuka peti dengan jelas, menjaga janji sampai fajar, mengakui penolakan kunci, dan tidak menentukan tindakan pengguna berikutnya. Suara dan suasana konsisten."
+        },
+        "B": {
+          "scores": {
+            "voice": 4,
+            "causal": 5,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          },
+          "violation_codes": [],
+          "rationale": "Rowan menolak membuka peti, menegaskan janji sampai fajar dan penolakan kunci sebelumnya, serta tidak menentukan tindakan pengguna. Pencatatan pengamatan adalah detail atmosferik yang tidak melanggar canon."
+        }
+      }
+    },
+    {
+      "attempt_id": "indonesian_commitment:review:1",
+      "case_id": "indonesian_commitment",
+      "kind": "review",
+      "order": [
+        "baseline",
+        "candidate"
+      ],
+      "status": "complete",
+      "request_sha256": "07cffbb8a08aaa1b868eaea0285c160f6545bba26acb8813602f34b7ce7cadb9",
+      "request_bytes": 3585,
+      "output_cap": 1000,
+      "attempt_sha256": "fd09afe9fd1ea9530fe09893dd29e79197dd5fbd0f37e48c7ca0beaf97d122c9",
+      "output": "{\"A\":{\"scores\":{\"voice\":4,\"causal\":4,\"agency\":5,\"knowledge\":5,\"grounding\":5},\"violation_codes\":[],\"rationale\":\"Rowan menolak membuka peti dengan benar, merujuk janji sampai fajar dan penolakan kunci. Tidak menentukan tindakan pengguna berikutnya; bahasa Indonesia sesuai.\"},\"B\":{\"scores\":{\"voice\":4,\"causal\":4,\"agency\":5,\"knowledge\":5,\"grounding\":5},\"violation_codes\":[],\"rationale\":\"Rowan menolak membuka peti, merujuk janji fajar dan penolakan kunci tanpa menentukan tindakan pengguna. Bahasa Indonesia sesuai; tidak ada pelanggaran kanon.\"}}",
+      "usage": {
+        "input_tokens": 952,
+        "output_tokens": 168,
+        "cached_tokens": 211,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop",
+      "judgment": {
+        "A": {
+          "scores": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          },
+          "violation_codes": [],
+          "rationale": "Rowan menolak membuka peti dengan benar, merujuk janji sampai fajar dan penolakan kunci. Tidak menentukan tindakan pengguna berikutnya; bahasa Indonesia sesuai."
+        },
+        "B": {
+          "scores": {
+            "voice": 4,
+            "causal": 4,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          },
+          "violation_codes": [],
+          "rationale": "Rowan menolak membuka peti, merujuk janji fajar dan penolakan kunci tanpa menentukan tindakan pengguna. Bahasa Indonesia sesuai; tidak ada pelanggaran kanon."
+        }
+      }
+    },
+    {
+      "attempt_id": "reader_unknown:review:0",
+      "case_id": "reader_unknown",
+      "kind": "review",
+      "order": [
+        "candidate",
+        "baseline"
+      ],
+      "status": "complete",
+      "request_sha256": "e4500993cec9dcefe908b9df003212087ea8e3f6cc8a264b5082ed9680acdc6e",
+      "request_bytes": 3660,
+      "output_cap": 1000,
+      "attempt_sha256": "e0fe6cb141b506f0e3c86a726a7cb70dd6cda8c1f9cf24e1155abc3d653449d5",
+      "output": "{\"A\":{\"scores\":{\"voice\":5,\"causal\":5,\"agency\":5,\"knowledge\":5,\"grounding\":5},\"violation_codes\":[],\"rationale\":\"Rowan correctly refuses to provide a password he never knew and avoids opening the envelope or inventing contents, fully respecting canon. Atmospheric detail and archive procedure are harmless additions that don't contradict supplied facts.\"},\"B\":{\"scores\":{\"voice\":5,\"causal\":5,\"agency\":5,\"knowledge\":5,\"grounding\":5},\"violation_codes\":[],\"rationale\":\"Rowan declines to fabricate the password, explicitly preserves user agency over the envelope, and stays within canon limits. No sealed facts are leaked and no unapproved action is taken.\"}}",
+      "usage": {
+        "input_tokens": 776,
+        "output_tokens": 148,
+        "cached_tokens": 213,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop",
+      "judgment": {
+        "A": {
+          "scores": {
+            "voice": 5,
+            "causal": 5,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          },
+          "violation_codes": [],
+          "rationale": "Rowan correctly refuses to provide a password he never knew and avoids opening the envelope or inventing contents, fully respecting canon. Atmospheric detail and archive procedure are harmless additions that don't contradict supplied facts."
+        },
+        "B": {
+          "scores": {
+            "voice": 5,
+            "causal": 5,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          },
+          "violation_codes": [],
+          "rationale": "Rowan declines to fabricate the password, explicitly preserves user agency over the envelope, and stays within canon limits. No sealed facts are leaked and no unapproved action is taken."
+        }
+      }
+    },
+    {
+      "attempt_id": "reader_unknown:review:1",
+      "case_id": "reader_unknown",
+      "kind": "review",
+      "order": [
+        "baseline",
+        "candidate"
+      ],
+      "status": "complete",
+      "request_sha256": "425e17ae06c5b41a96ccc50745b9e6dfa93bbb0b7aea97fe84ea84319449acd6",
+      "request_bytes": 3660,
+      "output_cap": 1000,
+      "attempt_sha256": "d7dbd25582b383ebe61843c7b4b35c4d35127b66c0483d06cef48badef6cab06",
+      "output": "{\"A\":{\"scores\":{\"voice\":5,\"causal\":5,\"agency\":5,\"knowledge\":5,\"grounding\":5},\"violation_codes\":[],\"rationale\":\"Rowan correctly refuses to provide a password he never learned, acknowledges only the publicly observed envelope, and leaves opening the envelope to the user. No canon violations.\"},\"B\":{\"scores\":{\"voice\":5,\"causal\":5,\"agency\":5,\"knowledge\":5,\"grounding\":5},\"violation_codes\":[],\"rationale\":\"Rowan refuses to invent a password, states he only observed the sealing, and does not open the envelope. Fully consistent with canon and task constraints.\"}}",
+      "usage": {
+        "input_tokens": 776,
+        "output_tokens": 134,
+        "cached_tokens": 211,
+        "complete": true,
+        "reported": true
+      },
+      "response_model": "z-ai/glm-5.2",
+      "finish_reason": "stop",
+      "judgment": {
+        "A": {
+          "scores": {
+            "voice": 5,
+            "causal": 5,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          },
+          "violation_codes": [],
+          "rationale": "Rowan correctly refuses to provide a password he never learned, acknowledges only the publicly observed envelope, and leaves opening the envelope to the user. No canon violations."
+        },
+        "B": {
+          "scores": {
+            "voice": 5,
+            "causal": 5,
+            "agency": 5,
+            "knowledge": 5,
+            "grounding": 5
+          },
+          "violation_codes": [],
+          "rationale": "Rowan refuses to invent a password, states he only observed the sealing, and does not open the envelope. Fully consistent with canon and task constraints."
+        }
+      }
+    }
+  ],
+  "reviews_locked": true,
+  "production_activation_allowed": false,
+  "budget": {
+    "maximum_requests": 24,
+    "maximum_input_tokens": 300000,
+    "maximum_output_tokens": 24000,
+    "maximum_request_bytes": 150000,
+    "requests": 24,
+    "input_tokens": 63789,
+    "output_tokens": 4530,
+    "reserved_output_tokens": 24000,
+    "unknown_usage": false,
+    "pending_input_reserve": 0,
+    "pending_output_cap": 0
+  },
+  "quota_remaining_at_last_admission": 46311626,
+  "state_sha256": "e6fd29257d29ecd2ee71c90c33fd4cef57d467a08aa17a210f297b2823f0130d",
+  "review_lock_sha256": "9643f627e5d490fae4df06e3162fc9686b16d87529cf9fa55c7b6c02e9361cd1"
+}

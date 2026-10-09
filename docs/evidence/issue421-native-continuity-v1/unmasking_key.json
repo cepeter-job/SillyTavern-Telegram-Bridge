@@ -1,0 +1,29 @@
+{
+  "review_lock_sha256": "9643f627e5d490fae4df06e3162fc9686b16d87529cf9fa55c7b6c02e9361cd1",
+  "key": {
+    "oath_negation": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "causal_branch": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "reader_unknown": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "indonesian_commitment": {
+      "A": "candidate",
+      "B": "baseline"
+    },
+    "unique_history_control": {
+      "A": "baseline",
+      "B": "candidate"
+    },
+    "short_continuation_control": {
+      "A": "baseline",
+      "B": "candidate"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "status": "frozen_before_provider_dispatch",
+  "implementation_commit": "025ccb004e4ddf6f9bdc9dea352e0b491247445c",
+  "plan_sha256": "809a8e5c7e4e4e26e10f433f33bbcdbb53cbd0e6fdb180f1ceaf582e34a8edb9",
+  "implementation_sha256": "16b74812705c2943ad5cea8ca195e05b92105a139354bb89df3b1ada4378bc22",
+  "declared_requests": 24,
+  "provider_requests_executed": 0,
+  "source": "six declared synthetic native SQLite stories; no production transcript",
+  "budget": {
+    "maximum_requests": 24,
+    "maximum_logical_input_tokens": 300000,
+    "maximum_output_tokens": 24000,
+    "maximum_request_bytes": 150000,
+    "minimum_subscription_reserve": 100000,
+    "paid_overage": false
+  },
+  "production_activation_allowed": false
+}

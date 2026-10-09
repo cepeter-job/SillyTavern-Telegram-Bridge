@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "measurement": "unchanged original offline replay; not a matched provider trial of the new codec",
+  "original_report_sha256": "36ea8f8a0a16d35e799f47ff73da0d7b1c310b9193a1b0766e201355ee8a3382",
+  "estimated": {
+    "aggregate_story_input": {
+      "baseline": 10458,
+      "candidate": 10458,
+      "reduction_fraction": 0.0
+    },
+    "story_input_percentiles": {
+      "baseline": {
+        "p50": 1681,
+        "p95": 2154
+      },
+      "candidate": {
+        "p50": 1681,
+        "p95": 2154
+      }
+    },
+    "basis": "production_character_ratio_estimate_not_provider_usage"
+  },
+  "decision": {
+    "approval_ready": false,
+    "blocking_reasons": [
+      "provider_observations_required",
+      "blinded_human_review_required"
+    ],
+    "meaning": "supplied evidence satisfies this synthetic checkpoint only; deployment needs human approval"
+  },
+  "provider_requests": 0,
+  "production_activation_allowed": false
+}

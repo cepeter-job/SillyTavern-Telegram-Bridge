@@ -1,0 +1,100 @@
+name: Python 3.15 compatibility (experimental)
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/python315-compat.yml
+      - bridge/**
+      - requirements.txt
+      - requirements-dev.txt
+      - tools/benchmark_python_runtime.py
+      - tools/compare_python_runtime.py
+      - tests/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Informational only. The existing Python 3.11 CI and installer remain authoritative.
+jobs:
+  python315:
+    name: Python 3.15 wheels, tests, synthetic benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.15
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: '3.15'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+          enable-cache: true
+          cache-dependency-glob: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Python 3.15 syntax check (no imports)
+        run: python -m compileall -q bridge tools tests sillytavern_telegram_bridge.py
+
+      # Do not reuse the 3.11 locks, or silently build native extensions from source.
+      - name: Resolve Python 3.15 wheel-only locks
+        id: wheels
+        continue-on-error: true
+        run: |
+          uv pip compile requirements.txt --python-version 3.15 \
+            --only-binary :all: --generate-hashes \
+            --output-file requirements-py315.lock
+          uv pip compile requirements.txt requirements-dev.txt \
+            --constraint requirements-py315.lock --python-version 3.15 \
+            --only-binary :all: --generate-hashes \
+            --output-file requirements-dev-py315.lock
+
+      - name: Install Python 3.15 isolated dependencies
+        if: steps.wheels.outcome == 'success'
+        run: |
+          uv pip install --system --python python \
+            --only-binary :all: --require-hashes -r requirements-dev-py315.lock
+          uv pip check --python python
+
+      - name: Run complete pytest suite under Python 3.15
+        if: steps.wheels.outcome == 'success'
+        run: python -X dev -W error::ResourceWarning -m pytest -q --maxfail=1
+
+      - name: Synthetic CPU and memory measurement (not an API latency test)
+        if: steps.wheels.outcome == 'success'
+        run: >-
+          python tools/benchmark_python_runtime.py
+          --iterations 80 --warmup 12 --output python315-benchmark.json
+
+      - name: Explain experimental gate
+        if: always()
+        run: |
+          if test -f requirements-dev-py315.lock; then
+            echo "### Python 3.15: wheel resolution passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "Check test and benchmark steps for the remaining evidence." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::Python 3.15 compatibility is blocked by dependency wheel availability or interpreter setup."
+            echo "### Python 3.15: blocked or incomplete" >> "$GITHUB_STEP_SUMMARY"
+            echo "This experimental run does **not** authorize a production upgrade." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: python315-compatibility
+          path: |
+            requirements-py315.lock
+            requirements-dev-py315.lock
+            python315-benchmark.json
+          if-no-files-found: ignore
+          retention-days: 14

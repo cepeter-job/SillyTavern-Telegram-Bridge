@@ -105,6 +105,9 @@ class MemoryPromptContext:
     selection_guard: Callable[[], str] | None = field(default=None, compare=False, repr=False)
     selection_query: str = field(default="", compare=False, repr=False)
     selection_history_source_rows: tuple[tuple[int, str, str], ...] = field(default=(), compare=False, repr=False)
+    selection_hybrid_shadow: Callable[[list[dict], float], dict[str, object]] | None = field(
+        default=None, compare=False, repr=False
+    )
 
 
 class SelectMemoryContext(Protocol):

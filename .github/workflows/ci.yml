@@ -319,10 +319,22 @@ jobs:
       - name: Install hash-locked audit tooling
         run: uv pip install --system --python python --require-hashes -r requirements-dev.lock
 
+      - name: Set up Node for locked development toolchain audits
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
       - name: Audit locked dependencies
-        run: |
-          python -m pip_audit --require-hashes --disable-pip -r requirements.lock
-          python -m pip_audit --require-hashes --disable-pip -r requirements-dev.lock
+        run: python tools/audit_dependencies.py --output-dir dependency-audit-reports
+
+      - name: Publish dependency audit reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dependency-audit
+          path: dependency-audit-reports/
+          if-no-files-found: warn
+          retention-days: 14
 
   static-analysis:
     runs-on: ubuntu-latest

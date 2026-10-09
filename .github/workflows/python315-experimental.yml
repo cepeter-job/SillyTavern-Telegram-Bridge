@@ -24,10 +24,10 @@ defaults:
 
 jobs:
   # Both jobs are deliberately excluded from the Python 3.11 release gate.
-  full-dependency-compatibility:
+  full-dependency-preflight:
+    # Probe failure is recorded as a BLOCKED finding; this experiment is not a release gate.
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -39,6 +39,8 @@ jobs:
           version: "0.12.22"
           enable-cache: true
       - name: Test complete native dependency install on Python 3.15
+        id: native-dependency-install
+        continue-on-error: true
         run: |
           uv python install 3.15
           uv venv --python 3.15 .venv315-full
@@ -49,6 +51,21 @@ jobs:
             --require-hashes -r "$RUNNER_TEMP/requirements-py315.lock"
           uv pip check --python .venv315-full/bin/python
           .venv315-full/bin/python -c "import aiohttp, faster_whisper, hindsight_client, yaml"
+      - name: Report full compatibility result without approving migration
+        if: ${{ always() }}
+        env:
+          NATIVE_INSTALL_OUTCOME: ${{ steps.native-dependency-install.outcome }}
+        run: |
+          if [[ "$NATIVE_INSTALL_OUTCOME" == "success" ]]; then
+            echo "Full Python 3.15 native dependency preflight: INSTALLED (not deployment approval)." \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Full Python 3.15 native dependency preflight: BLOCKED." \
+              >> "$GITHUB_STEP_SUMMARY"
+            echo "No production upgrade is authorized; inspect dependency resolver logs." \
+              >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=Python 3.15 full native dependencies blocked::See dependency resolver logs; do not migrate production"
+          fi
 
   # Core-only excludes voice transcription to isolate independent blockers.
   # Success here NEVER authorizes deployment or replacement of production locks.

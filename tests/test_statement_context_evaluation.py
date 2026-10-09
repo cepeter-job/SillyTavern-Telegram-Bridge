@@ -20,8 +20,12 @@ def test_frozen_six_case_report_preserves_controls_and_activation_off(tmp_path):
     assert report["semantic_continuity_proven"] is False
     cases = {item["case_id"]: item for item in report["cases"]}
     assert set(cases) == {
-        "unique_dialogue", "commitment_dense", "indonesian",
-        "unsupported_script", "short_history", "large_character_card",
+        "unique_dialogue",
+        "commitment_dense",
+        "indonesian",
+        "unsupported_script",
+        "short_history",
+        "large_character_card",
     }
     assert cases["commitment_dense"]["old_hybrid"]["estimated_reduction_fraction"] == 0
     assert cases["commitment_dense"]["estimated_reduction_fraction"] > 0
@@ -61,7 +65,10 @@ def test_machine_report_omits_story_text_and_identifying_scope(tmp_path):
 
 def test_digest_binds_runtime_policy_and_eval_implementation():
     assert {
-        "bridge/context_selection_runtime.py", "bridge/context_hybrid_shadow.py",
-        "bridge/context_statement_policy.py", "bridge/context_statement_shadow.py",
-        "bridge/memory_contracts.py", "bridge/generation.py",
+        "bridge/context_selection_runtime.py",
+        "bridge/context_hybrid_shadow.py",
+        "bridge/context_statement_policy.py",
+        "bridge/context_statement_shadow.py",
+        "bridge/memory_contracts.py",
+        "bridge/generation.py",
     }.issubset(CODE_FILES)

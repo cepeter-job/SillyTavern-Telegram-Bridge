@@ -1,3 +1,7 @@
 # Exact historical false positive: SQL assignment of excluded.lease_token, not a credential.
 # The SQL value is a column reference; the actual runtime lease is generated with uuid.uuid4().hex.
 23548fec70a94ca3da6aef5aeea21f51b5805d2c:bridge/action_repository.py:generic-api-key:104
+
+# Exact public-evidence false positive: SHA256 of the synthetic A/B label-map artifact.
+# Verified against unmasking_key.json bytes; this is not a model credential or API key.
+9c6ed11f7a42f511dfc26936f816d739b62558ad:docs/evidence/issue421-native-continuity-v1/evidence-manifest.json:generic-api-key:10

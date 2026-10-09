@@ -25,6 +25,26 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+  - package-ecosystem: npm
+    directories:
+      - /tests/miniapp-ui
+      - /tests/miniapp-browser
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7 # version updates wait for a week of public exposure; security updates are unaffected
+    open-pull-requests-limit: 3
+    groups:
+      npm-tooling-minor-patch:
+        patterns:
+          - '*'
+        update-types:
+          - minor
+          - patch
+    commit-message:
+      prefix: chore
+      include: scope
   - package-ecosystem: github-actions
     directory: /
     schedule:

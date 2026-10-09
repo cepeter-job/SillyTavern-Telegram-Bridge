@@ -42,14 +42,19 @@ def test_contributor_commands_match_actual_tools():
     assert "codeql" in text.casefold()
 
 
-def test_dependabot_covers_pip_and_actions_without_unbounded_updates():
+def test_dependabot_covers_all_dependency_ecosystems_without_unbounded_updates():
     config = yaml.safe_load((ROOT / ".github/dependabot.yml").read_text())
     assert config["version"] == 2
     updates = {item["package-ecosystem"]: item for item in config["updates"]}
-    assert set(updates) == {"pip", "github-actions"}
-    for item in updates.values():
-        assert item["directory"] == "/"
+    assert set(updates) == {"pip", "npm", "github-actions"}
+    for ecosystem, item in updates.items():
+        if ecosystem == "npm":
+            assert set(item["directories"]) == {"/tests/miniapp-ui", "/tests/miniapp-browser"}
+        else:
+            assert item["directory"] == "/"
         assert item["schedule"]["interval"] == "weekly"
+        assert item["schedule"]["day"] == "monday"
+        assert item["cooldown"]["default-days"] == 7
         assert 1 <= item["open-pull-requests-limit"] <= 3
         assert item.get("insecure-external-code-execution") != "allow"
     assert not list((ROOT / ".github/workflows").glob("*codeql*"))

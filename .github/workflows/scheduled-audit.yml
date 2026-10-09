@@ -28,6 +28,8 @@ env:
 
 jobs:
   advisory-audit:
+    # Manual dispatch may select another branch; only main may update its advisory issue.
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -56,17 +58,15 @@ jobs:
       - name: Install hash-locked audit tooling
         run: uv pip install --system --python python --require-hashes -r requirements-dev.lock
 
+      - name: Set up Node for locked development toolchain audits
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+
       - name: Advisory dependency audit
         id: dependencies
         continue-on-error: true
-        run: |
-          set -o pipefail
-          {
-            echo "\$ python -m pip_audit --require-hashes --disable-pip -r requirements.lock"
-            python -m pip_audit --require-hashes --disable-pip -r requirements.lock
-            echo "\$ python -m pip_audit --require-hashes --disable-pip -r requirements-dev.lock"
-            python -m pip_audit --require-hashes --disable-pip -r requirements-dev.lock
-          } 2>&1 | tee "$RUNNER_TEMP/dependencies.txt"
+        run: python tools/audit_dependencies.py --output-dir "$RUNNER_TEMP/dependency-audit"
 
       - name: Advisory leak scan
         id: leaks
@@ -102,13 +102,22 @@ jobs:
             if [ "$outcome" != "success" ]; then failing=1; fi
           done
 
+          # Keep all four scan outcomes ahead of any truncated detailed evidence.
+          if [ -s "$RUNNER_TEMP/dependency-audit/summary.md" ]; then
+            printf '\n' >> "$body"
+            cat "$RUNNER_TEMP/dependency-audit/summary.md" >> "$body"
+          else
+            printf '\nDependency audit summary is missing.\n' >> "$body"
+            failing=1
+          fi
+
           if [ "$failing" -eq 0 ]; then
             echo "No advisory findings." >> "$body"
           else
-            for evidence in dependencies.txt leakscan.md module-sizes.txt; do
-              if [ -s "$RUNNER_TEMP/$evidence" ]; then
-                printf '\n<details><summary>%s</summary>\n\n```\n' "$evidence" >> "$body"
-                head -c 4000 "$RUNNER_TEMP/$evidence" >> "$body"
+            for evidence in "$RUNNER_TEMP"/dependency-audit/*.txt "$RUNNER_TEMP/leakscan.md" "$RUNNER_TEMP/module-sizes.txt"; do
+              if [ -s "$evidence" ]; then
+                printf '\n<details><summary>%s</summary>\n\n```\n' "${evidence##*/}" >> "$body"
+                head -c 4000 "$evidence" >> "$body"
                 printf '\n```\n\n</details>\n' >> "$body"
               fi
             done
@@ -146,3 +155,16 @@ jobs:
               --title "Scheduled advisory audit findings" \
               --label "$ADVISORY_LABEL" --body-file "$body"
           fi
+
+      - name: Publish advisory audit reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: scheduled-advisory-audit
+          path: |
+            ${{ runner.temp }}/dependency-audit/
+            ${{ runner.temp }}/leakscan.md
+            ${{ runner.temp }}/module-sizes.txt
+            ${{ runner.temp }}/advisory-report.md
+          if-no-files-found: warn
+          retention-days: 14

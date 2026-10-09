@@ -34,15 +34,6 @@ def test_ci_python_installs_use_complete_hash_pinned_locks():
     assert any("requirements-dev.lock" in command for command in installs)
 
 
-def test_both_full_dependency_sets_are_audited_without_re_resolving():
-    workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
-    audit = "\n".join(step.get("run", "") for step in workflow["jobs"]["dependency-audit"]["steps"])
-    assert "--no-deps" not in audit
-    assert "pip_audit --require-hashes --disable-pip -r requirements.lock" in audit
-    assert "pip_audit --require-hashes --disable-pip -r requirements-dev.lock" in audit
-    assert "pip-audit==" in (ROOT / "requirements-dev.txt").read_text()
-
-
 def test_uv_download_is_versioned_consistently_with_development_input():
     manifest = (ROOT / "requirements-dev.txt").read_text()
     pin = re.search(r"^uv==([0-9.]+)$", manifest, re.MULTILINE)

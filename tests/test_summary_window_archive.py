@@ -340,3 +340,42 @@ def test_forged_archive_source_owner_cannot_authorize_other_story(db, tmp_path, 
     mira = archive.read_summary_block(db, scope(db, "Mira"), query="hidden silver password")
     assert "Mira alone knows the hidden silver password." not in mira.text
     assert "moonstone" in mira.text
+
+
+def test_short_summary_with_thirty_blocks_archives_before_next_part(db, tmp_path):
+    settings = make_test_settings(home=tmp_path)
+    old_row = append(db, "A catalogue of established details.")
+    prior = {"blocks": [{"text": f"Established detail {n}", "visibility": "shared", "known_by": []} for n in range(30)]}
+    assert sum(len(b["text"]) for b in prior["blocks"]) < 9600
+    accepted, _ = _drive(db, settings, prior)
+    assert accepted.complete and accepted.covered_until_rowid == old_row
+    new_row = append(db, "A new promise establishes a fresh fact.")
+    result, calls = _drive(
+        db, settings, {"blocks": [{"text": "The new promise is binding.", "visibility": "shared", "known_by": []}]}
+    )
+    assert result.complete and result.covered_until_rowid == new_row
+    assert len(calls) == 1
+    assert '"blocks": []' in calls[0][-1]["content"]
+    archived = db.execute(
+        "SELECT through_rowid,blocks_json FROM summary_archive_windows WHERE chat_id='c' AND session_id='s'"
+    ).fetchone()
+    assert archived is not None and archived[0] == old_row
+    assert len(json.loads(archived[1])) == 30
+    assert memory.get_session_summary(db, "c", "s")[0] == "The new promise is binding."
+
+
+def test_twenty_nine_short_blocks_do_not_roll_over_prematurely(db, tmp_path):
+    settings = make_test_settings(home=tmp_path)
+    original = append(db, "A catalogue of twenty-nine established facts.")
+    previous = {"blocks": [{"text": f"Canonical entry {n}", "visibility": "shared", "known_by": []} for n in range(29)]}
+    accepted, _ = _drive(db, settings, previous)
+    assert accepted.complete and accepted.covered_until_rowid == original
+    newer = append(db, "A new promise.")
+    successor = {"text": "The promise remains binding.", "visibility": "shared", "known_by": []}
+    result, calls = _drive(db, settings, {"blocks": [*previous["blocks"], successor]})
+    assert result.complete and result.covered_until_rowid == newer
+    assert len(calls) == 1
+    assert '"blocks": []' not in calls[0][-1]["content"]
+    assert db.execute("SELECT count(*) FROM summary_archive_windows").fetchone()[0] == 0
+    summary, through = memory.get_session_summary(db, "c", "s")
+    assert through == newer and successor["text"] in summary

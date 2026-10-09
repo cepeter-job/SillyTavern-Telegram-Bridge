@@ -6,7 +6,7 @@ import copy
 
 import pytest
 
-from tools.benchmark_python_runtime import _percentile, measure_case
+from tools.benchmark_python_runtime import _percentile, measure_case, run_benchmark
 from tools.compare_python_runtime import compare_reports
 
 
@@ -28,6 +28,17 @@ def test_case_reports_cpu_and_wall_without_payloads() -> None:
     assert result["wall_ms_p95"] >= 0
     assert result["cpu_ms_p95"] >= 0
     assert "synthetic" not in str(result)
+
+
+def test_real_synthetic_bridge_paths_smoke() -> None:
+    """Exercise real builder/compaction/formatter paths with no provider or user data."""
+    report = run_benchmark(iterations=5, warmup=1)
+    assert report["provider_requests_issued"] == 0
+    assert report["production_database_writes"] == 0
+    assert report["raw_prompts_exported"] is False
+    assert report["production_upgrade_authorized"] is False
+    assert set(report["workloads"]) == {"prompt_assembly", "prompt_compaction", "telegram_format"}
+    assert all(result["samples"] == 5 for result in report["workloads"].values())
 
 
 def _fake_report(version: list[int]) -> dict:

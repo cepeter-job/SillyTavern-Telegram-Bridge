@@ -1,0 +1,66 @@
+{
+  "checked_at": "2026-10-09T10:02:29.219393+00:00",
+  "native_telegram_transport": true,
+  "production_story_writes": 0,
+  "client_click_acceptance": false,
+  "checks": {
+    "getMe": {
+      "ok": true
+    },
+    "getWebhookInfo": {
+      "ok": true,
+      "webhook_configured": false,
+      "pending_update_count": 0
+    },
+    "getMyCommands": {
+      "ok": true,
+      "commands": [
+        "start",
+        "help",
+        "cancel",
+        "providers",
+        "character",
+        "narrative",
+        "director",
+        "lightnovel",
+        "session",
+        "sync",
+        "update",
+        "persona",
+        "world",
+        "status",
+        "usage",
+        "edit",
+        "voice",
+        "voice_input",
+        "settings",
+        "stream",
+        "preset",
+        "macro",
+        "stscript",
+        "memory",
+        "npc",
+        "trackers",
+        "check",
+        "remember",
+        "summarize",
+        "databank",
+        "group",
+        "new",
+        "reset",
+        "regen",
+        "swipe",
+        "branch",
+        "prompt",
+        "continue",
+        "retry",
+        "note",
+        "systemprompt",
+        "language",
+        "expression",
+        "imagine",
+        "scene"
+      ]
+    }
+  }
+}

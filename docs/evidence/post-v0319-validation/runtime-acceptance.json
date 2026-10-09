@@ -1,0 +1,19 @@
+{
+  "checked_at": "2026-10-09T09:27:54.157226+00:00",
+  "telegram_readonly": {
+    "getMe": {
+      "ok": false,
+      "error_class": "EndpointPolicyError"
+    },
+    "getWebhookInfo": {
+      "ok": false,
+      "error_class": "EndpointPolicyError"
+    },
+    "getMyCommands": {
+      "ok": false,
+      "error_class": "EndpointPolicyError"
+    }
+  },
+  "production_story_writes": 0,
+  "client_click_acceptance": false
+}

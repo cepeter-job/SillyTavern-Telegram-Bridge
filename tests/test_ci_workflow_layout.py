@@ -227,7 +227,7 @@ def test_playwright_cache_is_lock_scoped_without_skipping_browser_dependencies()
     jobs = workflow_documents()["ci.yml"]["jobs"]
     smoke_steps = jobs["miniapp-smoke"]["steps"]
     cache = next(step for step in smoke_steps if step.get("id") == "playwright-browsers-cache")
-    assert cache["uses"] == "actions/cache@caa296126883cff596d87d8935842f9db880ef25"
+    assert cache["uses"] == "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
     assert cache["with"]["path"] == "~/.cache/ms-playwright"
     key = cache["with"]["key"]
     assert "runner.os" in key and "runner.arch" in key

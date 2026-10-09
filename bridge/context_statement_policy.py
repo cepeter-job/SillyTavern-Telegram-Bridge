@@ -44,7 +44,7 @@ def split_complete_sentences(text: str) -> tuple[tuple[int, int], ...] | None:
         paragraphs = []
         start = 0
         for match in re.finditer(r"\n+", text):
-            if text[start:match.start()].strip():
+            if text[start : match.start()].strip():
                 paragraphs.append((start, match.start()))
             start = match.end()
         if text[start:].strip():
@@ -88,9 +88,7 @@ def _span(row: HybridRow, start: int, end: int) -> StatementSpan:
     return StatementSpan(start, end, exact, hashlib.sha256(exact.encode("utf-8")).hexdigest())
 
 
-def validate_statement_receipts(
-    rows: tuple[HybridRow, ...], receipts: StatementSelection
-) -> bool:
+def validate_statement_receipts(rows: tuple[HybridRow, ...], receipts: StatementSelection) -> bool:
     """Recompute exact substrings and SHA256 against authenticated history."""
     prior = -1
     for index, spans in receipts.selected:
@@ -103,7 +101,7 @@ def validate_statement_receipts(
                 not isinstance(span, StatementSpan)
                 or not 0 <= span.start < span.end <= len(row.text)
                 or span.start < last
-                or row.text[span.start:span.end] != span.text
+                or row.text[span.start : span.end] != span.text
                 or hashlib.sha256(span.text.encode("utf-8")).hexdigest() != span.sha256
             ):
                 raise ValueError("statement_source_receipt_invalid")
@@ -112,9 +110,7 @@ def validate_statement_receipts(
     return True
 
 
-def select_statement_spans(
-    rows: tuple[HybridRow, ...], query: str, options: HybridOptions
-) -> StatementSelection:
+def select_statement_spans(rows: tuple[HybridRow, ...], query: str, options: HybridOptions) -> StatementSelection:
     """Select chronological exact critical spans with local referents."""
     if len(rows) <= options.recent_turns + 3:
         raise ValueError("statement_insufficient_older_history")
@@ -132,10 +128,7 @@ def select_statement_spans(
             overlap = len(relevance_terms(rows[index].text[start:end]) & terms) if terms else 0
             if overlap:
                 scored.append((overlap, index, ordinal))
-    relevant = {
-        (index, ordinal)
-        for _, index, ordinal in sorted(scored, reverse=True)[:options.relevant_turns]
-    }
+    relevant = {(index, ordinal) for _, index, ordinal in sorted(scored, reverse=True)[: options.relevant_turns]}
     protected: dict[int, set[int]] = {}
     full_turns: set[int] = {0}
     critical_count = 0
@@ -169,13 +162,16 @@ def select_statement_spans(
     char_count = sum(span.end - span.start for _, items in selected for span in items)
     if span_count > MAX_SPANS or char_count > MAX_STATEMENT_CHARS:
         raise ValueError("statement_mandatory_source_bound")
-    result = StatementSelection(tuple(selected), {
-        "source_statement_spans": span_count,
-        "source_statement_characters": char_count,
-        "critical_statement_spans": critical_count,
-        "query_statement_matches": len(relevant),
-        "recent_verbatim_turns": options.recent_turns,
-        "older_turns_with_kept_statements": len(selected),
-    })
+    result = StatementSelection(
+        tuple(selected),
+        {
+            "source_statement_spans": span_count,
+            "source_statement_characters": char_count,
+            "critical_statement_spans": critical_count,
+            "query_statement_matches": len(relevant),
+            "recent_verbatim_turns": options.recent_turns,
+            "older_turns_with_kept_statements": len(selected),
+        },
+    )
     validate_statement_receipts(rows, result)
     return result

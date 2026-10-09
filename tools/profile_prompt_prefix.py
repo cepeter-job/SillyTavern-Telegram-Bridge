@@ -19,7 +19,6 @@ if str(ROOT) not in sys.path:
 
 from bridge.prompt_prefix_profile import PrefixProfiler  # noqa: E402
 from bridge.prompt_profile_snapshot import MAX_REQUEST_BYTES  # noqa: E402
-from tools.prompt_prefix_demo import demo_records  # noqa: E402
 
 MAX_INPUT_RECORDS = 512
 MAX_INPUT_BYTES = 32_000_000
@@ -82,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         profiler = PrefixProfiler(args.window, args.max_cohorts, args.chars_per_token)
         if args.demo:
+            from tools.prompt_prefix_demo import demo_records
+
             with tempfile.TemporaryDirectory(prefix="sttb-prefix-demo-") as directory:
                 _observe(profiler, demo_records(Path(directory)))
         else:

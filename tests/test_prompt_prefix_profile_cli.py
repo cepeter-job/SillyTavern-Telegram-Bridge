@@ -100,3 +100,24 @@ def test_raw_json_request_input_does_not_get_loaded_via_symlink(tmp_path):
     link = tmp_path / "link.jsonl"
     link.symlink_to(source)
     assert cli().main(["--samples", str(link), "--output", str(tmp_path / "out")]) != 0
+
+
+def test_capture_cli_does_not_import_runtime_or_provider_stack():
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    probe = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import tools.profile_prompt_prefix; "
+            "assert 'bridge.generation' not in sys.modules; "
+            "assert 'bridge.provider_port' not in sys.modules",
+        ],
+        cwd=Path(__file__).parents[1],
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert probe.returncode == 0, probe.stderr

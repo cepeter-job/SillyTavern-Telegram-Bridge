@@ -181,13 +181,13 @@ def snapshot(request: dict, scope: dict, usage: dict | None, key: bytes) -> Prom
     envelope = {k: v for k, v in request.items() if k != "messages"}
     if len(encoded({**envelope, "messages": wire_messages})) > MAX_REQUEST_BYTES:
         raise ValueError("profile_request_limit")
-    stamps = []
-    sections = []
+    stamps: list[MessageStamp] = []
+    sections: list[SectionStamp] = []
     ordinals: dict[str, int] = {}
     for original, message in zip(messages, wire_messages, strict=True):
         text, non_text = _text(message.get("content"))
         layout = fingerprint(key, "layout", {k: v for k, v in message.items() if k != "content"})
-        chunks = ()
+        chunks: tuple[str, ...] = ()
         if message["role"] in INSTRUCTIONS and isinstance(message.get("content"), str):
             # Only full blocks participate in a partial-prefix lower bound.
             chunks = tuple(

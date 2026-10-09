@@ -223,26 +223,30 @@ def test_secret_scanning_routes_events_without_requiring_unavailable_secrets(
     assert json.loads(replay.stdout) == [licensed_expected, True]
 
 
-def test_playwright_cache_is_lock_scoped_without_skipping_browser_dependencies():
+def test_playwright_browser_dependencies_are_pinned_without_ubuntu_apt_downloads():
     jobs = workflow_documents()["ci.yml"]["jobs"]
-    smoke_steps = jobs["miniapp-smoke"]["steps"]
-    cache = next(step for step in smoke_steps if step.get("id") == "playwright-browsers-cache")
-    assert cache["uses"] == "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
-    assert cache["with"]["path"] == "~/.cache/ms-playwright"
-    key = cache["with"]["key"]
-    assert "runner.os" in key and "runner.arch" in key
-    assert "hashFiles('tests/miniapp-browser/package-lock.json')" in key
-    assert "restore-keys" not in cache["with"]
-    install = next(step for step in smoke_steps if step.get("name", "").startswith("Install pinned Chromium"))
-    assert smoke_steps.index(cache) < smoke_steps.index(install)
-    assert "if" not in install
-    assert 'install --with-deps "$BROWSER_ENGINE"' in install["run"]
-    assert install["env"]["BROWSER_ENGINE"] == "${{ matrix.browser }}"
-    assert jobs["miniapp-smoke"]["strategy"]["matrix"]["browser"] == ["chromium", "webkit"]
-    report = next(step for step in smoke_steps if step.get("name") == "Report browser cache hit")
-    assert "steps.playwright-browsers-cache.outputs.cache-hit" in report["env"]["PLAYWRIGHT_CACHE_HIT"]
+    smoke = jobs["miniapp-smoke"]
+    assert smoke["container"]["image"] == (
+        "mcr.microsoft.com/playwright@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27"
+    )
+    assert "--ipc=host" in smoke["container"]["options"]
+    smoke_steps = smoke["steps"]
+    assert smoke["strategy"]["matrix"]["browser"] == ["chromium", "webkit"]
+    assert not any(step.get("id") == "playwright-browsers-cache" for step in smoke_steps)
+    assert not any(step.get("name") == "Report browser cache hit" for step in smoke_steps)
+
+    verify = next(step for step in smoke_steps if step.get("name") == "Verify image-bundled Playwright browsers")
+    assert "if" not in verify
+    assert verify["env"]["BROWSER_ENGINE"] == "${{ matrix.browser }}"
+    assert "PLAYWRIGHT_BROWSERS_PATH" in verify["run"]
+    assert "existsSync" in verify["run"]
+    assert "1.63.0" in verify["run"]
+    assert "install --with-deps" not in "\n".join(step.get("run", "") for step in smoke_steps)
+    assert "apt-get" not in "\n".join(step.get("run", "") for step in smoke_steps)
+
     node = next(step for step in smoke_steps if step.get("uses", "").startswith("actions/setup-node@"))
     assert node["with"]["cache"] == "npm"
+    assert "npm ci --prefix tests/miniapp-browser" in "\n".join(step.get("run", "") for step in smoke_steps)
     for name in ("python-tests", "miniapp-smoke", "dependency-audit", "static-analysis"):
         uv = next(step for step in jobs[name]["steps"] if step.get("uses", "").startswith("astral-sh/setup-uv@"))
         assert uv["with"]["enable-cache"] is True

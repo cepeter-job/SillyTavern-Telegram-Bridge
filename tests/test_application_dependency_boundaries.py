@@ -77,10 +77,14 @@ def test_telegram_has_no_application_command_backedge():
 
 
 def test_telegram_runtime_requires_download_transport():
+    from dataclasses import MISSING
+
     from bridge.composition import TelegramRuntime
 
     assert "download_file" in TelegramRuntime.__dataclass_fields__
-    assert TelegramRuntime.__dataclass_fields__["download_file"].default.__class__.__name__ == "_MISSING_TYPE"
+    # Dataclasses' MISSING sentinel changes its type name in Python 3.15.
+    # Identity is the stable contract: the field must still be required.
+    assert TelegramRuntime.__dataclass_fields__["download_file"].default is MISSING
 
 
 def _image_services(download_file, sent):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import builtins
+import sys
 import unittest
 from pathlib import Path
 
@@ -180,12 +181,20 @@ class ApplicationImportBoundaryTests(SettingsTestCase):
     def test_application_modules_have_no_implicit_runtime_globals(self):
         owners = _owner_index()
         builtin_names = set(dir(builtins))
+        # Python 3.15 adds this compiler-provided annotations helper to
+        # references under postponed annotations. It is not a user-owned
+        # dependency or an implicit bridge runtime service.
+        compiler_globals = {"__conditional_annotations__"} if sys.version_info >= (3, 15) else set()
         failures = []
         for filename in APPLICATION_BOUNDARY_FILES:
             source = (BRIDGE_DIR / filename).read_text(encoding="utf-8")
             bound = _module_bound_names(source)
             unresolved = sorted(
-                referenced_globals(source, filename) - bound - builtin_names - {"__file__", "__name__", "__package__"}
+                referenced_globals(source, filename)
+                - bound
+                - builtin_names
+                - {"__file__", "__name__", "__package__"}
+                - compiler_globals
             )
             if unresolved:
                 detail = []

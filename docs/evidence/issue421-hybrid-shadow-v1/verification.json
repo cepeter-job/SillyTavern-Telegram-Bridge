@@ -1,0 +1,26 @@
+{
+  "code_commit": "11d1a9f902d2ec019f780d5b500590a9a908331e",
+  "base_commit": "98570bff313a120bbb83b16279ac7a5af32c4605",
+  "implementation_sha256": "ad70c539be72d1a38892195abc6426328efe8bf40f4b795984f4ba3bbc9cdf0b",
+  "verified_at_utc": "2026-10-09T08:45:51.418408+00:00",
+  "local_regression_tests": 204,
+  "local_subtests": 65,
+  "mypy_typed_files": 174,
+  "ruff_lint": "passed",
+  "ruff_format": "passed",
+  "architecture_cycles": 0,
+  "module_size_gate": "passed",
+  "leak_scan_high_severity": 0,
+  "module_reference_audit": "passed",
+  "scope": "Native source, hybrid selector, runtime, offline CLI and existing context/history/dispatch/compaction/post-history regressions",
+  "independent_review": "not_performed; PR review required",
+  "provider_requests": 0,
+  "production_changed": false,
+  "prior_pr_467_commit": "53ab904e015ad9c1996293231498b0c62b6387e2",
+  "human_review_or_semantic_quality_pass": false,
+  "production_activation_allowed": false,
+  "artifacts": {
+    "synthetic-estimates.json": "ce715abf25a13245b496c44ee10b9d14f9e07e29e26b3bf62e783b19b6d0909c",
+    "live-history-metadata.json": "73710469c98c599b25bb8d48ea75c8465d833fadf224a4f629b4967cb08a4dba"
+  }
+}

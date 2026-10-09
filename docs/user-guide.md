@@ -747,7 +747,16 @@ protected from deletion.
 
 `/systemprompt` selects native JSON or TXT files in the configured `sysprompt`
 directory. JSON uses `name` and `content`; native `post_history` fields are
-currently ignored. `/note` sets a session Author's Note. Menus and status show
+currently ignored. Full SillyTavern **Chat Completion presets** are not supported:
+files containing the reserved `prompts` or `prompt_order` keys are skipped with
+an operator warning, rather than partially importing their utility instructions.
+Keep these exports outside the native prompt directory. To adapt a writing
+profile manually, use plain TXT or a native JSON prompt; copying the full export
+does not resolve its toggles, ordering, variables or conditional macros. Invalid
+JSON or unreadable UTF-8 files are skipped without hiding valid prompts.
+
+`/preset` saves generation settings, not a modular writing preset. `/note` sets
+a session Author's Note. Menus and status show
 prompt labels rather than their bodies. Paths and example configuration are in
 [Configuration](configuration.md#paths-and-native-sillytavern-data).
 

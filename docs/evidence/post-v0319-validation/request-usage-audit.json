@@ -1,0 +1,16 @@
+{
+  "exported_at": "2026-10-09T10:39:32.608197+00:00",
+  "complete_inventory": true,
+  "request_payloads_match_frozen_plan": true,
+  "usage_matches_all_budget_blocks": true,
+  "frozen_protocol_hashes_unchanged": true,
+  "published_requests_exclude_credentials": true,
+  "inference_requests": 152,
+  "story_requests": 76,
+  "automated_judge_requests": 76,
+  "metadata_GET_requests_separate": true,
+  "known_input_tokens": 235024,
+  "known_output_tokens": 31483,
+  "human_pairs": 38,
+  "private_quota_omitted": true
+}

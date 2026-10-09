@@ -1,0 +1,1184 @@
+{
+  "schema_version": 1,
+  "review_completed": false,
+  "pairs": [
+    {
+      "pair_id": "pair-35ecdc264159",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-79945a3878c9",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-87bc78c37718",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-60b52dfae886",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-0c4c0e79467e",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-8c4dfec623df",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-f7c2ba3447c0",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-e5c343dd964a",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-d7eae261f251",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-1236f8506cb4",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-c903b2c1f988",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-48b887ada698",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-f5863fdcd848",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-3e9e7c528d1b",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-67b721873c83",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-9e7815d5832e",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-dd0282235a1f",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-b037daad8f09",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-bae595a99008",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-86618ba285ae",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-dff1190abf78",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-dc7156510d4e",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-3239f9158b63",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-134d6e73e23b",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-25d9ea4bc0e3",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-1a98cc71dd57",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-525e9639f9a0",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-03cb3e378f38",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-b79f7befc52f",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-a071cda173e0",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-c4e16b768c1f",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-c4e69d8fb8a6",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-d9b528d9ca56",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-3870e15fd3b0",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-7a250b382683",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-e5db988cec4f",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-aecfb9489b7d",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    },
+    {
+      "pair_id": "pair-16275b12d0f8",
+      "A": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "B": {
+        "scores": {
+          "facts": null,
+          "causality": null,
+          "agency": null,
+          "knowledge": null,
+          "voice": null,
+          "dialogue": null,
+          "handoff": null,
+          "format_language": null
+        },
+        "hard_failures": null
+      },
+      "preference": null,
+      "reviewer": null
+    }
+  ]
+}

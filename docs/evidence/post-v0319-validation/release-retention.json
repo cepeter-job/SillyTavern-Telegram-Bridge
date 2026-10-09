@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "old_releases": 12,
+  "old_assets": 48,
+  "old_metadata_bodies_unchanged": true,
+  "old_tag_objects_match_archived_refs": true,
+  "old_assets_rehashed": true,
+  "latest_tag": "v0.3.019",
+  "latest_tag_object": "70b5a2245917b89f88ad54ff6d64df4353a26727",
+  "latest_signature_verified": true,
+  "latest_assets_redownloaded_verified": true,
+  "changelog_backfill_main": "b3f98b3a806938b98fa8a928b98e63a100bc82b7",
+  "legacy_changelog_exact": true,
+  "deleted_releases": [
+    "v0.3.007",
+    "v0.3.008",
+    "v0.3.009",
+    "v0.3.010",
+    "v0.3.011",
+    "v0.3.012",
+    "v0.3.013",
+    "v0.3.014",
+    "v0.3.015",
+    "v0.3.016",
+    "v0.3.017",
+    "v0.3.018"
+  ],
+  "deleted_tags": [
+    "v0.3.007",
+    "v0.3.008",
+    "v0.3.009",
+    "v0.3.010",
+    "v0.3.011",
+    "v0.3.012",
+    "v0.3.013",
+    "v0.3.014",
+    "v0.3.015",
+    "v0.3.016",
+    "v0.3.017",
+    "v0.3.018"
+  ],
+  "started_at": "2026-10-09T10:24:45.636263+00:00",
+  "actions": [
+    {
+      "tag": "v0.3.007",
+      "release_id": 405955240,
+      "expected_tag_object": "35b68b7f6e7e1f93c629d3231413bd95df03ae2b",
+      "tag_deleted": true,
+      "release_deleted": true
+    },
+    {
+      "tag": "v0.3.008",
+      "release_id": 406448394,
+      "expected_tag_object": "803e0a6c5fca1d8094fffa5d087ec769e0aaa56b",
+      "tag_deleted": true,
+      "release_deleted": true
+    },
+    {
+      "tag": "v0.3.009",
+      "release_id": 406511163,
+      "expected_tag_object": "8f26fe21267408ebf701fdf7fc914dcf57695eb3",
+      "tag_deleted": true,
+      "release_deleted": true
+    },
+    {
+      "tag": "v0.3.010",
+      "release_id": 406659596,
+      "expected_tag_object": "9d401fedae5f3c838ec99792220da459a03099c4",
+      "tag_deleted": true,
+      "release_deleted": true
+    },
+    {
+      "tag": "v0.3.011",
+      "release_id": 406702694,
+      "expected_tag_object": "f574d668d37bae36388f2978ab37d87ef7ca9b27",
+      "tag_deleted": true,
+      "release_deleted": true
+    },
+    {
+      "tag": "v0.3.012",
+      "release_id": 406879747,
+      "expected_tag_object": "711b0aaf216e80c0bd84fb5a697250cff4ccd7d5",
+      "tag_deleted": true,
+      "release_deleted": true
+    },
+    {
+      "tag": "v0.3.013",
+      "release_id": 407348097,
+      "expected_tag_object": "44c17f0866ac86c6517bca186bc99e042f24615b",
+      "tag_deleted": true,
+      "release_deleted": true
+    },
+    {
+      "tag": "v0.3.014",
+      "release_id": 407408871,
+      "expected_tag_object": "e4d4772271fa8fbf76a684fe56f250c995b11b96",
+      "tag_deleted": true,
+      "release_deleted": true
+    },
+    {
+      "tag": "v0.3.015",
+      "release_id": 407424626,
+      "expected_tag_object": "c30a3257aa598a5fc51448171aac5d86db04b098",
+      "tag_deleted": true,
+      "release_deleted": true
+    },
+    {
+      "tag": "v0.3.016",
+      "release_id": 407435849,
+      "expected_tag_object": "11b5420bae2cd5abd0aac81e642877ec0f9fc936",
+      "tag_deleted": true,
+      "release_deleted": true
+    },
+    {
+      "tag": "v0.3.017",
+      "release_id": 407457931,
+      "expected_tag_object": "7b073547bda4edd4df6bfae3dcd3412502437452",
+      "tag_deleted": true,
+      "release_deleted": true
+    },
+    {
+      "tag": "v0.3.018",
+      "release_id": 407490554,
+      "expected_tag_object": "be42746fb8960aa8f85369b48e3120efbb073c0e",
+      "tag_deleted": true,
+      "release_deleted": true
+    }
+  ],
+  "completed": true,
+  "remaining_release_tags": [
+    "v0.3.019"
+  ],
+  "remaining_remote_tag_refs": [
+    "70b5a2245917b89f88ad54ff6d64df4353a26727\trefs/tags/v0.3.019",
+    "4e3b31af8c6f8c9f81d97cf09051a2ba31477b03\trefs/tags/v0.3.019^{}"
+  ],
+  "finished_at": "2026-10-09T10:25:58.023433+00:00"
+}

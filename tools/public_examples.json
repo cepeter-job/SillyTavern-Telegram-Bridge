@@ -3,6 +3,18 @@
   "sha256": {
     "config/system_prompts.example/balanced.txt": "650d90653881ce076d30c86b8becda89223ccb2a2a406fed647cde39c8a082f4",
     "config/system_prompts.example/concise.txt": "e23471efaa11f0095b63ab3f96890eaaff6aa1dc15c8b28592f65ac8aab2f1af",
-    "config/system_prompts.example/natural.txt": "1c9ac9e6611595ff089ad03881742e77db54de5a91b7a7c58630adfdd29daf45"
+    "config/system_prompts.example/natural.txt": "1c9ac9e6611595ff089ad03881742e77db54de5a91b7a7c58630adfdd29daf45",
+    "config/system_prompts.example/writer_continuity.json": "6361100e9122eb149ff31882a11f4a5a9f93b9d4f15f5d4f179acc55ada82dc2",
+    "config/system_prompts.example/writer_dialogue.json": "1f26dbe7ada60d1440f96cd0dc7501466ae2b6b43fcf2be0fcc06c9fefa77f7e",
+    "config/system_prompts.example/writer_ensemble.json": "91fde133e7b57bb714fd1b39285394e725a1b6cebdbc5e7b618de3b9c3272ae2",
+    "config/system_prompts.example/writer_magical_realism.json": "6876abf7ecbe92ebd6d023dcbd3c1b33021b578741e8fad631f2003a469bfc9b"
+  },
+  "additional_source_commits": {
+    "f43ce04090ac80ce48b823e452da87d137aec252": [
+      "config/system_prompts.example/writer_continuity.json",
+      "config/system_prompts.example/writer_dialogue.json",
+      "config/system_prompts.example/writer_ensemble.json",
+      "config/system_prompts.example/writer_magical_realism.json"
+    ]
   }
 }

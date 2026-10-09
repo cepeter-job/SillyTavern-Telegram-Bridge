@@ -1,10 +1,20 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from types import SimpleNamespace
+
+import pytest
 
 from bridge.job_store import finish_job
 from bridge.schema import initialize_database_schema
+
+
+@pytest.fixture
+def callback_db():
+    """Close test-owned SQLite handles even when callback assertions fail."""
+    with closing(sqlite3.connect(":memory:")) as connection:
+        yield connection
 
 
 def _callback(data="characteroptimizeauto:token", *, sender="100", message_id=77):
@@ -89,10 +99,10 @@ def _services(jobs, requests):
     )
 
 
-def test_callback_ingress_marks_owned_panel_busy_before_submit(monkeypatch):
+def test_callback_ingress_marks_owned_panel_busy_before_submit(monkeypatch, callback_db):
     import bridge.update_callback_routing as routing
 
-    db = sqlite3.connect(":memory:")
+    db = callback_db
     jobs, requests, answers = _Jobs(), [], []
     monkeypatch.setattr(routing, "route_light_novel_callback", lambda *a, **k: False)
     monkeypatch.setattr(routing, "is_help_callback", lambda _data: False)
@@ -124,10 +134,10 @@ def test_callback_ingress_marks_owned_panel_busy_before_submit(monkeypatch):
     }
 
 
-def test_callback_ingress_rejects_second_click_and_foreign_owner_before_enqueue(monkeypatch):
+def test_callback_ingress_rejects_second_click_and_foreign_owner_before_enqueue(monkeypatch, callback_db):
     import bridge.update_callback_routing as routing
 
-    db = sqlite3.connect(":memory:")
+    db = callback_db
     answers = []
     monkeypatch.setattr(routing, "route_light_novel_callback", lambda *a, **k: False)
     monkeypatch.setattr(routing, "is_help_callback", lambda _data: False)
@@ -149,10 +159,10 @@ def test_callback_ingress_rejects_second_click_and_foreign_owner_before_enqueue(
     assert answers[-1] == "Already processing…"
 
 
-def test_busy_button_is_answered_without_enqueuing(monkeypatch):
+def test_busy_button_is_answered_without_enqueuing(monkeypatch, callback_db):
     import bridge.update_callback_routing as routing
 
-    db = sqlite3.connect(":memory:")
+    db = callback_db
     jobs, answers = _Jobs(), []
     monkeypatch.setattr(routing, "route_light_novel_callback", lambda *a, **k: False)
     monkeypatch.setattr(routing, "answer_callback", lambda _t, _id, text="": answers.append(text))
@@ -188,10 +198,10 @@ def test_send_panel_request_treats_not_modified_as_idempotent(monkeypatch):
         db.close()
 
 
-def test_busy_panel_restore_reinstates_original_keyboard_when_handler_did_not_rerender(monkeypatch):
+def test_busy_panel_restore_reinstates_original_keyboard_when_handler_did_not_rerender(monkeypatch, callback_db):
     import bridge.panel_singleflight as singleflight
 
-    db = sqlite3.connect(":memory:")
+    db = callback_db
     callback = _callback()
     callback["_panel_busy_revision"] = 123.0
     callback["_panel_original_reply_markup"] = callback["message"]["reply_markup"]
@@ -219,10 +229,10 @@ def test_busy_panel_restore_reinstates_original_keyboard_when_handler_did_not_re
     ]
 
 
-def test_busy_panel_restore_does_not_overwrite_newer_panel_render(monkeypatch):
+def test_busy_panel_restore_does_not_overwrite_newer_panel_render(monkeypatch, callback_db):
     import bridge.panel_singleflight as singleflight
 
-    db = sqlite3.connect(":memory:")
+    db = callback_db
     callback = _callback()
     callback["_panel_busy_revision"] = 123.0
     callback["_panel_original_reply_markup"] = callback["message"]["reply_markup"]

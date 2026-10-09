@@ -5,7 +5,9 @@ import json
 import pytest
 
 from tools.evaluate_statement_context import (
-    CODE_FILES, build_report, reconstruct_synthetic_prompt,
+    CODE_FILES,
+    build_report,
+    reconstruct_synthetic_prompt,
 )
 
 
@@ -26,7 +28,10 @@ def test_frozen_six_case_report_preserves_controls_and_activation_off(tmp_path):
     for name in ("unsupported_script", "short_history"):
         assert cases[name]["estimated_reduction_fraction"] == 0
     assert cases["large_character_card"]["fixed_prompt_tokens"] > cases["unique_dialogue"]["fixed_prompt_tokens"]
-    assert cases["large_character_card"]["estimated_reduction_fraction"] < cases["unique_dialogue"]["estimated_reduction_fraction"]
+    assert (
+        cases["large_character_card"]["estimated_reduction_fraction"]
+        < cases["unique_dialogue"]["estimated_reduction_fraction"]
+    )
     assert sum(item["weight"] for item in cases.values()) == pytest.approx(1.0)
     assert all(item["dispatch_uses_full_history"] for item in cases.values())
     assert "PRIVATE_HYBRID_CANARY" not in json.dumps(report)

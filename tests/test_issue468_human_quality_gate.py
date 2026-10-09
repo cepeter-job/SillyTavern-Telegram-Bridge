@@ -1,6 +1,7 @@
 """Reviewer-submission structural gate. Does not judge the writing or certify human independence."""
 
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -38,7 +39,7 @@ def valid_inputs():
         "no_access_to_assignments_or_previous_scores": True,
         "reviewed_all_pairs": True,
         "signed_name": "Second Human Reviewer",
-        "reviewed_at_utc": "2026-10-10T09:00:00Z",
+        "reviewed_at_utc": (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat().replace("+00:00", "Z"),
     }
     return packet, rows, declaration
 
@@ -234,3 +235,20 @@ def test_reviewer_facing_instructions_omit_unblinding_hints_and_previous_outcome
     assert template["reviewer_id"] == ""
     assert template["signed_name"] == ""
     assert template["reviewed_at_utc"] == ""
+
+
+def test_future_dated_signed_declaration_is_not_accepted():
+    packet, rows, declaration = valid_inputs()
+    declaration["reviewed_at_utc"] = (
+        (datetime.now(timezone.utc) + timedelta(hours=7)).isoformat().replace("+00:00", "Z")
+    )
+    expect_invalid(packet, rows, declaration, "future_reviewer_declaration")
+
+
+def test_reasonable_clock_skew_within_five_minutes_is_allowed():
+    packet, rows, declaration = valid_inputs()
+    declaration["reviewed_at_utc"] = (
+        (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat().replace("+00:00", "Z")
+    )
+    outcome = evaluate(packet, rows, declaration)
+    assert outcome["human_quality_approved"] is False

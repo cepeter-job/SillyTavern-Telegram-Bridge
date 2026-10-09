@@ -13,7 +13,7 @@ import hashlib
 import json
 import sys
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -102,6 +102,10 @@ def validate_submission(
         _failure("missing_reviewer_provenance", "review date must be ISO-8601")
     if stamp.utcoffset() is None or stamp.utcoffset().total_seconds() != 0:
         _failure("missing_reviewer_provenance", "review date must carry UTC timezone")
+    # A local Jakarta clock mislabeled as Z can place a purported signature
+    # seven hours in the future. Never rewrite a reviewer-signed timestamp.
+    if stamp > datetime.now(timezone.utc) + timedelta(minutes=5):
+        _failure("future_reviewer_declaration", "signed UTC timestamp is in the future; reviewer must correct it")
     reviewer_id = attestation["reviewer_id"].strip()
     if any(row.get("independent_reviewer_id") != reviewer_id for row in rows):
         _failure("reviewer_mismatch", "the signed reviewer ID must match every pair")

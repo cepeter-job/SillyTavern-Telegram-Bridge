@@ -13,7 +13,7 @@ One earlier user-provided sheet scored the 16 pairs and identified **three hard-
 - [ ] A *different human* from the original rater and the implementer completes and signs the declaration, and their provenance is independently verified off-ChatGPT.
 - [ ] An unchanged blinded 16-pair packet was used, with 16 unique pair IDs and complete Yes/No/Unclear ratings for both outputs in all five dimensions.
 - [ ] Exact error quotes occur in the corresponding frozen A or B outputs. Every pair has a justified A/B/Tie/Unresolved preference and consistent reviewer ID.
-- [ ] Preserve the signed response and hash it **before** unblinding. Do not publish identifiable reviewer information in the public PR.
+- [ ] Preserve the signed response and hash it **before** unblinding. Verify the signed timestamp uses real UTC (not local WIB mislabeled with `Z`) and is not in the future; never silently correct someone else's signature. Do not publish identifiable reviewer information in the public PR.
 - [ ] Run the structure-only validator below. Any **Unclear** or **Unresolved** item is examined by the owner rather than silently treated as No.
 - [ ] Only after recording the blind judgments, privately unblind the mapping and count failures by variant; investigate causal/agency/knowledge errors individually.
 - [ ] Document a human decision with reviewer provenance: **APPROVE MORE TESTING / REJECT / INCONCLUSIVE**. Do not use “production approved” from this small synthetic sample.

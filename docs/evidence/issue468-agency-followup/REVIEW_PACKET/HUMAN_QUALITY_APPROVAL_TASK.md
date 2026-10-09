@@ -29,7 +29,7 @@ For every pair also select **A**, **B**, **Tie** or **Unresolved** in `preferenc
 1. Read and score **all 16 pairs** without looking up which output was produced by which setting.
 2. Write the **same reviewer ID** in `independent_reviewer_id` for each row. An anonymous reviewer code is acceptable if the project owner can verify it privately.
 3. Save the completed scorecard as a CSV with the **original column names and pair IDs**; do not delete any rows.
-4. Complete `REVIEWER_DECLARATION_TEMPLATE.json`: truthfully set each statement to `true` or `false`, enter your reviewer ID, sign or identify yourself, and include the UTC review date. Do not claim independence if uncertain.
+4. Complete `REVIEWER_DECLARATION_TEMPLATE.json`: truthfully set each statement to `true` or `false`, enter your reviewer ID, sign or identify yourself, and include the **actual UTC** review time. **Convert Jakarta/WIB time (UTC+7) to UTC by subtracting seven hours before adding `Z`**; do not label a local clock reading as UTC or supply a time in the future. Do not claim independence if uncertain.
 5. Return **both completed files privately** to the project owner, then refrain from viewing the concealed assignments until the owner confirms receipt.
 
 A submission checker will verify all required fields, pair IDs and copied supporting quotes. **It cannot verify independence or decide narrative quality automatically**. Reviewer contact information should not be committed to a public repository.

@@ -811,10 +811,13 @@ only the image, with no source or revised prompt caption. A provider failure
 does not automatically try another image model. Typing `/imagine <text>` opens
 the panel; it does not bypass it.
 
-Anime automatically adds clean linework, cel shading, polished detail and balanced
-lighting to both Current Scene and Custom Prompt. These quality cues are rendering
-instructions, not a guarantee of output quality or resolution. They use the existing
-style-prefix budget and do not add an extra Utility rewrite to Custom Prompt.
+Anime requests polished, semi-realistic 2D art with clean linework, soft gradient
+cel shading, luminous eyes, glossy hair, smooth skin and vivid colors. These cues
+apply to both Current Scene and Custom Prompt, including Auto and character-reference
+requests. They describe rendering, not fixed characters, clothing, poses or settings;
+your scene and character reference still supply that content. The cues consume part
+of the existing prompt budget and do not add a Utility rewrite to Custom Prompt.
+This is prompt-based art direction, not an exact style-copy guarantee.
 
 Photos with captions can be analyzed by a vision-capable Story model. If the
 selected model does not support vision, the bridge refuses the turn without

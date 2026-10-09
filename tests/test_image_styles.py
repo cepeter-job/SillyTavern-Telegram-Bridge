@@ -163,10 +163,19 @@ def test_unknown_persisted_style_falls_back_to_realism(image_session):
     assert "Style: Realism" in _options_panel(image_session)[0]
 
 
-def _capture_generation(state, monkeypatch, *, transport, visual_prompt="Mira stands beside an oak."):
+def _capture_generation(state, monkeypatch, *, transport, visual_prompt="Mira stands beside an oak.", auto=False):
     requests, photos, utility_messages = [], [], []
     model = "step-image-edit-2" if transport == "reference" else "z-image-turbo"
     image_routing.set_session_image_model(state.db, "chat", "scene", f"images::{model}", app_settings=state.settings)
+    if auto:
+        catalog = state.settings.provider_config_file
+        catalog.write_text(
+            catalog.read_text(encoding="utf-8") + "image_auto:\n"
+            "  text_model: images::z-image-turbo\n"
+            "  reference_model: images::step-image-edit-2\n",
+            encoding="utf-8",
+        )
+        image_routing.set_session_image_model(state.db, "chat", "scene", "auto", app_settings=state.settings)
     reference = ImageReference(b"reference-png", "image/png", "Mira.png") if transport == "reference" else None
     monkeypatch.setattr(image_generation, "load_character_reference", lambda *args, **kwargs: reference)
     monkeypatch.setattr(image_generation, "send_text", lambda *args: [71])
@@ -194,6 +203,7 @@ def _capture_generation(state, monkeypatch, *, transport, visual_prompt="Mira st
 )
 @pytest.mark.parametrize("action", ["scene", "custom"])
 @pytest.mark.parametrize("transport", ["text", "reference"])
+@pytest.mark.parametrize("selection", ["manual", "auto"])
 def test_selected_style_reaches_image_provider_for_both_generation_modes(
     image_session,
     monkeypatch,
@@ -201,10 +211,13 @@ def test_selected_style_reaches_image_provider_for_both_generation_modes(
     marker,
     action,
     transport,
+    selection,
 ):
     state = image_session
     set_meta(state.db, "image_style:chat:scene", style)
-    requests, photos, utility_messages, provider = _capture_generation(state, monkeypatch, transport=transport)
+    requests, photos, utility_messages, provider = _capture_generation(
+        state, monkeypatch, transport=transport, auto=selection == "auto"
+    )
     before = state.db.execute("SELECT role,content FROM messages ORDER BY rowid").fetchall()
     if action == "scene":
         image_generation.handle_imagine_scene(
@@ -245,7 +258,16 @@ def test_selected_style_reaches_image_provider_for_both_generation_modes(
         if action == "custom":
             assert utility_messages == []
     if style == "anime":
-        for quality_cue in ("clean linework", "cel shading", "polished detail", "balanced lighting"):
+        for quality_cue in (
+            "semi-realistic",
+            "2d art",
+            "clean linework",
+            "soft gradient cel shading",
+            "luminous eyes",
+            "glossy hair",
+            "smooth skin",
+            "vivid colors",
+        ):
             assert quality_cue in prompt.casefold()
             if action == "scene":
                 assert quality_cue in utility_messages[0][0]["content"].casefold()
@@ -274,6 +296,8 @@ def test_custom_input_hint_matches_style_and_reference_prompt_budget(
     assert style in hint.casefold()
     allowed = int(hint.split("1–", 1)[1].split(" ", 1)[0].replace(",", ""))
     assert 0 < allowed < model_limit
+    if style == "anime" and transport == "reference":
+        assert allowed >= 32
     image_generation.handle_imagine_custom_prompt(
         state.db,
         "token",

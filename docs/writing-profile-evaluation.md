@@ -1,6 +1,6 @@
 # Writing-profile evaluation protocol
 
-Status: **offline assembly checks only; no provider comparison has been run**.
+Status: the original offline protocol is preserved below. A completed, bounded v0.3.019 subscription-only pilot is recorded in [post-release results](evidence/post-v0319-validation/RESULTS.md). It does not approve a new default or replace independent human review.
 This protocol does not assert semantic correctness from a unit test or declare
 any profile better than an existing user prompt.
 

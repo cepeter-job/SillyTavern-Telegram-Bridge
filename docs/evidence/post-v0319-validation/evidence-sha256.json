@@ -1,0 +1,12 @@
+{
+  "frozen-trial-plan.json": "4a2951026f36bb665916a657ec5416e8ea54c20435b294a4ee8d1c1609913e92",
+  "provider-observations.json": "e88b011d13abb2dadcb32b92383c0d57136076192c232e657bcaaadb9e54c860",
+  "provider-requests.jsonl": "1181eeb21b3b56ff5f4ba2c6f55bad958a53fc9bafe3dc64437e0da9693e8bb6",
+  "RESULTS.json": "1398447148d989ad4571a0fce1b3e77f14583c80aa75f950d117b0d446a9d94b",
+  "RESULTS.md": "836359938fff4a999c9b3639e8f8e25196435e138d6e96471304811ec24bb2b9",
+  "human-review-packet.json": "badd24458c1a05d9097417ed99d9fb1abfcfd8c0ab80e6b21a9478246d1681cd",
+  "HUMAN_REVIEW.md": "e5c23220cfca23fae5adff63544dda1729fe115f11acaf784b39ad7fd1ab204b",
+  "anonymous-pair-map.json": "2257b3760c4be92e7790a042b296e0088938b688e8a7e0513702f352733eb5d1",
+  "human-score-form.json": "57efc8fb63ad647a9422687fcdde4a9a8e88f004c261bd8663c4475399bbd363",
+  "request-usage-audit.json": "8b07088ad7233a55580f0f32b640f351d04f42bb0120732050b7dbf68222a0fb"
+}

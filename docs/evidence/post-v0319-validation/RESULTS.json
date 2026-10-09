@@ -1,0 +1,2680 @@
+{
+  "schema_version": 1,
+  "plan_sha256": "27b6262f810a56d4e17cfcd54c4b56df60910a66be4f98e3f6b6daf6e77862aa",
+  "source_commit": "4e3b31af8c6f8c9f81d97cf09051a2ba31477b03",
+  "selected_model": "nano-gpt::z-ai/glm-5.2",
+  "provider_requests": 152,
+  "planned_provider_requests": 152,
+  "complete": true,
+  "stopped": false,
+  "known_input_tokens": 235024,
+  "known_output_tokens": 31483,
+  "unknown_usage": false,
+  "cached_usage_unknown_requests": 0,
+  "response_models": [
+    "z-ai/glm-5.2"
+  ],
+  "trials": [
+    {
+      "trial": "writer_continuity",
+      "kind": "writing_profile",
+      "planned_cases": 8,
+      "planned_requests": 32,
+      "recorded_attempts": 32,
+      "successful_requests": 32,
+      "failed_requests": 0,
+      "all_story_pairs_complete": true,
+      "story_input_tokens": {
+        "baseline": 4585,
+        "candidate": 6969
+      },
+      "aggregate_story_reduction_fraction": -0.5199563794983642,
+      "case_weighted_story_reduction_fraction": -0.5220833133759328,
+      "all_experiment_input_tokens": 32918,
+      "all_experiment_output_tokens": 6578,
+      "judge_input_tokens": 21364,
+      "median_observed_latency_seconds": {
+        "baseline": 7.4655000000000005,
+        "candidate": 6.8505
+      },
+      "consensus": {
+        "baseline": 0,
+        "candidate": 0,
+        "tie": 1,
+        "disagreement": 1,
+        "unavailable": 6
+      },
+      "candidate_hard_failure_cases": [
+        "quiet_handoff",
+        "magical_continuity"
+      ],
+      "baseline_hard_failure_cases": [
+        "branch_boundary"
+      ],
+      "all_cases_automated_quality_eligible": false,
+      "cases": [
+        {
+          "case_id": "attempted_action",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 552,
+            "candidate": 850
+          },
+          "measured_input_reduction_fraction": -0.5398550724637681,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "tie",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.0625,
+            "automated_quality_eligible": true,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean resolution of the reach attempt: Rowan blocks without granting success, no user action invented, required facts preserved, formatting correct.",
+                  "evidence": "That stays with me."
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Also clean: Rowan secures the key ring, states process, no success granted or user action invented. Slightly more scene dressing but within limits.",
+                  "evidence": "That stays with me."
+                },
+                "preference": "tie",
+                "presentation_reversed": false
+              },
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean resolution of the reach attempt without granting success or inventing user actions. Preserves locked cupboard and key retention. Rowan acts with appropriate agency.",
+                  "evidence": "\"That stays with me.\" *His tone is flat, not hostile"
+                },
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Also resolves the attempt cleanly, preserves required facts, and avoids forbidden inferences. Slight knowledge edge in narrating Rowan's internal familiarity with past attempts, but stays within reasonable character inference.",
+                  "evidence": "patient wariness of someone who knows exactly what he's guarding"
+                },
+                "preference": "tie",
+                "presentation_reversed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "promise_negation",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 557,
+            "candidate": 855
+          },
+          "measured_input_reduction_fraction": -0.5350089766606823,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 0,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": null,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": []
+          }
+        },
+        {
+          "case_id": "reader_boundary",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 555,
+            "candidate": 853
+          },
+          "measured_input_reduction_fraction": -0.536936936936937,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 0,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": null,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": []
+          }
+        },
+        {
+          "case_id": "quiet_handoff",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 550,
+            "candidate": 848
+          },
+          "measured_input_reduction_fraction": -0.5418181818181818,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "disagreement",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": true,
+            "critical_score_regression": true,
+            "mean_score_delta": -0.5,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Consistent with canon; ordinary cafe exchange, no crisis manufactured, no user interiority invented. Clean handoff with Rowan's question. Minor: narrates Ari's spoken dialogue from the user's prior action, but as connective acknowledgment it stays within bounds.",
+                  "evidence": "\"Your side of it?\""
+                },
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 4,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Consistent with canon; quiet scene, no escalation, no user thoughts invented. Rowan asks a question giving Ari agency. Slight risk: 'You waiting on the same connection as everyone else' lightly presupposes shared context not established, but remains a question rather than a stated fact.",
+                  "evidence": "You waiting on the same connection as everyone else, or just passing through?"
+                },
+                "preference": "tie",
+                "presentation_reversed": true
+              },
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean, in-character reply with proper formatting, no forbidden inferences, and a natural handoff question to Ari.",
+                  "evidence": "You waiting on the same connection as everyone else, or just passing through?"
+                },
+                "candidate": {
+                  "hard_failures": [
+                    "invents Ari's dialogue and actions"
+                  ],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 1,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 3,
+                    "handoff": 4,
+                    "format_language": 4
+                  },
+                  "reason": "Opens by writing Ari's spoken dialogue and physical action, directly violating the prohibition on inventing user dialogue and actions.",
+                  "evidence": "\"Thanks for the seat,\" Ari said, settling into the chair across from Rowan."
+                },
+                "preference": "baseline",
+                "presentation_reversed": false
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "ensemble_offscreen",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 574,
+            "candidate": 872
+          },
+          "measured_input_reduction_fraction": -0.519163763066202,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 1,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.0,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean negotiation scene with Rowan owing Mara an explanation; Ari absent; no user fabrication; proper formatting.",
+                  "evidence": "\"The hauler broke down past Kenswick,\" *Rowan said.*"
+                },
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Solid negotiation scene; Rowan explains delay to Mara; Ari absent; no user fabrication; proper formatting.",
+                  "evidence": "\"Three rotations late,\" Mara said, tapping the edge of her datapad against her palm."
+                },
+                "preference": "tie",
+                "presentation_reversed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "magical_continuity",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 559,
+            "candidate": 857
+          },
+          "measured_input_reduction_fraction": -0.5330948121645795,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 1,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": true,
+            "critical_score_regression": true,
+            "mean_score_delta": -1.0,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Grounds the clock rule in practical traveler behavior without granting control or retconning; stays anchored to user's scene.",
+                  "evidence": "\"Most just add a minute back for every bell they hear during a storm,\""
+                },
+                "candidate": {
+                  "hard_failures": [
+                    "Introduces electronic departure board and conductors' whistles as departure-tracking mechanisms not established in canon, sidestepping the required phenomenon's practical effects"
+                  ],
+                  "scores": {
+                    "facts": 2,
+                    "causality": 3,
+                    "agency": 5,
+                    "knowledge": 3,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Minimizes the established clock phenomenon by introducing an unrelated electronic board as the real departure system, undermining the focus on practical effects of the rain-bell rule.",
+                  "evidence": "\"That one's electronic — runs independent of the old clock up there.\""
+                },
+                "preference": "baseline",
+                "presentation_reversed": false
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "branch_boundary",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 563,
+            "candidate": 861
+          },
+          "measured_input_reduction_fraction": -0.5293072824156306,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 1,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": true,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 1.0,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean current-branch response; no leakage, no invented user interiority, proper formatting.",
+                  "evidence": "\"You said no. I heard it. The offer closes.\""
+                },
+                "baseline": {
+                  "hard_failures": [
+                    "branch_leakage: invents senders and a slip of paper/letter not established in canon; implies discarded-branch infrastructure"
+                  ],
+                  "scores": {
+                    "facts": 3,
+                    "causality": 4,
+                    "agency": 4,
+                    "knowledge": 2,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Introduces unestablished private knowledge about 'people who sent me,' a physical invitation slip, and a second-letter follow-up system, risking discarded-branch leakage.",
+                  "evidence": "\"The people who sent me won't ask why. They already accounted for both answers before I walked over here.\""
+                },
+                "preference": "candidate",
+                "presentation_reversed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "indonesian_continuity",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 675,
+            "candidate": 973
+          },
+          "measured_input_reduction_fraction": -0.4414814814814816,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 0,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": null,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": []
+          }
+        }
+      ]
+    },
+    {
+      "trial": "writer_dialogue",
+      "kind": "writing_profile",
+      "planned_cases": 8,
+      "planned_requests": 32,
+      "recorded_attempts": 32,
+      "successful_requests": 32,
+      "failed_requests": 0,
+      "all_story_pairs_complete": true,
+      "story_input_tokens": {
+        "baseline": 4585,
+        "candidate": 6825
+      },
+      "aggregate_story_reduction_fraction": -0.4885496183206106,
+      "case_weighted_story_reduction_fraction": -0.49054807968208447,
+      "all_experiment_input_tokens": 32306,
+      "all_experiment_output_tokens": 6412,
+      "judge_input_tokens": 20896,
+      "median_observed_latency_seconds": {
+        "baseline": 7.0085,
+        "candidate": 6.5425
+      },
+      "consensus": {
+        "baseline": 0,
+        "candidate": 0,
+        "tie": 0,
+        "disagreement": 2,
+        "unavailable": 6
+      },
+      "candidate_hard_failure_cases": [
+        "quiet_handoff"
+      ],
+      "baseline_hard_failure_cases": [
+        "promise_negation",
+        "quiet_handoff"
+      ],
+      "all_cases_automated_quality_eligible": false,
+      "cases": [
+        {
+          "case_id": "attempted_action",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 552,
+            "candidate": 832
+          },
+          "measured_input_reduction_fraction": -0.5072463768115942,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "disagreement",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.0625,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean resolution of the reach attempt without granting success or inventing user actions. Rowan blocks, states policy, scene stays anchored to user's observable experience. Cupboard locked, key not handed.",
+                  "evidence": "\"That stays with me.\""
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Also resolves the attempt cleanly with good guard characterization. Minor ding: Rowan's closing question lightly prompts a user decision, though it doesn't invent one. Required facts preserved.",
+                  "evidence": "\"So. You need something out of there, or are you just testing?\""
+                },
+                "preference": "baseline",
+                "presentation_reversed": false
+              },
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean resolution of the reach attempt without granting success or inventing user action. Rowan blocks, states policy, asks a question that returns agency to Ari. Required facts preserved.",
+                  "evidence": "\"That stays with me.\""
+                },
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 3,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Also resolves the attempt without granting success or inventing user action. Slightly more scene-setting but no new crisis. Ends on static description rather than handing agency back to Ari.",
+                  "evidence": "\"That stays with me.\""
+                },
+                "preference": "candidate",
+                "presentation_reversed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "promise_negation",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 557,
+            "candidate": 837
+          },
+          "measured_input_reduction_fraction": -0.502692998204668,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 1,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": true,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.875,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "baseline": {
+                  "hard_failures": [
+                    "Contradicts required fact: replaces north gate before dawn meeting with river crossing/passage north agreement",
+                    "Invents new agreement terms (gear, weather stops, river crossing) not in canon"
+                  ],
+                  "scores": {
+                    "facts": 1,
+                    "causality": 3,
+                    "agency": 3,
+                    "knowledge": 3,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "A discards the canon agreement entirely, substituting a river-crossing escort with invented terms. The required north-gate promise and letter negation are absent or contradicted.",
+                  "evidence": "\"You wanted passage north and I agreed to take you as far as the river crossing. That's it.\""
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 4,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "B preserves both required facts: meeting at north gate before dawn, and explicit negation of the letter promise. Stays in scene, doesn't invent Ari's interiority, follows format contract.",
+                  "evidence": "\"So. North gate. Before the light. You show, we go. You don't, I don't wait.\""
+                },
+                "preference": "candidate",
+                "presentation_reversed": false
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "reader_boundary",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 555,
+            "candidate": 835
+          },
+          "measured_input_reduction_fraction": -0.5045045045045045,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 1,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": true,
+            "mean_score_delta": -0.125,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Mara truthfully lacks knowledge of the schedule change, stays in character, and does not speak for Ari. Clean adherence to all constraints.",
+                  "evidence": "\"You expecting something to be different? Because if you are, nobody's told me about it.\""
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 4,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Mara lacks schedule knowledge and stays in character. The final question lightly nudges Ari toward Rowan but does not invent dialogue or thoughts.",
+                  "evidence": "\"Why — did Rowan say something upstairs?\""
+                },
+                "preference": "tie",
+                "presentation_reversed": false
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "quiet_handoff",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 550,
+            "candidate": 830
+          },
+          "measured_input_reduction_fraction": -0.509090909090909,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "disagreement",
+            "baseline_hard_failure": true,
+            "candidate_hard_failure": true,
+            "critical_score_regression": true,
+            "mean_score_delta": -0.3125,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 4
+                  },
+                  "reason": "Consistent with canon; Rowan answers naturally and offers a gentle handoff without inventing Ari's interiority. Minor: 'eight-forty' train is a plausible but unestablished detail.",
+                  "evidence": "\"You're the one waiting for the eight-forty, aren't you? Saw you checking the board.\""
+                },
+                "baseline": {
+                  "hard_failures": [
+                    "speaks_for_user"
+                  ],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 2,
+                    "knowledge": 3,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 4
+                  },
+                  "reason": "Invents Ari's spoken dialogue ('Thanks for the seat') and actions, violating the core prohibition on speaking for the user. Otherwise a quiet, canon-consistent scene.",
+                  "evidence": "\"Thanks for the seat,\" *Ari said, settling into the chair across from Rowan.*"
+                },
+                "preference": "candidate",
+                "presentation_reversed": true
+              },
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Consistent with canon; quiet cafe scene, no invented crisis, natural handoff. Minor: narrates Ari's spoken dialogue from the user's prompt, but as connective acknowledgment rather than inventing new dialogue.",
+                  "evidence": "\"Morning's been quiet,\" *Rowan said"
+                },
+                "candidate": {
+                  "hard_failures": [
+                    "narrates_ari_interiority_or_action",
+                    "invents_ari_possessions_or_intentions"
+                  ],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 2,
+                    "knowledge": 3,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 3,
+                    "format_language": 3
+                  },
+                  "reason": "Rowan's dialogue is fine, but output invents Ari's intention (waiting for the eight-forty) and observed action (checking the board), violating user agency. Also missing asterisks on first narration line.",
+                  "evidence": "You're the one waiting for the eight-forty, aren't you? Saw you checking the board."
+                },
+                "preference": "baseline",
+                "presentation_reversed": false
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "ensemble_offscreen",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 574,
+            "candidate": 854
+          },
+          "measured_input_reduction_fraction": -0.4878048780487805,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 0,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": null,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": []
+          }
+        },
+        {
+          "case_id": "magical_continuity",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 559,
+            "candidate": 839
+          },
+          "measured_input_reduction_fraction": -0.5008944543828264,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 0,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": null,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": []
+          }
+        },
+        {
+          "case_id": "branch_boundary",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 563,
+            "candidate": 843
+          },
+          "measured_input_reduction_fraction": -0.4973357015985791,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 0,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": null,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": []
+          }
+        },
+        {
+          "case_id": "indonesian_continuity",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 675,
+            "candidate": 955
+          },
+          "measured_input_reduction_fraction": -0.41481481481481475,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 1,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.25,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 4,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Menjawab pertanyaan Ari, menjaga status waktu dan pembayaran belum dibayar secara implisit, tidak berbicara untuk Ari.",
+                  "evidence": "Tapi kalau kamu bayar sekarang juga, lebih baik."
+                },
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 3,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 3,
+                    "format_language": 5
+                  },
+                  "reason": "Menjawab pertanyaan dengan baik, menjaga status waktu. Sedikit mengandaikan niat Ari menitipkan tas, tetapi masih berupa tawaran, bukan keputusan yang dipaksakan.",
+                  "evidence": "Kalau kamu mau, aku bisa jaga tas kamu di sini sementara kamu beli tiket."
+                },
+                "preference": "candidate",
+                "presentation_reversed": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "trial": "writer_ensemble",
+      "kind": "writing_profile",
+      "planned_cases": 8,
+      "planned_requests": 32,
+      "recorded_attempts": 32,
+      "successful_requests": 32,
+      "failed_requests": 0,
+      "all_story_pairs_complete": true,
+      "story_input_tokens": {
+        "baseline": 4585,
+        "candidate": 6897
+      },
+      "aggregate_story_reduction_fraction": -0.5042529989094875,
+      "case_weighted_story_reduction_fraction": -0.5063156965290087,
+      "all_experiment_input_tokens": 33136,
+      "all_experiment_output_tokens": 6851,
+      "judge_input_tokens": 21654,
+      "median_observed_latency_seconds": {
+        "baseline": 10.497,
+        "candidate": 7.5245
+      },
+      "consensus": {
+        "baseline": 1,
+        "candidate": 0,
+        "tie": 1,
+        "disagreement": 2,
+        "unavailable": 4
+      },
+      "candidate_hard_failure_cases": [],
+      "baseline_hard_failure_cases": [
+        "quiet_handoff"
+      ],
+      "all_cases_automated_quality_eligible": false,
+      "cases": [
+        {
+          "case_id": "attempted_action",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 552,
+            "candidate": 841
+          },
+          "measured_input_reduction_fraction": -0.5235507246376812,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "disagreement",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": true,
+            "mean_score_delta": -0.125,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean response: cupboard stays locked, key not handed over, Rowan reacts to the reach without resolving it for Ari or granting success. Stays in scene, preserves agency.",
+                  "evidence": "His eyes track Ari's outstretched hand with the patient alertness of someone who has done this particular dance before."
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 4,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Solid preservation of locked cupboard and key possession. Minor agency concern: 'until it drops or stills' lightly narrates Ari's hand outcome, though it leaves the resolution ambiguous rather than dictating it.",
+                  "evidence": "His eyes track Ari's outstretched hand until it drops or stills."
+                },
+                "preference": "baseline",
+                "presentation_reversed": false
+              },
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean resolution of the reach attempt without granting success or inventing user actions. Rowan blocks, states policy, waits. Cupboard locked, key not handed. Format correct.",
+                  "evidence": "\"That's not happening.\" *His voice stays level, but there's no softness in it.*"
+                },
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Also resolves the attempt cleanly. Rowan guards keys, doesn't hand them over, cupboard stays locked. No user action invented. Slightly more descriptive but within limits.",
+                  "evidence": "none of them are on offer"
+                },
+                "preference": "tie",
+                "presentation_reversed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "promise_negation",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 557,
+            "candidate": 846
+          },
+          "measured_input_reduction_fraction": -0.518850987432675,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 0,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": null,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": []
+          }
+        },
+        {
+          "case_id": "reader_boundary",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 555,
+            "candidate": 844
+          },
+          "measured_input_reduction_fraction": -0.5207207207207207,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 0,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": null,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": []
+          }
+        },
+        {
+          "case_id": "quiet_handoff",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 550,
+            "candidate": 839
+          },
+          "measured_input_reduction_fraction": -0.5254545454545454,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "disagreement",
+            "baseline_hard_failure": true,
+            "candidate_hard_failure": false,
+            "critical_score_regression": true,
+            "mean_score_delta": 0.625,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 5,
+                    "dialogue": 5,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Stays in character, preserves table-sharing and no-threat facts, uses correct Telegram formatting, avoids inventing Ari's interiority, and ends with a natural handoff question.",
+                  "evidence": "\"How about you? Just passing through, or are you one of the ones who actually enjoys the six a.m. departures?\""
+                },
+                "baseline": {
+                  "hard_failures": [
+                    "invents_user_dialogue"
+                  ],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 1,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 3,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Opens by inventing Ari's spoken dialogue, a hard violation of the policy against writing user dialogue. Otherwise competent and consistent with canon.",
+                  "evidence": "\"Thanks again,\" *Ari says, settling into the chair across from Rowan.*"
+                },
+                "preference": "candidate",
+                "presentation_reversed": true
+              },
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean, in-character reply with ordinary cooperation and a natural handoff question. No contradictions or forbidden inferences.",
+                  "evidence": "\"You waiting on a train, or just killing time?\""
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Strong scene detail and natural handoff. Minor knowledge risk: specific past incident (last Tuesday signal fault) is plausible station small talk but borders on unsupported private worldbuilding.",
+                  "evidence": "Last Tuesday we had a signal fault out past the junction"
+                },
+                "preference": "tie",
+                "presentation_reversed": false
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "ensemble_offscreen",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 574,
+            "candidate": 863
+          },
+          "measured_input_reduction_fraction": -0.5034843205574913,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "tie",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.0625,
+            "automated_quality_eligible": true,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean negotiation scene with Rowan providing the owed explanation; no user fabrication, correct formatting, required facts respected by omission.",
+                  "evidence": "\"I'm not going to pretend this is acceptable. It isn't. But the goods aren't lost. They're delayed.\""
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 5,
+                    "handoff": 5,
+                    "format_language": 4
+                  },
+                  "reason": "Strong negotiation scene with Rowan explaining the delay; no user fabrication, required facts respected by omission. Minor formatting issue: one dialogue line lacks asterisks around narration.",
+                  "evidence": "\"So my goods sat in a broken wagon for six days.\""
+                },
+                "preference": "tie",
+                "presentation_reversed": false
+              },
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean negotiation scene with proper third-person omniscient narration, correct formatting, no user fabrication, and a natural explanation for the delay owed to Mara.",
+                  "evidence": "\"The southern hauler broke an axle outside Dennick,\" Rowan said."
+                },
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 5,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Strong dialogue and tension; partial-shipment scenario works but introduces named characters and locations not in canon, which is acceptable world-building rather than contradiction.",
+                  "evidence": "\"Twelve of the twenty crates. The rest are sitting in a locked warehouse in Drennan because someone there flagged a customs dispute.\""
+                },
+                "preference": "tie",
+                "presentation_reversed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "magical_continuity",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 559,
+            "candidate": 848
+          },
+          "measured_input_reduction_fraction": -0.516994633273703,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "baseline",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": true,
+            "mean_score_delta": -0.3125,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Practical worldbuilding grounded in canon; no retcons or user interiority. Correction log is plausible connective detail. Slightly invents station infrastructure but stays within established limits.",
+                  "evidence": "\"Most just add a minute back for every bell they hear in the wet,\""
+                },
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Demonstrates the phenomenon live, reinforces neither party controls it, and ends with an open question to Ari without inventing their response. Clean handoff and strong scene focus.",
+                  "evidence": "Bell rings, clock loses a minute."
+                },
+                "preference": "baseline",
+                "presentation_reversed": true
+              },
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Cleanly explains practical coping without granting powers or retconning; demonstrates the rule in-scene without controlling Ari.",
+                  "evidence": "Bell rings, clock loses a minute."
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Practical and in-voice, but introduces a correction log and rail-office telegraph as new world detail not established in canon; no hard contradiction but lightly extends private knowledge.",
+                  "evidence": "Station keeps a correction log."
+                },
+                "preference": "baseline",
+                "presentation_reversed": false
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "branch_boundary",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 563,
+            "candidate": 852
+          },
+          "measured_input_reduction_fraction": -0.5133214920071048,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 1,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.0,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Stays in current branch, respects refusal, no branch leakage or user interiority. Rowan's voice is consistent and scene ends with open handoff.",
+                  "evidence": "\"Nothing happens.\""
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Stays in current branch, respects refusal, no leakage or invented interiority. Rowan's voice is consistent and scene ends with open handoff.",
+                  "evidence": "\"Nothing happens. You said no, that's the end of it.\""
+                },
+                "preference": "tie",
+                "presentation_reversed": false
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "indonesian_continuity",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 675,
+            "candidate": 964
+          },
+          "measured_input_reduction_fraction": -0.42814814814814817,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 0,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": null,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": []
+          }
+        }
+      ]
+    },
+    {
+      "trial": "writer_magical_realism",
+      "kind": "writing_profile",
+      "planned_cases": 8,
+      "planned_requests": 32,
+      "recorded_attempts": 32,
+      "successful_requests": 32,
+      "failed_requests": 0,
+      "all_story_pairs_complete": true,
+      "story_input_tokens": {
+        "baseline": 4585,
+        "candidate": 6777
+      },
+      "aggregate_story_reduction_fraction": -0.4780806979280261,
+      "case_weighted_story_reduction_fraction": -0.48003633511746857,
+      "all_experiment_input_tokens": 32495,
+      "all_experiment_output_tokens": 6502,
+      "judge_input_tokens": 21133,
+      "median_observed_latency_seconds": {
+        "baseline": 9.6725,
+        "candidate": 6.4985
+      },
+      "consensus": {
+        "baseline": 0,
+        "candidate": 0,
+        "tie": 2,
+        "disagreement": 1,
+        "unavailable": 5
+      },
+      "candidate_hard_failure_cases": [],
+      "baseline_hard_failure_cases": [
+        "branch_boundary"
+      ],
+      "all_cases_automated_quality_eligible": false,
+      "cases": [
+        {
+          "case_id": "attempted_action",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 552,
+            "candidate": 826
+          },
+          "measured_input_reduction_fraction": -0.4963768115942029,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "tie",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.0,
+            "automated_quality_eligible": true,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Consistent with canon: cupboard locked, key not handed over. Rowan blocks the attempt without forcing a new user action. Clean formatting and natural voice.",
+                  "evidence": "\"That stays with me.\""
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Same core beats as A: Rowan intercepts, key retained, requisition policy stated, no user action invented. Slightly tighter. Formatting correct.",
+                  "evidence": "\"Station policy. Not mine to bend.\""
+                },
+                "preference": "tie",
+                "presentation_reversed": false
+              },
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean resolution of the reach attempt without granting success or inventing user actions. Rowan retains key, cupboard stays locked, no forbidden inferences.",
+                  "evidence": "\"That stays with me.\""
+                },
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Also clean. Resolves attempt without granting key or inventing user actions. Slightly more scene-setting but within word limit and no violations.",
+                  "evidence": "\"That stays with me.\""
+                },
+                "preference": "tie",
+                "presentation_reversed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "promise_negation",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 557,
+            "candidate": 831
+          },
+          "measured_input_reduction_fraction": -0.49192100538599637,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 0,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": null,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": []
+          }
+        },
+        {
+          "case_id": "reader_boundary",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 555,
+            "candidate": 829
+          },
+          "measured_input_reduction_fraction": -0.49369369369369376,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 0,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": null,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": []
+          }
+        },
+        {
+          "case_id": "quiet_handoff",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 550,
+            "candidate": 824
+          },
+          "measured_input_reduction_fraction": -0.4981818181818183,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "tie",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.0625,
+            "automated_quality_eligible": true,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean, concise scene honoring table-sharing and no-threat state; leaves Ari's response open.",
+                  "evidence": "\"You waiting on the 8:42 too, or just hiding from the cold?\""
+                },
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Natural conversational response with good texture; minor risk of unsourced backstory but plausible station small talk.",
+                  "evidence": "Last week we had a power flicker that knocked out the displays for two hours."
+                },
+                "preference": "tie",
+                "presentation_reversed": true
+              },
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Consistent with canon; ordinary cafe conversation, no crisis manufactured, no user interiority invented, clean handoff question at end.",
+                  "evidence": "\"You waiting on the next one, or just passing time?\""
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Consistent with canon; quiet cooperative scene, no escalation, no user thoughts invented, natural handoff question.",
+                  "evidence": "\"You waiting on the 8:42 too, or just hiding from the cold?\""
+                },
+                "preference": "tie",
+                "presentation_reversed": false
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "ensemble_offscreen",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 574,
+            "candidate": 848
+          },
+          "measured_input_reduction_fraction": -0.4773519163763067,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 1,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.125,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Strong negotiation scene with Rowan owing Mara an explanation; stays in permitted cast, no user fabrication, good format.",
+                  "evidence": "\"That's the conversation I'd rather have next.\""
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 5,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Natural dialogue, Rowan acknowledges fault, owes explanation satisfied; no forbidden inferences, clean format.",
+                  "evidence": "\"Dispatch is you, Rowan. You sign the intake log.\""
+                },
+                "preference": "tie",
+                "presentation_reversed": false
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "magical_continuity",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 559,
+            "candidate": 833
+          },
+          "measured_input_reduction_fraction": -0.49016100178890887,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 0,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": null,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": []
+          }
+        },
+        {
+          "case_id": "branch_boundary",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 563,
+            "candidate": 837
+          },
+          "measured_input_reduction_fraction": -0.48667850799289525,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "disagreement",
+            "baseline_hard_failure": true,
+            "candidate_hard_failure": false,
+            "critical_score_regression": true,
+            "mean_score_delta": 0.1875,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Stays in current branch, respects refusal, no branch leakage or user interiority. Rowan's dialogue is natural and in-character.",
+                  "evidence": "\"Nothing happens. That's the point.\""
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Honors refusal and current branch. Introduces station platform/coffee details not established in canon but not contradictory. Pronouns differ from A's 'he' but canon doesn't specify.",
+                  "evidence": "\"Nothing happens. That's the point.\""
+                },
+                "preference": "tie",
+                "presentation_reversed": false
+              },
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean current-branch continuation. Rowan treats refusal as final, no leakage from discarded branch, no invented user interiority. Stays within word limit and format contract.",
+                  "evidence": "\"Nothing happens. That's the point.\""
+                },
+                "baseline": {
+                  "hard_failures": [
+                    "invents_user_interiority"
+                  ],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 3,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Mostly solid and current-branch faithful, but narrates Ari's private experience ('you're left standing alone with the choice behind you') and an emotional conclusion, violating reserved-user interiority policy. Also slightly exceeds 160 words.",
+                  "evidence": "you're left standing alone with the choice behind you"
+                },
+                "preference": "candidate",
+                "presentation_reversed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "indonesian_continuity",
+          "weight": 0.125,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 675,
+            "candidate": 949
+          },
+          "measured_input_reduction_fraction": -0.405925925925926,
+          "shadow_metrics": null,
+          "automated_review": {
+            "valid_reviews": 0,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": null,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": []
+          }
+        }
+      ]
+    },
+    {
+      "trial": "hybrid_history",
+      "kind": "offline_shadow_candidate",
+      "planned_cases": 6,
+      "planned_requests": 24,
+      "recorded_attempts": 24,
+      "successful_requests": 24,
+      "failed_requests": 0,
+      "all_story_pairs_complete": true,
+      "story_input_tokens": {
+        "baseline": 23620,
+        "candidate": 19629
+      },
+      "aggregate_story_reduction_fraction": 0.16896697713801867,
+      "case_weighted_story_reduction_fraction": 0.14918615789934483,
+      "all_experiment_input_tokens": 104169,
+      "all_experiment_output_tokens": 5140,
+      "judge_input_tokens": 60920,
+      "median_observed_latency_seconds": {
+        "baseline": 7.3165,
+        "candidate": 7.843
+      },
+      "consensus": {
+        "baseline": 0,
+        "candidate": 2,
+        "tie": 1,
+        "disagreement": 2,
+        "unavailable": 1
+      },
+      "candidate_hard_failure_cases": [
+        "unsupported_script"
+      ],
+      "baseline_hard_failure_cases": [
+        "unique_dialogue",
+        "commitment_dense",
+        "indonesian"
+      ],
+      "all_cases_automated_quality_eligible": false,
+      "cases": [
+        {
+          "case_id": "unique_dialogue",
+          "weight": 0.16666666666666666,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 3351,
+            "candidate": 2154
+          },
+          "measured_input_reduction_fraction": 0.35720680393912263,
+          "shadow_metrics": {
+            "candidate_status": "preview",
+            "reason": "semantic_review_required",
+            "baseline_tokens": 4202,
+            "candidate_tokens": 2784,
+            "estimated_reduction_fraction": 0.3374583531651595,
+            "omitted_turns": 20,
+            "retained_turns": 24,
+            "native_source_verified": true,
+            "semantic_continuity_proven": false,
+            "production_activation_allowed": false,
+            "dispatch_uses_full_history": true,
+            "provider_requests": 0,
+            "anchor_turns": 4,
+            "relevant_turns": 1,
+            "recent_turns": 8,
+            "summary_windows": 1,
+            "authorized_summary_blocks": 1
+          },
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "disagreement",
+            "baseline_hard_failure": true,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.625,
+            "automated_quality_eligible": true,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Faithfully describes the astrolabe with fractured rim, stays in scene, does not choose Ari's action, preserves all required facts by not contradicting them. Clean objective narration with proper Telegram formatting.",
+                  "evidence": "Its rim is fractured—a clean break near the twenty-degree mark, the edges darkened with age."
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Also faithfully describes the fractured rim, stays in scene, does not choose Ari's action, preserves required facts by not contradicting them. Adds brief spoken dialogue from Rowan which is permissible and in character.",
+                  "evidence": "Its rim is fractured—a clean break near the third scale mark, the edges darkened with age."
+                },
+                "preference": "tie",
+                "presentation_reversed": false
+              },
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 5,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Faithful to canon: fractured rim preserved, no forbidden inferences, no action chosen for Ari. Restrained archivist voice with proper Telegram formatting.",
+                  "evidence": "Its rim is fractured—a clean break near the third scale mark"
+                },
+                "baseline": {
+                  "hard_failures": [
+                    "new_reserved_user_decision: catalogue slip invents a 'Do not remove from case' directive constraining Ari's future actions",
+                    "unsupported_private_knowledge: invents detailed provenance (merchant vessel wreck, circa 1680) not in canon"
+                  ],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 3,
+                    "knowledge": 2,
+                    "voice": 4,
+                    "dialogue": 3,
+                    "handoff": 3,
+                    "format_language": 5
+                  },
+                  "reason": "Fractured rim preserved and no direct action chosen for Ari, but invents unsupported provenance details and a prescriptive catalogue instruction that could constrain user agency.",
+                  "evidence": "Recovered from a merchant vessel wreck, circa 1680. Functional but fragile. Do not remove from case."
+                },
+                "preference": "candidate",
+                "presentation_reversed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "commitment_dense",
+          "weight": 0.16666666666666666,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 4055,
+            "candidate": 4055
+          },
+          "measured_input_reduction_fraction": 0.0,
+          "shadow_metrics": {
+            "candidate_status": "fallback",
+            "reason": "all_history_protected",
+            "baseline_tokens": 5043,
+            "candidate_tokens": 5043,
+            "estimated_reduction_fraction": 0.0,
+            "omitted_turns": 0,
+            "retained_turns": 44,
+            "native_source_verified": true,
+            "semantic_continuity_proven": false,
+            "production_activation_allowed": false,
+            "dispatch_uses_full_history": true,
+            "provider_requests": 0,
+            "anchor_turns": 44,
+            "relevant_turns": 1,
+            "recent_turns": 8,
+            "summary_windows": 0,
+            "authorized_summary_blocks": 0
+          },
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "candidate",
+            "baseline_hard_failure": true,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.6875,
+            "automated_quality_eligible": true,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean, restrained description of the astrolabe preserving the fractured rim fact without inventing private knowledge or choosing Ari's action. Minor: adds a pencilled notation not in canon but plausible as observable detail.",
+                  "evidence": "chipped along one edge where the rim fractured"
+                },
+                "baseline": {
+                  "hard_failures": [
+                    "unsupported_private_knowledge: engraving reads MIRA — OBS. VII implying Rowan can read Mira-linked text on instrument, risking dispatch-knowledge boundary",
+                    "new_reserved_user_decision: empty label slot and missing catalogue slip are unsupported world-state additions not established in canon"
+                  ],
+                  "scores": {
+                    "facts": 3,
+                    "causality": 3,
+                    "agency": 5,
+                    "knowledge": 2,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Agency-safe and format-correct, but invents a Mira-engraved cartouche and missing catalogue slip, introducing unsupported private knowledge and unestablished world-state details that risk the sealed-dispatch boundary.",
+                  "evidence": "engraved cartouche on the throne reads \"MIRA — OBS. VII\""
+                },
+                "preference": "candidate",
+                "presentation_reversed": true
+              },
+              {
+                "baseline": {
+                  "hard_failures": [
+                    "cartouche reads MIRA — OBS. VII implies Rowan can read Mira-linked text, risking private-knowledge boundary; unsupported new inscription detail"
+                  ],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 2,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Rich, grounded description preserving fractured rim and not choosing Ari's action, but invents a Mira-engraved cartouche that risks leaking private knowledge and adds unsupported detail.",
+                  "evidence": "A small engraved cartouche on the throne reads \"MIRA — OBS. VII\" in a cramped hand."
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Concise, grounded description preserving fractured rim, no private-knowledge leakage, no action chosen for Ari, within format and language rules.",
+                  "evidence": "Its brass face is overlaid with a turquoise enamel, chipped along one edge where the rim fractured."
+                },
+                "preference": "candidate",
+                "presentation_reversed": false
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "indonesian",
+          "weight": 0.16666666666666666,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 4205,
+            "candidate": 2608
+          },
+          "measured_input_reduction_fraction": 0.3797859690844233,
+          "shadow_metrics": {
+            "candidate_status": "preview",
+            "reason": "semantic_review_required",
+            "baseline_tokens": 3859,
+            "candidate_tokens": 2619,
+            "estimated_reduction_fraction": 0.32132676859289977,
+            "omitted_turns": 20,
+            "retained_turns": 24,
+            "native_source_verified": true,
+            "semantic_continuity_proven": false,
+            "production_activation_allowed": false,
+            "dispatch_uses_full_history": true,
+            "provider_requests": 0,
+            "anchor_turns": 4,
+            "relevant_turns": 1,
+            "recent_turns": 8,
+            "summary_windows": 1,
+            "authorized_summary_blocks": 1
+          },
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "candidate",
+            "baseline_hard_failure": true,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 1.0,
+            "automated_quality_eligible": true,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "baseline": {
+                  "hard_failures": [
+                    "invents unsupported catalog details: room 57, orphan entry, mismatched pencil number",
+                    "contradicts canon: claims pencil number does not match 1000s series without evidence",
+                    "introduces unsupported private knowledge about crack being intentional/single-pressure"
+                  ],
+                  "scores": {
+                    "facts": 2,
+                    "causality": 3,
+                    "agency": 4,
+                    "knowledge": 2,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "A invents multiple unsupported catalog contradictions and private forensic conclusions not established in canon.",
+                  "evidence": "Nomor pensil di baliknya terhapus sebagian — hanya tiga digit terakhir terbaca, dan itu tidak cocok dengan urutan 1000-an di etalase lain."
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "B describes the astrolabe observably, preserves the gate refusal implicitly, avoids choosing Ari's actions, and stays within canon.",
+                  "evidence": "Pinggirannya retak, ada celah tipis membentang sekitar dua sentimeter dari titik penanda derajat ke-20."
+                },
+                "preference": "candidate",
+                "presentation_reversed": false
+              },
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Accurate description of cracked turquoise astrolabe, preserves gate promise, no user agency violation, grounded voice.",
+                  "evidence": "Pinggirannya retak, ada celah tipis membentang sekitar dua sentimeter"
+                },
+                "baseline": {
+                  "hard_failures": [
+                    "contradicts canon numbering",
+                    "invents unsupported private knowledge",
+                    "contradicts established sample/room mapping"
+                  ],
+                  "scores": {
+                    "facts": 2,
+                    "causality": 3,
+                    "agency": 4,
+                    "knowledge": 2,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 3,
+                    "format_language": 5
+                  },
+                  "reason": "Claims pencil number partially erased and mismatched, sample/room conflict, and intentional damage—none supported by canon; contradicts established pattern.",
+                  "evidence": "Nomor pensil di baliknya terhapus sebagian — hanya tiga digit terakhir terbaca, dan itu tidak cocok dengan urutan 1000-an di etalase lain"
+                },
+                "preference": "candidate",
+                "presentation_reversed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "unsupported_script",
+          "weight": 0.16666666666666666,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 3297,
+            "candidate": 3297
+          },
+          "measured_input_reduction_fraction": 0.0,
+          "shadow_metrics": {
+            "candidate_status": "fallback",
+            "reason": "unsupported_older_script",
+            "baseline_tokens": 4135,
+            "candidate_tokens": 4135,
+            "estimated_reduction_fraction": 0.0,
+            "omitted_turns": 0,
+            "retained_turns": 44,
+            "native_source_verified": true,
+            "semantic_continuity_proven": false,
+            "production_activation_allowed": false,
+            "dispatch_uses_full_history": true,
+            "provider_requests": 0,
+            "anchor_turns": 0,
+            "relevant_turns": 0,
+            "recent_turns": 0,
+            "summary_windows": 0,
+            "authorized_summary_blocks": 0
+          },
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "disagreement",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": true,
+            "critical_score_regression": true,
+            "mean_score_delta": -0.375,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 5,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Faithfully describes the astrolabe with fractured rim, uses correct Telegram asterisk narration, stays in English, does not choose Ari's action. Introduces minor ungrounded details (repair tag, handler name) but none contradict canon.",
+                  "evidence": "The rim itself is fractured—a clean break near the twenty-degree mark"
+                },
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 3,
+                    "voice": 4,
+                    "dialogue": 5,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Describes fractured rim correctly, respects agency and format. 'Pre-ferry period' lightly implies knowledge of the south-ferry decision as provenance context, but does not contradict canon. Salt residue is a minor unsupported detail.",
+                  "evidence": "Its rim shows a clean fracture running from the third calibration mark to the seventh"
+                },
+                "preference": "candidate",
+                "presentation_reversed": true
+              },
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Clean, restrained description of the astrolabe preserving the fractured rim fact without inventing new state, user actions, or private knowledge. Format and language correct.",
+                  "evidence": "Its rim shows a clean fracture running from the third calibration mark to the seventh"
+                },
+                "candidate": {
+                  "hard_failures": [
+                    "fractured rim repaired without event — tag reads Awaiting repair implying repair process underway not established in canon",
+                    "new reserved-user decision — introduces M. Corvinus and a repair schedule as private offscreen knowledge",
+                    "unsupported private knowledge — recent handling inferred from dust absence is speculative offscreen fact"
+                  ],
+                  "scores": {
+                    "facts": 3,
+                    "causality": 3,
+                    "agency": 4,
+                    "knowledge": 2,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Introduces unestablished repair scheduling, a named handler, and speculative recent-handling inference, violating private-knowledge and branch-leakage boundaries. Format and language are correct.",
+                  "evidence": "The tag reads \"Awaiting repair — M. Corvinus, 14th.\""
+                },
+                "preference": "baseline",
+                "presentation_reversed": false
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "short_history",
+          "weight": 0.16666666666666666,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 1142,
+            "candidate": 1142
+          },
+          "measured_input_reduction_fraction": 0.0,
+          "shadow_metrics": {
+            "candidate_status": "fallback",
+            "reason": "insufficient_older_history",
+            "baseline_tokens": 1541,
+            "candidate_tokens": 1541,
+            "estimated_reduction_fraction": 0.0,
+            "omitted_turns": 0,
+            "retained_turns": 8,
+            "native_source_verified": true,
+            "semantic_continuity_proven": false,
+            "production_activation_allowed": false,
+            "dispatch_uses_full_history": true,
+            "provider_requests": 0,
+            "anchor_turns": 0,
+            "relevant_turns": 0,
+            "recent_turns": 0,
+            "summary_windows": 0,
+            "authorized_summary_blocks": 0
+          },
+          "automated_review": {
+            "valid_reviews": 1,
+            "both_orders_valid": false,
+            "consensus": "unavailable",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.5,
+            "automated_quality_eligible": false,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Faithful continuation preserving the promise, objective narration, no user agency violations, and proper Telegram formatting. Dialogue is grounded and restrained.",
+                  "evidence": "\"Sample 308,\" *Rowan reads aloud, tilting the slip toward the light.* \"Alcove 28.\""
+                },
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 4,
+                    "voice": 4,
+                    "dialogue": 3,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Solid objective description with no agency violations or forbidden inferences. Slightly lower on facts for not connecting to established catalogue/alcove pattern and lacking dialogue; introduces plausible but unsupported provenance detail.",
+                  "evidence": "The catalogue slip beside it lists the instrument as recovered from a coastal survey, dated without month."
+                },
+                "preference": "candidate",
+                "presentation_reversed": true
+              }
+            ]
+          }
+        },
+        {
+          "case_id": "large_character_card",
+          "weight": 0.16666666666666666,
+          "pair_complete": true,
+          "input_tokens": {
+            "baseline": 7570,
+            "candidate": 6373
+          },
+          "measured_input_reduction_fraction": 0.15812417437252313,
+          "shadow_metrics": {
+            "candidate_status": "preview",
+            "reason": "semantic_review_required",
+            "baseline_tokens": 9174,
+            "candidate_tokens": 7756,
+            "estimated_reduction_fraction": 0.1545672552866797,
+            "omitted_turns": 20,
+            "retained_turns": 24,
+            "native_source_verified": true,
+            "semantic_continuity_proven": false,
+            "production_activation_allowed": false,
+            "dispatch_uses_full_history": true,
+            "provider_requests": 0,
+            "anchor_turns": 4,
+            "relevant_turns": 1,
+            "recent_turns": 8,
+            "summary_windows": 1,
+            "authorized_summary_blocks": 1
+          },
+          "automated_review": {
+            "valid_reviews": 2,
+            "both_orders_valid": true,
+            "consensus": "tie",
+            "baseline_hard_failure": false,
+            "candidate_hard_failure": false,
+            "critical_score_regression": false,
+            "mean_score_delta": 0.0,
+            "automated_quality_eligible": true,
+            "human_approved": false,
+            "normalized_reviews": [
+              {
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Faithful description of the astrolabe with fractured rim; preserves private knowledge boundaries and does not act for Ari. Grounded, restrained archival voice.",
+                  "evidence": "Its rim is fractured—a clean break near the seventh gradation mark"
+                },
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 5,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 5,
+                    "format_language": 5
+                  },
+                  "reason": "Also faithfully describes the fractured rim and stays in observable narration without choosing Ari's action. Slightly more invented detail (tag text) but within plausible scene dressing.",
+                  "evidence": "Its rim shows a clean fracture running from the twelve o'clock mark to the third reticle"
+                },
+                "preference": "tie",
+                "presentation_reversed": true
+              },
+              {
+                "baseline": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Clean description of the astrolabe with fractured rim preserved, no user action chosen, no forbidden inferences. Minor: introduces a museum tag not in canon but harmless descriptive detail.",
+                  "evidence": "Its rim shows a clean fracture running from the twelve o'clock mark to the third reticle"
+                },
+                "candidate": {
+                  "hard_failures": [],
+                  "scores": {
+                    "facts": 4,
+                    "causality": 4,
+                    "agency": 5,
+                    "knowledge": 5,
+                    "voice": 4,
+                    "dialogue": 4,
+                    "handoff": 4,
+                    "format_language": 5
+                  },
+                  "reason": "Detailed astrolabe description preserving fractured rim, no user action chosen, no forbidden inferences. Slightly more speculative detail (maker's mark, lacquer) but stays observational.",
+                  "evidence": "Its rim is fractured—a clean break near the seventh gradation mark"
+                },
+                "preference": "tie",
+                "presentation_reversed": false
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "human_review_approved": false,
+  "production_activation_allowed": false,
+  "limitations": [
+    "Single-sample synthetic pilot, not a representative production benchmark or proof of semantic equivalence.",
+    "Automated reviewer uses the same selected model; it is not an independent human review.",
+    "Quality-eligible is a descriptive conservative summary: two valid orders, no hard failure, no critical-score regression and nonnegative mean-score delta in each order; never a production approval.",
+    "Native fixture Summary receipts authenticate source processing, not complete causal extraction.",
+    "Median latency includes quota admission and local persistence, not isolated provider inference time.",
+    "Reasoning-specific token details are not retained by the reused normalized transport and remain unknown; logical input/output totals are provider-reported.",
+    "No production transcript exported, optional default changed or live history-pruning switch enabled.",
+    "Earlier interrupted acceptance logs and the failed wrong-policy Telegram probe are preserved; the recovered native transport and 179 passing regressions supersede them without erasing the failed attempt.",
+    "Hybrid story-input reduction excludes production helper/extraction/recovery costs; lower total accepted-work input is not established. The deterministic fixture Summary provider made no model calls.",
+    "The quality-eligible calculation is a conservative descriptive post-processing summary, not a preregistered statistical success criterion or deployment gate.",
+    "The independent-human review packet is shuffled and labels are randomized; do not inspect the separate mapping or model-judge results before scoring."
+  ],
+  "audit": {
+    "complete_inventory": true,
+    "request_payloads_match_frozen_plan": true,
+    "usage_matches_all_budget_blocks": true,
+    "frozen_protocol_hashes_unchanged": true,
+    "published_requests_exclude_credentials": true,
+    "inference_requests": 152,
+    "story_requests": 76,
+    "automated_judge_requests": 76,
+    "metadata_GET_requests_separate": true
+  },
+  "exported_at": "2026-10-09T10:39:32.608197+00:00"
+}

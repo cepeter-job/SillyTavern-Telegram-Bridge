@@ -1,5 +1,7 @@
 # Post-v0.3.019 validation checkpoint
 
+**Current results:** the interrupted work below was recovered. See [RESULTS.md](RESULTS.md) for the completed 152-request pilot and remaining human/production-quality gates. The original outage record is retained as history.
+
 User approved all recommended post-release work on 2026-10-09: acceptance, writing-profile comparisons, hybrid-history validation, release housekeeping and the preset-compatibility decision.
 
 ## Verified starting point
@@ -32,3 +34,11 @@ The architecture decision is native prompts only for this release line; full for
 6. Verify the previously preserved release archive at ~/.local/share/sillytavern-telegram/backups/release-retention/pre-v0.3.019-20261009T085801Z against current remote metadata and assets. Only after changelog merge, validated newest signature/assets and complete recovery backup may older releases/tags be retired. No cleanup deletion was performed while the VPS was unavailable.
 
 The authorized work is incomplete. No provider benchmark was executed, no production quality winner or 30% saving is claimed, and no pruning/default was activated. Main documentation integration, actual live acceptance, provider measurements, independent review and retention deletion must be reported separately.
+
+## Recovery and completed experiment — 2026-10-09
+
+The native Telegram transport checks succeeded and 179 targeted acceptance tests passed. The full fake-wire/accounting group passed 31 tests; a separate hybrid/history/updater group passed 65 tests. These overlapping counts are not additive. The frozen subscription-only trial completed all 152 model calls with 235,024 reported input and 31,483 output tokens. No model retry, repair or fallback was added.
+
+The hybrid history aggregate reduction was 16.90% including all six cases, below the 30% target. Automated profile reviews were incomplete/order-sensitive and do not establish a reliable winner. All observations and exact payloads are preserved; account quota is omitted from the public copy. Thirty-eight anonymous pairs are prepared for independent human review, which remains outstanding.
+
+PR #474 merged the changelog backfill/native-only decision. All 12 older releases/tags were retired only after full backup/ref/metadata/checksum validation; the original signed v0.3.019 remains. The receipt is in release-retention.json. No story/default/pruning change was made.

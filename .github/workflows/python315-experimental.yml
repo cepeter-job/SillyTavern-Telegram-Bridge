@@ -189,6 +189,9 @@ jobs:
         run: |
           set -euo pipefail
           grep -v '^faster-whisper' requirements.txt > "$RUNNER_TEMP/python315-core-only.txt"
+          # The existing network-isolation test fixture imports httpx; when
+          # faster-whisper is removed it is no longer available transitively.
+          printf '%s\n' 'httpx>=0.28,<1' >> "$RUNNER_TEMP/python315-core-only.txt"
           uv pip compile "$RUNNER_TEMP/python315-core-only.txt" requirements-dev.txt \
             --python-version 3.15 --generate-hashes --output-file "$RUNNER_TEMP/python315-core-dev.lock"
           uv venv --python "$STTB_FINAL_PY315" .venv315-stable-core

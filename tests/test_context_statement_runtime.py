@@ -21,12 +21,18 @@ def test_statement_shadow_runtime_preserves_original_dispatch(story, tmp_path):
     settings = load_app_settings({"SILLYTAVERN_CONTEXT_SELECTION_MODE": "shadow"}, home=tmp_path)
     context = MemoryPromptContext(scope=scope, selection_query="turquoise astrolabe")
     prepared = prepare_context_selection(
-        db, context, lambda: scope, app_settings=settings,
+        db,
+        context,
+        lambda: scope,
+        app_settings=settings,
         validate_blocks=lambda _db, _scope, blocks: blocks,
     )
     messages[0]["_context_selection"] = prepared
     output, metrics = choose_context_messages(
-        messages, app_settings=settings, chars_per_token=4, input_budget_tokens=100000,
+        messages,
+        app_settings=settings,
+        chars_per_token=4,
+        input_budget_tokens=100000,
     )
     assert metrics["hybrid_shadow_reason"] == "all_history_protected"
     assert metrics["hybrid_statement_reason"] == "semantic_review_required"
@@ -46,12 +52,18 @@ def test_statement_probe_not_run_outside_shadow(story, tmp_path, mode):
     settings = load_app_settings({"SILLYTAVERN_CONTEXT_SELECTION_MODE": mode}, home=tmp_path)
     context = MemoryPromptContext(scope=scope, selection_query="turquoise astrolabe")
     prepared = prepare_context_selection(
-        db, context, lambda: scope, app_settings=settings,
+        db,
+        context,
+        lambda: scope,
+        app_settings=settings,
         validate_blocks=lambda _db, _scope, blocks: blocks,
     )
     messages[0]["_context_selection"] = prepared
     _output, stats = choose_context_messages(
-        messages, app_settings=settings, chars_per_token=4, input_budget_tokens=100000,
+        messages,
+        app_settings=settings,
+        chars_per_token=4,
+        input_budget_tokens=100000,
     )
     assert "hybrid_statement_candidate_tokens" not in stats
 
@@ -62,18 +74,24 @@ def test_tampered_diagnostics_cannot_exfiltrate_private_text(story, tmp_path):
 
     def malicious(_messages, _ratio):
         return {
-            "reason": "semantic_review_required", "candidate_tokens": 300,
-            "omitted_turns": 6, "native_source_verified": True,
+            "reason": "semantic_review_required",
+            "candidate_tokens": 300,
+            "omitted_turns": 6,
+            "native_source_verified": True,
             "statement_candidate_tokens": -100,
             "statement_reason": "PRIVATE_HYBRID_CANARY",
             "statement_source_verified": "yes",
         }
 
     messages[0]["_context_selection"] = MemoryPromptContext(
-        scope=scope, selection_hybrid_shadow=malicious,
+        scope=scope,
+        selection_hybrid_shadow=malicious,
     )
     _, stats = choose_context_messages(
-        messages, app_settings=settings, chars_per_token=4, input_budget_tokens=100000,
+        messages,
+        app_settings=settings,
+        chars_per_token=4,
+        input_budget_tokens=100000,
     )
     assert "PRIVATE_HYBRID_CANARY" not in str(stats)
     assert stats["applied"] is False

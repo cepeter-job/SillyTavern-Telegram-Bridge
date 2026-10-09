@@ -1,9 +1,21 @@
-# Precommitted experiment checkpoint
+# Native context experiment checkpoint
 
-The exact frozen synthetic prompts, weights, schedules, source-receipt hashes, model settings, implementation digest and blinded-review rubric were committed before any model call. Source snapshots and the pending/completed attempt journal are persisted privately on the operator host; no production data or credentials appear here.
+**Completed first trial: measured synthetic savings above 30%; automated quality gate failed. No production activation.**
 
-Plan hash: `809a8e5c7e4e4e26e10f433f33bbcdbb53cbd0e6fdb180f1ceaf582e34a8edb9`.
+Start with [results and limitations](RESULTS.md). Full measurements are in
+[report.json](report.json); the original provider responses and locked judgments
+are in [state.json](state.json). The pre-dispatch [frozen plan](frozen-plan.json)
+and [checkpoint](checkpoint.json) are unchanged.
 
-Maximum: 24 physical model calls, 300,000 logical input tokens, 24,000 reserved output tokens, subscription-only NanoGPT and no paid overage.
+For an independent human assessment, open the [anonymous review packet](human-blinded-review.md)
+**before** the [unmasking key](unmasking_key.json) or unblinded journal. No human
+approval is recorded. See [artifact digests](evidence-manifest.json),
+[unchanged original replay summary](original-benchmark-summary.json), and
+[read-only production history shape](live-shape-metadata.json).
 
-This records preparation, not measured success. Results will be added without rewriting the precommitted plan. Human approval and production activation remain false.
+The [native source snapshot archive](native-source-snapshots.zip) preserves all six
+synthetic SQLite inputs; restored bytes and native receipts were revalidated. The
+private operator copies also remain intact. No production transcript,
+API key or account credential is included. A scanner false positive on the public
+label-map checksum is documented with a single exact historical fingerprint in
+`.gitleaksignore`; default detectors remain enabled.

@@ -12,6 +12,7 @@ import sqlite3
 import pytest
 
 import bridge.telegram as telegram
+from bridge.schema import initialize_database_schema
 
 
 def _callback(message_id=41, data="characterinfo:token"):
@@ -233,6 +234,7 @@ def test_obsolete_character_rank_callback_uses_generic_invalid_character_path(tm
     context = make_test_request_context(db, "session", "owner", app_settings=make_test_settings(home=tmp_path))
     answers = []
     try:
+        initialize_database_schema(db)
         handled = _owner_character_callbacks.handle_character_callback(
             db,
             "bot-token",

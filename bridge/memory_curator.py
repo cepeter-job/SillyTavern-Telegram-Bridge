@@ -147,6 +147,7 @@ def extract_curator_segment(
             "temperature": 0.0,
             "max_tokens": 1400,
             "stop_sequences": "",
+            "json_once": True,
             "reasoning_budget": utility_reasoning_for_session(db, chat_id, session["session_id"]),
         }
     )

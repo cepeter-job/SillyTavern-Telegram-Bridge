@@ -213,6 +213,7 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
             "temperature": 0.0,
             "max_tokens": _limits.NPC_EXTRACTION_MAX_OUTPUT_TOKENS,
             "stop_sequences": "",
+            "json_once": True,
             "reasoning_budget": utility_reasoning_for_session(db, chat_id, session["session_id"]),
         }
     )
@@ -221,7 +222,9 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
         {
             "role": "system",
             "content": (
-                "Extract durable supporting-character state as JSON with npcs; each has name, aliases, operations. "
+                'Return one complete JSON object with mandatory "npcs" array and "simulation" object. '
+                'Use {"npcs":[],"simulation":{}} only when neither has established updates. '
+                "Extract durable supporting-character state; each NPC has name, aliases, operations. "
                 "Each operation has field, op, value, mode, visibility, known_by. "
                 "Fixed fields: appearance, voice, background, canon. Mutable: role, location, "
                 "agenda, relationship, mood, "
@@ -261,7 +264,8 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
     )
     groups, valid = _parse_payload(raw, primary_name=primary_name, user_name=user_name)
     simulation, simulation_valid = parse_simulation_payload(raw)
-    if not simulation_valid:
+    repair_npcs = not valid
+    if repair_npcs or not simulation_valid:
         repair_messages = [
             {
                 "role": "system",
@@ -285,17 +289,42 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
                 ),
             },
         ]
-        event("tracker.repair_start", reason="invalid_shape")
-        with diagnostic_scope(phase="tracker_repair"):
-            repaired = provider_port.for_usage(chat_id, session["session_id"], "npc").generate(
-                "",
-                model,
-                repair_messages,
-                session_id=f"tracker-repair:{chat_id}:{session['session_id']}",
-                settings=settings,
-                force_non_stream=True,
+        if repair_npcs:
+            # The existing single repair must repair the missing NPC contract,
+            # not only simulation; never echo rejected output as source data.
+            repair_messages = [dict(message) for message in messages]
+            repair_messages.insert(
+                0,
+                {
+                    "role": "system",
+                    "content": (
+                        'Repair NPC and tracker output as one JSON object with both "npcs" and "simulation". '
+                        "Re-extract only from the same canonical source and accepted prior state below. "
+                        "Keep exact audience restrictions; do not invent missing facts, NPCs or user actions."
+                    ),
+                },
             )
-        simulation, simulation_valid = parse_simulation_payload(repaired)
+        event("tracker.repair_start", reason="invalid_shape")
+        try:
+            with diagnostic_scope(phase="tracker_repair"):
+                repaired = provider_port.for_usage(chat_id, session["session_id"], "npc").generate(
+                    "",
+                    model,
+                    repair_messages,
+                    session_id=f"tracker-repair:{chat_id}:{session['session_id']}",
+                    settings=settings,
+                    force_non_stream=True,
+                )
+        except Exception as error:
+            if repair_npcs and simulation_valid:
+                preserved = merge_simulation_payload(previous.get("simulation"), simulation)
+                raise NpcExtractionMalformed(preserved, primary_name, user_name) from error
+            raise
+        if repair_npcs:
+            groups, valid = _parse_payload(repaired, primary_name=primary_name, user_name=user_name)
+        repaired_simulation, repaired_valid = parse_simulation_payload(repaired)
+        if repaired_valid and not simulation_valid:
+            simulation, simulation_valid = repaired_simulation, True
         event("tracker.repair_finish", accepted=simulation_valid)
     merged_simulation = merge_simulation_payload(previous.get("simulation"), simulation) if simulation_valid else {}
     if not valid:

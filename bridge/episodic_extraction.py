@@ -130,8 +130,11 @@ def extract_episodic_memories_result(
                 "Keep irreversible events, established facts, goals, relationship changes, "
                 "world changes, and secrets. Exclude transient scene posture, ordinary dialogue, "
                 "style instructions, and speculation stated as fact. Preserve uncertainty. "
-                "Return only a JSON array with objects containing kind, importance (0 to 1), "
-                "summary, visibility, and known_by. visibility must be shared or restricted. "
+                'Return only one JSON object with a "memories" array; use {"memories":[]} '
+                "when no durable event qualifies. Each memory has kind, importance (0 to 1), "
+                "summary, visibility, and known_by. Include at most six qualifying memories, "
+                "with importance at least 0.65 and summaries at most 800 characters each. "
+                "visibility must be shared or restricted. "
                 + CLASSIFIED_AUDIENCE_PROMPT
                 + " For restricted memories, known_by must list only character names explicitly "
                 "established as knowing the fact. Allowed kinds: scene_event, relationship_change, "

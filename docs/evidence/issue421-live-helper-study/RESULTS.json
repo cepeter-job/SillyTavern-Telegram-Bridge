@@ -1,0 +1,127 @@
+{
+  "protocol": "issue421-helper-correction-v1",
+  "plan_sha256": "02df404c0353722ca108485832df93c9bcbbe479a8d4564a8bfe3855c7809eb7",
+  "evaluated_baseline_revision": "5370e435f56804fd37b1d57f21b82a3bba6efd7b",
+  "evaluated_candidate_revision": "b4c426b698cb5dc21da6c467fb1745b5608a326e",
+  "totals": {
+    "baseline": {
+      "physical_requests": 12,
+      "input_tokens": 6734,
+      "output_tokens": 6196,
+      "cached_tokens": 3381,
+      "shape_accepted_logical_cases": 9,
+      "logical_cases": 10,
+      "unknown_usage": 0
+    },
+    "candidate": {
+      "physical_requests": 11,
+      "input_tokens": 6468,
+      "output_tokens": 3348,
+      "cached_tokens": 3972,
+      "shape_accepted_logical_cases": 9,
+      "logical_cases": 10,
+      "unknown_usage": 0
+    }
+  },
+  "by_kind": [
+    {
+      "kind": "episodes",
+      "baseline": {
+        "requests": 3,
+        "input_tokens": 1249,
+        "output_tokens": 668,
+        "shape_accepted": 2
+      },
+      "candidate": {
+        "requests": 2,
+        "input_tokens": 839,
+        "output_tokens": 12,
+        "shape_accepted": 2
+      },
+      "input_reduction_fraction": 0.32826261008807045
+    },
+    {
+      "kind": "npc",
+      "baseline": {
+        "requests": 3,
+        "input_tokens": 2713,
+        "output_tokens": 2773,
+        "shape_accepted": 1
+      },
+      "candidate": {
+        "requests": 3,
+        "input_tokens": 2775,
+        "output_tokens": 710,
+        "shape_accepted": 1
+      },
+      "input_reduction_fraction": -0.022852930335422128
+    },
+    {
+      "kind": "scene",
+      "baseline": {
+        "requests": 2,
+        "input_tokens": 769,
+        "output_tokens": 1010,
+        "shape_accepted": 2
+      },
+      "candidate": {
+        "requests": 2,
+        "input_tokens": 851,
+        "output_tokens": 1255,
+        "shape_accepted": 2
+      },
+      "input_reduction_fraction": -0.10663198959687903
+    },
+    {
+      "kind": "curator",
+      "baseline": {
+        "requests": 2,
+        "input_tokens": 695,
+        "output_tokens": 1370,
+        "shape_accepted": 2
+      },
+      "candidate": {
+        "requests": 2,
+        "input_tokens": 695,
+        "output_tokens": 908,
+        "shape_accepted": 2
+      },
+      "input_reduction_fraction": 0.0
+    },
+    {
+      "kind": "story",
+      "baseline": {
+        "requests": 2,
+        "input_tokens": 1308,
+        "output_tokens": 375,
+        "shape_accepted": 2
+      },
+      "candidate": {
+        "requests": 2,
+        "input_tokens": 1308,
+        "output_tokens": 463,
+        "shape_accepted": 2
+      },
+      "input_reduction_fraction": 0.0
+    }
+  ],
+  "all_declared_input_reduction_fraction": 0.03950103950103945,
+  "story_input_reduction_fraction": 0.0,
+  "story_target_fraction": 0.2,
+  "story_target_met": false,
+  "all_logical_cases_shape_accepted": false,
+  "independent_human_review_complete": false,
+  "production_activation_allowed": false,
+  "provider_usage_reported": true,
+  "raw_ledgers_sha256": {
+    "baseline": "4b225c958fa76af3fa2a6fd09ee68363703c3d59337f07fb055ab9e33484590f",
+    "candidate": "40a3edcd2e91474cda6dfd2bd490c8cafec9b40c3ad08133642df5b8b9973264"
+  },
+  "limitations": [
+    "Two synthetic scenarios; not representative production proof.",
+    "NPC gate_promise failed in both arms; failed work remains in cost totals.",
+    "Later NPC root-repair correction is not covered by this frozen provider study.",
+    "External Hindsight service LLM usage is not measured by this study.",
+    "Shape acceptance is not semantic continuity approval. Cached input is not removed input."
+  ]
+}

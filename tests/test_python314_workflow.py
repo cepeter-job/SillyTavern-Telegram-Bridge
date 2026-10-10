@@ -99,4 +99,7 @@ def test_manual_gdb_job_requires_explicit_debug_dispatch():
     assert "native-finalizer-backtrace" in str(debug["steps"])
     assert "pybind11==3.0.1" not in str(debug["steps"])  # Version is passed as a bound loop variable.
     assert "for version in 2.11.1 2.13.6 3.0.1" in str(debug["steps"])
+    assert "ctranslate2-upstream" in str(debug["steps"])
+    assert "d44d2d069eb88c7b7804da864c10c201501cb4a9" in str(debug["steps"])
+    assert "LD_LIBRARY_PATH" in str(debug["steps"])
     assert "continue-on-error" not in str(jobs["full-regression"])

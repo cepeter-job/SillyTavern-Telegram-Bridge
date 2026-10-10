@@ -283,6 +283,53 @@ jobs:
               exit 1
             fi
           done
+      - name: Rebuild only CTranslate2 Python binding with corrected pybind11 (isolated trial)
+        run: |
+          set -euo pipefail
+          echo "Experimental build only. No replacement or repackaging of production wheel." | tee python314-patched-native-candidate.log
+          root="$RUNNER_TEMP/ct2-binding-candidate"
+          mkdir -p "$root/lib"
+          git clone --quiet --depth 1 --branch v4.8.2 \
+            https://github.com/OpenNMT/CTranslate2.git "$RUNNER_TEMP/ctranslate2-upstream"
+          candidate_sha=$(git -C "$RUNNER_TEMP/ctranslate2-upstream" rev-parse HEAD)
+          if [[ "$candidate_sha" != "d44d2d069eb88c7b7804da864c10c201501cb4a9" ]]; then
+            echo "::error::Unexpected upstream CTranslate2 source commit"
+            exit 1
+          fi
+          ln -s "$RUNNER_TEMP/ctranslate2-upstream/include" "$root/include"
+          # Reuse the exact native core shared library from the reviewed
+          # hash-locked official wheel already installed above. Do NOT build
+          # a different model engine or substitute wheel ABI tags.
+          native_lib=$(python - <<'PYCODE'
+          from pathlib import Path
+          import ctranslate2
+          wheel_root = Path(ctranslate2.__file__).resolve().parent.parent
+          libs = list(wheel_root.glob("ctranslate2.libs/libctranslate2-*.so.*"))
+          if len(libs) != 1:
+              raise SystemExit("Expected one official, audited CTranslate2 shared library")
+          print(libs[0])
+          PYCODE
+          )
+          ln -s "$native_lib" "$root/lib/libctranslate2.so"
+          export LD_LIBRARY_PATH="$(dirname "$native_lib"):${LD_LIBRARY_PATH:-}"
+          uv pip install --system --python python --no-deps 'pybind11==2.13.6' 'setuptools==80.9.0' 'wheel==0.45.1'
+          pushd "$RUNNER_TEMP/ctranslate2-upstream/python" >/dev/null
+          export CTRANSLATE2_ROOT="$root"
+          export CMAKE_BUILD_PARALLEL_LEVEL=2
+          python setup.py build_ext --inplace \
+            >> "$GITHUB_WORKSPACE/python314-patched-native-candidate.log" 2>&1
+          popd >/dev/null
+          export PYTHONPATH="$RUNNER_TEMP/ctranslate2-upstream/python:${PYTHONPATH:-}"
+          # These subprocess exit checks failed for the published wheel,
+          # but must succeed without suppressing debug allocation checks.
+          python -X dev -W error::ResourceWarning \
+            -c 'import ctranslate2, faster_whisper; print("patched_native_binding_exit=PASS", ctranslate2.__version__)' \
+            2>&1 | tee -a python314-patched-native-candidate.log
+          python -X dev -W error::ResourceWarning -m pytest -q -n 0 \
+            tests/test_python314_native_imports.py \
+            2>&1 | tee -a python314-patched-native-candidate.log
+          echo "No patched native binary was published or deployed." \
+            | tee -a python314-patched-native-candidate.log
       - name: Retain isolated native backtrace
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -291,5 +338,6 @@ jobs:
           path: |
             python314-native-gdb.log
             python314-pybind-allocation-probe.log
+            python314-patched-native-candidate.log
           if-no-files-found: error
           retention-days: 14

@@ -129,3 +129,16 @@ the native extension finalization abort under `-X dev`, retaining its
 native stack trace for 14 days. This diagnostic is intentionally **not**
 a passing runtime gate or an authorization to deploy. It does not run on
 normal pull requests and never accesses the live VPS or story data.
+
+### Experimental pybind11-rebuilt binding
+
+An isolated `native-debugger` trial also recompiles **only** the CTranslate2
+v4.8.2 Python extension at verified upstream commit
+`d44d2d069eb88c7b7804da864c10c201501cb4a9` using pybind11 2.13.6
+instead of the upstream-pinned 2.11.1. It links against the *reviewed
+official CTranslate2 core library* obtained from the existing hash-locked
+wheel. This tests the actual fix to `tp_doc` allocator ownership
+without shipping a private unreviewed native wheel or switching runtime.
+Any successful diagnostic is not an authorization to deploy; wait for a
+verified upstream build/release and the full resource/quality/performance
+gates. See CTranslate2 upstream issue #2107.

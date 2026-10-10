@@ -1,4 +1,5 @@
 import json
+from contextlib import closing
 
 import pytest
 from miniapp_test_support import identity, make_services
@@ -282,7 +283,7 @@ def test_status_includes_last_context_window_diagnostics(tmp_path):
     from bridge.miniapp_system import system_status
 
     s, w, _p = setup(tmp_path)
-    with s.db_factory() as db:
+    with closing(s.db_factory()) as db, db:
         session = current_session(s, w, {})["session"]
         set_meta(
             db,

@@ -2,6 +2,17 @@ name: Python 3.15 experimental compatibility
 
 on:
   workflow_dispatch:
+    inputs:
+      trace_resource_allocations:
+        description: "Run focused resource-allocation diagnostics, NOT the full regression suite"
+        required: false
+        type: boolean
+        default: false
+      resource_trace_tests:
+        description: "Space-separated tests/test_*.py paths (one to four, no shell expressions)"
+        required: false
+        type: string
+        default: "tests/test_expressions.py"
   pull_request:
     paths:
       - ".github/workflows/python315-experimental.yml"
@@ -202,6 +213,7 @@ jobs:
           .venv315-stable-core/bin/python -c \
             'import ssl, sqlite3, httpx, pytest, aiohttp, yaml; print("core_and_dev_imports_pass")'
       - name: Provisional full test discovery without native voice module
+        if: ${{ !inputs.trace_resource_allocations }}
         id: core-suite
         continue-on-error: true
         run: |
@@ -214,18 +226,60 @@ jobs:
             --junitxml=python315-stable-junit.xml \
             --durations=20 --durations-min=1 \
             2>&1 | tee python315-stable-pytest.log
+      - name: Targeted Python 3.15 resource-owner trace (NOT full regression)
+        if: ${{ inputs.trace_resource_allocations }}
+        id: resource-trace
+        continue-on-error: true
+        env:
+          TRACE_TEST_FILES: ${{ inputs.resource_trace_tests }}
+        run: |
+          set -euo pipefail
+          # Never inject user-supplied workflow inputs into a shell command.
+          # Check each target strictly and pass it as an ordinary array element.
+          if [[ -z "$TRACE_TEST_FILES" || "$TRACE_TEST_FILES" == *$'\n'* ]]; then
+            echo "::error::Specify one to four existing test modules on one line"
+            exit 2
+          fi
+          read -r -a targets <<< "$TRACE_TEST_FILES"
+          if (( ${#targets[@]} < 1 || ${#targets[@]} > 4 )); then
+            echo "::error::Resource tracing supports one to four test files"
+            exit 2
+          fi
+          for target in "${targets[@]}"; do
+            if [[ ! "$target" =~ ^tests/test_[a-zA-Z0-9_]+\.py$ || ! -f "$target" ]]; then
+              echo "::error::Invalid trace test target (tests/test_*.py files only)"
+              exit 2
+            fi
+          done
+          echo "Focused resource tracing for ${#targets[@]} test module(s); NOT a full regression."
+          # Serial pytest isolates actual resource ownership and avoids tracing
+          # subprocess-heavy unrelated tests with hardcoded timeouts.
+          PYTHONTRACEMALLOC=8 .venv315-stable-core/bin/python -X dev -W error::ResourceWarning \
+            -m pytest -q -n 0 "${targets[@]}" \
+            --junitxml=python315-stable-junit.xml \
+            --durations=20 --durations-min=1 \
+            2>&1 | tee python315-stable-pytest.log
       - name: Record stable runtime gate without granting promotion
         if: always()
         env:
           PROVISIONAL_SUITE_RESULT: ${{ steps.core-suite.outcome }}
+          RESOURCE_TRACE_RESULT: ${{ steps.resource-trace.outcome }}
         run: |
           echo "Python 3.15.0 FINAL — isolated core-plus-dev suite" >> "$GITHUB_STEP_SUMMARY"
-          echo "Provisional (no faster-whisper): $PROVISIONAL_SUITE_RESULT" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$RESOURCE_TRACE_RESULT" != "skipped" ]]; then
+            echo "Focused allocation trace (NOT a full regression): $RESOURCE_TRACE_RESULT" >> "$GITHUB_STEP_SUMMARY"
+            echo "Full Python 3.15 regression was intentionally NOT run in diagnostic mode." >> "$GITHUB_STEP_SUMMARY"
+            if [[ "$RESOURCE_TRACE_RESULT" != "success" ]]; then
+              echo "::warning title=Python 3.15 focused allocation trace failed::Review resource-allocation logs"
+            fi
+          else
+            echo "Provisional (no faster-whisper): $PROVISIONAL_SUITE_RESULT" >> "$GITHUB_STEP_SUMMARY"
+            if [[ "$PROVISIONAL_SUITE_RESULT" != "success" ]]; then
+              echo "::warning title=Provisional Python 3.15 final tests failed::Review JUnit and logs; migration remains blocked"
+            fi
+          fi
           echo "Full runtime native dependency gate remains BLOCKED until ctranslate2 cp315 wheel exists." >> "$GITHUB_STEP_SUMMARY"
           echo "Source build is not PGO or JIT optimized; do not compare its CPU time to a production interpreter." >> "$GITHUB_STEP_SUMMARY"
-          if [[ "$PROVISIONAL_SUITE_RESULT" != "success" ]]; then
-            echo "::warning title=Provisional Python 3.15 final tests failed::Review JUnit and logs; migration remains blocked"
-          fi
       - name: Upload core-only final-release regression evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

@@ -75,6 +75,7 @@ class ExpressionTests(SettingsTestCase):
         sprite_dir.mkdir()
         (sprite_dir / "joy.png").write_bytes(b"image")
         db = sqlite3.connect(":memory:")
+        self.addCleanup(db.close)
         db.execute("CREATE TABLE sessions(chat_id TEXT, session_id TEXT, character_file TEXT)")
         db.execute("CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT)")
         db.execute("INSERT INTO sessions VALUES('1', 's1', 'Alisha.png')")

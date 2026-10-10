@@ -235,11 +235,61 @@ jobs:
             echo "::error::Expected native shutdown failure was not captured; investigate environment"
             exit 1
           fi
+      - name: Compare pybind11 docstring allocator versions with a synthetic extension
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pybind-allocator-probe"
+          cat > "$RUNNER_TEMP/pybind-allocator-probe/_palloc.cpp" <<'CPP'
+          #include <pybind11/pybind11.h>
+          namespace py = pybind11;
+          struct Probe {};
+          PYBIND11_MODULE(_palloc, m) {
+            py::class_<Probe>(m, "Probe", "Synthetic C++ heap-type documentation with no user data.")
+              .def(py::init<>());
+          }
+          CPP
+          ulimit -c 0
+          suffix=$(python -c 'import sysconfig; print(sysconfig.get_config_var("EXT_SUFFIX"))')
+          for version in 2.11.1 2.13.6 3.0.1; do
+            uv pip install --system --python python --no-deps "pybind11==$version"
+            mkdir -p "$RUNNER_TEMP/pybind-allocator-probe/$version"
+            set +e
+            g++ -O0 -shared -std=c++17 -fPIC $(python -m pybind11 --includes) \
+              "$RUNNER_TEMP/pybind-allocator-probe/_palloc.cpp" \
+              -o "$RUNNER_TEMP/pybind-allocator-probe/$version/_palloc$suffix" \
+              > "$RUNNER_TEMP/pybind-allocator-probe/compile-$version.log" 2>&1
+            compiled=$?
+            if (( compiled == 0 )); then
+              PYTHONPATH="$RUNNER_TEMP/pybind-allocator-probe/$version" \
+                python -X dev -W error::ResourceWarning \
+                -c 'import _palloc; print(_palloc.Probe.__doc__)' \
+                > "$RUNNER_TEMP/pybind-allocator-probe/exit-$version.log" 2>&1
+              result=$?
+            else
+              result="not-compiled"
+            fi
+            set -e
+            echo "pybind11=$version compiled=$compiled exit=$result" \
+              | tee -a python314-pybind-allocation-probe.log
+            if (( compiled != 0 )); then
+              tail -20 "$RUNNER_TEMP/pybind-allocator-probe/compile-$version.log" \
+                | tee -a python314-pybind-allocation-probe.log
+            else
+              tail -13 "$RUNNER_TEMP/pybind-allocator-probe/exit-$version.log" \
+                | tee -a python314-pybind-allocation-probe.log
+            fi
+            if [[ "$version" == "3.0.1" && "$result" != "0" ]]; then
+              echo "::error::Modern pybind11 allocator candidate did not pass strict exit"
+              exit 1
+            fi
+          done
       - name: Retain isolated native backtrace
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: python314-native-finalizer-backtrace
-          path: python314-native-gdb.log
+          path: |
+            python314-native-gdb.log
+            python314-pybind-allocation-probe.log
           if-no-files-found: error
           retention-days: 14

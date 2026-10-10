@@ -97,4 +97,6 @@ def test_manual_gdb_job_requires_explicit_debug_dispatch():
     assert jobs["voice-enabled-native-preflight"]["if"].startswith("${{ !inputs.native_debug_backtrace")
     assert "gdb" in str(debug["steps"])
     assert "native-finalizer-backtrace" in str(debug["steps"])
+    assert "pybind11==3.0.1" not in str(debug["steps"])  # Version is passed as a bound loop variable.
+    assert "for version in 2.11.1 2.13.6 3.0.1" in str(debug["steps"])
     assert "continue-on-error" not in str(jobs["full-regression"])

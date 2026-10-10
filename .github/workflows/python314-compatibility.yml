@@ -80,6 +80,10 @@ jobs:
     if: ${{ !inputs.trace_resource_allocations && !inputs.native_debug_backtrace }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    # CLI flags alone do not reach xdist workers or their subprocesses.
+    env:
+      PYTHONDEVMODE: "1"
+      PYTHONWARNINGS: "error::ResourceWarning"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -107,6 +111,11 @@ jobs:
         run: |
           set -euo pipefail
           python -X dev -W error::ResourceWarning -m pytest -q             -n auto --maxprocesses=4 --dist=loadfile             --cov=bridge --cov-fail-under=76             --cov-report=json:python314-coverage.json             --cov-report=xml:python314-coverage.xml             --junitxml=python314-junit.xml --durations=20 --durations-min=1             2>&1 | tee python314-pytest.log
+          # xdist can report success before a worker aborts during finalization.
+          if grep -E 'Fatal Python error:|_PyMem_DebugRawFree|Segmentation fault|Aborted \(core dumped\)' python314-pytest.log; then
+            echo "::error::Native shutdown crash detected in pytest output"
+            exit 1
+          fi
           python tools/check_security_coverage.py python314-coverage.json
       - name: Retain non-advisory regression evidence
         if: always()

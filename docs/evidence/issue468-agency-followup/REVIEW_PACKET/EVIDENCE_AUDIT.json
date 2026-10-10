@@ -1,0 +1,18 @@
+{
+  "frozen_plan_sha256": "69ceed2e538b8c3d5f910fd5f7ca58354c7b78cc61904cb1edd1e3a84ddb5873",
+  "records": 32,
+  "distinct_cases": 16,
+  "requests_paired_and_ordered": true,
+  "all_reported_usage_reconciled": true,
+  "original_input_tokens": 9261,
+  "updated_input_tokens": 10093,
+  "combined_output_tokens": 5667,
+  "unknown_usage": false,
+  "failed_requests": 0,
+  "retries_or_repair_or_fallback": false,
+  "independent_human_review_completed": false,
+  "private_map_sha256": "b72910eb0e4c0a7a355e70ea59b63b5b0a5a8252adbb5e9cac99392f7effa302",
+  "private_provider_state_sha256": "f526368182a51114039e89dcd7ff0c3b89febea1d7427dd0f33e66b8baf0852c",
+  "packet_sha256": "534d689566de6cff386436e33a8d14d43f79970aaa6cadefbf622971703fb43a",
+  "scorecard_sha256": "79eca9068ac38d5cbc7403d24cfcbe63d52ef7690dbdc68cc6d845f7320e6ca0"
+}

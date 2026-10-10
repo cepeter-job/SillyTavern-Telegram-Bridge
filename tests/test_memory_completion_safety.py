@@ -227,7 +227,7 @@ def test_summary_coverage_stops_at_processed_rows(session_db, force):
 
     def generate(_key, _model, messages, **_kwargs):
         if str(_kwargs.get("session_id", "")).startswith("episodic:"):
-            return "[]"
+            return '{"memories":[],"no_memory_reason":"Only synthetic transient text was present."}'
         assert not db.in_transaction
         prompts.append(messages[-1]["content"])
         return classified_summary("Summary of supplied complete rows.")
@@ -272,7 +272,7 @@ def test_summary_unproven_prior_state_replays_complete_rows_from_floor(session_d
 
     def generate(_key, _model, messages, **_kwargs):
         if str(_kwargs.get("session_id", "")).startswith("episodic:"):
-            return "[]"
+            return '{"memories":[],"no_memory_reason":"Only synthetic transient text was present."}'
         prompts.append(messages[-1]["content"])
         return classified_summary("Updated continuity.")
 
@@ -313,7 +313,7 @@ def test_summary_later_segment_failure_preserves_only_completed_coverage(session
 
     def generate(_key, _model, messages, **_kwargs):
         if str(_kwargs.get("session_id", "")).startswith("episodic:"):
-            return "[]"
+            return '{"memories":[],"no_memory_reason":"Only synthetic transient text was present."}'
         prompts.append(messages[-1]["content"])
         if len(prompts) == 2:
             raise RuntimeError("synthetic later segment failure")
@@ -507,7 +507,12 @@ def test_episodic_extraction_rejects_outer_transaction_before_provider(session_d
                 source_text="Old source",
                 source_start_rowid=1,
                 source_end_rowid=2,
-                provider_port=make_test_provider_port(generate_backend=lambda *a, **k: calls.append(1) or "[]"),
+                provider_port=make_test_provider_port(
+                    generate_backend=lambda *a, **k: (
+                        calls.append(1)
+                        or '{"memories":[],"no_memory_reason":"Only synthetic transient text was present."}'
+                    )
+                ),
                 app_settings=settings,
             )
         assert calls == []

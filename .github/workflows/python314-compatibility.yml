@@ -2,6 +2,17 @@ name: Python 3.14 migration compatibility
 
 on:
   workflow_dispatch:
+    inputs:
+      trace_resource_allocations:
+        description: "Run bounded SQLite allocation diagnostics, not the full regression"
+        type: boolean
+        required: false
+        default: false
+      resource_trace_tests:
+        description: "One to four existing tests/test_*.py files separated by spaces"
+        type: string
+        required: false
+        default: "tests/test_transcript_delivery_recovery.py"
   pull_request:
     paths:
       - ".github/workflows/python314-compatibility.yml"
@@ -53,8 +64,13 @@ jobs:
       - name: Verify native voice-enabled integrations and CPU-compatible NumPy
         run: |
           python -c 'import av, ctranslate2, faster_whisper, numpy, onnxruntime, hindsight_client, aiohttp, yaml, sqlite3, ssl; assert numpy.__version__ == "2.3.5"; print("Python3.14.8 native_voice_imports=passed")'
+          # Runtime ownership checks must cover extension finalizers at process exit.
+          # The target VPS has reproduced a CTranslate2 shutdown abort under -X dev.
+          python -X dev -W error::ResourceWarning -c 'import ctranslate2; print("Python3.14.8 native_extension_exit_probe=started")'
+          python -X dev -W error::ResourceWarning -m pytest -q -n 0 tests/test_python314_native_imports.py
 
   full-regression:
+    if: ${{ !inputs.trace_resource_allocations }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -95,5 +111,67 @@ jobs:
             python314-junit.xml
             python314-coverage.json
             python314-coverage.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+  resource-owner-trace:
+    if: ${{ inputs.trace_resource_allocations }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up CPython 3.14.8
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14.8"
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+          enable-cache: true
+          cache-dependency-glob: requirements-dev-py314.lock
+      - name: Install native voice-enabled developer lock
+        run: |
+          set -euo pipefail
+          uv pip install --system --python python --require-hashes -r requirements-dev-py314.lock
+          uv pip check --python python
+      - name: Trace only selected test modules with strict warnings
+        id: trace
+        env:
+          TRACE_TEST_FILES: ${{ inputs.resource_trace_tests }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$TRACE_TEST_FILES" || "$TRACE_TEST_FILES" == *$'\n'* ]]; then
+            echo "::error::Select one to four existing test files"
+            exit 2
+          fi
+          read -r -a targets <<< "$TRACE_TEST_FILES"
+          if (( ${#targets[@]} < 1 || ${#targets[@]} > 4 )); then
+            echo "::error::Too many or no test targets"
+            exit 2
+          fi
+          for path in "${targets[@]}"; do
+            if [[ ! "$path" =~ ^tests/test_[a-zA-Z0-9_]+\.py$ || ! -f "$path" ]]; then
+              echo "::error::Invalid trace target"
+              exit 2
+            fi
+          done
+          echo "Focused SQLite allocation tracing; NOT a full-regression pass" >> "$GITHUB_STEP_SUMMARY"
+          PYTHONTRACEMALLOC=6 python -X dev -W error::ResourceWarning \
+            -m pytest -q -n 0 "${targets[@]}" \
+            --junitxml=python314-trace-junit.xml \
+            --durations=20 --durations-min=1 \
+            2>&1 | tee python314-trace.log
+      - name: Retain allocation traces independently of exit status
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: python314-sqlite-allocation-trace
+          path: |
+            python314-trace.log
+            python314-trace-junit.xml
           if-no-files-found: ignore
           retention-days: 14

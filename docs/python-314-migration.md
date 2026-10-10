@@ -47,6 +47,41 @@ the old locks:
 
 ## Validation and release gates
 
+## Current blockers and diagnostic evidence
+
+The first strict Python 3.14.8 full regression on GitHub
+([run 38020696462](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/actions/runs/38020696462))
+**failed: 5,110 passed, 16 failed and one error**, mainly from Python
+SQLite `ResourceWarning` finalizers. This does not establish Python 3.14
+readiness and must not be masked by advisory CI. The workflow registry
+documentation omission was fixed separately.
+
+On the actual older KVM VPS, CPython 3.14.8 **and** 3.14.7
+standalone environments abort on exit after importing CTranslate2 4.8.2
+under `-X dev -W error::ResourceWarning`:
+`Fatal Python error: _PyMem_DebugRawFree: bad ID`.
+Plain imports succeed, so simple import-only checks are insufficient;
+`voice-enabled-native-preflight` now checks strict subprocess exit status.
+Do not assume the root cause belongs solely to the CTranslate2 wheel or
+the standalone Python distribution without further isolation. Do not
+disable Python's developer allocator to claim the gate passes.
+
+Three alternating runs per interpreter on the same VPS of
+`tools/benchmark_python_runtime.py` showed identical synthetic
+outputs and an 11.5% **slowdown** in Python 3.14.8 SQLite lookup median
+CPU versus Python 3.11.16. Context estimation, deduplication and JSON
+showed gains (+3.0%, +11.5%, +8.2%). These are tiny synthetic
+microbenchmarks, not Telegram p95 or actual process RSS.
+
+To diagnose SQLite finalization warnings without slowing or contaminating
+the entire suite, manually dispatch the Python 3.14 workflow with
+`trace_resource_allocations=true` and `resource_trace_tests` set to
+one to four existing `tests/test_*.py` paths. This optional mode runs
+only the selected files serially under `PYTHONTRACEMALLOC=6`; the
+full-regression job is explicitly skipped and diagnostics can fail.
+It does not grant migration approval, nor relax resource warnings.
+Regular pull requests still run the untraced full strict pytest suite.
+
 The Python 3.14 compatibility GitHub Actions workflow performs a
 **full voice-enabled dependency install**, not a transcription-disabled
 core-only installation. Full pytest with native Python 3.14.8,

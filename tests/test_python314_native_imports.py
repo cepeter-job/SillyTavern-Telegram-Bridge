@@ -33,3 +33,24 @@ def test_required_stdlib_native_modules_load():
     assert ssl.OPENSSL_VERSION
     assert lzma.compress(b"sample")
     assert bz2.compress(b"sample")
+
+
+@pytest.mark.skipif(sys.version_info[:2] != (3, 14), reason="Python 3.14-only speech decoder smoke")
+def test_voice_decoder_handles_synthetic_wav_without_model_download():
+    from io import BytesIO
+    from wave import open as open_wave
+
+    import numpy as np
+    from faster_whisper.audio import decode_audio
+
+    raw = BytesIO()
+    with open_wave(raw, "wb") as output:
+        output.setnchannels(1)
+        output.setsampwidth(2)
+        output.setframerate(8000)
+        output.writeframes(b"\0\0" * 4000)
+    pcm = decode_audio(BytesIO(raw.getvalue()), sampling_rate=16000)
+    assert pcm.dtype == np.float32
+    assert pcm.ndim == 1
+    assert 7800 <= len(pcm) <= 8200
+    assert np.max(np.abs(pcm)) == 0

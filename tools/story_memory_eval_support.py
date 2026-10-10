@@ -78,7 +78,11 @@ class OfflineTransport:
                     "summaries": [fact["summary"] for fact in marker_facts(source)],
                 }
             )
-            return json.dumps(marker_facts(source))
+            facts = marker_facts(source)
+            payload = {"memories": facts}
+            if not facts:
+                payload["no_memory_reason"] = "No complete durable fact marker was present."
+            return json.dumps(payload)
         self.story_payloads.append({"messages": messages, "settings": dict(kwargs.get("settings") or {})})
         return self.reply
 

@@ -122,10 +122,49 @@ def test_parser_accepts_valid_groups_and_rejects_invalid_identity_and_secret_sco
     assert [op.field_key for op in groups[0].operations] == ["role"]
 
 
+def test_parser_rejects_populated_supporting_npc_when_every_operation_is_invalid():
+    raw = _payload(name="Maya", field="role", value="Archivist", mode="public")
+    groups, valid = _parse_payload(raw, primary_name="Alice", user_name="User")
+    assert groups == []
+    assert valid is False
+
+
+def test_parser_accepts_explicit_empty_or_blocked_only_npc_results():
+    assert _parse_payload('{"npcs":[]}', primary_name="Alice", user_name="User") == ([], True)
+    blocked = _payload(name="Alice", field="role", value="Hero")
+    assert _parse_payload(blocked, primary_name="Alice", user_name="User") == ([], True)
+
+
 def test_parser_returns_empty_for_malformed_or_unsupported_payload():
     assert _parse_payload("not-json", primary_name="Alice", user_name="User")[0] == []
     raw = _payload(name="Maya", field="unsupported", value="x")
     assert _parse_payload(raw, primary_name="Alice", user_name="User")[0] == []
+
+
+def test_all_invalid_supporting_operations_repair_once_without_advancing_coverage(synthetic_settings):
+    db = _db()
+    _messages(db)
+    calls = []
+
+    def generate(*_args, **_kwargs):
+        calls.append(1)
+        return _payload(name="Maya", field="role", value="Archivist", mode="public")
+
+    try:
+        applied = refresh_npc_state_now(
+            db,
+            "chat",
+            _session(),
+            _fields(),
+            provider_port=make_test_provider_port(generate_backend=generate),
+            app_settings=synthetic_settings,
+        )
+        assert applied == 0
+        assert len(calls) == 2
+        assert get_npc_extraction_coverage(db, "chat", "s1") == 0
+        assert find_test_npc(db, "chat", "s1", "maya") is None
+    finally:
+        db.close()
 
 
 def test_refresh_extracts_once_and_advances_coverage(synthetic_settings):

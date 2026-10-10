@@ -18,6 +18,7 @@ from typing import Any
 
 from bridge.hindsight_client_runtime import close_hindsight_client as close_hindsight_client
 from bridge.hindsight_client_runtime import hindsight_client as hindsight_client
+from bridge.hindsight_diagnostics import handle_hindsight_retain_failure
 from bridge.hindsight_endpoint import (
     _ensure_hindsight_loopback_proxy_bypass as _ensure_hindsight_loopback_proxy_bypass,
 )
@@ -488,9 +489,8 @@ def _retain_with_client(
                 retain_async=False,
             )
             return True
-    except Exception:
-        logging.warning("Hindsight native fact retain unavailable for chat %s", chat_id, exc_info=True)
-        return False
+    except Exception as error:
+        return handle_hindsight_retain_failure(error, chat_id, session_id)
 
 
 def _memory_hindsight_epoch_key(

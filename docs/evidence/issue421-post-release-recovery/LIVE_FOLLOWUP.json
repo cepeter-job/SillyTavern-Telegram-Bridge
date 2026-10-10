@@ -1,0 +1,114 @@
+{
+  "captured_at": 1791645538.3156013,
+  "queue_categories": [
+    {
+      "layer": "curator",
+      "category": "eligible",
+      "count": 1
+    },
+    {
+      "layer": "hindsight",
+      "category": "leased",
+      "count": 1
+    },
+    {
+      "layer": "npc",
+      "category": "eligible",
+      "count": 1
+    },
+    {
+      "layer": "npc",
+      "category": "inactive",
+      "count": 1
+    },
+    {
+      "layer": "npc",
+      "category": "parked",
+      "count": 1
+    },
+    {
+      "layer": "scene",
+      "category": "eligible",
+      "count": 1
+    },
+    {
+      "layer": "scene",
+      "category": "inactive",
+      "count": 1
+    },
+    {
+      "layer": "scene",
+      "category": "parked",
+      "count": 1
+    },
+    {
+      "layer": "summary",
+      "category": "eligible",
+      "count": 1
+    },
+    {
+      "layer": "summary",
+      "category": "parked",
+      "count": 1
+    }
+  ],
+  "summary_recovery": {
+    "schema_version": 1,
+    "source": "existing_sqlite_read_only",
+    "summary": {
+      "layers": {
+        "total": 3,
+        "invalidated": 0,
+        "covered_lagging": 2
+      },
+      "jobs": {
+        "eligible": 1,
+        "leased": 0,
+        "backoff": 0,
+        "inactive": 0,
+        "parked": 1,
+        "disabled": 0,
+        "pending": 2,
+        "manual_due": 2,
+        "max_attempts": 8,
+        "error_codes": {
+          "malformed_json": 1
+        }
+      },
+      "catchup_complete": false
+    },
+    "approval_ready": false,
+    "meaning": "Queue snapshot only; accepted summary coverage and causal review remain separate requirements.",
+    "blocking_reasons": [
+      "live_summary_recovery_not_verified",
+      "native_required_fact_and_causal_proof_required",
+      "provider_reported_input_and_blinded_review_required"
+    ]
+  },
+  "episode_segments": [
+    {
+      "cohort": "earlier",
+      "segments": 147,
+      "segments_with_valid_facts": 49,
+      "segments_without_valid_facts": 98
+    },
+    {
+      "cohort": "since_release_restart",
+      "segments": 8,
+      "segments_with_valid_facts": 0,
+      "segments_without_valid_facts": 8
+    }
+  ],
+  "episode_schema": [
+    "memory_id",
+    "chat_id",
+    "session_id",
+    "kind",
+    "importance",
+    "summary",
+    "source_start_rowid",
+    "source_end_rowid",
+    "created_at"
+  ],
+  "observation_files": []
+}

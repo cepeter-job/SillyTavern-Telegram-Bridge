@@ -264,7 +264,8 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
     )
     groups, valid = _parse_payload(raw, primary_name=primary_name, user_name=user_name)
     simulation, simulation_valid = parse_simulation_payload(raw)
-    if not simulation_valid:
+    repair_npcs = not valid
+    if repair_npcs or not simulation_valid:
         repair_messages = [
             {
                 "role": "system",
@@ -288,6 +289,21 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
                 ),
             },
         ]
+        if repair_npcs:
+            # The existing single repair must repair the missing NPC contract,
+            # not only simulation; never echo rejected output as source data.
+            repair_messages = [dict(message) for message in messages]
+            repair_messages.insert(
+                0,
+                {
+                    "role": "system",
+                    "content": (
+                        'Repair the extraction into one complete JSON object with both "npcs" and "simulation". '
+                        "Re-extract only from the same canonical source and accepted prior state below. "
+                        "Keep exact audience restrictions; do not invent missing facts, NPCs or user actions."
+                    ),
+                },
+            )
         event("tracker.repair_start", reason="invalid_shape")
         with diagnostic_scope(phase="tracker_repair"):
             repaired = provider_port.for_usage(chat_id, session["session_id"], "npc").generate(
@@ -298,7 +314,11 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
                 settings=settings,
                 force_non_stream=True,
             )
-        simulation, simulation_valid = parse_simulation_payload(repaired)
+        if repair_npcs:
+            groups, valid = _parse_payload(repaired, primary_name=primary_name, user_name=user_name)
+        repaired_simulation, repaired_valid = parse_simulation_payload(repaired)
+        if repaired_valid:
+            simulation, simulation_valid = repaired_simulation, True
         event("tracker.repair_finish", accepted=simulation_valid)
     merged_simulation = merge_simulation_payload(previous.get("simulation"), simulation) if simulation_valid else {}
     if not valid:

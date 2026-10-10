@@ -71,3 +71,58 @@ def test_empty_episode_object_cannot_be_silently_accepted_as_no_memories(session
     assert result == "invalid_shape"
     assert len(seen) == 2
     assert db.execute("SELECT completed_version FROM memory_jobs WHERE layer='episodes'").fetchone() == (0,)
+
+
+def test_missing_npc_root_repairs_npcs_not_only_simulation(session_db):
+    settings, db, session = session_db
+    add(db, "Mira is an archivist. No item changed hands.")
+    repaired = (
+        '{"npcs":[{"name":"Mira","aliases":[],"operations":[{"field":"role",'
+        '"op":"set","value":"Archivist","mode":"mutable","visibility":"shared",'
+        '"known_by":[]}]}],"simulation":{}}'
+    )
+    responses = iter(["{}", repaired])
+    calls = []
+
+    def generate(*args, **kwargs):
+        calls.append((args, kwargs))
+        return next(responses)
+
+    result = run_memory_claim(
+        db,
+        claim_jobs(db, layers=("npc",))[0],
+        session,
+        {"name": "Alice"},
+        provider_port=make_test_provider_port(generate_backend=generate),
+        app_settings=settings,
+    )
+    assert result == "complete"
+    assert len(calls) == 2
+    assert calls[0][0][2][-1] == calls[1][0][2][-1]
+    repair = "\n".join(m["content"] for m in calls[1][0][2] if m["role"] == "system")
+    assert '"npcs"' in repair and '"simulation"' in repair
+    assert "no NPC data" not in repair
+    assert all(x[1]["settings"].get("json_once") is True for x in calls)
+    assert db.execute("SELECT COUNT(*) FROM npc_entities WHERE display_name=?", ("Mira",)).fetchone() == (1,)
+
+
+def test_npc_root_repair_failure_remains_bounded_and_does_not_complete(session_db):
+    settings, db, session = session_db
+    add(db, "Mira still holds the key; Alice did not receive it.")
+    calls = []
+
+    def generate(*args, **kwargs):
+        calls.append(1)
+        return "{}"
+
+    result = run_memory_claim(
+        db,
+        claim_jobs(db, layers=("npc",))[0],
+        session,
+        {"name": "Alice"},
+        provider_port=make_test_provider_port(generate_backend=generate),
+        app_settings=settings,
+    )
+    assert result == "invalid_npc_output"
+    assert len(calls) == 2
+    assert db.execute("SELECT completed_version FROM memory_jobs WHERE layer='npc'").fetchone() == (0,)

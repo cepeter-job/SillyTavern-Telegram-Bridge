@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from bridge.diagnostic_events import event
+import logging
+
+from bridge.diagnostic_events import clean_fields, event
 
 _CAPPED = frozenset({"length", "max_tokens", "max_output_tokens"})
 _NOT_CAPPED = frozenset(
@@ -18,6 +20,36 @@ _NOT_CAPPED = frozenset(
         "pause_turn",
     }
 )
+_RESPONSE_KEYS = frozenset({"id", "object", "model", "choices", "usage", "data", "success"})
+
+
+def warn_missing_assistant_content(
+    provider: str, model: str, response: object, choices: list[dict], finish_reason: object, result: object
+) -> None:
+    """Retain bounded response metadata without logging provider-controlled text."""
+    metadata = clean_fields({"provider": provider, "model": model})
+    try:
+        http_status = getattr(response, "status", None)
+        if http_status is None:
+            getcode = getattr(response, "getcode", None)
+            http_status = getcode() if callable(getcode) else None
+    except Exception:
+        http_status = None
+    safe_status = http_status if type(http_status) is int and 100 <= http_status <= 599 else "unknown"
+    safe_reason = (
+        finish_reason if isinstance(finish_reason, str) and finish_reason in _CAPPED | _NOT_CAPPED else "unknown"
+    )
+    response_keys = sorted(_RESPONSE_KEYS.intersection(result)) if isinstance(result, dict) else []
+    logging.getLogger("bridge.provider_transport").warning(
+        "Provider response missing assistant content: "
+        "provider=%s model=%s http_status=%s choice_count=%s finish_reason=%s response_keys=%s",
+        metadata.get("provider", "unknown"),
+        metadata.get("model", "unknown"),
+        safe_status,
+        len(choices),
+        safe_reason,
+        response_keys,
+    )
 
 
 def report_finish_reason(reason: object) -> None:

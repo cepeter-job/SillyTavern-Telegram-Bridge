@@ -16,7 +16,7 @@ from bridge.context_attempt_budget import check_attempt_budget
 from bridge.limits import DEFAULT_MAX_TOKENS
 from bridge.model_router import ModelRouter
 from bridge.network_security import strict_urlopen, validate_provider_endpoint
-from bridge.provider_completion import report_finish_reason, report_response_completion
+from bridge.provider_completion import report_finish_reason, report_response_completion, warn_missing_assistant_content
 from bridge.provider_response import openai_response_choices as _openai_response_choices
 from bridge.provider_response import provider_response_lines, read_provider_response
 from bridge.provider_streaming import read_openai_stream_segment as _read_openai_stream_segment
@@ -562,7 +562,7 @@ def generate_provider_text(
                             context_observer=context_observer,
                             context_model=selected_model,
                         )
-                logging.getLogger(__name__).warning("Provider response missing assistant content")
+                warn_missing_assistant_content(provider_id, actual_model, response, choices, finish_reason, result)
                 raise RuntimeError("backend returned no assistant content")
             content = str(content).strip()
             if finish_reason != "length" or generation.get("json_once") is True:

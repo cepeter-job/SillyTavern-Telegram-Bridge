@@ -1,7 +1,7 @@
 """Offline checks for the project's runtime and combined development locks.
 
 Validate exact pins, SHA-256 metadata, and direct requirements against the
-Python 3.11 target on the current platform. This is not a dependency resolver,
+selected Python target on the current platform. This is not a dependency resolver,
 artifact hash verifier, or vulnerability scanner. Installation and pip-audit
 remain separate gates. Inputs are never echoed in parsing errors.
 """
@@ -147,6 +147,7 @@ def main() -> int:
     parser.add_argument("--lock", type=Path, default=root / "requirements.lock")
     parser.add_argument("--development", type=Path, default=root / "requirements-dev.txt")
     parser.add_argument("--development-lock", type=Path, default=root / "requirements-dev.lock")
+    parser.add_argument("--python-version", choices=("3.11", "3.14"), default="3.11")
     args = parser.parse_args()
     try:
         errors = validate(
@@ -154,6 +155,10 @@ def main() -> int:
             args.lock.read_text(encoding="utf-8"),
             args.development.read_text(encoding="utf-8"),
             development_locked=args.development_lock.read_text(encoding="utf-8"),
+            environment={
+                "python_version": args.python_version,
+                "python_full_version": f"{args.python_version}.0",
+            },
         )
     except (OSError, UnicodeError):
         print("dependency-lock: cannot read the configured UTF-8 dependency files", file=sys.stderr)
@@ -162,7 +167,7 @@ def main() -> int:
         for error in errors:
             print(error, file=sys.stderr)
         return 1
-    print("dependency-lock=ok (Python 3.11 target; current platform)")
+    print(f"dependency-lock=ok (Python {args.python_version} target; current platform)")
     return 0
 
 

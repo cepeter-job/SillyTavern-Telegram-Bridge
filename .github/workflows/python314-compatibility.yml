@@ -1,0 +1,99 @@
+name: Python 3.14 migration compatibility
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/python314-compatibility.yml"
+      - "requirements-py314.lock"
+      - "requirements-dev-py314.lock"
+      - "config/python314-constraints.txt"
+      - "tools/check_dependency_lock.py"
+      - "tests/test_dependency_lock.py"
+      - "tests/test_python314_native_imports.py"
+      - "docs/python-314-migration.md"
+      - "bridge/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python314-migration
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  voice-enabled-native-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up CPython 3.14.8
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14.8"
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+          enable-cache: true
+          cache-dependency-glob: requirements-py314.lock
+      - name: Confirm final interpreter and install full hash-locked runtime
+        run: |
+          set -euo pipefail
+          python -c 'import sys; assert sys.version_info[:3] == (3,14,8) and sys.version_info.releaselevel == "final"'
+          uv pip install --system --python python --require-hashes -r requirements-py314.lock
+          uv pip check --python python
+      - name: Verify native voice-enabled integrations and CPU-compatible NumPy
+        run: |
+          python -c 'import av, ctranslate2, faster_whisper, numpy, onnxruntime, hindsight_client, aiohttp, yaml, sqlite3, ssl; assert numpy.__version__ == "2.3.5"; print("Python3.14.8 native_voice_imports=passed")'
+
+  full-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up CPython 3.14.8
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14.8"
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+          enable-cache: true
+          cache-dependency-glob: |
+            requirements-py314.lock
+            requirements-dev-py314.lock
+      - name: Install complete hash-locked native and development environment
+        run: |
+          set -euo pipefail
+          uv pip install --system --python python --require-hashes -r requirements-dev-py314.lock
+          uv pip check --python python
+          python tools/check_dependency_lock.py --python-version 3.14 --lock requirements-py314.lock --development-lock requirements-dev-py314.lock
+      - name: Run full Python 3.14 strict regression suite and original coverage gate
+        run: |
+          set -euo pipefail
+          python -X dev -W error::ResourceWarning -m pytest -q             -n auto --maxprocesses=4 --dist=loadfile             --cov=bridge --cov-fail-under=76             --cov-report=json:python314-coverage.json             --cov-report=xml:python314-coverage.xml             --junitxml=python314-junit.xml --durations=20 --durations-min=1             2>&1 | tee python314-pytest.log
+          python tools/check_security_coverage.py python314-coverage.json
+      - name: Retain non-advisory regression evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: python314-full-regression
+          path: |
+            python314-pytest.log
+            python314-junit.xml
+            python314-coverage.json
+            python314-coverage.xml
+          if-no-files-found: ignore
+          retention-days: 14

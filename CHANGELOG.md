@@ -8,6 +8,16 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+## [0.3.022] - 2026-10-10
+
+### Memory extraction reliability
+
+- Reject supporting-NPC results with no accepted operations instead of advancing coverage. Use the existing single repair attempt; repeated invalid output remains pending (#510).
+- Require a text exclusion reason for an empty episodic result. Reject populated results with no accepted candidates, and re-check durable facts during the single bounded repair. Failed repair preserves canonical source coverage (#510).
+- Classify Hindsight retention failures with content-free upstream-response, HTTP, timeout or generic diagnostics. Existing retry/backoff and provider routes remain unchanged (#510).
+- Align synthetic episodic providers with the explicit-empty contract and preserve the frozen post-release findings. Upstream Hindsight recovery and the issue #421 efficiency/quality goals remain unverified.
+- No dependency-lock or database-schema change. Production history pruning remains off; install from the trusted signed release and verify the running revision after restart.
+
 ## [0.3.021] - 2026-10-10
 
 ### Conversation setup and helper reliability

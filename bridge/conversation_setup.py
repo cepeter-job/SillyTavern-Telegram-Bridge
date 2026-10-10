@@ -33,6 +33,10 @@ from bridge.settings import AppSettings
 from bridge.sqlite_store import write_transaction
 
 
+class SetupExpiredError(ValueError):
+    """A setup draft is no longer usable; its panel may be retired."""
+
+
 def setup_key(chat_id: str, actor_id: str) -> str:
     return f"conversation_setup:{chat_id}:{actor_id}"
 
@@ -95,7 +99,7 @@ class ConversationSetupService:
         except (ValueError, TypeError):
             valid = False
         if not valid:
-            raise ValueError("Setup expired; run /character again.")
+            raise SetupExpiredError("Setup expired; run /character again.")
         return state
 
     def _save(self, db: sqlite3.Connection, chat_id: str, actor_id: str, state: dict) -> dict:

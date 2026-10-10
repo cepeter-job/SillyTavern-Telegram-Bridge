@@ -1,0 +1,146 @@
+{
+  "captured_at_utc": "2026-10-10T15:24:51.166946+00:00",
+  "runtime_head": "3c94d3ca5ee91e1574a0db2c47b415de2fc67188",
+  "service": "active",
+  "queue_categories": [
+    {
+      "layer": "curator",
+      "category": "backoff",
+      "count": 1
+    },
+    {
+      "layer": "hindsight",
+      "category": "backoff",
+      "count": 1
+    },
+    {
+      "layer": "npc",
+      "category": "backoff",
+      "count": 1
+    },
+    {
+      "layer": "npc",
+      "category": "inactive",
+      "count": 1
+    },
+    {
+      "layer": "npc",
+      "category": "parked",
+      "count": 1
+    },
+    {
+      "layer": "scene",
+      "category": "backoff",
+      "count": 1
+    },
+    {
+      "layer": "scene",
+      "category": "inactive",
+      "count": 1
+    },
+    {
+      "layer": "scene",
+      "category": "parked",
+      "count": 1
+    },
+    {
+      "layer": "summary",
+      "category": "parked",
+      "count": 1
+    }
+  ],
+  "summary_recovery": {
+    "schema_version": 1,
+    "source": "existing_sqlite_read_only",
+    "summary": {
+      "layers": {
+        "total": 3,
+        "invalidated": 0,
+        "covered_lagging": 1
+      },
+      "jobs": {
+        "eligible": 0,
+        "leased": 0,
+        "backoff": 0,
+        "inactive": 0,
+        "parked": 1,
+        "disabled": 0,
+        "pending": 1,
+        "manual_due": 1,
+        "max_attempts": 8,
+        "error_codes": {
+          "malformed_json": 1
+        }
+      },
+      "catchup_complete": false
+    },
+    "approval_ready": false,
+    "meaning": "Queue snapshot only; accepted summary coverage and causal review remain separate requirements.",
+    "blocking_reasons": [
+      "live_summary_recovery_not_verified",
+      "native_required_fact_and_causal_proof_required",
+      "provider_reported_input_and_blinded_review_required"
+    ]
+  },
+  "pending_errors": [
+    {
+      "layer": "curator",
+      "last_error": "work_failed",
+      "count": 1
+    },
+    {
+      "layer": "hindsight",
+      "last_error": "retain_failed",
+      "count": 1
+    },
+    {
+      "layer": "npc",
+      "last_error": "invalid_npc_output",
+      "count": 2
+    },
+    {
+      "layer": "npc",
+      "last_error": "work_failed",
+      "count": 1
+    },
+    {
+      "layer": "scene",
+      "last_error": "invalid_shape",
+      "count": 1
+    },
+    {
+      "layer": "scene",
+      "last_error": "malformed_json",
+      "count": 1
+    },
+    {
+      "layer": "scene",
+      "last_error": "work_failed",
+      "count": 1
+    },
+    {
+      "layer": "summary",
+      "last_error": "malformed_json",
+      "count": 1
+    }
+  ],
+  "retired_external_documents": [
+    {
+      "deleted": 0,
+      "count": 604,
+      "due": 0
+    },
+    {
+      "deleted": 1,
+      "count": 310,
+      "due": 310
+    }
+  ],
+  "pending_external_facts": 19,
+  "post_restart_episode_segments": [
+    {
+      "segments": 8,
+      "segments_with_valid_facts": 0
+    }
+  ]
+}

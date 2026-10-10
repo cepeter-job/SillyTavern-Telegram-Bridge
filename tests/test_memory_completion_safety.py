@@ -507,12 +507,7 @@ def test_episodic_extraction_rejects_outer_transaction_before_provider(session_d
                 source_text="Old source",
                 source_start_rowid=1,
                 source_end_rowid=2,
-                provider_port=make_test_provider_port(
-                    generate_backend=lambda *a, **k: (
-                        calls.append(1)
-                        or '{"memories":[],"no_memory_reason":"Only synthetic transient text was present."}'
-                    )
-                ),
+                provider_port=make_test_provider_port(generate_backend=lambda *a, **k: calls.append(1) or "[]"),
                 app_settings=settings,
             )
         assert calls == []

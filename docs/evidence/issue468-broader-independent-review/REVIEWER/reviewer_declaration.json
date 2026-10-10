@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "packet_sha256": null,
+  "reviewer_id": null,
+  "signed_name": null,
+  "reviewed_at_utc": null,
+  "human_reviewer": null,
+  "different_from_original_38_pair_grader": null,
+  "no_implementation_access": null,
+  "no_condition_assignment_access": null,
+  "no_previous_38_pair_grade_access": null,
+  "reviewed_all_38_pairs": null,
+  "acknowledgment": null
+}

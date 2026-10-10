@@ -24,6 +24,14 @@ if str(ROOT) not in sys.path:
 from tools.issue468_agency_trial import SHEET_COLUMNS  # noqa: E402
 
 ORIGINAL_BLINDED_PACKET_SHA256 = "f461013fa5370c9afd53eaaccab0e5ac1f2b719f804364e54a6dfd2df3845228"
+FRESH_BLINDED_PACKET_SHA256 = "4fcef6f4b715ab9ff53936e87d62a2d4f3fafc9649642d5e0db08dbdc0438088"
+APPROVED_PACKET_SHA256 = {ORIGINAL_BLINDED_PACKET_SHA256, FRESH_BLINDED_PACKET_SHA256}
+# Pin parsed content as well, so direct callers cannot bypass the file fingerprint.
+APPROVED_PACKET_CONTENT_SHA256 = {
+    "e28f232045b0254b638d6c8df63c9baef6f661da00503ef70acb8f719f0a2566",
+    "65e5ce38aebe4c3357a205f39274a9cd516ec01793ebd11fd7eb467458602397",
+}
+
 
 CATEGORIES = (
     "invented_user_speech",
@@ -56,10 +64,10 @@ def _is_nonempty(value: object) -> bool:
 
 
 def load_original_packet(path: Path) -> dict[str, Any]:
-    """Reject altered or rewritten evidence before validating reviewer scores."""
+    """Load only the frozen original or fresh presentation, never altered evidence."""
     raw = path.read_bytes()
-    if hashlib.sha256(raw).hexdigest() != ORIGINAL_BLINDED_PACKET_SHA256:
-        _failure("wrong_blind_packet", "the source packet must match the originally frozen evidence")
+    if hashlib.sha256(raw).hexdigest() not in APPROVED_PACKET_SHA256:
+        _failure("wrong_blind_packet", "the source packet must match an explicitly frozen presentation")
     data = json.loads(raw)
     if not isinstance(data, dict):
         _failure("wrong_blind_packet", "expected source packet object")
@@ -78,10 +86,14 @@ def validate_submission(
     pair_ids = [pair.get("id") for pair in pairs]
     if (
         len(set(pair_ids)) != 16
-        or any(not isinstance(key, str) or not key.startswith("pair-") for key in pair_ids)
+        or any(not isinstance(key, str) or not key.startswith(("pair-", "fresh-")) for key in pair_ids)
         or any(not _is_nonempty(pair.get("A")) or not _is_nonempty(pair.get("B")) for pair in pairs)
     ):
         _failure("invalid_packet_inventory", "duplicate/malformed or blank A/B pair")
+
+    canonical = json.dumps(packet, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    if hashlib.sha256(canonical).hexdigest() not in APPROVED_PACKET_CONTENT_SHA256:
+        _failure("wrong_blind_packet", "parsed evidence must match an explicitly frozen presentation")
     if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
         _failure("scorecard_columns", "rows must be CSV dictionaries")
     schema = set(SHEET_COLUMNS)

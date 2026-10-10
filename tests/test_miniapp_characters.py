@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 import urllib.error
+from contextlib import closing
 from email.message import Message
 from pathlib import Path
 
@@ -40,7 +41,7 @@ def test_character_selection_creates_new_session_not_rewrites_history(tmp_path):
     result = select_character(s, w, {**p, "filename": "Alice.png", "confirm": True})
     assert result["session"]["character_file"] == "Alice.png"
     assert result["session"]["session_id"] != p["session_id"]
-    with s.db_factory() as db:
+    with closing(s.db_factory()) as db, db:
         assert s.session.load(db, w.chat_id, p["session_id"], s.config.default_model)["character_file"] == "Default.png"
     with pytest.raises(ValueError):
         select_character(s, w, {**p, "filename": "Alice.png", "confirm": True})
@@ -125,7 +126,7 @@ def test_miniapp_optimizer_apply_reranks_character(tmp_path):
     )
     s.provider = ProviderPort(generate_backend=lambda *a, **k: next(responses))
     target = s.config.character_dir / "Alice.png"
-    with s.db_factory() as db:
+    with closing(s.db_factory()) as db, db:
         seed_character_rank(db, "Alice.png", "B", app_settings=s.config)
 
     proposal = optimize_character(
@@ -143,7 +144,7 @@ def test_miniapp_optimizer_apply_reranks_character(tmp_path):
         {**p, "nonce": proposal["nonce"], "action": "apply", "confirm": True},
     )
 
-    with s.db_factory() as db:
+    with closing(s.db_factory()) as db, db:
         assert character_rank(db, "Alice.png", app_settings=s.config) == "S"
     assert applied["rank"] == "S"
     assert "Re-ranked S" in applied["message"]
@@ -163,7 +164,7 @@ def test_miniapp_optimizer_apply_clears_rank_when_reranking_has_no_result(tmp_pa
     )
     s.provider = ProviderPort(generate_backend=lambda *a, **k: next(responses))
     target = s.config.character_dir / "Alice.png"
-    with s.db_factory() as db:
+    with closing(s.db_factory()) as db, db:
         seed_character_rank(db, "Alice.png", "A", app_settings=s.config)
 
     proposal = optimize_character(
@@ -181,7 +182,7 @@ def test_miniapp_optimizer_apply_clears_rank_when_reranking_has_no_result(tmp_pa
         {**p, "nonce": proposal["nonce"], "action": "apply", "confirm": True},
     )
 
-    with s.db_factory() as db:
+    with closing(s.db_factory()) as db, db:
         assert character_rank(db, "Alice.png", app_settings=s.config) == ""
     assert applied["rank"] == ""
     assert "Rank unavailable" in applied["message"]
@@ -392,10 +393,10 @@ def test_miniapp_character_setup_preserves_personal_style_prefill_only_for_new_s
         if preset == "custom"
         else preset_narrative_settings(preset)
     )
-    with services.db_factory() as db:
+    with closing(services.db_factory()) as db, db:
         original = load_session_narrative_settings(db, who.chat_id, params["session_id"])
         save_user_narrative_default(db, who.user_id, preferred)
     result = select_character(services, who, {**params, "filename": "Alice.png", "confirm": True})
-    with services.db_factory() as db:
+    with closing(services.db_factory()) as db, db:
         assert load_session_narrative_settings(db, who.chat_id, result["session"]["session_id"]) == preferred
         assert load_session_narrative_settings(db, who.chat_id, params["session_id"]) == original

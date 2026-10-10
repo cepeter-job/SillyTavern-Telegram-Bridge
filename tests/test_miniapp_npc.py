@@ -1,3 +1,5 @@
+from contextlib import closing
+
 import pytest
 from miniapp_test_support import identity, make_services
 
@@ -15,7 +17,7 @@ def _apply(services, who, session, rowid, value, *, field="relationship", visibi
     from bridge.npc_service import NpcService
     from bridge.npc_types import NpcExtractionGroup, NpcOperation
 
-    with services.db_factory() as db:
+    with closing(services.db_factory()) as db, db:
         result = NpcService().apply_group(
             db,
             who.chat_id,

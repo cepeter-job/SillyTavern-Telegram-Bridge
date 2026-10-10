@@ -1,0 +1,186 @@
+name: Python 3.14 pinned candidate for PR500
+run-name: PR500 candidate 11660198517 at ${{ github.event.pull_request.head.sha }}
+
+# Deliberately PR500-only: this does not replace the official published-wheel gate.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python314-candidate-pr500
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  candidate-validation:
+    if: >-
+      ${{ github.repository == 'cepeter-job/SillyTavern-Telegram-Bridge' &&
+          github.event_name == 'pull_request' && github.actor == 'cepeter' &&
+          github.event.pull_request.number == 500 &&
+          github.event.pull_request.head.repo.id == 1369500317 &&
+          github.event.pull_request.head.ref == 'feat/python314-migration-20261010' &&
+          github.event.pull_request.base.ref == 'main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - name: Checkout immutable PR500 head without persistent credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact source and current main before candidate execution
+        id: source
+        run: |
+          set -euo pipefail
+          python3 tools/python314_candidate_validation.py source
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          git merge-base --is-ancestor "$BASE_SHA" "$EXPECTED_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Download and verify the approved upstream artifact only
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --max-time 180 \
+            https://nightly.link/OpenNMT/CTranslate2/actions/runs/38023794309/python-wheels-Linux-auto64.zip \
+            -o candidate-artifact.zip
+          python3 tools/python314_candidate_validation.py artifact candidate-artifact.zip .candidate314
+
+      - name: Install pinned uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: '0.12.22'
+          enable-cache: false
+
+      - name: Create disposable final Python 3.14.8 environment
+        run: |
+          set -euo pipefail
+          uv python install 3.14.8
+          uv venv --clear --managed-python --python 3.14.8 .venv314-candidate
+          .venv314-candidate/bin/python -c 'import sys; assert sys.version_info[:3] == (3, 14, 8) and sys.version_info.releaselevel == "final"; print(sys.version)'
+
+      - name: Compile migration source and install unchanged hash-locked dependencies
+        run: |
+          set -euo pipefail
+          .venv314-candidate/bin/python -m compileall -q -f bridge tools sillytavern_telegram_bridge.py
+          uv pip install --python .venv314-candidate/bin/python --require-hashes -r requirements-py314.lock
+          uv pip install --python .venv314-candidate/bin/python --require-hashes -r requirements-dev-py314.lock
+          uv pip check --python .venv314-candidate/bin/python
+          .venv314-candidate/bin/python tools/check_dependency_lock.py --python-version 3.14 \
+            --lock requirements-py314.lock --development-lock requirements-dev-py314.lock
+
+      - name: Replace only CT2 in the disposable candidate environment
+        id: candidate_install
+        run: |
+          set -euo pipefail
+          wheel=ctranslate2-4.8.2-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
+          digest=186f18a7204361767d5158d75f98d6b2a750d3fbebda44ca72432be6ceff9da6
+          printf '%s  .candidate314/%s\n' "$digest" "$wheel" | sha256sum --check --strict
+          printf './.candidate314/%s --hash=sha256:%s\n' "$wheel" "$digest" > candidate-requirement.txt
+          uv pip install --python .venv314-candidate/bin/python --no-index --no-deps --reinstall \
+            --require-hashes -r candidate-requirement.txt
+          uv pip check --python .venv314-candidate/bin/python
+          git diff --exit-code -- requirements-py314.lock requirements-dev-py314.lock
+
+      - name: Probe candidate voice imports and clean native process exit
+        id: native_probe
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          unset PYTHONMALLOC PYTHONWARNINGS PYTHONOPTIMIZE PYTHONPATH PYTHONHOME LD_LIBRARY_PATH LD_PRELOAD
+          .venv314-candidate/bin/python -X dev -W error::ResourceWarning \
+            tools/python314_candidate_validation.py native .candidate314 2>&1 | tee python314-candidate-native.log
+
+      - name: Run independent serial strict native and audio smoke tests
+        id: native_smoke
+        continue-on-error: true
+        if: ${{ !cancelled() && steps.candidate_install.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          unset PYTHONMALLOC PYTHONWARNINGS PYTHONOPTIMIZE PYTHONPATH PYTHONHOME LD_LIBRARY_PATH LD_PRELOAD
+          export PYTHONDEVMODE=1
+          export PYTHONWARNINGS=error::ResourceWarning
+          .venv314-candidate/bin/python -X dev -W error::ResourceWarning -m pytest -q -n 0 \
+            tests/test_python314_native_imports.py --junitxml=python314-candidate-smoke.xml \
+            2>&1 | tee python314-candidate-smoke.log
+
+      - name: Run independent full strict regression and original coverage floor
+        id: full_regression
+        if: ${{ !cancelled() && steps.candidate_install.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          unset PYTHONMALLOC PYTHONWARNINGS PYTHONOPTIMIZE PYTHONPATH PYTHONHOME LD_LIBRARY_PATH LD_PRELOAD
+          export PYTHONDEVMODE=1
+          export PYTHONWARNINGS=error::ResourceWarning
+          .venv314-candidate/bin/python -X dev -W error::ResourceWarning -m pytest -q \
+            -n auto --maxprocesses=4 --dist=loadfile --cov=bridge --cov-fail-under=76 \
+            --cov-report=json:python314-candidate-coverage.json --cov-report=xml:python314-candidate-coverage.xml \
+            --junitxml=python314-candidate-junit.xml --durations=20 --durations-min=1 \
+            2>&1 | tee python314-candidate-pytest.log
+
+      - name: Enforce every security-module coverage floor
+        id: security_coverage
+        if: ${{ !cancelled() && steps.candidate_install.outcome == 'success' }}
+        run: .venv314-candidate/bin/python tools/check_security_coverage.py python314-candidate-coverage.json
+
+      - name: Reject hidden native failures in all three required logs
+        id: native_logs
+        if: ${{ !cancelled() && steps.candidate_install.outcome == 'success' }}
+        run: |
+          python3 tools/python314_candidate_validation.py logs \
+            python314-candidate-native.log python314-candidate-smoke.log python314-candidate-pytest.log
+
+      - name: Recheck tested PR500 head and main freshness independently
+        id: freshness
+        if: ${{ always() && steps.source.outcome == 'success' }}
+        run: python3 tools/python314_candidate_validation.py source
+
+      - name: Upload candidate-specific evidence independently
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: python314-candidate-pr500-${{ github.event.pull_request.head.sha }}
+          path: |
+            python314-candidate-native.log
+            python314-candidate-smoke.log
+            python314-candidate-smoke.xml
+            python314-candidate-pytest.log
+            python314-candidate-junit.xml
+            python314-candidate-coverage.json
+            python314-candidate-coverage.xml
+            .candidate314/candidate-provenance.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Require every original gate outcome to succeed
+        if: ${{ always() }}
+        env:
+          NATIVE_RESULT: ${{ steps.native_probe.outcome }}
+          SMOKE_RESULT: ${{ steps.native_smoke.outcome }}
+          FULL_RESULT: ${{ steps.full_regression.outcome }}
+          SECURITY_RESULT: ${{ steps.security_coverage.outcome }}
+          LOGS_RESULT: ${{ steps.native_logs.outcome }}
+          FRESHNESS_RESULT: ${{ steps.freshness.outcome }}
+        run: |
+          set -euo pipefail
+          for result in "$NATIVE_RESULT" "$SMOKE_RESULT" "$FULL_RESULT" "$SECURITY_RESULT" "$LOGS_RESULT" "$FRESHNESS_RESULT"; do
+            test "$result" = success
+          done
+          echo 'Pinned unreleased candidate validation passed; official-wheel promotion remains separate.'
+
+      - name: Remove disposable environment and native artifact
+        if: ${{ always() }}
+        run: rm -rf -- .venv314-candidate .candidate314 candidate-artifact.zip candidate-requirement.txt

@@ -30,6 +30,24 @@ def test_real_dependency_files_pass_the_offline_guard():
     assert "dependency-lock=ok" in result.stdout
 
 
+def test_python314_runtime_and_development_locks_preserve_cpu_baseline():
+    python_version = "3.14"
+    errors = guard().validate(
+        (ROOT / "requirements.txt").read_text(encoding="utf-8"),
+        (ROOT / "requirements-py314.lock").read_text(encoding="utf-8"),
+        (ROOT / "requirements-dev.txt").read_text(encoding="utf-8"),
+        environment={"python_version": python_version, "python_full_version": "3.14.8"},
+        development_locked=(ROOT / "requirements-dev-py314.lock").read_text(encoding="utf-8"),
+    )
+    assert errors == ()
+    assert "numpy==2.3.5" in (ROOT / "requirements-py314.lock").read_text()
+    assert "numpy==2.3.5" in (ROOT / "requirements-dev-py314.lock").read_text()
+    constraint = (ROOT / "config/python314-constraints.txt").read_text()
+    assert "numpy==2.3.5" in constraint.splitlines()
+    assert "hindsight-client==0.10.2" in constraint.splitlines()
+    assert "httpx==0.28.1" in constraint.splitlines()
+
+
 def test_valid_flat_lock_and_development_pin():
     assert guard().validate("demo>=1,<2\n", f"demo==1.4 --hash=sha256:{HASH}\n", "pytest==9.1.1\n") == ()
 

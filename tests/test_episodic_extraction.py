@@ -64,6 +64,81 @@ def test_parser_keeps_only_supported_durable_candidates():
     ]
 
 
+def test_empty_episode_result_requires_explicit_exclusion_reason():
+    with pytest.raises(ValueError, match="empty result requires a reason"):
+        parse_episodic_candidates('{"memories":[]}')
+    assert parse_episodic_candidates('{"memories":[],"no_memory_reason":"Only transient posture was present."}') == []
+
+
+def test_empty_episode_result_gets_one_focused_repair(synthetic_settings):
+    db = _db()
+    _add_messages(db, 2)
+    calls = []
+
+    def generate(_key, _model, messages, **_kwargs):
+        calls.append(messages)
+        if len(calls) == 1:
+            return '{"memories":[]}'
+        return json.dumps(
+            {
+                "memories": [
+                    {
+                        "kind": "fact",
+                        "importance": 0.9,
+                        "summary": "Utang tiket feri belum dibayar.",
+                        "visibility": "shared",
+                        "known_by": [],
+                    }
+                ]
+            }
+        )
+
+    try:
+        result = extract_episodic_memories_result(
+            db,
+            "chat",
+            _session(),
+            source_text="Utang tiket feri belum dibayar.",
+            source_start_rowid=1,
+            source_end_rowid=2,
+            provider_port=make_test_provider_port(generate_backend=generate),
+            app_settings=synthetic_settings,
+        )
+        assert result.status == "complete"
+        assert result.inserted == 1
+        assert len(calls) == 2
+        assert "no_memory_reason" in calls[1][0]["content"].casefold()
+    finally:
+        db.close()
+
+
+def test_unexplained_empty_episode_repair_fails_without_advancing(synthetic_settings):
+    db = _db()
+    _add_messages(db, 2)
+    calls = []
+
+    def generate(*_args, **_kwargs):
+        calls.append(1)
+        return '{"memories":[]}'
+
+    try:
+        with pytest.raises(ValueError, match="empty result requires a reason"):
+            extract_episodic_memories_result(
+                db,
+                "chat",
+                _session(),
+                source_text="Rowan berjanji menjaga peti tetap tertutup sampai fajar.",
+                source_start_rowid=1,
+                source_end_rowid=2,
+                provider_port=make_test_provider_port(generate_backend=generate),
+                app_settings=synthetic_settings,
+            )
+        assert len(calls) == 2
+        assert read_episodic_memories(db, "chat", "s1") == []
+    finally:
+        db.close()
+
+
 def test_store_deduplicates_normalized_summary_within_session():
     db = _db()
     try:

@@ -76,12 +76,14 @@ def _parse_payload(raw: str, *, primary_name: str, user_name: str) -> tuple[list
 
     blocked = {normalize_npc_name(primary_name), normalize_npc_name(user_name)}
     groups: list[NpcExtractionGroup] = []
+    supporting_candidate_seen = False
     for item in groups_raw[: _limits.NPC_EXTRACTION_MAX_GROUPS]:
         if not isinstance(item, dict):
             continue
         name = " ".join(str(item.get("name") or "").split()).strip()[: _limits.NPC_NAME_MAX_CHARS]
         if not name or normalize_npc_name(name) in blocked:
             continue
+        supporting_candidate_seen = True
         aliases_raw = item.get("aliases") or []
         aliases = []
         if isinstance(aliases_raw, list):
@@ -134,7 +136,10 @@ def _parse_payload(raw: str, *, primary_name: str, user_name: str) -> tuple[list
                 operations.append(validated)
         if operations:
             groups.append(NpcExtractionGroup(name, tuple(aliases), tuple(operations)))
-    return groups, True
+    # A model that offered supporting-character updates but had every operation
+    # rejected did not satisfy the contract. Trigger the existing bounded repair
+    # instead of silently publishing an empty, complete extraction.
+    return groups, bool(groups) or not supporting_candidate_seen
 
 
 def _existing_state_text(

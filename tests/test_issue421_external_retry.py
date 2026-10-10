@@ -1,5 +1,6 @@
 """Backoff must reduce repeated work without forgetting ambiguous late writes."""
 
+import json
 import sqlite3
 
 import pytest
@@ -90,3 +91,17 @@ def test_retention_timeout_does_not_shorten_server_work_or_slow_recall(tmp_path,
         "owner", "story", "doc", "Alice", "An accepted fact.", "synthetic", "native_fact", app_settings=settings
     )
     assert calls == [30.0, 90.0]
+
+
+def test_hindsight_retain_failure_reason_classifies_upstream_without_response_text():
+    malformed = json.JSONDecodeError("provider prose", "x", 0)
+    assert memory_backend._hindsight_retain_failure_reason(malformed) == "upstream_invalid_response"
+
+    class Response:
+        status_code = 500
+
+    error = RuntimeError("private provider response")
+    error.response = Response()
+    assert memory_backend._hindsight_retain_failure_reason(error) == "upstream_http_error"
+    assert memory_backend._hindsight_retain_failure_reason(TimeoutError()) == "upstream_timeout"
+    assert memory_backend._hindsight_retain_failure_reason(RuntimeError()) == "retain_failed"

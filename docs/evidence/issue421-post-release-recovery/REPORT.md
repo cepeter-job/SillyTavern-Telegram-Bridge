@@ -60,3 +60,16 @@ A fresh Python 3.11 focused regression run passed **53 tests** covering NPC extr
 The final provider ledgers, exact source revisions, plan hashes, semantic-file hashes and reported totals were rechecked. Raw provider responses and private fixture databases remain on the VPS inside the protected trial directory. Public files contain only synthetic frozen requests, content-free live aggregates, derived fixture-state evidence and accounting.
 
 No production database write, forced queue completion, source deployment, restart, default change or pruning activation was performed by this task. Ordinary live workers continued during the read-only observations, so snapshots are time-scoped. Puntoap was offline; checks ran on vm148. The requested verification and investigation are completed with a failed recovery/quality disposition, not a claim that the outstanding memory failures are fixed.
+
+
+## Follow-up implementation
+
+After the owner approved the bounded fix, the bridge was hardened at the three observed acceptance boundaries:
+
+- NPC extraction now treats a populated supporting-character result with zero accepted operations as invalid. It uses the existing single repair and leaves coverage unchanged if repair still fails. Explicitly empty results and primary/user-only exclusions remain valid.
+- Episodic extraction now requires an explicit `no_memory_reason` for an empty memory array. An unexplained empty result enters the existing one-call repair path, whose focused contract names promises, refusals, ownership, obligations, causal choices, goals, relationship changes, world changes and secrets. A second unexplained empty result fails rather than advancing coverage.
+- Hindsight retain failures now emit content-free diagnostic classifications for invalid upstream responses, upstream HTTP failures, timeouts and generic retain failures. Retry/backoff behavior and the configured provider route are unchanged. This makes the upstream fault observable; it does not claim the Bailu route now returns valid structured facts.
+
+A completed changed-code run passed 45 tests across NPC extraction, episodic extraction, memory response recovery and external retry behavior. The new end-to-end all-invalid NPC regression also passed separately. Ruff and `git diff --check` passed. A later broader rerun reached 53 passing test markers with no failure, then blocked in the VM kernel at `jbd2_log_wait_commit`; that process was terminated and is not counted as a completed test run.
+
+The code fix has not been deployed, pruning remains off, and live recovery remains unverified until the fix is released and the upstream Hindsight route returns supported structured responses.

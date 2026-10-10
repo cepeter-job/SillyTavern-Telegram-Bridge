@@ -42,10 +42,14 @@ def parse_episodic_candidates(source: str) -> list[EpisodicCandidate]:
         payload = json.loads(unfence_json(source))
     except (TypeError, ValueError) as exc:
         raise ValueError("episodic memory response is not valid JSON") from exc
+    no_memory_reason = ""
     if isinstance(payload, dict):
+        no_memory_reason = str(payload.get("no_memory_reason") or "").strip()
         payload = payload.get("memories")
     if not isinstance(payload, list):
         raise ValueError("episodic memory response must be a JSON array")
+    if not payload and len(no_memory_reason) < 8:
+        raise ValueError("episodic memory empty result requires a reason")
     result: list[EpisodicCandidate] = []
     for item in payload:
         if not isinstance(item, dict):
@@ -130,8 +134,9 @@ def extract_episodic_memories_result(
                 "Keep irreversible events, established facts, goals, relationship changes, "
                 "world changes, and secrets. Exclude transient scene posture, ordinary dialogue, "
                 "style instructions, and speculation stated as fact. Preserve uncertainty. "
-                'Return only one JSON object with a "memories" array; use {"memories":[]} '
-                "when no durable event qualifies. Each memory has kind, importance (0 to 1), "
+                'Return only one JSON object with a "memories" array. When no durable event qualifies, '
+                'return {"memories":[],"no_memory_reason":"concise reason"}; never return an unexplained '
+                "empty array. Each memory has kind, importance (0 to 1), "
                 "summary, visibility, and known_by. Include at most six qualifying memories, "
                 "with importance at least 0.65 and summaries at most 800 characters each. "
                 "visibility must be shared or restricted. "
@@ -161,6 +166,11 @@ def extract_episodic_memories_result(
         session_id=f"episodic:{chat_id}:{session_id}",
         settings=settings,
         source_valid=source_valid,
+        repair_contract=(
+            'An empty "memories" array must include a concise "no_memory_reason" explaining why the canonical '
+            "source contains no qualifying durable fact. Re-check explicit promises, refusals, ownership, "
+            "obligations, causal choices, goals, relationship changes, world changes, and secrets."
+        ),
     )
     if source_ref is not None:
         with write_transaction(db):

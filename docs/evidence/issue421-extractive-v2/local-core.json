@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "type": "read_only_local_core_continuation_replay",
+  "complete_live_prompt_captured": false,
+  "provider_measured_reduction": null,
+  "missing_prompt_components": [
+    "external_recall",
+    "npc_context",
+    "simulation_context",
+    "rag_context",
+    "group_context",
+    "locked_action_and_novel_contracts"
+  ],
+  "included_prompt_components": [
+    "card",
+    "system",
+    "world",
+    "persona",
+    "author_note",
+    "history",
+    "scoped_summary",
+    "scoped_scene",
+    "scoped_episodes",
+    "narrative",
+    "current_input"
+  ],
+  "production_database_writes": 0,
+  "production_transcript_exported": false,
+  "provider_requests": 0,
+  "production_activation_allowed": false,
+  "semantic_continuity_proven": false,
+  "independent_human_review_complete": false,
+  "estimated": {
+    "all_local_core_denominators_available": true,
+    "local_core_baseline_tokens": 52295,
+    "local_core_candidate_tokens": 51817,
+    "local_core_aggregate_reduction_fraction": 0.009140453198202558
+  },
+  "cases": [
+    {
+      "sample": 1,
+      "source_rows": 73,
+      "candidate_status": "preview",
+      "reason": "independent_continuity_review_required",
+      "baseline_tokens": 38588,
+      "candidate_tokens": 38110,
+      "estimated_reduction_fraction": 0.0123872706540894,
+      "changed_assistant_turns": 6,
+      "native_source_verified": true,
+      "selected_source_spans_verified": true,
+      "all_source_evidence_preserved": false,
+      "semantic_continuity_proven": false,
+      "production_activation_allowed": false,
+      "dispatch_uses_full_history": true,
+      "provider_requests": 0,
+      "archive_blocks_added": 0
+    },
+    {
+      "sample": 2,
+      "source_rows": 15,
+      "candidate_status": "fallback",
+      "reason": "native_or_required_evidence_unavailable",
+      "baseline_tokens": 13707,
+      "candidate_tokens": 13707,
+      "estimated_reduction_fraction": 0.0,
+      "changed_assistant_turns": 0,
+      "native_source_verified": false,
+      "selected_source_spans_verified": false,
+      "all_source_evidence_preserved": false,
+      "semantic_continuity_proven": false,
+      "production_activation_allowed": false,
+      "dispatch_uses_full_history": true,
+      "provider_requests": 0,
+      "archive_blocks_added": 0
+    }
+  ],
+  "limitations": [
+    "Counterfactual continuation on a read snapshot; not actual dispatched provider requests.",
+    "Missing fixed payloads must not be treated as empty in a full-live efficiency claim.",
+    "Adding omitted fixed payloads unchanged can only lower the estimated savings fraction.",
+    "No private transcript, source identity, reader identity or account credential is exported.",
+    "A read snapshot is not authority to dispatch after the live source changes."
+  ],
+  "implementation_sha256": "69548b14b24de52651ab2e6078b04c56b1f676a8f594d40d94f8e5f929052608"
+}

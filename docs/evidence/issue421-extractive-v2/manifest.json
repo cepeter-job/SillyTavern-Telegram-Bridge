@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "source_commit": "e17a7d2f02b9b230ae1cadf60b2269c271438ad6",
+  "artifacts": {
+    "checkpoint.json": "d1f327b7bac60874628463c11184a88e0ecbf5a58c4ce0acea5f22165441cad3",
+    "synthetic.json": "296fc3bc28e64b2d2c5af6e246407d57d54f9a9477729621d9e1022325f61d44",
+    "local-core.json": "da48b634ca75aa5287b3c7dacf5c5cda7cced39b73da3bef73d3fc18ddb36e46",
+    "RESULTS.md": "23eddd133a309eae9f08326f525f78027ec9f9824badecd31f1e6ab7bd498ecf"
+  }
+}

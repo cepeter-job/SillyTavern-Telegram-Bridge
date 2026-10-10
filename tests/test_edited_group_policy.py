@@ -80,6 +80,20 @@ def edited(sender="200"):
     }
 
 
+def test_manually_closed_case_releases_its_sqlite_connection(tmp_path):
+    import sqlite3
+
+    fixture = case.__wrapped__(tmp_path)
+    state = next(fixture)
+    try:
+        fixture.close()
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            state.db.execute("SELECT 1")
+    finally:
+        fixture.close()
+        state.db.close()
+
+
 @pytest.mark.parametrize("kind", ["ordinary", "edited"])
 def test_other_manual_participant_is_rejected_before_enqueue(case, monkeypatch, kind):
     monkeypatch.setattr(update_message_routing, "send_help_command", lambda *args, **kw: False)

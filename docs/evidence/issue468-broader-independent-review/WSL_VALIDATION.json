@@ -1,0 +1,29 @@
+{
+  "recorded_at_utc": "2026-10-10T06:09:19.473654+00:00",
+  "status": "PASS",
+  "execution": "Puntoap Ubuntu-24.04 WSL; ci-runner; separate manual artifact audit",
+  "kind": "artifact_integrity_not_runtime_test_suite",
+  "archive_sha256": "ddaa9e7590582d9101bd013899315b9663c6c1899dc11d0f6f5e494b8b12e52b",
+  "packet_sha256": "5889fdbc105481494ddc61deff9bbee38c089b504c32bde997817c557ded1a60",
+  "source_packet_sha256": "badd24458c1a05d9097417ed99d9fb1abfcfd8c0ab80e6b21a9478246d1681cd",
+  "pairs": 38,
+  "original_outputs_and_common_canon_preserved": 76,
+  "blank_numeric_score_cells": 608,
+  "blank_error_flag_cells": 456,
+  "all_other_csv_fields_blank": true,
+  "declaration_unfilled": true,
+  "reviewer_archive_files": 6,
+  "zip_crc_and_file_hashes": "PASS",
+  "tamper_cases_rejected": [
+    "changed_output",
+    "dropped_canon",
+    "duplicate_id",
+    "condition_metadata",
+    "prefilled_score",
+    "csv_pair_mismatch"
+  ],
+  "new_provider_requests": 0,
+  "human_review": "pending",
+  "independence_verified": false,
+  "quality_approved": false
+}

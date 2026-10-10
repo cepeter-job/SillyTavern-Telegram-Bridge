@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "files": {
+    "HUMAN_REVIEW.json": "5889fdbc105481494ddc61deff9bbee38c089b504c32bde997817c557ded1a60",
+    "HUMAN_REVIEW.md": "091f3c0ce0158cbbd254b9591c1fb03dcd1b4ff5c1111ac703c11cc9f439fa81",
+    "HUMAN_SCORECARD.csv": "5180b0401d67216dab04bd5c471ccd4ab601c11d83a493f1dc68d3619c49cafc",
+    "REVIEWER_INSTRUCTIONS.md": "90593c79fb61d1cc74b333ec91eb4bbe16040f1d376e2772eb5e17deb157d207",
+    "reviewer_declaration.json": "1e5df0f41a541a7bbc6f31f42697d83656f06224f2f322b266b07df1505d5320"
+  }
+}

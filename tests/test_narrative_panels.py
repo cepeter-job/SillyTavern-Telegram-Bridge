@@ -118,7 +118,7 @@ def test_review_shows_effective_narrative_values_and_recommendation(setup, monke
     db, _, service, _ = setup
     state = ready(setup, preset="world_driven")
     sent = []
-    monkeypatch.setattr(panels, "send_panel_request", lambda *a, **k: sent.append(a[2]))
+    monkeypatch.setattr(panels, "send_panel_request", lambda *a, **k: sent.append(a[2]) or {"message_id": 55})
     panels.send_setup_panel(
         "token",
         "chat",
@@ -130,6 +130,7 @@ def test_review_shows_effective_narrative_values_and_recommendation(setup, monke
     for expected in ("World-driven", "Third-person limited, rotating", "Free", "Physical continuity", "I am not MC"):
         assert expected in text
     assert "not enabled automatically" in text
+    assert json.loads(get_meta(db, "conversation_setup:chat:owner"))["panel_message_id"] == 55
 
 
 def panel_buttons(setup, monkeypatch, *, view="presets", field=""):

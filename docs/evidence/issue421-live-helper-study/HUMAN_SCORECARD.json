@@ -1,0 +1,272 @@
+{
+  "packet_sha256": "b25fa45927470f6cf32dd69a9148e1bf31ab13eb3a166be60b829baf9df92c23",
+  "reviewer_declaration": {
+    "reviewer": null,
+    "reviewed_at": null,
+    "is_human": null,
+    "did_not_implement": null,
+    "did_not_view_mapping_or_unblinded_material": null
+  },
+  "pairs": [
+    {
+      "pair_id": "review-faece3db15ff126c",
+      "A": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "B": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "preference": null
+    },
+    {
+      "pair_id": "review-9da166403feb4a66",
+      "A": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "B": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "preference": null
+    },
+    {
+      "pair_id": "review-60e61c0890656ff8",
+      "A": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "B": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "preference": null
+    },
+    {
+      "pair_id": "review-303b6030859d5c11",
+      "A": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "B": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "preference": null
+    },
+    {
+      "pair_id": "review-e369c262a3975141",
+      "A": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "B": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "preference": null
+    },
+    {
+      "pair_id": "review-0dfe45689437ddd9",
+      "A": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "B": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "preference": null
+    },
+    {
+      "pair_id": "review-b9e7d76cf151b523",
+      "A": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "B": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "preference": null
+    },
+    {
+      "pair_id": "review-07b049f9df1f8fa5",
+      "A": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "B": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "preference": null
+    },
+    {
+      "pair_id": "review-1d93e0c5dbcddf3d",
+      "A": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "B": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "preference": null
+    },
+    {
+      "pair_id": "review-d58394a23b75be6f",
+      "A": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "B": {
+        "canon": null,
+        "causality": null,
+        "reader_knowledge": null,
+        "user_agency": null,
+        "language": null,
+        "task_usefulness": null,
+        "hard_failure": null,
+        "exact_quote": null,
+        "explanation": null
+      },
+      "preference": null
+    }
+  ]
+}

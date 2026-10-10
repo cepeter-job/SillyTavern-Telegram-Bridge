@@ -36,6 +36,7 @@ from bridge.memory_contracts import MemoryReadScope
 from bridge.memory_queue import AUTO_FAILURE_LIMIT as AUTO_FAILURE_LIMIT
 from bridge.memory_queue import AUTO_IDLE_SECONDS as AUTO_IDLE_SECONDS
 from bridge.memory_queue import CLAIM_SELECTION, queue_parameters
+from bridge.memory_queue import recover_expired_jobs as recover_expired_jobs
 from bridge.memory_retry import CONFIGURATION_RETRY_SECONDS, MEMORY_FAILURE_CODES
 from bridge.sqlite_store import write_transaction
 
@@ -87,15 +88,6 @@ def enqueue_memory(db: sqlite3.Connection, chat_id: str, session_id: str, layer:
             (layer, chat_id, session_id, chat_id, session_id),
         )
     return bool(cursor.rowcount)
-
-
-def recover_expired_jobs(db: sqlite3.Connection, *, now: float | None = None) -> int:
-    now = time.time() if now is None else now
-    with write_transaction(db):
-        return db.execute(
-            "UPDATE memory_jobs SET lease_token='',lease_deadline=0 WHERE lease_token<>'' AND lease_deadline<=?",
-            (now,),
-        ).rowcount
 
 
 def claim_jobs(
@@ -205,10 +197,11 @@ def fail_job(
             db.execute(
                 "UPDATE memory_jobs SET lease_token='',lease_deadline=0,last_error=?,"
                 "next_attempt_at=? + CASE WHEN ? THEN 0 WHEN ?='configuration' THEN ? "
+                "WHEN ?='retain_failed' THEN MIN(3600,5 * (1 << MIN(attempts,10))) "
                 "ELSE MIN(300,5 * (1 << MIN(attempts,6))) END "
                 "WHERE chat_id=? AND session_id=? AND session_created_at=? AND layer=? "
                 "AND lease_token=? AND claimed_version=?",
-                (safe_error, now, deferred, safe_error, CONFIGURATION_RETRY_SECONDS, *_scope(claim)),
+                (safe_error, now, deferred, safe_error, CONFIGURATION_RETRY_SECONDS, safe_error, *_scope(claim)),
             ).rowcount
         )
 

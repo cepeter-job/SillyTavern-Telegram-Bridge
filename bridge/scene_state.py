@@ -143,7 +143,9 @@ def extract_scene_segment(
         {
             "role": "system",
             "content": (
-                "Maintain complete compact fictional scene state. Return JSON with state and blocks. "
+                'Maintain complete compact fictional scene state. Return one complete JSON object with "state" '
+                'object and "blocks" array. Use {"state":{},"blocks":[]} only if no scene facts are established; '
+                "otherwise preserve the established previous state. Include at most 32 classified blocks. "
                 "Allowed state keys: location, time, weather, participants, objects, facts, goals. "
                 "Every block requires text, visibility (shared or restricted), and known_by. "
                 + CLASSIFIED_AUDIENCE_PROMPT

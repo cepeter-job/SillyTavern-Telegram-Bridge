@@ -13,7 +13,7 @@ tests and the size ratchet.
 | `pr-size-labeler.yml` | `pull_request_target` lifecycle | `size-label` | No, advisory |
 | `scheduled-audit.yml` | weekly schedule; manual dispatch | `advisory-audit` | No, advisory |
 | `python314-compatibility.yml` | Python 3.14 migration file changes; manual dispatch | `voice-enabled-native-preflight`, `full-regression`, `resource-owner-trace`, `native-debugger` | Candidate promotion gates (strict failing checks); optional targeted trace is manual-only and never counts as the full-suite gate |
-| `python315-experimental.yml` | relevant pull requests; manual dispatch | `full-dependency-preflight`, `core-smoke-and-benchmarks` | No, experimental; a missing 3.15 native wheel blocks migration, not Python 3.11 delivery |
+| `python315-experimental.yml` | manual dispatch only | `full-dependency-preflight`, `core-smoke-and-benchmarks`, `stable-final-core-regression` | No, experimental; a missing 3.15 native wheel blocks migration, not Python 3.11 delivery |
 
 ## Required result and independent jobs
 

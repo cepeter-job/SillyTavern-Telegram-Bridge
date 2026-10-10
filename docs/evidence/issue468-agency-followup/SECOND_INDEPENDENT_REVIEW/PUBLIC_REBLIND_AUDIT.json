@@ -1,0 +1,16 @@
+{
+  "kind": "one_time_fresh_human_reblind",
+  "created_utc": "2026-10-10T00:39:11.325664+00:00",
+  "source_packet_sha256": "f461013fa5370c9afd53eaaccab0e5ac1f2b719f804364e54a6dfd2df3845228",
+  "new_packet_sha256": "4fcef6f4b715ab9ff53936e87d62a2d4f3fafc9649642d5e0db08dbdc0438088",
+  "new_markdown_sha256": "a3fd35e4ed4dc8e4f6497750ec039a5ca29ee4e135d54fa39d830a89a12b779b",
+  "blank_scorecard_sha256": "283879973cba2ee271ebb4b85ada7a718ffcfa40107653e67d5b53d5411f8f88",
+  "number_pairs": 16,
+  "balanced_A_B_swap_count": 8,
+  "physical_provider_requests_added": 0,
+  "user_private_stories_included": false,
+  "prior_grades_copied": false,
+  "blank_scorecard_cells": 240,
+  "private_mapping_unpublished": true,
+  "independent_human_review_completed": false
+}

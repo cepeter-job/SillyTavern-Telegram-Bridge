@@ -21,7 +21,9 @@ be used to deploy the live bridge.
 ## Nonblocking CI experiment
 
 The [experimental workflow](../.github/workflows/python315-experimental.yml)
-does not participate in required Python 3.11 CI or alter existing lockfiles.
+runs only by manual dispatch while Python 3.14 is the active migration focus;
+it no longer runs on pull requests. It does not participate in required
+Python 3.11 CI or alter existing lockfiles.
 
 1. Resolve a fresh, hashed full Python 3.15 lock into runner temporary storage;
    install all packages and import critical integrations. Failure is retained

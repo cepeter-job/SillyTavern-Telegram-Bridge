@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from contextlib import closing
 from functools import partial
 
 import pytest
@@ -171,7 +172,7 @@ def test_private_usage_api_isolates_chat_and_session_and_preserves_unknown(tmp_p
     assert "PRIVATE" not in json.dumps(result)
     assert result["retention_days"] == 90
     assert len(result["daily"]) <= 8
-    with services.db_factory() as db:
+    with closing(services.db_factory()) as db, db:
         with write_transaction(db):
             db.execute("DELETE FROM sessions WHERE chat_id=? AND session_id=?", (who.chat_id, session["session_id"]))
         assert db.execute("SELECT count(*) FROM token_usage_events WHERE chat_id=?", (who.chat_id,)).fetchone()[0] == 0

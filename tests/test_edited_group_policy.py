@@ -29,45 +29,47 @@ def case(tmp_path):
         allowed_users=frozenset({"100", "200"}),
     )
     db = db_connect(app_settings=config)
-    session = create_session(db, CHAT, "target::model", session_id="target", app_settings=config)
-    db.execute(
-        "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_id,created_at) VALUES(?,?,?,?,?,?)",
-        (CHAT, "target", "user", "original", "77", 1.0),
-    )
-    db.commit()
-    group_core.save_group_state(
-        db,
-        CHAT,
-        "target",
-        dict(
-            group_core.group_state(db, CHAT, "target"),
-            enabled=True,
-            mode="manual",
-            turn_user_id="100",
-            turn_users=["100", "200"],
-            members=["a.png", "b.png"],
-        ),
-    )
-    sent = []
-    services = SimpleNamespace(
-        config=config,
-        jobs=Mock(),
-        telegram=SimpleNamespace(send_text=lambda token, chat, text: sent.append(text)),
-        group=SimpleNamespace(user_turn_allowed=group_core.group_user_turn_allowed),
-        db_factory=lambda: db_connect(app_settings=config),
-        provider=object(),
-        memory=object(),
-        npc=object(),
-        persona=object(),
-        delivery=object(),
-        session=make_test_session_service(app_settings=config),
-        rag=make_test_rag_service(),
-    )
-    services.jobs.start.return_value = True
-    services.jobs.enqueue.return_value = 91
-    services.jobs.actor_id.return_value = "100"
-    yield SimpleNamespace(db=db, services=services, sent=sent, session=session)
-    db.close()
+    try:
+        session = create_session(db, CHAT, "target::model", session_id="target", app_settings=config)
+        db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_id,created_at) VALUES(?,?,?,?,?,?)",
+            (CHAT, "target", "user", "original", "77", 1.0),
+        )
+        db.commit()
+        group_core.save_group_state(
+            db,
+            CHAT,
+            "target",
+            dict(
+                group_core.group_state(db, CHAT, "target"),
+                enabled=True,
+                mode="manual",
+                turn_user_id="100",
+                turn_users=["100", "200"],
+                members=["a.png", "b.png"],
+            ),
+        )
+        sent = []
+        services = SimpleNamespace(
+            config=config,
+            jobs=Mock(),
+            telegram=SimpleNamespace(send_text=lambda token, chat, text: sent.append(text)),
+            group=SimpleNamespace(user_turn_allowed=group_core.group_user_turn_allowed),
+            db_factory=lambda: db_connect(app_settings=config),
+            provider=object(),
+            memory=object(),
+            npc=object(),
+            persona=object(),
+            delivery=object(),
+            session=make_test_session_service(app_settings=config),
+            rag=make_test_rag_service(),
+        )
+        services.jobs.start.return_value = True
+        services.jobs.enqueue.return_value = 91
+        services.jobs.actor_id.return_value = "100"
+        yield SimpleNamespace(db=db, services=services, sent=sent, session=session)
+    finally:
+        db.close()
 
 
 def edited(sender="200"):

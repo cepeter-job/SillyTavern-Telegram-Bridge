@@ -13,6 +13,12 @@ import yaml
 _WORKFLOW = Path(__file__).resolve().parents[1] / ".github/workflows/python315-experimental.yml"
 
 
+def test_python315_experiment_runs_only_on_manual_dispatch():
+    workflow = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
+    # PyYAML's YAML 1.1 loader resolves the bare GitHub Actions `on` key as True.
+    assert set(workflow[True]) == {"workflow_dispatch"}
+
+
 def _test_steps() -> tuple[dict, dict]:
     workflow = yaml.safe_load(_WORKFLOW.read_text(encoding="utf-8"))
     steps = workflow["jobs"]["stable-final-core-regression"]["steps"]

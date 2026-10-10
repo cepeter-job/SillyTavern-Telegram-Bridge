@@ -34,7 +34,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: python314-migration
+  # Manual native diagnostics must not cancel queued PR regressions (or vice versa).
+  group: python314-migration-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: false
 
 defaults:

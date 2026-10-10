@@ -92,6 +92,8 @@ def test_trace_selector_rejects_untrusted_or_excessive_inputs(tmp_path, selectio
 def test_manual_gdb_job_requires_explicit_debug_dispatch():
     data = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     jobs = data["jobs"]
+    assert "github.event_name" in data["concurrency"]["group"]
+    assert "github.ref" in data["concurrency"]["group"]
     debug = jobs["native-debugger"]
     assert debug["if"] == "${{ inputs.native_debug_backtrace }}"
     assert jobs["voice-enabled-native-preflight"]["if"].startswith("${{ !inputs.native_debug_backtrace")

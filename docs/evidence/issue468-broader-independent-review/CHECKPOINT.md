@@ -4,7 +4,7 @@
 
 Prepare the next human gate under #468 after the separate 16-pair agency study was completed in merged #482 and intake #494. This checkpoint provides a new presentation of the **existing 38 profile/history pairs**, not another provider experiment or a quality verdict.
 
-Independent human review and owner corroboration **remain pending for these 38 pairs**. The earlier signed 16-pair agency review and its owner confirmation remain complete; they are not reused as approval of this broader packet.
+**Completed intake and private adjudication on 2026-10-10.** The final signed 38-pair review and separate owner corroboration are locked. See [completed review and maintainer decision](ADJUDICATED_REVIEW_2026-10-10.md) and [condition-level aggregates](PUBLIC_ADJUDICATION.json). Retain the current native default; approve further bounded testing only and leave production history pruning disabled. The earlier 16-pair review remains a separate completed study. Preparation details below are preserved; the original reviewer forms remain blank and unchanged.
 
 ## Preserved evidence
 

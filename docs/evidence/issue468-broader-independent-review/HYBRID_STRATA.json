@@ -1,0 +1,30 @@
+{
+  "input_reduced": {
+    "pairs": 3,
+    "preferences": {
+      "baseline": 0,
+      "candidate": 2,
+      "Tie": 1
+    },
+    "candidate_lower_critical": {
+      "facts": 0,
+      "causality": 0,
+      "agency": 0,
+      "knowledge": 0
+    }
+  },
+  "identical_payload_controls": {
+    "pairs": 3,
+    "preferences": {
+      "baseline": 1,
+      "candidate": 1,
+      "Tie": 1
+    },
+    "candidate_lower_critical": {
+      "facts": 1,
+      "causality": 1,
+      "agency": 0,
+      "knowledge": 1
+    }
+  }
+}

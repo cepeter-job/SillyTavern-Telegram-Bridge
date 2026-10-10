@@ -21,8 +21,8 @@ def _steps():
 
 def test_python314_compatibility_has_real_full_suite_without_warning_suppression():
     full, trace = _steps()
-    assert full["if"] == "${{ !inputs.trace_resource_allocations }}"
-    assert trace["if"] == "${{ inputs.trace_resource_allocations }}"
+    assert full["if"] == "${{ !inputs.trace_resource_allocations && !inputs.native_debug_backtrace }}"
+    assert trace["if"] == "${{ inputs.trace_resource_allocations && !inputs.native_debug_backtrace }}"
     full_run = next(s["run"] for s in full["steps"] if "full Python 3.14 strict regression" in s["name"])
     trace_run = next(s["run"] for s in trace["steps"] if s.get("id") == "trace")
     assert "-W error::ResourceWarning" in full_run
@@ -87,3 +87,14 @@ def test_trace_selector_rejects_untrusted_or_excessive_inputs(tmp_path, selectio
         assert proc.returncode != 0
         assert not marker.exists()
     assert not (tmp_path / "unsafe").exists()
+
+
+def test_manual_gdb_job_requires_explicit_debug_dispatch():
+    data = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    jobs = data["jobs"]
+    debug = jobs["native-debugger"]
+    assert debug["if"] == "${{ inputs.native_debug_backtrace }}"
+    assert jobs["voice-enabled-native-preflight"]["if"].startswith("${{ !inputs.native_debug_backtrace")
+    assert "gdb" in str(debug["steps"])
+    assert "native-finalizer-backtrace" in str(debug["steps"])
+    assert "continue-on-error" not in str(jobs["full-regression"])

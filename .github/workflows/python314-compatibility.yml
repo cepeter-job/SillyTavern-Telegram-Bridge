@@ -13,6 +13,11 @@ on:
         type: string
         required: false
         default: "tests/test_transcript_delivery_recovery.py"
+      native_debug_backtrace:
+        description: "Capture isolated CTranslate2 Python 3.14 allocator abort using GDB"
+        type: boolean
+        required: false
+        default: false
   pull_request:
     paths:
       - ".github/workflows/python314-compatibility.yml"
@@ -38,6 +43,7 @@ defaults:
 
 jobs:
   voice-enabled-native-preflight:
+    if: ${{ !inputs.native_debug_backtrace && !inputs.trace_resource_allocations }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -70,7 +76,7 @@ jobs:
           python -X dev -W error::ResourceWarning -m pytest -q -n 0 tests/test_python314_native_imports.py
 
   full-regression:
-    if: ${{ !inputs.trace_resource_allocations }}
+    if: ${{ !inputs.trace_resource_allocations && !inputs.native_debug_backtrace }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -115,7 +121,7 @@ jobs:
           retention-days: 14
 
   resource-owner-trace:
-    if: ${{ inputs.trace_resource_allocations }}
+    if: ${{ inputs.trace_resource_allocations && !inputs.native_debug_backtrace }}
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
@@ -174,4 +180,66 @@ jobs:
             python314-trace.log
             python314-trace-junit.xml
           if-no-files-found: ignore
+          retention-days: 14
+
+  native-debugger:
+    if: ${{ inputs.native_debug_backtrace }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Set up official CPython 3.14.8
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.14.8"
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.22"
+          enable-cache: true
+          cache-dependency-glob: requirements-py314.lock
+      - name: Install full hash-locked voice runtime and OS debugger
+        run: |
+          set -euo pipefail
+          uv pip install --system --python python --require-hashes -r requirements-py314.lock
+          uv pip check --python python
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq gdb
+          gdb --version | head -1
+      - name: Capture allocator-domain crash stack without changing production
+        run: |
+          set -euo pipefail
+          ulimit -c 0
+          # This is a diagnostic of an *expected* failing extension finalizer.
+          # Keep original traceback and crash status, not secrets or user data.
+          set +e
+          gdb --batch --quiet \
+            -ex 'set pagination off' \
+            -ex 'set debuginfod enabled off' \
+            -ex 'set print static off' \
+            -ex 'handle SIGABRT stop print nopass' \
+            -ex run \
+            -ex 'thread apply all bt 60' \
+            -ex 'info sharedlibrary' \
+            --args python -X dev -W error::ResourceWarning -c 'import ctranslate2; print(ctranslate2.__version__)' \
+            > python314-native-gdb.log 2>&1
+          debugger_exit=$?
+          set -e
+          echo "GDB exit status: $debugger_exit" >> python314-native-gdb.log
+          echo "Diagnostic only: no production promotion permitted." >> "$GITHUB_STEP_SUMMARY"
+          cat python314-native-gdb.log
+          if ! grep -Eq 'PyMem_DebugRawFree|PyMem_DebugCheckAddress|SIGABRT|Program received signal' python314-native-gdb.log; then
+            echo "::error::Expected native shutdown failure was not captured; investigate environment"
+            exit 1
+          fi
+      - name: Retain isolated native backtrace
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: python314-native-finalizer-backtrace
+          path: python314-native-gdb.log
+          if-no-files-found: error
           retention-days: 14

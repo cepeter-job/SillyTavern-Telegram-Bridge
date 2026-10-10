@@ -119,3 +119,13 @@ checkout contains unrelated uncommitted changes and must not be
 force-reset or deployed as a substitute for signed source.
 
 This stage is a migration candidate, not production activation.
+
+### Isolated debugger workflow (Issue #501)
+
+Manual `python314-compatibility.yml` with `native_debug_backtrace=true`
+selects only the GitHub-hosted `native-debugger` job. It installs reviewed
+CPython 3.14.8 dependencies, GDB in that disposable runner, and reproduces
+the native extension finalization abort under `-X dev`, retaining its
+native stack trace for 14 days. This diagnostic is intentionally **not**
+a passing runtime gate or an authorization to deploy. It does not run on
+normal pull requests and never accesses the live VPS or story data.

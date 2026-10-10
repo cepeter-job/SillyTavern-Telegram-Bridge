@@ -23,8 +23,10 @@ LOW_LEVEL_IMPORTS = {
         ["bridge.light_novel_repository", "bridge.meta_repository", "bridge.sqlite_store"]
     ),
     "bridge.conversation_schema": frozenset([]),
+    "bridge.conversation_setup_state": frozenset(["bridge.metadata", "bridge.sqlite_store"]),
     "bridge.conversation_setup": frozenset(
         [
+            "bridge.conversation_setup_state",
             "bridge.narrative_settings",
             "bridge.card_content",
             "bridge.conversation_lifecycle",
@@ -43,6 +45,7 @@ LOW_LEVEL_IMPORTS = {
             "bridge.callbacks",
             "bridge.conversation_setup",
             "bridge.conversation_setup_panels",
+            "bridge.conversation_setup_state",
             "bridge.metadata",
             "bridge.persona_service",
             "bridge.request_types",
@@ -51,6 +54,7 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.conversation_setup_panels": frozenset(
         [
+            "bridge.conversation_setup_state",
             "bridge.narrative_panels",
             "bridge.narrative_settings",
             "bridge.callback_tokens",

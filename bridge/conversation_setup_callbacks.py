@@ -6,10 +6,11 @@ import json
 import sqlite3
 from collections.abc import Callable
 
-from bridge.callback_tokens import resolve_dynamic_callback_token
+from bridge.callback_tokens import CallbackTokenError, resolve_dynamic_callback_token
 from bridge.callbacks import close_panel_message
-from bridge.conversation_setup import ConversationSetupService, SetupExpiredError, setup_key
+from bridge.conversation_setup import ConversationSetupService, SetupExpiredError
 from bridge.conversation_setup_panels import send_setup_panel
+from bridge.conversation_setup_state import setup_key, setup_panel_markup
 from bridge.metadata import get_meta
 from bridge.persona_service import PersonaService
 from bridge.request_types import RequestContext
@@ -33,6 +34,14 @@ def handle_setup_callback(
         return False
     service = ConversationSetupService(request_context.app_settings, persona_service)
     try:
+        markup = setup_panel_markup(db, chat_id, request_context.actor_id, message.get("message_id"))
+        can_close = markup is None or any(
+            button.get("callback_data") == data for row in markup["inline_keyboard"] for button in row
+        )
+        if markup is not None and "_panel_busy_revision" in callback:
+            callback["_panel_original_reply_markup"] = markup
+        if not can_close:
+            raise SetupExpiredError("Setup expired; run /character again.")
         raw = resolve_dynamic_callback_token(data.split(":", 1)[1], "conversation_setup", chat_id, db=db)
         if raw is None:
             raise SetupExpiredError("Setup expired; run /character again.")
@@ -75,8 +84,12 @@ def handle_setup_callback(
                 request_context=request_context,
             )
         answer_callback(token, str(callback.get("id") or ""), "Setup updated")
+    except (CallbackTokenError, sqlite3.Error):
+        answer_callback(token, str(callback.get("id") or ""), "Setup unavailable")
+        send_text(token, chat_id, "Setup is temporarily unavailable; try again.")
     except SetupExpiredError as exc:
-        close_panel_message(db, token, chat_id, {"message": message})
+        if can_close:
+            close_panel_message(db, token, chat_id, {"message": message})
         answer_callback(token, str(callback.get("id") or ""), "Setup unavailable")
         send_text(token, chat_id, str(exc))
     except (ValueError, KeyError, TypeError, OSError) as exc:

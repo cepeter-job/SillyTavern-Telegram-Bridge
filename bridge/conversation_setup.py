@@ -16,6 +16,7 @@ from bridge.conversation_lifecycle import (
     initialize_conversation,
     is_group_conversation,
 )
+from bridge.conversation_setup_state import setup_key
 from bridge.limits import PENDING_SETTINGS_TTL_SECONDS
 from bridge.metadata import get_meta, set_meta
 from bridge.narrative_settings import (
@@ -35,10 +36,6 @@ from bridge.sqlite_store import write_transaction
 
 class SetupExpiredError(ValueError):
     """A setup draft is no longer usable; its panel may be retired."""
-
-
-def setup_key(chat_id: str, actor_id: str) -> str:
-    return f"conversation_setup:{chat_id}:{actor_id}"
 
 
 def begin_setup(

@@ -17,7 +17,7 @@ _TOKEN_INSERT_ATTEMPTS = 8
 
 
 class CallbackTokenError(RuntimeError):
-    """A durable callback handle could not be created."""
+    """A durable callback handle could not be created or read."""
 
 
 def _required_scope(kind: str, chat_id: str) -> None:
@@ -62,7 +62,7 @@ def dynamic_callback_token(kind: str, value: str, chat_id: str, *, db: sqlite3.C
 
 
 def resolve_dynamic_callback_token(token: str, kind: str, chat_id: str, *, db: sqlite3.Connection) -> str | None:
-    """Read a valid handle without owning, committing, or pruning a transaction."""
+    """Read a handle without writes; unavailable storage raises CallbackTokenError."""
     _required_scope(kind, chat_id)
     if not isinstance(token, str) or not token or len(token) > 64:
         return None
@@ -71,9 +71,9 @@ def resolve_dynamic_callback_token(token: str, kind: str, chat_id: str, *, db: s
             "SELECT kind,value,chat_id,expires_at FROM callback_tokens WHERE token=?",
             (token,),
         ).fetchone()
-    except sqlite3.Error:
-        logging.warning("Could not read callback token; reopen the panel")
-        return None
+    except sqlite3.Error as exc:
+        logging.warning("Could not read callback token; try again")
+        raise CallbackTokenError("Could not read callback token") from exc
     if row is None or row[0] != kind or not row[2] or row[2] != chat_id:
         return None
     try:

@@ -61,12 +61,12 @@ jobs:
         with:
           version: "0.12.22"
           enable-cache: true
-          cache-dependency-glob: requirements-py314.lock
-      - name: Confirm final interpreter and install full hash-locked runtime
+          cache-dependency-glob: requirements-dev-py314.lock
+      - name: Confirm final interpreter and install full hash-locked development environment
         run: |
           set -euo pipefail
           python -c 'import sys; assert sys.version_info[:3] == (3,14,8) and sys.version_info.releaselevel == "final"'
-          uv pip install --system --python python --require-hashes -r requirements-py314.lock
+          uv pip install --system --python python --require-hashes -r requirements-dev-py314.lock
           uv pip check --python python
       - name: Verify native voice-enabled integrations and CPU-compatible NumPy
         run: |

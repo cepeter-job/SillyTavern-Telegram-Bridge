@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -18,6 +20,27 @@ WORKFLOW = ROOT / ".github/workflows/python314-compatibility.yml"
 def _steps():
     data = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     return data["jobs"]["full-regression"], data["jobs"]["resource-owner-trace"]
+
+
+def test_official_native_preflight_installs_hash_locked_test_prerequisites():
+    job = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["voice-enabled-native-preflight"]
+    commands = "\n".join(step.get("run", "") for step in job["steps"])
+    installed = set()
+    for line in commands.splitlines():
+        args = shlex.split(line)
+        if args[:3] != ["uv", "pip", "install"]:
+            continue
+        assert "--require-hashes" in args
+        for position, token in enumerate(args[:-1]):
+            if token == "-r":
+                installed.update(re.findall(r"^([\w-]+)==", (ROOT / args[position + 1]).read_text(), re.MULTILINE))
+    # The serial native test command still loads pytest and xdist from pytest.ini.
+    assert {"ctranslate2", "numpy", "pytest", "pytest-xdist"} <= installed
+    assert "python -X dev -W error::ResourceWarning -c 'import ctranslate2;" in commands
+    assert (
+        "python -X dev -W error::ResourceWarning -m pytest -q -n 0 tests/test_python314_native_imports.py" in commands
+    )
+    assert "--force-reinstall" not in commands
 
 
 def test_python314_compatibility_has_real_full_suite_without_warning_suppression():

@@ -49,29 +49,76 @@ the old locks:
 
 ## Current blockers and diagnostic evidence
 
-The first strict Python 3.14.8 full regression on GitHub
-([run 38020696462](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/actions/runs/38020696462))
-**failed: 5,110 passed, 16 failed and one error**, mainly from Python
-SQLite `ResourceWarning` finalizers. This does not establish Python 3.14
-readiness and must not be masked by advisory CI. The workflow registry
-documentation omission was fixed separately.
+The original SQLite connection-lifecycle failures are repaired by
+[#503](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/pull/503),
+merged into this migration branch. The
+[initial run](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/actions/runs/38020696462)
+(5,110 passed, 16 failed and one error) is historical pre-fix evidence,
+not the current SQLite result.
 
-On the actual older KVM VPS, CPython 3.14.8 **and** 3.14.7
-standalone environments abort on exit after importing CTranslate2 4.8.2
-under `-X dev -W error::ResourceWarning`:
-`Fatal Python error: _PyMem_DebugRawFree: bad ID`.
-Plain imports succeed, so simple import-only checks are insufficient;
-`voice-enabled-native-preflight` now checks strict subprocess exit status.
-Do not assume the root cause belongs solely to the CTranslate2 wheel or
-the standalone Python distribution without further isolation. Do not
-disable Python's developer allocator to claim the gate passes.
+At source `0700181f12063570f0babf9ebc26208d713a4b78`,
+[ordinary CI passed](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/actions/runs/38031945230).
+The [strict Python 3.14 run](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/actions/runs/38031945226)
+reported **5,216 tests and 817 subtests passed**, with 84.39% coverage,
+but correctly failed on a fatal native allocator error at shutdown.
+Its separate published-wheel native probe exited **134**. Passing test
+assertions do not establish a clean interpreter exit or completed security
+coverage gates; the fatal-log guard stopped this run before those floors.
 
-Three alternating runs per interpreter on the same VPS of
-`tools/benchmark_python_runtime.py` showed identical synthetic
-outputs and an 11.5% **slowdown** in Python 3.14.8 SQLite lookup median
-CPU versus Python 3.11.16. Context estimation, deduplication and JSON
-showed gains (+3.0%, +11.5%, +8.2%). These are tiny synthetic
-microbenchmarks, not Telegram p95 or actual process RSS.
+The native cause is established: upstream-pinned pybind11 2.11.1 allocated
+heap-type `tp_doc` with `PyObject_MALLOC`, while Python 3.14 frees it with
+`PyMem_Free`. Strict CPython 3.14.7/3.14.8 finalization exposes the mismatch
+as `_PyMem_DebugRawFree: bad ID`. The same minimal binding exits cleanly
+with pybind11 2.13.6 or 3.0.1. Upstream
+[PR #2108](https://github.com/OpenNMT/CTranslate2/pull/2108) merged on
+2026-10-10 and issue #2107 closed. The latest official release remains
+**v4.8.2** at this checkpoint; the published wheel is still unfixed.
+Do not disable the developer allocator or substitute plain imports for
+strict clean-exit verification.
+
+### Separate pinned-candidate CI for PR #500
+
+`Python 3.14 pinned candidate for PR500` runs on GitHub-hosted Ubuntu 24.04
+for updates to PR #500's same-repository migration branch. It checks out
+the immutable PR event head and requires current PR/main refs to match
+the event head/base both before and after testing. Upstream artifact
+`11660198517`, its source identity, ZIP digest and exact regular cp314
+wheel digest are verified before installation.
+
+Only CTranslate2 is replaced inside a disposable Python 3.14.8 environment.
+Strict native clean exit, serial native/audio tests, full regression,
+original global/security coverage floors and fatal-log checks all gate
+success. Candidate-specific evidence is retained for 14 days. This
+experimental result does not waive the separate official published-wheel
+promotion gate or change the production dependency locks.
+
+### Completed isolated staging at source 0700181f
+
+The separately approved unreleased CTranslate2 candidate wheel has SHA-256
+`186f18a7204361767d5158d75f98d6b2a750d3fbebda44ca72432be6ceff9da6`.
+It contains other upstream CPU/GPU changes in addition to the allocator
+repair, and is not a fixed official release or an approved production lock.
+
+On the actual old-CPU host, that exact candidate passed strict native
+clean exit, three audio tests, and 83 selected continuity tests plus nine
+subtests. A real local English transcription of synthetic audio matched
+all ten reference words and exited cleanly under strict checks. The one
+cold call took 129.50 seconds under a 25% CPU quota and reached 629.0 MiB
+process peak RSS. This is one bounded speech smoke, not warm-repeat,
+multilingual, production-latency or concurrent-load acceptance.
+
+A disposable Python **3.11 → 3.14 → 3.11** backup/write/restore rehearsal
+preserved all 75 tables and 280 schema objects, with integrity and
+foreign-key checks passing. This does not establish production-sized
+backup or live-service rollback readiness.
+
+Three matched normal-mode offline bridge workload pairs verified 270
+turns. Median paired mean CPU changed **−3.42%** and peak RSS **+2.95%**;
+p95 results varied enough that latency acceptance remains inconclusive.
+The 5% CPU-gain target is unproven. Earlier tiny synthetic SQLite results
+remain historical; the later history-fetch wall-time changes were mixed,
+so they do not isolate a consistent Python-specific SQLite slowdown.
+Production promotion still requires the separate gates below.
 
 To diagnose SQLite finalization warnings without slowing or contaminating
 the entire suite, manually dispatch the Python 3.14 workflow with

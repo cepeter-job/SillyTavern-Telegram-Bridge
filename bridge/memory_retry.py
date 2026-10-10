@@ -4,6 +4,7 @@ MEMORY_RESPONSE_ERRORS = {
     "episodic memory response is not valid JSON": "malformed_json",
     "episodic memory response must be a JSON array": "invalid_shape",
     "episodic memory empty result requires a reason": "invalid_shape",
+    "episodic memory populated result has no accepted candidates": "invalid_shape",
     "Classified memory response must be a JSON object": "invalid_shape",
     "Memory classification requires at most 32 explicit blocks": "invalid_shape",
     "Classified memory blocks require text": "invalid_shape",

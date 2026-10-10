@@ -44,7 +44,8 @@ def parse_episodic_candidates(source: str) -> list[EpisodicCandidate]:
         raise ValueError("episodic memory response is not valid JSON") from exc
     no_memory_reason = ""
     if isinstance(payload, dict):
-        no_memory_reason = str(payload.get("no_memory_reason") or "").strip()
+        reason = payload.get("no_memory_reason")
+        no_memory_reason = reason.strip() if isinstance(reason, str) else ""
         payload = payload.get("memories")
     if not isinstance(payload, list):
         raise ValueError("episodic memory response must be a JSON array")
@@ -81,6 +82,8 @@ def parse_episodic_candidates(source: str) -> list[EpisodicCandidate]:
         )
         if len(result) >= EPISODIC_MAX_EVENTS:
             break
+    if payload and not result:
+        raise ValueError("episodic memory populated result has no accepted candidates")
     return result
 
 

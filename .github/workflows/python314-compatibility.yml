@@ -320,11 +320,15 @@ jobs:
           python setup.py build_ext --inplace \
             >> "$GITHUB_WORKSPACE/python314-patched-native-candidate.log" 2>&1
           popd >/dev/null
+          # The debugger job installed only the production lock. Bring in
+          # the reviewed, hash-locked dev tools before invoking pytest.
+          uv pip install --system --python python --require-hashes -r requirements-dev-py314.lock
+          uv pip check --python python
           export PYTHONPATH="$RUNNER_TEMP/ctranslate2-upstream/python:${PYTHONPATH:-}"
           # These subprocess exit checks failed for the published wheel,
           # but must succeed without suppressing debug allocation checks.
           python -X dev -W error::ResourceWarning \
-            -c 'import ctranslate2, faster_whisper; print("patched_native_binding_exit=PASS", ctranslate2.__version__)' \
+            -c 'import ctranslate2, ctranslate2._ext as ext, faster_whisper; assert "ctranslate2-upstream/python" in ext.__file__, ext.__file__; print("patched_native_binding_exit=PASS", ctranslate2.__version__)' \
             2>&1 | tee -a python314-patched-native-candidate.log
           python -X dev -W error::ResourceWarning -m pytest -q -n 0 \
             tests/test_python314_native_imports.py \

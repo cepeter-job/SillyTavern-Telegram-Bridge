@@ -104,4 +104,6 @@ def test_manual_gdb_job_requires_explicit_debug_dispatch():
     assert "ctranslate2-upstream" in str(debug["steps"])
     assert "d44d2d069eb88c7b7804da864c10c201501cb4a9" in str(debug["steps"])
     assert "LD_LIBRARY_PATH" in str(debug["steps"])
+    assert "requirements-dev-py314.lock" in str(debug["steps"])
+    assert '"ctranslate2-upstream/python" in ext.__file__' in str(debug["steps"])
     assert "continue-on-error" not in str(jobs["full-regression"])

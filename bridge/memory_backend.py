@@ -16,9 +16,9 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any
 
-from bridge.diagnostic_events import event
 from bridge.hindsight_client_runtime import close_hindsight_client as close_hindsight_client
 from bridge.hindsight_client_runtime import hindsight_client as hindsight_client
+from bridge.hindsight_diagnostics import handle_hindsight_retain_failure
 from bridge.hindsight_endpoint import (
     _ensure_hindsight_loopback_proxy_bypass as _ensure_hindsight_loopback_proxy_bypass,
 )
@@ -456,24 +456,6 @@ def recall_scoped_memory(
     return ranked_fact_block(db, scope, [str(getattr(result, "document_id", "") or "") for result in results])
 
 
-def _hindsight_retain_failure_reason(error: BaseException) -> str:
-    """Classify a retain failure without persisting response text or credentials."""
-    current: BaseException | None = error
-    seen: set[int] = set()
-    while current is not None and id(current) not in seen:
-        seen.add(id(current))
-        if isinstance(current, json.JSONDecodeError):
-            return "upstream_invalid_response"
-        response = getattr(current, "response", None)
-        status_code = getattr(response, "status_code", None)
-        if isinstance(status_code, int):
-            return "upstream_http_error"
-        if isinstance(current, TimeoutError) or "timeout" in type(current).__name__.casefold():
-            return "upstream_timeout"
-        current = current.__cause__ or current.__context__
-    return "retain_failed"
-
-
 def _retain_with_client(
     chat_id: str,
     session_id: str,
@@ -508,16 +490,7 @@ def _retain_with_client(
             )
             return True
     except Exception as error:
-        event(
-            "memory.hindsight_retain_failed",
-            chat_id=chat_id,
-            session_id=session_id,
-            reason=_hindsight_retain_failure_reason(error),
-            error_type=type(error).__name__,
-            retryable=True,
-        )
-        logging.warning("Hindsight native fact retain unavailable for chat %s", chat_id, exc_info=True)
-        return False
+        return handle_hindsight_retain_failure(error, chat_id, session_id)
 
 
 def _memory_hindsight_epoch_key(

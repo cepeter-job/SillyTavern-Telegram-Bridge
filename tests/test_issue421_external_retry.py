@@ -9,6 +9,7 @@ from test_durable_memory_workers import add
 from test_memory_completion_safety import session_db as session_db
 
 from bridge import memory_backend
+from bridge.hindsight_diagnostics import hindsight_retain_failure_reason
 from bridge.memory_store import claim_jobs, fail_job
 from bridge.schema import initialize_database_schema
 
@@ -95,13 +96,13 @@ def test_retention_timeout_does_not_shorten_server_work_or_slow_recall(tmp_path,
 
 def test_hindsight_retain_failure_reason_classifies_upstream_without_response_text():
     malformed = json.JSONDecodeError("provider prose", "x", 0)
-    assert memory_backend._hindsight_retain_failure_reason(malformed) == "upstream_invalid_response"
+    assert hindsight_retain_failure_reason(malformed) == "upstream_invalid_response"
 
     class Response:
         status_code = 500
 
     error = RuntimeError("private provider response")
     error.response = Response()
-    assert memory_backend._hindsight_retain_failure_reason(error) == "upstream_http_error"
-    assert memory_backend._hindsight_retain_failure_reason(TimeoutError()) == "upstream_timeout"
-    assert memory_backend._hindsight_retain_failure_reason(RuntimeError()) == "retain_failed"
+    assert hindsight_retain_failure_reason(error) == "upstream_http_error"
+    assert hindsight_retain_failure_reason(TimeoutError()) == "upstream_timeout"
+    assert hindsight_retain_failure_reason(RuntimeError()) == "retain_failed"

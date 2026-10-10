@@ -64,7 +64,7 @@ SCENARIOS = (
     },
 )
 EMPTY = {
-    "episodes": '{"memories":[]}',
+    "episodes": '{"memories":[],"no_memory_reason":"Only transient fixture text was present."}',
     "npc": '{"npcs":[],"simulation":{}}',
     "scene": '{"state":{},"blocks":[]}',
     "curator": '{"memories":[]}',

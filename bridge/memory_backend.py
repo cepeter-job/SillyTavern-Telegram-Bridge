@@ -36,7 +36,6 @@ from bridge.memory_retirement_store import RETIREMENT_SCOPE_UNPAUSED
 from bridge.memory_scope_store import eligible_fact, ranked_fact_block, resolve_memory_scope, scope_is_current
 from bridge.memory_store import (
     ARCHIVAL_PENDING,
-    ARCHIVAL_WATCH_SECONDS,
     archival_attempts_outstanding,
     purge_external_memory,
     reconcile_archival_attempts,
@@ -59,13 +58,15 @@ def hindsight_tags(chat_id: str, session_id: str, character_name: str) -> list[s
     return [f"user:telegram-{user_key}", f"session:{session_id}", f"character:{character_key}"]
 
 
-def hindsight_client(*, app_settings: AppSettings) -> Any:
+def hindsight_client(*, app_settings: AppSettings, request_timeout: float = 30.0) -> Any:
     base_url = prepare_compatible_hindsight_endpoint(app_settings)
 
     from hindsight_client import Hindsight
 
     api_key = app_settings.environ.get("HINDSIGHT_API_KEY") or None
-    return Hindsight(base_url=base_url, api_key=api_key, timeout=30.0, user_agent="SillyTavernTelegramBridge/1.0")
+    return Hindsight(
+        base_url=base_url, api_key=api_key, timeout=request_timeout, user_agent="SillyTavernTelegramBridge/1.0"
+    )
 
 
 _HINDSIGHT_SESSION_LOCKS: weakref.WeakValueDictionary[tuple[str, str], threading.RLock] = weakref.WeakValueDictionary()
@@ -83,7 +84,7 @@ def close_hindsight_client(client: Any) -> None:
 
 
 @contextmanager
-def hindsight_client_scope(*, app_settings: AppSettings) -> Iterator[Any]:
+def hindsight_client_scope(*, app_settings: AppSettings, request_timeout: float | None = None) -> Iterator[Any]:
     """Own the loop used by one synchronous SDK client, including its cleanup.
 
     The SDK's sync API reuses the thread's current loop but does not close it.
@@ -91,7 +92,11 @@ def hindsight_client_scope(*, app_settings: AppSettings) -> Iterator[Any]:
     the transport, even when client construction, requests, or cleanup fail.
     """
     with asyncio.Runner():
-        client = hindsight_client(app_settings=app_settings)
+        client = (
+            hindsight_client(app_settings=app_settings)
+            if request_timeout is None
+            else hindsight_client(app_settings=app_settings, request_timeout=request_timeout)
+        )
         try:
             yield client
         finally:
@@ -367,14 +372,16 @@ def cleanup_retired_memory_documents(
                 terminal = succeeded and not outstanding_at_start and not archival_attempts_outstanding(db, document_id)
                 db.execute(
                     "UPDATE memory_retired_documents SET deleted=?,attempts=attempts+1,"
-                    "next_attempt_at=CASE WHEN ? THEN 0 WHEN ? THEN ? ELSE ?+MIN(300,5*(1 << MIN(attempts,6))) END "
+                    "next_attempt_at=CASE WHEN ? THEN 0 "
+                    "WHEN ? THEN ?+MIN(3600,300*(1 << MIN(attempts/4,4))) "
+                    "ELSE ?+MIN(3600,5*(1 << MIN(attempts,10))) END "
                     "WHERE chat_id=? AND session_id=? AND document_id=? AND deleted=0 AND lease_token=? "
                     "AND retirement_revision=?",
                     (
                         int(terminal),
                         int(terminal),
                         int(succeeded),
-                        time.time() + ARCHIVAL_WATCH_SECONDS,
+                        time.time(),
                         time.time(),
                         chat_id,
                         session_id,
@@ -484,7 +491,9 @@ def _retain_with_client(
     if kind != "native_fact":
         raise ValueError("Only native facts may be retained in Hindsight")
     try:
-        with hindsight_client_scope(app_settings=app_settings) as client:
+        # Synchronous retention must outlive the server's 60-second extraction
+        # deadline; recall and metadata operations keep the 30-second default.
+        with hindsight_client_scope(app_settings=app_settings, request_timeout=90.0) as client:
             client.retain(
                 bank_id=hindsight_bank_id(chat_id),
                 content=content,

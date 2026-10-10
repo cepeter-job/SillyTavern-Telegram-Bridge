@@ -213,6 +213,7 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
             "temperature": 0.0,
             "max_tokens": _limits.NPC_EXTRACTION_MAX_OUTPUT_TOKENS,
             "stop_sequences": "",
+            "json_once": True,
             "reasoning_budget": utility_reasoning_for_session(db, chat_id, session["session_id"]),
         }
     )
@@ -221,7 +222,9 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
         {
             "role": "system",
             "content": (
-                "Extract durable supporting-character state as JSON with npcs; each has name, aliases, operations. "
+                'Return one complete JSON object with mandatory "npcs" array and "simulation" object. '
+                'Use {"npcs":[],"simulation":{}} only when neither has established updates. '
+                "Extract durable supporting-character state; each NPC has name, aliases, operations. "
                 "Each operation has field, op, value, mode, visibility, known_by. "
                 "Fixed fields: appearance, voice, background, canon. Mutable: role, location, "
                 "agenda, relationship, mood, "

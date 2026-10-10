@@ -36,6 +36,7 @@ from bridge.memory_contracts import MemoryReadScope
 from bridge.memory_queue import AUTO_FAILURE_LIMIT as AUTO_FAILURE_LIMIT
 from bridge.memory_queue import AUTO_IDLE_SECONDS as AUTO_IDLE_SECONDS
 from bridge.memory_queue import CLAIM_SELECTION, queue_parameters
+from bridge.memory_queue import recover_expired_jobs as recover_expired_jobs
 from bridge.memory_retry import CONFIGURATION_RETRY_SECONDS, MEMORY_FAILURE_CODES
 from bridge.sqlite_store import write_transaction
 
@@ -87,15 +88,6 @@ def enqueue_memory(db: sqlite3.Connection, chat_id: str, session_id: str, layer:
             (layer, chat_id, session_id, chat_id, session_id),
         )
     return bool(cursor.rowcount)
-
-
-def recover_expired_jobs(db: sqlite3.Connection, *, now: float | None = None) -> int:
-    now = time.time() if now is None else now
-    with write_transaction(db):
-        return db.execute(
-            "UPDATE memory_jobs SET lease_token='',lease_deadline=0 WHERE lease_token<>'' AND lease_deadline<=?",
-            (now,),
-        ).rowcount
 
 
 def claim_jobs(

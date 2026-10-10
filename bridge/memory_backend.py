@@ -16,10 +16,11 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any
 
+from bridge.hindsight_client_runtime import close_hindsight_client as close_hindsight_client
+from bridge.hindsight_client_runtime import hindsight_client as hindsight_client
 from bridge.hindsight_endpoint import (
     _ensure_hindsight_loopback_proxy_bypass as _ensure_hindsight_loopback_proxy_bypass,
 )
-from bridge.hindsight_endpoint import prepare_compatible_hindsight_endpoint
 from bridge.limits import (
     HINDSIGHT_RECALL_MAX_TOKENS,
     HINDSIGHT_RETAIN_MAX_MESSAGES,
@@ -58,29 +59,8 @@ def hindsight_tags(chat_id: str, session_id: str, character_name: str) -> list[s
     return [f"user:telegram-{user_key}", f"session:{session_id}", f"character:{character_key}"]
 
 
-def hindsight_client(*, app_settings: AppSettings, request_timeout: float = 30.0) -> Any:
-    base_url = prepare_compatible_hindsight_endpoint(app_settings)
-
-    from hindsight_client import Hindsight
-
-    api_key = app_settings.environ.get("HINDSIGHT_API_KEY") or None
-    return Hindsight(
-        base_url=base_url, api_key=api_key, timeout=request_timeout, user_agent="SillyTavernTelegramBridge/1.0"
-    )
-
-
 _HINDSIGHT_SESSION_LOCKS: weakref.WeakValueDictionary[tuple[str, str], threading.RLock] = weakref.WeakValueDictionary()
 _HINDSIGHT_SESSION_LOCKS_GUARD = threading.Lock()
-
-
-def close_hindsight_client(client: Any) -> None:
-    """Close the supported SDK wrapper on its own synchronous lifecycle."""
-    if client is None:
-        return
-    try:
-        client.close()
-    except Exception:
-        logging.debug("Could not close Hindsight client cleanly", exc_info=True)
 
 
 @contextmanager

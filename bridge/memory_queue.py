@@ -3,6 +3,8 @@
 import sqlite3
 import time
 
+from bridge.sqlite_store import write_transaction
+
 AUTO_IDLE_SECONDS, AUTO_FAILURE_LIMIT = 86400, 8
 
 CURRENT_SESSION = (
@@ -71,3 +73,12 @@ ACK_GUARD = (
     "WHERE m.chat_id=memory_jobs.chat_id AND m.session_id=memory_jobs.session_id "
     "AND m.id>l.covered_id AND m.id<=memory_jobs.claimed_target_id))"
 )
+
+
+def recover_expired_jobs(db: sqlite3.Connection, *, now: float | None = None) -> int:
+    now = time.time() if now is None else now
+    with write_transaction(db):
+        return db.execute(
+            "UPDATE memory_jobs SET lease_token='',lease_deadline=0 WHERE lease_token<>'' AND lease_deadline<=?",
+            (now,),
+        ).rowcount

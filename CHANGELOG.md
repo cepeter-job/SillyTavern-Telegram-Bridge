@@ -8,6 +8,23 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+## [0.3.021] - 2026-10-10
+
+### Conversation setup and helper reliability
+
+- Close expired conversation-setup panels when they are used. Preserve the current panel and draft when an older callback arrives for the same message, and fail safely when callback-token storage is unavailable (#507).
+- Align episodic, scene and NPC helper prompts with their validated JSON-object contracts; keep NPC and curator generation on the single JSON-response path (#508).
+- Repair missing NPC roots with the existing bounded repair, preserving independently valid tracker state if the NPC repair fails. Do not mark a failed NPC extraction complete (#508).
+- Let synchronous Hindsight retention wait up to 90 seconds while recall and metadata retain their 30-second default. Gradually back off repeated retention failures and ambiguous-delete watches to one-hour intervals without clearing late-write evidence (#508).
+- Include the previously reviewed HTTP-error response-stream cleanup (#495), Anime art-direction refinement (#489), and test/CI compatibility fixes. Experimental Python 3.15 checks remain manual-only (#506).
+
+### Evidence and deployment boundaries
+
+- Preserve the frozen helper study and independent writing-profile review evidence (#482, #504, #508). The helper study did not meet the 20% story-input goal, and its measurements do not cover the later NPC repair correction.
+- No runtime dependency or database schema change since v0.3.020. Production remains on Python 3.11; Python 3.14 migration is not part of this release.
+- Story assembly, production history selection/pruning, private provider routes and configuration remain unchanged. No new provider comparison, Telegram acceptance test, or production input-savings claim is implied by this release.
+- Install only from the independently trusted SSH-signed tag after exact-source CI/CodeQL checks and SHA-256 asset verification. Back up private state and verify the running revision after the supervised restart.
+
 ## [0.3.020] - 2026-10-09
 
 ### Context research and opt-in diagnostics

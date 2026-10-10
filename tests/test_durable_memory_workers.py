@@ -110,7 +110,15 @@ def test_empty_extraction_succeeds_but_stale_snapshot_is_distinct(session_db):
     add(db)
     kwargs = dict(source_text="event", source_start_rowid=1, source_end_rowid=1, app_settings=settings)
     result = extract_episodic_memories_result(
-        db, "chat", session, provider_port=make_test_provider_port(generate_backend=lambda *a, **k: "[]"), **kwargs
+        db,
+        "chat",
+        session,
+        provider_port=make_test_provider_port(
+            generate_backend=lambda *a, **k: (
+                '{"memories":[],"no_memory_reason":"Only synthetic transient text was present."}'
+            )
+        ),
+        **kwargs,
     )
     assert result.status == "complete" and result.inserted == 0
     result = extract_episodic_memories_result(
@@ -163,7 +171,11 @@ def test_summary_success_episode_failure_is_still_pending(session_db, monkeypatc
             episodes,
             session,
             {"name": "Alice"},
-            provider_port=make_test_provider_port(generate_backend=lambda *a, **k: "[]"),
+            provider_port=make_test_provider_port(
+                generate_backend=lambda *a, **k: (
+                    '{"memories":[],"no_memory_reason":"Only synthetic transient text was present."}'
+                )
+            ),
             app_settings=settings,
         )
         == "complete"

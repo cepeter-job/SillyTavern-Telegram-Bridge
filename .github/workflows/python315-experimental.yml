@@ -13,14 +13,6 @@ on:
         required: false
         type: string
         default: "tests/test_expressions.py"
-  pull_request:
-    paths:
-      - ".github/workflows/python315-experimental.yml"
-      - "requirements.txt"
-      - "bridge/**"
-      - "tools/benchmark_python_runtime.py"
-      - "tests/test_benchmark_python_runtime.py"
-      - "docs/python-315-migration.md"
 
 permissions:
   contents: read

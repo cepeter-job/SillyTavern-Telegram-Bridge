@@ -12,6 +12,6 @@ Authoritative source: [frozen plan at its pre-inference commit](https://github.c
 
 ## Review checkpoint
 
-The final amended independent scorecard was preserved and structurally validated before unblinding. It contains 16 complete pairs, two flagged categories in one response, and no unresolved items. The owner separately confirmed reviewer independence on 2026-10-10. Private condition-level adjudication is still pending access to the VPS-hosted maps; display labels are not condition labels. The current human-review decision and infrastructure status are tracked in [#494](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/issues/494).
+The final amended independent scorecard was preserved and structurally validated before unblinding. It contains 16 complete pairs, two flagged categories in one response, and no unresolved items. The owner separately confirmed reviewer independence on 2026-10-10. Private unblinding and adjudication subsequently completed after access was restored. The independent review found one baseline hard-error response, no updated-wording hard-error response, and preferences of six for each condition with four ties. The [completed review record](ADJUDICATED_REVIEW_2026-10-10.md) documents provenance, verification and the bounded further-testing disposition; overall narrative preference remains inconclusive.
 
 No production-quality, winning-profile, default-policy or history-pruning approval follows from this checkpoint.

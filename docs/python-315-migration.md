@@ -67,15 +67,24 @@ The core-only Python 3.15 final run can report a leaked SQLite connection
 when the garbage collector executes. Do not assume the failing test owns the
 connection merely because it received the warning.
 
-For a targeted diagnostic run, manually dispatch **Python 3.15 experimental
-compatibility** with the optional `trace_resource_allocations` input enabled.
-Only the manually dispatched final-core regression uses this input. It sets
-`PYTHONTRACEMALLOC=8` for the pytest parent and all xdist workers, so
-`ResourceWarning` includes an **Object allocated at** stack where Python
-allocated the unclosed connection or HTTP response. Inspect the retained
-`python315-final-core-regression` logs and fix the actual connection owner.
-This is intentionally opt-in because allocation tracking increases runtime
-and memory usage; leave it off for routine CI.
+For a focused diagnostic run, manually dispatch **Python 3.15 experimental
+compatibility** with the optional `trace_resource_allocations` switch enabled
+and `resource_trace_tests` set to one to four existing `tests/test_*.py`
+modules separated by spaces (default: `tests/test_expressions.py`). This
+runs **only those tests**, serially (`-n 0`), with `PYTHONTRACEMALLOC=8`;
+subprocess-heavy unrelated tests and the full suite are not traced. The
+strict `ResourceWarning` checks remain active. Inspect the resulting
+`python315-final-core-regression` artifact for allocation stacks and
+fix resource owners, not the tests in which garbage collection happens.
+
+**Diagnostic success is not a Python 3.15 regression pass.** With the
+trace switch disabled, the separate untraced full pytest suite still runs
+with its original xdist coverage and warning gates. The trace run has
+additional memory and CPU overhead, so compare its findings with an
+untraced final-runtime regression; never compare its speed with production.
+In [run 37972376367](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/actions/runs/37972376367),
+tracing the entire suite caused many subprocess timeouts and took about
+38 minutes; this is why the diagnostic mode is now explicitly targeted.
 
 This locally compiled release is not a like-for-like PGO/JIT performance
 build. Do not compare its benchmark timings with production or interpret its

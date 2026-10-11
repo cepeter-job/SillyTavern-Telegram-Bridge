@@ -39,7 +39,7 @@ def test_ending_configuration_rejects_ambiguous_values(session_db, mode, confirm
         configure_ending(
             db, "chat", "s1", director_room(db, "chat", "s1")["revision"], mode=mode, require_confirmation=confirmation
         )
-    assert load_session_narrative_settings(db, "chat", "s1").ending_mode == "open_ended"
+    assert load_session_narrative_settings(db, "chat", "s1").ending_mode == "closed_story"
 
 
 def confirming_story(case):

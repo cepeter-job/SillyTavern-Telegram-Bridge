@@ -206,7 +206,8 @@ def migrate_narrative_engine_foundation(db: sqlite3.Connection) -> None:
         raise RuntimeError("Narrative migration requires an active transaction")
     for statement in (*_TABLES, *_INDEXES, *_HISTORY_LIMITS):
         db.execute(statement)
-    settings = json.dumps(NarrativeSettings().to_dict(), separators=(",", ":"), sort_keys=True)
+    # Existing pre-Narrative Engine stories retain their original ending behavior.
+    settings = json.dumps(NarrativeSettings(ending_mode="open_ended").to_dict(), separators=(",", ":"), sort_keys=True)
     db.execute(
         "INSERT INTO narrative_settings(chat_id,session_id,settings_json,updated_at) "
         "SELECT chat_id,session_id,?,? FROM sessions WHERE true ON CONFLICT(chat_id,session_id) DO NOTHING",

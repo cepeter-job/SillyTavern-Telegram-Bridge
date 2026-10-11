@@ -13,7 +13,7 @@ class NarrativeSettings:
     user_control: str = "physical_continuity"
     director_cadence_mode: str = "adaptive"
     director_fixed_interval: int = 6
-    ending_mode: str = "open_ended"
+    ending_mode: str = "closed_story"
     require_finale_confirmation: bool = False
 
     def to_dict(self) -> dict[str, object]:

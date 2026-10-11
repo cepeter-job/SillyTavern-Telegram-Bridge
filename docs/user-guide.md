@@ -590,10 +590,12 @@ edits from an old panel rather than silently overwrite a newer decision.
 
 ## Closed Story and the epilogue
 
-Choose **Closed Story** in the Advanced step after selecting a character, or open
-**Director Room → Ending settings** for an existing story. The default remains
-Open-ended. An optional Ending Goal gives the Director a destination without
-scripting your character's decisions. Its revisions and reasons remain visible.
+New stories default to **Closed Story**. Choose **Open-ended** in the Advanced
+step after selecting a character, or open **Director Room → Ending settings**
+to change an existing story. Saved story settings and personal defaults keep
+their selected ending mode. An optional Ending Goal gives the Director a
+destination without scripting your character's decisions. Its revisions and
+reasons remain visible.
 
 A finale starts automatically when current story evidence supports it. Turn on
 **Ask before finale** to review the Director's reason and press **Begin finale**

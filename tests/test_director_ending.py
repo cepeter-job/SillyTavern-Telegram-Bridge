@@ -1,6 +1,7 @@
 """Director ending proposals are atomic plans, not a shortcut around committed facts."""
 
 import json
+from dataclasses import replace
 
 import pytest
 from test_ending_state import goal, ready_case
@@ -122,7 +123,9 @@ def test_invalid_ending_proposal_never_partially_applies(session_db, values):
 )
 def test_open_ended_stories_cannot_be_silently_closed_or_retargeted(session_db, values):
     db = ready_case(session_db)
-    save_session_narrative_settings(db, "chat", "s1", preset_narrative_settings("world_driven"))
+    save_session_narrative_settings(
+        db, "chat", "s1", replace(preset_narrative_settings("world_driven"), ending_mode="open_ended")
+    )
     result = direct(session_db, lambda *a, **k: decision(db, **values))
     assert result.result == "rejected"
     assert load_ending_state(db, "chat", "s1").lifecycle == "open"

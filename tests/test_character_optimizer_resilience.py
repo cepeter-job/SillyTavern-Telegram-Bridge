@@ -6,9 +6,11 @@ import hashlib
 import json
 import logging
 
+import pytest
 from application_test_setup import ensure_application_extensions, make_test_application_services
 from character_test_support import card_context as card_context
 from character_test_support import card_png as _card_png
+from provider_budget_test_support import Response, setup_route
 
 ensure_application_extensions()
 
@@ -18,9 +20,56 @@ from bridge import (
     character_optimizer_panels,
     character_quality,
     input_flows,
+    provider_transport,
 )
 from bridge.provider_port import ProviderPort
 from bridge.request_types import RequestContext
+
+
+@pytest.mark.parametrize(
+    "description,marker,offset",
+    [
+        ("First line\nSecond line", "\\n", 1),
+        ("A  B", "  ", 1),
+        ("Unicode α", "\\u03b1", 3),
+        ('Quoted "word"', '\\"', 1),
+    ],
+)
+def test_optimizer_preserves_json_escape_across_output_continuation(
+    card_context, tmp_path, monkeypatch, description, marker, offset
+):
+    db, ctx, _ = card_context
+    settings, router = setup_route(tmp_path, window=32000)
+    expected = {"description": description}
+    raw = json.dumps(expected)
+    boundary = raw.index(marker) + offset
+    calls = []
+
+    def request(req, **kwargs):
+        calls.append(json.loads(req.data))
+        # Both optimizer and repair would encounter the same token-boundary cut.
+        if len(calls) % 2:
+            return Response(raw[:boundary], "length")
+        return Response(raw[boundary:], "stop")
+
+    monkeypatch.setattr(provider_transport, "strict_urlopen", request)
+    monkeypatch.setattr(character_quality, "_utility_model", lambda *a, **k: "p::synthetic")
+
+    def generate(*args, **kwargs):
+        return provider_transport.generate_provider_text(router, *args, app_settings=settings, **kwargs)
+
+    port = ProviderPort(generate)
+    result = character_quality.optimize_character(
+        db,
+        "chat",
+        {"session_id": ctx.session_id},
+        {"name": "Fixture", "description": "original"},
+        provider_port=port,
+        app_settings=ctx.app_settings,
+    )
+
+    assert result == expected
+    assert len(calls) == 2
 
 
 def test_optimizer_repairs_invalid_json_once(card_context, monkeypatch):

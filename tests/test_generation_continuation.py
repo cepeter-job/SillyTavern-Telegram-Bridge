@@ -271,7 +271,7 @@ class GenerationContinuationTests(SettingsTestCase):
                 "data": {
                     "choices": [
                         {
-                            "message": {"content": "Part two."},
+                            "message": {"content": " Part two."},
                             "finish_reason": "stop",
                         }
                     ]
@@ -397,7 +397,7 @@ class GenerationContinuationTests(SettingsTestCase):
     def test_length_finish_adds_one_bounded_continuation(self):
         payloads = [
             {"choices": [{"message": {"content": "Part one."}, "finish_reason": "length"}]},
-            {"choices": [{"message": {"content": "Part two."}, "finish_reason": "stop"}]},
+            {"choices": [{"message": {"content": " Part two."}, "finish_reason": "stop"}]},
         ]
         requests = []
 

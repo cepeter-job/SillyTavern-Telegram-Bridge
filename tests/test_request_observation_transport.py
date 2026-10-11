@@ -41,11 +41,12 @@ def test_observer_is_wired_at_actual_send_and_never_changes_body(tmp_path, monke
     assert len(usage) == 2
 
 
-def test_each_automatic_continuation_keeps_its_own_usage(tmp_path, monkeypatch):
+@pytest.mark.parametrize("prefix,suffix,expected", [("First", " Second", "First Second"), ("Fi", "rst", "First")])
+def test_each_automatic_continuation_keeps_its_own_usage(tmp_path, monkeypatch, prefix, suffix, expected):
     obs = runtime(emit=lambda fields: None)
-    port, usage, sent = setup(tmp_path, monkeypatch, [response("First", "length", 10), response("Second", "stop", 20)])
+    port, usage, sent = setup(tmp_path, monkeypatch, [response(prefix, "length", 10), response(suffix, "stop", 20)])
     port = replace(port, request_observer=obs)
-    assert port.generate("key", "p::m", [{"role": "user", "content": "Continue"}]) == "First Second"
+    assert port.generate("key", "p::m", [{"role": "user", "content": "Continue"}]) == expected
     report = obs.report()
     assert len(sent) == report["requests_finished"] == 2
     by_phase = {r["phase"]: r["input_tokens"] for r in report["records"]}

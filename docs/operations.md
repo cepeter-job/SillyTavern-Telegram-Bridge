@@ -345,7 +345,7 @@ to install a specific reviewed release. This procedure is for an
 installer-managed **Git checkout**. Back up the database, private configuration
 and native SillyTavern data first; see [Backup and restore](#database-migrations-backup-and-restore).
 
-Open the [releases page](https://github.com/cepeter/SillyTavern-Telegram-Bridge/releases),
+Open the [releases page](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/releases),
 read the notes, and copy the exact tag of the release you chose. The terminal
 block below asks for that tag rather than guessing from the highest tag in Git.
 Run it from an interactive Bash terminal as the bridge user. Check the two paths

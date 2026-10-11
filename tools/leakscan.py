@@ -749,13 +749,13 @@ class Scanner:
     def rule_datastruct_loop(self, ctx: Context, node: ast.Call) -> None:
         t = tail(dotted(node.func))
         if t in {"concat", "concatenate", "vstack", "hstack", "append"} and ctx.in_loop(node):
-            recv = dotted(node.func.value)
+            recv = dotted(node.func.value) if isinstance(node.func, ast.Attribute) else ""
             if t == "append":
                 # word-boundary match so `metadata`/`thread_data` do not read as "data"
                 if not re.search(r"\b(df|frame|frames|data|series|arr|array)\b", recv.lower()):
                     return
             self.add(ctx, node, "DATAFRAME_REBUILD_IN_LOOP",
-                     f"`{recv}.{t}()` inside a loop rebuilds the whole structure each iteration")
+                     f"`{dotted(node.func)}()` inside a loop rebuilds the whole structure each iteration")
 
     def rule_gc(self, ctx: Context, node: ast.Call) -> None:
         if dotted(node.func) in {"gc.disable", "gc.freeze"}:

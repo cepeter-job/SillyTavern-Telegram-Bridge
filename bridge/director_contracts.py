@@ -12,13 +12,45 @@ DIRECTOR_TRANSITIONS = frozenset({"continue", "cut", "pov_switch", "time_jump", 
 DIRECTOR_POVS = frozenset({"first_person", "third_person_user", "third_person_rotating", "omniscient", "cinematic"})
 
 
+DIRECTOR_POLICY_REJECTION_CODES = frozenset(
+    {
+        "user_authorship",
+        "arc_outcome_change",
+        "ending_mode_required",
+        "finale_phase_undeveloped",
+        "user_speaker",
+        "pov_policy_conflict",
+        "user_first_person",
+        "absent_user_viewpoint",
+        "continue_transition",
+        "continue_viewpoint_change",
+        "continue_pov_change",
+        "continue_presence_change",
+    }
+)
+
+
 class DirectorProposalError(ValueError):
     """A safe category for failures; never echo provider output into errors."""
 
-    def __init__(self, category: str, message: str, *, repairable: bool = False):
+    def __init__(self, category: str, message: str, *, repairable: bool = False, rejection_code: object = ""):
         super().__init__(message)
-        self.category = category
+        self.category = (
+            category
+            if isinstance(category, str)
+            and category in {"size", "parse", "version", "policy", "reference", "lifecycle", "stale"}
+            else "unavailable"
+        )
         self.repairable = repairable
+        self._rejection_code = rejection_code
+
+    @property
+    def rejection_code(self) -> str:
+        """Only fixed policy identifiers may cross the diagnostic boundary."""
+        if self.category != "policy":
+            return ""
+        code = self._rejection_code
+        return code if isinstance(code, str) and code in DIRECTOR_POLICY_REJECTION_CODES else "policy"
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,7 +142,9 @@ def parse_director_proposal(raw: str) -> DirectorProposal:
     if type(data.get("schema_version")) is not int or data["schema_version"] != 1:
         raise DirectorProposalError("version", "Director schema version is missing or unsupported")
     if any(key in data for key in ("user_dialogue", "user_thoughts", "user_decision", "user_action")):
-        raise DirectorProposalError("policy", "Director cannot author user decisions or dialogue")
+        raise DirectorProposalError(
+            "policy", "Director cannot author user decisions or dialogue", rejection_code="user_authorship"
+        )
     action = data.get("action")
     revision = data.get("expected_revision")
     if action not in ("continue", "transition_scene"):

@@ -8,7 +8,7 @@ from dataclasses import asdict
 from typing import Any
 
 from bridge.card_content import build_world_info, card_fields_from_file, replace_macros
-from bridge.director_contracts import bounded_arc_guidance
+from bridge.director_contracts import DirectorProposalError, bounded_arc_guidance
 from bridge.director_repository import director_group_files, director_npc_names, director_recent_story
 from bridge.ending_service import load_ending_state
 from bridge.narrative_arc_repository import list_arc_rows
@@ -29,6 +29,8 @@ DIRECTOR_INSTRUCTION = (
     "Return JSON only: schema_version:1, action:continue|transition_scene, expected_revision (copy exactly), "
     "direction (<=4000 chars), scene_id (current scene anchor), thread_id, viewpoint, pov, user_present:boolean|null, "
     "purpose, transition_type:continue|cut|pov_switch|time_jump|thread_switch, direction_ttl:1..1000. "
+    "For either action, any nonempty pov must equal narrative_policy.pov_mode exactly; viewpoint names a "
+    "character, while pov names the narration mode. The selected policy is not a suggestion. "
     "For continue, omit unchanged optional fields; do not switch scene, thread, viewpoint or user presence. "
     "For transition_scene, specify target thread, viewpoint, the selected policy's pov_mode, and an explicit "
     "non-continue transition. A cinematic/omniscient camera may omit viewpoint. A genuinely new thread needs "
@@ -143,3 +145,20 @@ def build_director_input(
         "recent_committed_story": [{"id": row[0], "role": row[1], "content": row[2]} for row in history],
     }
     return data, cast, users, {str(row["thread_id"]) for row in threads}
+
+
+def director_repair_instruction(exc: DirectorProposalError, pov_mode: str) -> str:
+    """Describe contract corrections without echoing proposal values into feedback."""
+    return (
+        "Repair once. Return exactly one JSON object and nothing else. "
+        "Do not use Markdown or code fences. Use schema_version 1 and copy the original "
+        "expected_revision exactly. "
+        "Omit optional string fields instead of null. "
+        "Use only allowed references from the original request. "
+        "Allowed action: continue|transition_scene; transition_type: "
+        "continue|cut|pov_switch|time_jump|thread_switch. Any nonempty pov must equal "
+        f"narrative_policy.pov_mode exactly: {pov_mode}. For continue, omit pov "
+        "when unchanged; do not invent a transition to fix the mode. "
+        "story_phase: setup|development|escalation|climax|resolution. "
+        f"Validation error: {exc.rejection_code or exc.category}: {exc}"
+    )

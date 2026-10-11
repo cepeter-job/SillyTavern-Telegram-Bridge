@@ -8,6 +8,8 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+- Give Director POV-policy conflicts targeted feedback within the existing single repair attempt; preserve full validation and stale-state rejection.
+
 ## [0.3.024] - 2026-10-11
 
 ### Verified code-quality audit fixes

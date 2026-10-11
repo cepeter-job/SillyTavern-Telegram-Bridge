@@ -17,7 +17,7 @@ from bridge.director_cadence import DIRECTOR_LEASE_SECONDS, director_event_key, 
 from bridge.director_contracts import DirectorProposal, DirectorProposalError, parse_director_proposal
 from bridge.director_goal_repository import store_director_goal
 from bridge.director_guidance import active_director_plan
-from bridge.director_prompt import DIRECTOR_INSTRUCTION, build_director_input
+from bridge.director_prompt import DIRECTOR_INSTRUCTION, build_director_input, director_repair_instruction
 from bridge.director_repository import (
     append_director_decision,
     claim_director_run,
@@ -262,17 +262,7 @@ class DirectorService:
                         {"role": "assistant", "content": raw[:16384]},
                         {
                             "role": "user",
-                            "content": (
-                                "Repair once. Return exactly one JSON object and nothing else. "
-                                "Do not use Markdown or code fences. Use schema_version 1 and copy the original "
-                                "expected_revision exactly. Omit optional string fields instead of null. "
-                                "Use only allowed references from the original request. "
-                                "Allowed action: continue|transition_scene; transition_type: "
-                                "continue|cut|pov_switch|time_jump|thread_switch; pov: "
-                                "first_person|third_person_user|third_person_rotating|omniscient|cinematic; "
-                                "story_phase: setup|development|escalation|climax|resolution. "
-                                f"Validation error: {exc}"
-                            ),
+                            "content": director_repair_instruction(exc, settings.pov_mode),
                         },
                     ]
             if proposal is None:

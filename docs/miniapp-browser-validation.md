@@ -75,11 +75,14 @@ and keep the production polling/backoff intervals. The child releases blocked
 provider calls, drains its executor and closes its server on SIGTERM. Each
 Playwright context and process is isolated from the next test.
 
-Normal `miniapp-smoke` CI still runs the existing DOM suite and loopback smoke,
-then installs both engine revisions and runs all fourteen browser cases. Neither
-engine is skipped. Its protected aggregate dependency is unchanged. Logs,
-the HTML report, and failure screenshots/traces are uploaded for 14 days.
-The job timeout is ten minutes to include browser/system-library installation.
+Normal `miniapp-smoke` CI uses the digest-pinned Playwright 1.63.0 Noble container
+declared in [ci.yml](../.github/workflows/ci.yml). Its Chromium and WebKit binaries
+and system libraries are already installed. Each engine runs in its own matrix
+job, which verifies the package version and bundled binary before testing; the
+Chromium job also runs the existing DOM suite and loopback smoke. Both engines
+remain required by the protected aggregate. Logs, the HTML report, and failure
+screenshots/traces are uploaded for 14 days. Each matrix job has a 20-minute
+timeout.
 
 ## Recorded local evidence and limits
 

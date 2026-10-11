@@ -136,8 +136,10 @@ that session and use the [retry and recovery guide](docs/user-guide.md#retry-reg
 | Restart, update, back up or troubleshoot the bridge | [Operations](docs/operations.md) |
 | Use the Telegram management interface | [Mini App](docs/miniapp.md) |
 | Understand reported model usage and missing counts | [Token usage](docs/token-usage.md) |
+| Set up development, understand the code and contribute a PR | [Developer handbook](docs/development/README.md) |
 
-The six guides above describe how to use and maintain the bot. Dated files under
+The user and operations guides above describe how to use and maintain the bot;
+the developer handbook covers contributing to its source. Dated files under
 `docs/audits/` and `docs/superpowers/` are development records, not alternative
 installation instructions.
 

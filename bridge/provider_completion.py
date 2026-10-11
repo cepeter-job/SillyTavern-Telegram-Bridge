@@ -23,6 +23,26 @@ _NOT_CAPPED = frozenset(
 _RESPONSE_KEYS = frozenset({"id", "object", "model", "choices", "usage", "data", "success"})
 
 
+class StructuredOutputCapped(ValueError):
+    """Capped helper output is never complete, even if its JSON parses."""
+
+    rejection_code = "output_capped"
+
+    def __init__(self, output: str):
+        super().__init__("Structured JSON response reached the output cap")
+        # Ephemeral parser input for audience-conflict checks, never diagnostics
+        # or repair context. The exception's message/args contain no output text.
+        self.output = output
+
+
+def structured_output_text(output: object, reason: object, settings: dict[str, object]) -> str:
+    """Check nonstreaming Chat Completions JSON before missing-content errors."""
+    result = str(output) if output else ""
+    if settings.get("json_once") is True and isinstance(reason, str) and reason in _CAPPED:
+        raise StructuredOutputCapped(result)
+    return result
+
+
 def warn_missing_assistant_content(
     provider: str, model: str, response: object, choices: list[dict], finish_reason: object, result: object
 ) -> None:

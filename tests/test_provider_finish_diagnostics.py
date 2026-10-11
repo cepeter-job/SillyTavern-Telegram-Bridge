@@ -1,9 +1,12 @@
 """Transport completion metadata is factual, allowlisted and independent of usage."""
 
 import logging
+from contextlib import nullcontext
 
 import pytest
 from test_memory_json_transport import FakeResponse, routed_provider
+
+from bridge.provider_completion import StructuredOutputCapped
 
 
 @pytest.mark.parametrize(
@@ -16,8 +19,8 @@ def test_actual_finish_metadata_only(tmp_path, monkeypatch, caplog, reason, want
         choice["finish_reason"] = reason
     port, sent = routed_provider(tmp_path, monkeypatch, [{"choices": [choice], "usage": {"completion_tokens": 1000}}])
     caplog.set_level(logging.INFO, logger="bridge.events")
-    assert (
-        port.generate(
+    with pytest.raises(StructuredOutputCapped) if cap else nullcontext():
+        output = port.generate(
             "",
             "openrouter::test/model",
             [{"role": "user", "content": "PRIVATE_SOURCE"}],
@@ -25,8 +28,7 @@ def test_actual_finish_metadata_only(tmp_path, monkeypatch, caplog, reason, want
             settings={"max_tokens": 1000, "json_once": True},
             force_non_stream=True,
         )
-        == "{}"
-    )
+        assert output == "{}"
     records = [
         r.diagnostic_fields
         for r in caplog.records

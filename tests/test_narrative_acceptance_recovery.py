@@ -252,7 +252,7 @@ def test_completed_scene_identifier_reuse_is_not_repaired(session_db, caplog):
     assert len(calls) == 1
     assert snapshot(db) == before
     assert any(record.get("phase") == "publish" for record in diagnostics(caplog))
-    assert any(record.get("reason") == "state_rejected" for record in diagnostics(caplog))
+    assert any(record.get("reason") == "scene_id_reused" for record in diagnostics(caplog))
 
 
 @pytest.mark.parametrize("collection", ["evidence", "open_questions", "related_threads"])

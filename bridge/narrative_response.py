@@ -35,6 +35,15 @@ _EVIDENCE_ERRORS = frozenset(
         "Outcome evidence must quote actual committed prose in this session",
     }
 )
+_PUBLICATION_ERRORS = {
+    "A completed scene identifier cannot be reused": "scene_id_reused",
+    "A viewpoint change requires a new scene identifier": "scene_viewpoint_changed",
+    "A new scene requires an explicit transition": "scene_transition_missing",
+    "Active scene must reference an established thread": "scene_thread_missing",
+    "An arc must reference established narrative threads": "arc_thread_missing",
+    "Epilogue facts require the committed epilogue identity": "epilogue_identity_mismatch",
+    "Narrative state changed before publication": "state_revision_conflict",
+}
 
 
 def narrative_failure_reason(error: Exception, phase: str) -> str:
@@ -49,6 +58,8 @@ def narrative_failure_reason(error: Exception, phase: str) -> str:
         return "invalid_collection"
     if isinstance(error, ValueError) and str(error) in _EVIDENCE_ERRORS:
         return "invalid_evidence"
+    if phase == "publish" and isinstance(error, (ValueError, RuntimeError)):
+        return _PUBLICATION_ERRORS.get(str(error), "state_rejected")
     return "invalid_shape" if phase == "parse" else "state_rejected"
 
 

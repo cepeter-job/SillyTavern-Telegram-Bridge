@@ -65,17 +65,26 @@ test('late optimizer success cannot restore a retired view or change current ses
   } finally {page.close();}
 });
 
-for(const failure of ['terminal','rejected'])test(`real job UI retains ${failure} failure navigation through nested character actions`,async()=>{
-  let posts=0,releaseJobs;
+for(const failure of ['terminal','rejected','uncertain'])test(`real job UI retains ${failure} failure navigation through nested character actions`,async()=>{
+  let posts=0,releaseJobs,operationId;
+  const recovered=[];
   const status={session,deployment:{version:'fixture',commit:''},telegram:{state:'observed'},database:{state:'ok',sessions:1,messages:0},uptime_seconds:60,installed_version:'fixture'};
-  const page=await createPage('app.js',{telegram:{initData:'isolated-auth-fixture',initDataUnsafe:{start_param:'characters'},ready(){},expand(){}},api:async path=>{
+  const page=await createPage('app.js',{telegram:{initData:'isolated-auth-fixture',initDataUnsafe:{start_param:'characters'},ready(){},expand(){}},api:async(path,options={})=>{
     if(path==='/me')return {user:{id:123,name:'Fixture'}};
     if(path.startsWith('/characters?'))return catalog;
     if(path.endsWith('/portrait'))throw Object.assign(new Error('Synthetic portrait unavailable'),{status:404});
     if(path.endsWith('/optimize')){
       posts++;
       if(failure==='rejected')throw Object.assign(new Error('Synthetic stale revision'),{status:409});
+      if(failure==='uncertain'){
+        operationId=options.body.operation_id;
+        throw new Error('Synthetic connection lost after submission');
+      }
       return {id:'synthetic-job',state:'queued'};
+    }
+    if(path.startsWith('/jobs/by-operation/')){
+      recovered.push({path,method:options.method});
+      return {id:'synthetic-job',state:'succeeded',result:{kind:'optimize'}};
     }
     if(path==='/jobs/synthetic-job')return {id:'synthetic-job',state:'failed',error:'Optimizer could not produce a valid character preview. Review the Utility model and try again.'};
     if(path==='/status')return status;
@@ -96,6 +105,22 @@ for(const failure of ['terminal','rejected'])test(`real job UI retains ${failure
       assert.match(page.document.querySelector('.character-operation').textContent,/could not produce a valid character preview/);
       assert.doesNotMatch(page.document.getElementById('content').textContent,/resource is unavailable or changed|Status unavailable|Reconnecting/);
       assert.equal(page.document.querySelector('.operation-recovery'),null);
+    }
+    if(failure==='uncertain'){
+      assert.match(page.document.querySelector('.character-operation').textContent,/Status unavailable/);
+      assert.equal(generate.getAttribute('aria-disabled'),'true');
+      generate.click();generate.dispatchEvent(new page.window.Event('click'));
+      await until(()=>!generate.hasAttribute('aria-busy'));
+      assert.equal(posts,1,'An unconfirmed preview must block repeat dispatch');
+      assert.ok(operationId,'Submission must have an operation ID to recover');
+      const recovery=page.document.querySelector('.operation-recovery');
+      assert.ok(recovery,'The shared job UI must retain recovery controls');
+      find(page,'Recover original operation').click();
+      await until(()=>recovery.classList.contains('recovery-completed'),'original operation recovered');
+      assert.deepEqual(recovered,[{path:'/jobs/by-operation/'+operationId,method:'GET'}]);
+      assert.equal(posts,1,'Recovering the original operation must not submit another preview');
+      assert.equal(guidance.value,'Keep the synthetic setting and clarify motivation.');
+      assert.equal(generate.getAttribute('aria-disabled'),'true');
     }
     const operations=find(page,'Open Operations');operations.click();operations.dispatchEvent(new page.window.Event('click'));
     await until(()=>releaseJobs);assert.equal(page.document.body.dataset.page,'system');

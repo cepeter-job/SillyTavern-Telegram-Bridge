@@ -62,7 +62,10 @@ def validate_director_proposal(
         raise DirectorProposalError("reference", "Director speaker is not an established cast member")
     if proposal.pov and proposal.pov != policy.settings.pov_mode:
         raise DirectorProposalError(
-            "policy", "Director viewpoint mode conflicts with Narrative Style", rejection_code="pov_policy_conflict"
+            "policy",
+            "Director viewpoint mode conflicts with Narrative Style",
+            repairable=True,
+            rejection_code="pov_policy_conflict",
         )
     if viewpoint in users:
         if proposal.pov == "first_person" or policy.settings.pov_mode == "first_person":

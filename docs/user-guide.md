@@ -299,7 +299,7 @@ rolls NPC state back to the applicable revision before regeneration.
 | Explicit `/check <domain> <DC> <action>` | A local d20 roll and saved receipt, with no model request. |
 | Narrative continuity | A bounded Utility reconciliation after committed replies; older or edited history can need more than one batch. |
 | Current Scene image | Utility preparation of the visual prompt, then an image-provider request. |
-| AI Director | One planning call on an event or cadence threshold, with at most one repair for malformed version-1 output. Groups reuse the accepted plan without another planning call. |
+| AI Director | One planning call on an event or cadence threshold, with at most one shared repair for malformed version-1 output or a POV-policy conflict. Groups reuse the accepted plan without another planning call. |
 | Autonomous groups | Bounded multi-character Story replies; not another independent story planner. |
 
 Review reported counts in the Mini App's **Settings → Usage**.
@@ -582,6 +582,10 @@ Story turns between checks, development 6, escalation 4 and climax 2. Meaningful
 scene or thread changes can trigger a check sooner. Advanced controls offer fixed
 4/6/10-turn intervals or a custom whole-number interval from 1 to 100. Ordinary
 turns below the threshold make no extra Director call.
+
+If a Director proposal conflicts with your selected POV mode, the bridge can request one
+correction within its existing repair limit. Every replacement must pass the same
+validation; a repeated conflict leaves the last accepted direction intact.
 
 A Director outage does not change your Narrative Style or erase a reply. The bridge
 keeps valid guidance and otherwise continues conservatively from committed state.

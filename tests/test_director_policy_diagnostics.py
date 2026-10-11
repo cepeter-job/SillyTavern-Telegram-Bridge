@@ -82,7 +82,7 @@ def formatted_rejection(caplog, code):
 
 
 @pytest.mark.parametrize("policy_case", CASES, indirect=True)
-def test_each_policy_guard_is_precise_nonrepairable_and_content_free(policy_case, caplog):
+def test_each_policy_guard_has_precise_repairability_and_is_content_free(policy_case, caplog):
     case, settings, code, changes = policy_case
     _, db, _ = case
     raw = response(db, direction="PRIVATE_PROPOSAL_CONTENT", **changes)
@@ -100,7 +100,7 @@ def test_each_policy_guard_is_precise_nonrepairable_and_content_free(policy_case
         )
     assert raised.value.category == "policy"
     assert raised.value.rejection_code == code
-    assert not raised.value.repairable
+    assert raised.value.repairable is (code == "pov_policy_conflict")
     assert snapshot(db) == before
 
     assert reassess(case).result == "accepted"
@@ -117,7 +117,7 @@ def test_each_policy_guard_is_precise_nonrepairable_and_content_free(policy_case
     with caplog.at_level(logging.WARNING):
         result = reassess(case, generate)
     assert result.result == "rejected" and result.proposal is None
-    assert calls == [True]
+    assert calls == [True] * (2 if code == "pov_policy_conflict" else 1)
     assert snapshot(db) == before
     assert load_ending_state(db, "chat", "s1") == ending
     current = load_director_state(db, "chat", "s1")

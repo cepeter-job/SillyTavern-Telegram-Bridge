@@ -399,3 +399,68 @@ def test_miniapp_character_setup_preserves_personal_style_prefill_only_for_new_s
     with services.db_factory() as db:
         assert load_session_narrative_settings(db, who.chat_id, result["session"]["session_id"]) == preferred
         assert load_session_narrative_settings(db, who.chat_id, params["session_id"]) == original
+
+
+@pytest.mark.parametrize("failure", ["model", "output", "validation"])
+def test_optimizer_nonstale_failures_are_not_resource_conflicts(tmp_path, monkeypatch, failure):
+    from bridge import character_quality
+    from bridge.miniapp_characters import optimize_character
+    from bridge.miniapp_errors import MiniAppError
+    from bridge.provider_port import ProviderPort
+
+    s, w, p = setup(tmp_path)
+    target = s.config.character_dir / "Alice.png"
+    before = target.read_bytes()
+    calls = []
+
+    def generate(*args, **kwargs):
+        calls.append(1)
+        return "private synthetic malformed output"
+
+    s.provider = ProviderPort(generate)
+    if failure == "model":
+
+        def unavailable(*args, **kwargs):
+            raise ValueError("private synthetic configuration")
+
+        monkeypatch.setattr(character_quality, "_utility_model", unavailable)
+    elif failure == "validation":
+        s.provider = ProviderPort(lambda *a, **k: json.dumps({"description": "Valid synthetic revision"}))
+        monkeypatch.setattr(character_quality._limits, "RAG_MAX_FILE_BYTES", 1)
+
+    with pytest.raises(MiniAppError) as raised:
+        optimize_character(s, w, {**p, "filename": "Alice.png", "digest": hashlib.sha256(before).hexdigest()})
+    assert raised.value.code == ("optimizer_unavailable" if failure == "model" else "optimizer_validation")
+    assert raised.value.status == (503 if failure == "model" else 422)
+    assert "private synthetic" not in str(raised.value)
+    assert target.read_bytes() == before
+    assert len(calls) == (2 if failure == "output" else 0)
+
+
+@pytest.mark.parametrize("when", ["before", "during"])
+def test_optimizer_real_stale_revision_remains_safe(tmp_path, when):
+    from bridge.miniapp_characters import optimize_character
+    from bridge.miniapp_errors import MiniAppError
+    from bridge.provider_port import ProviderPort
+
+    s, w, p = setup(tmp_path)
+    target = s.config.character_dir / "Alice.png"
+    before = target.read_bytes()
+    calls = []
+    changed = card_bytes("Synthetic external revision")
+
+    def generate(*args, **kwargs):
+        calls.append(1)
+        target.write_bytes(changed)
+        return json.dumps({"description": "Valid synthetic revision"})
+
+    s.provider = ProviderPort(generate)
+    if when == "before":
+        target.write_bytes(changed)
+    with pytest.raises(MiniAppError) as raised:
+        optimize_character(s, w, {**p, "filename": "Alice.png", "digest": hashlib.sha256(before).hexdigest()})
+    assert raised.value.code == "stale"
+    assert raised.value.status == 409
+    assert len(calls) == (0 if when == "before" else 1)
+    assert target.read_bytes() == changed
+    assert not list(s.config.character_backup_dir.glob("*.png"))

@@ -116,10 +116,13 @@ def test_optimizer_preview_validation_logs_exact_reason_and_sanitizes_user_messa
         lambda *_a, **_k: "Alice.png",
     )
 
-    def reject_preview(*_args, **_kwargs):
-        raise ValueError("Optimizer returned invalid JSON after one repair attempt.")
+    calls = []
 
-    monkeypatch.setattr(character_optimizer_callbacks, "prepare_character_optimization", reject_preview)
+    def malformed(_api_key, _model, messages, **_kwargs):
+        calls.append(messages)
+        return "Synthetic malformed optimizer output"
+
+    monkeypatch.setattr(character_quality, "task_model_for_session", lambda *a, **k: "utility::fixture")
     monkeypatch.setattr(
         character_optimizer_callbacks,
         "send_panel_request",
@@ -136,7 +139,7 @@ def test_optimizer_preview_validation_logs_exact_reason_and_sanitizes_user_messa
             "chat",
             {"message_id": 55},
             {"session_id": ctx.session_id},
-            provider_port=ProviderPort(lambda *_a, **_k: ""),
+            provider_port=ProviderPort(malformed),
             request_context=ctx,
         )
 
@@ -147,6 +150,7 @@ def test_optimizer_preview_validation_logs_exact_reason_and_sanitizes_user_messa
         "The installed card is unchanged."
     )
     assert "Optimizer returned invalid JSON after one repair attempt." in caplog.text
+    assert len(calls) == 2
     assert target.read_bytes() == _card_png("Alice", "original")
 
 

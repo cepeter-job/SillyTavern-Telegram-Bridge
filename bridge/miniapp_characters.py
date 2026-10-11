@@ -17,7 +17,7 @@ from bridge.card_content import (
     parse_png_chara_bytes,
 )
 from bridge.character_backups import character_backup_digest, character_restore_targets
-from bridge.character_optimizer import prepare_character_optimization
+from bridge.character_optimizer import CharacterOptimizationError, prepare_character_optimization
 from bridge.character_proposals import stage_character_proposal
 from bridge.character_quality import character_rank, rank_character
 from bridge.conversation_setup import ConversationSetupService
@@ -250,6 +250,14 @@ def optimize_character(services: Any, who: MiniAppIdentity, values: dict) -> dic
                 suggestion=text(values, "suggestion", 2000, required=False),
                 expected_digest=expected,
             )
+        except CharacterOptimizationError as exc:
+            raise MiniAppError(
+                str(exc)
+                if exc.unavailable
+                else "Optimizer could not produce a valid character preview. Review the Utility model and try again.",
+                status=503 if exc.unavailable else 422,
+                code="optimizer_unavailable" if exc.unavailable else "optimizer_validation",
+            ) from None
         except ProviderRequestError as exc:
             raise MiniAppError(str(exc), status=exc.miniapp_status, code=exc.miniapp_code) from None
         return {

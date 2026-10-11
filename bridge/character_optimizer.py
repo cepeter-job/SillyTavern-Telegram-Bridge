@@ -18,6 +18,14 @@ from bridge.provider_port import ProviderPort
 from bridge.request_types import RequestContext
 
 
+class CharacterOptimizationError(ValueError):
+    """Optimizer failure retaining internal validation detail for transport adapters."""
+
+    def __init__(self, message: str, *, unavailable: bool = False) -> None:
+        super().__init__(message)
+        self.unavailable = unavailable
+
+
 @dataclass(frozen=True)
 class CharacterOptimizationDraft:
     filename: str
@@ -52,17 +60,22 @@ def prepare_character_optimization(
         raise ValueError("invalid optimizer revision base")
     base_info = dict(installed_info)
     base_info.update(prior)
-    optimized = optimize_character(
-        db,
-        chat_id,
-        session,
-        base_info,
-        provider_port=provider_port,
-        app_settings=request_context.app_settings,
-        suggestion=suggestion,
-    )
+    try:
+        optimized = optimize_character(
+            db,
+            chat_id,
+            session,
+            base_info,
+            provider_port=provider_port,
+            app_settings=request_context.app_settings,
+            suggestion=suggestion,
+        )
+    except ValueError as exc:
+        raise CharacterOptimizationError(str(exc)) from None
     if not optimized:
-        raise ValueError("Optimization unavailable. Check the utility-model configuration and retry.")
+        raise CharacterOptimizationError(
+            "Optimization unavailable. Check the utility-model configuration and retry.", unavailable=True
+        )
     revised_info = dict(base_info)
     revised_info.update(optimized)
     effective_fields = {
@@ -72,7 +85,10 @@ def prepare_character_optimization(
     }
     if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
         raise ValueError("Character changed during optimization; reopen the preview.")
-    candidate = write_png_chara_bytes(original, merge_optimized_fields(card, effective_fields))
+    try:
+        candidate = write_png_chara_bytes(original, merge_optimized_fields(card, effective_fields))
+    except ValueError as exc:
+        raise CharacterOptimizationError(str(exc)) from None
     nonce = stage_character_proposal(
         db,
         chat_id,

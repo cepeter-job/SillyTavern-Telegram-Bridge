@@ -79,7 +79,11 @@ def report_finish_reason(reason: object) -> None:
         fields["finish_reason"] = reason if known else "unknown"
         if known:
             fields["output_cap_reached"] = reason in _CAPPED
-    event("provider.output_finished", **fields)
+    event(
+        "provider.output_finished",
+        finish_reason=fields.get("finish_reason"),
+        output_cap_reached=fields.get("output_cap_reached"),
+    )
 
 
 def report_response_completion(payload: object) -> None:

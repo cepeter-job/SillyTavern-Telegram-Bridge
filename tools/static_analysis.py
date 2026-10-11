@@ -120,6 +120,7 @@ TYPE_TARGETS: tuple[str, ...] = (
     "bridge/narrative_checkpoint_repository.py",
     "bridge/narrative_context.py",
     "bridge/narrative_extraction.py",
+    "bridge/narrative_response.py",
     "bridge/narrative_reconciliation.py",
     "bridge/narrative_values.py",
     "bridge/narrative_schema.py",
@@ -197,7 +198,6 @@ TYPE_TARGETS: tuple[str, ...] = (
     "bridge/limits.py",
     "tools/check_dependency_lock.py",
 )
-
 
 PURE_CONTRACT_IMPORTS = {
     "bridge.director_contracts": frozenset(),

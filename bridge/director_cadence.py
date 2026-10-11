@@ -65,8 +65,15 @@ def director_due(
     now: float,
     event: str = "",
     event_key: str = "",
+    ending_lifecycle: str = "open",
 ) -> bool:
-    if completed_turns <= 0 or state.story_phase in ENDING_PHASES:
+    # A descriptive resolution can precede entry into the ending workflow.
+    resolution_needs_readiness = (
+        state.story_phase == "resolution"
+        and settings.ending_mode == "closed_story"
+        and ending_lifecycle in {"open", "finale_ready"}
+    )
+    if completed_turns <= 0 or (state.story_phase in ENDING_PHASES and not resolution_needs_readiness):
         return False
     if current.get("inflight_token") and now - float(current.get("inflight_started_at", 0)) < DIRECTOR_LEASE_SECONDS:
         return False

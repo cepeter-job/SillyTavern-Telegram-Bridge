@@ -83,6 +83,21 @@ def make_plan(engine, data):
     )
 
 
+def test_default_update_source_uses_canonical_organization(engine, release_tree):
+    data = release_tree
+    plan = engine.UpdatePlan(source=data.source, live=data.live, trusted_signers=data.signers, release_version="0.0.2")
+    assert plan.remote_url == "https://github.com/cepeter-job/SillyTavern-Telegram-Bridge.git"
+
+
+def test_existing_deployment_identity_remains_recognized(engine, release_tree):
+    import json
+
+    (release_tree.live / engine.MARKER).write_text(
+        json.dumps({"application": "cepeter/SillyTavern-Telegram-Bridge", "format": 1}), encoding="utf-8"
+    )
+    engine._validate_live_contents(release_tree.live)
+
+
 def fake_supervisor(monkeypatch, engine):
     calls = []
     original = engine._run

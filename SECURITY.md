@@ -4,7 +4,7 @@
 
 Use this repository's **Security → Advisories → Report a vulnerability** option
 when GitHub private vulnerability reporting is available. See the repository's
-[Security page](https://github.com/cepeter/SillyTavern-Telegram-Bridge/security).
+[Security page](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/security).
 Do not include bot tokens, provider credentials, private character cards, chat
 transcripts, database files, or working exploit details in a public issue.
 

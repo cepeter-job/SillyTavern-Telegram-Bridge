@@ -470,6 +470,24 @@ saved, or only missing from Telegram. After a provider error, use `/retry` or
 **Recover saved ending**. Check the result before submitting another recovery.
 A failed model call does not start an unlimited automatic retry loop.
 
+For `narrative.reconciliation_rejected` events with `phase=publish`, the fixed
+`reason` code identifies the rejected update without logging its content:
+
+| Reason | Publication guard |
+| --- | --- |
+| `scene_thread_missing` | The scene's thread was neither established nor included in the update. |
+| `arc_thread_missing` | An arc references a thread that was neither established nor included in the update. |
+| `scene_id_reused` | A completed scene identifier was reused. |
+| `scene_viewpoint_changed` | An existing scene changed its thread, viewpoint or POV without a new identifier. |
+| `scene_transition_missing` | A new scene omitted an explicit transition. |
+| `epilogue_identity_mismatch` | The update did not match the committed epilogue. |
+| `state_revision_conflict` | The conditional state update could not publish at its expected revision. |
+| `state_rejected` | Another publication error occurred; its message is not logged. |
+
+These codes do not add retries or weaken validation. Rejected updates leave the
+saved story intact; do not manufacture missing records or reset the story to
+bypass a guard.
+
 The bridge resumes the unfinished step. It does not write a second epilogue just
 because Telegram failed to deliver the first one. Read-only recovery does not
 generate new expressions, speech or images, and a completed original stays closed.

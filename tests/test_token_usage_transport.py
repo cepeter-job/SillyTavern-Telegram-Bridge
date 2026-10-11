@@ -37,7 +37,8 @@ def setup(tmp_path, monkeypatch, responses, *, streaming=False):
     return port, records, requests
 
 
-def test_json_continuation_accounts_for_each_actual_response(tmp_path, monkeypatch):
+@pytest.mark.parametrize("prefix,suffix,expected", [("First", " Second", "First Second"), ("Fi", "rst", "First")])
+def test_json_continuation_accounts_for_each_actual_response(tmp_path, monkeypatch, prefix, suffix, expected):
     responses = [
         io.BytesIO(
             json.dumps(
@@ -47,10 +48,10 @@ def test_json_continuation_accounts_for_each_actual_response(tmp_path, monkeypat
                 }
             ).encode()
         )
-        for text, reason, inputs in [("First", "length", 10), ("Second", "stop", 20)]
+        for text, reason, inputs in [(prefix, "length", 10), (suffix, "stop", 20)]
     ]
     port, records, _ = setup(tmp_path, monkeypatch, responses)
-    assert port.generate("fixture-key", "p::m", []) == "First Second"
+    assert port.generate("fixture-key", "p::m", []) == expected
     assert len(records) == 1 and len(records[0].readings) == 2
     assert sum(r.total_tokens for r in records[0].readings) == 34
 

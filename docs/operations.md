@@ -488,6 +488,34 @@ These codes do not add retries or weaken validation. Rejected updates leave the
 saved story intact; do not manufacture missing records or reset the story to
 bypass a guard.
 
+For `director.rejected`, `reason` retains the broad failure category. When it is
+`policy`, the warning-level event also carries a fixed `rejection_code`:
+
+| Rejection code | Policy guard |
+| --- | --- |
+| `user_authorship` | The response contains a user dialogue, thought, decision or action field. |
+| `arc_outcome_change` | An arc plan attempts to change a committed arc status. |
+| `ending_mode_required` | An ending-goal or readiness proposal requires Closed Story mode. |
+| `finale_phase_undeveloped` | The committed story phase is not escalation, climax or resolution. |
+| `user_speaker` | The user is selected as an autonomous speaker. |
+| `pov_policy_conflict` | The proposed POV mode conflicts with Narrative Style. |
+| `user_first_person` | First-person narration selects the user as viewpoint. |
+| `absent_user_viewpoint` | The proposed viewpoint is the user while user presence is false. |
+| `continue_transition` | A continuing scene proposes a new thread or non-continuing transition. |
+| `continue_viewpoint_change` | A continuing scene changes the viewpoint character. |
+| `continue_pov_change` | A continuing scene changes the established POV mode. |
+| `continue_presence_change` | A continuing scene changes established user presence. |
+| `policy` | A policy failure has no recognized code; its exception text is omitted. |
+
+The code identifies the first failed guard, not every possible problem with the
+proposal. Parse, reference, stale, lifecycle and provider failures retain their
+existing broad categories; unrecognized exceptions remain `unavailable`. Codes
+survive the production JSON formatter without including proposals, story text,
+private entity identifiers or exception messages. The retained decision and
+user-facing message remain generic, and rejected proposals remain empty.
+Existing logs cannot recover a specific rule that was not recorded at the time.
+These diagnostics do not change validation, retry budgets or ending admission.
+
 The bridge resumes the unfinished step. It does not write a second epilogue just
 because Telegram failed to deliver the first one. Read-only recovery does not
 generate new expressions, speech or images, and a completed original stays closed.

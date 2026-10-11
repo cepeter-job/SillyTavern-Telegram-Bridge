@@ -8,6 +8,17 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+## [0.3.023] - 2026-10-11
+
+### Settings validation and content-free memory diagnostics
+
+- Share on/off setting validation for grounded-user and Humanizer preferences (#511).
+- Record content-free extraction contract rejection codes and root-shape diagnostics; provide safe compact schema guidance for the existing bounded repair (#513).
+- Record allowlisted provider finish reasons and explicit output-cap metadata, without inferring truncation from token counts (#513).
+- Correlate Hindsight retention using per-attempt and per-document opaque references; report allowlisted server operation references only when returned (#513).
+- Preserve repair/call limits and output allocations, the 90-second retain timeout, canonical source/audience/coverage guards, and ambiguous-timeout/late-write fences.
+- Python remains 3.11.16 and history pruning remains off. No migration, dependency, database-schema, routing or configuration change; no tracker recovery, historical completion matching, idempotency, cancellation or measured token-savings claim.
+
 ## [0.3.022] - 2026-10-10
 
 ### Memory extraction reliability

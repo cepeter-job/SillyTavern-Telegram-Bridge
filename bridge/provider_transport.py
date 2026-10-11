@@ -564,9 +564,9 @@ def generate_provider_text(
                         )
                 warn_missing_assistant_content(provider_id, actual_model, response, choices, finish_reason, result)
                 raise RuntimeError("backend returned no assistant content")
-            content = str(content).strip()
+            content = str(content)
             if finish_reason != "length" or generation.get("json_once") is True:
-                return content
+                return content.strip()
             segments = [content]
             continuation_messages = list(body["messages"])
             for _attempt in range(3):
@@ -634,10 +634,10 @@ def generate_provider_text(
                 if not continuation:
                     logging.warning("Automatic continuation returned no content after %s segment(s)", len(segments))
                     break
-                segments.append(str(continuation).strip())
+                segments.append(str(continuation))  # Boundaries may split JSON escapes or string whitespace.
                 if continuation_reason != "length":
                     break
-            return " ".join(segment for segment in segments if segment)
+            return "".join(segments).strip()
 
         content, finish_reason, cancelled = _read_openai_stream_segment(
             response,

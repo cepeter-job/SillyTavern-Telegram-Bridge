@@ -18,6 +18,7 @@ REJECTION_CODES = frozenset(
     {
         "accepted",
         "malformed_json",
+        "output_capped",
         "invalid_shape",
         "invalid_audience",
         "work_failed",
@@ -41,10 +42,14 @@ SCENE_REPAIR_CONTRACT = (
     'Required schema example: {"state":{},"blocks":[]}. '
     'For established facts: {"state":{"location":"Established place"},'
     '"blocks":[{"text":"Established fact","visibility":"shared","known_by":[]}]}. '
-    "state must be an object; blocks must be an array. Keep prior established state and exact audiences."
+    "state must be an object; blocks must be an array of objects with text strings, "
+    'visibility="shared" and known_by=[], or visibility="restricted" and known_by=["Exact knower"]. '
+    "Use compact JSON and concise values, preserving complete established state and exact audiences. "
+    "Previous state is input, not an alternative output schema. Never return only blocks or only state."
 )
-_NPC_REPAIR_CONTRACT = (
+NPC_EXTRACTION_CONTRACT = (
     'Required empty schema: {"npcs":[],"simulation":{}}. '
+    "Use empty arrays/objects only when no updates are established. "
     "Operation examples (use only facts established by source): "
     '{"npcs":[{"name":"Supporting NPC","aliases":[],"operations":['
     '{"field":"appearance","op":"set","value":"Established appearance","mode":"fixed",'
@@ -52,7 +57,13 @@ _NPC_REPAIR_CONTRACT = (
     '{"field":"location","op":"set","value":"Established place","mode":"mutable",'
     '"visibility":"shared","known_by":[]}]}],"simulation":{}}. '
     'mode must be "fixed" for appearance/voice/background/canon and "mutable" for '
-    "role/location/agenda/relationship/mood/secrets/status. Preserve exact audience restrictions."
+    "role/location/agenda/relationship/mood/secrets/status. Each NPC requires a name string, aliases array "
+    "of strings, and operations array of objects. Each operation requires field, op, mode, visibility "
+    "strings and a known_by array of exact names. Ops: set; append/remove only for secrets/status. "
+    "value is text except secrets/status set values may be arrays of text; append/remove values are text. "
+    'visibility="shared" uses known_by=[]; private facts and secrets require visibility="restricted" '
+    "and nonempty exact knowers. Use compact JSON; return changes, not the existing fields/state schema. "
+    "Preserve exact audience restrictions."
 )
 
 
@@ -102,11 +113,16 @@ def tracker_repair_instruction(npc_code: str, simulation_code: str, *, repair_np
         + safe_rejection_code(simulation_code)
         + ". "
     )
+    if "output_capped" in {npc_code, simulation_code}:
+        rejection += (
+            "The provider reported truncation. Re-extract compact complete JSON from canonical input; "
+            "partial output is not accepted state. Use concise values without dropping established changes. "
+        )
     if repair_npcs:
         return (
             rejection + 'Repair NPC and tracker output as one JSON object with both "npcs" and "simulation". '
             "Re-extract only from the same canonical source and accepted prior state below. "
-            "Do not invent missing facts, NPCs or user actions. " + _NPC_REPAIR_CONTRACT
+            "Do not invent missing facts, NPCs or user actions. " + NPC_EXTRACTION_CONTRACT
         )
     return (
         rejection + 'Repair only tracker extraction. Required schema: {"simulation":{}}. '

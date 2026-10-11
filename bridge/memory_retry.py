@@ -32,6 +32,7 @@ MEMORY_FAILURE_CODES = RESPONSE_FAILURE_CODES | frozenset(
         "disabled",
         "deferred",
         "configuration",
+        "output_capped",
     }
 )
 CONFIGURATION_RETRY_SECONDS = 3600

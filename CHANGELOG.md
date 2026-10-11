@@ -8,6 +8,17 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+## [0.3.024] - 2026-10-11
+
+### Verified code-quality audit fixes
+
+- Use the canonical `cepeter-job` repository for release discovery and signed self-update fetches; align current installation, release and security links (#515).
+- Preserve the existing persistent deployment identity so managed installations remain recognized after the repository move (#515).
+- Handle bare and qualified rebuild calls safely in the leak scanner, with regression coverage for the previously crashing forms (#515).
+- Keep optional NumPy import typing valid when NumPy is absent, preserving the existing pure-Python vector-math fallback (#515).
+- Document logging limits, request observation and context-selection controls; keep context-selection defaults off (#515).
+- Includes the settings validation and content-free memory diagnostics recorded under 0.3.023. Production remains on Python 3.11; dependency locks, database schema, private provider configuration and history-pruning policy are unchanged.
+
 ## [0.3.023] - 2026-10-11
 
 ### Settings validation and content-free memory diagnostics

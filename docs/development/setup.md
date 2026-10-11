@@ -93,6 +93,25 @@ process. The production installation procedure belongs in
 [Installation](../installation.md); it is not required to start development from
 source.
 
+### Isolate optional local services
+
+Run connected development on a separate development host or in a container/network
+namespace whose loopback cannot reach production services. A separate bot token
+and bridge directory do not isolate those services.
+
+Hindsight defaults to `http://127.0.0.1:8890`; Data Bank embeddings default to
+`http://127.0.0.1:8891/v1/embeddings`. Leaving `HINDSIGHT_API_URL` commented out
+does not disable Hindsight. Memory defaults to on, and Hindsight banks are keyed
+by Telegram chat ID, not the bot token or bridge directory. A development bot used
+by the same account can write to the same bank; reset cleanup can also remove
+legacy session documents.
+
+When testing these integrations, use dedicated development instances, storage
+and credentials, and explicitly configure `HINDSIGHT_API_URL` and/or
+`SILLYTAVERN_RAG_EMBEDDING_URL` to their isolated endpoints. Otherwise, ensure
+no listener or forwarding proxy is reachable at each configured/default endpoint
+inside the development environment. Do not reuse production tunnels.
+
 ### Prepare private configuration and native content
 
 Start in a clean development shell so old exported service settings do not

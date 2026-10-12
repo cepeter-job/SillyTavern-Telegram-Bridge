@@ -8,8 +8,35 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
-- Give Director POV-policy conflicts targeted feedback within the existing single repair attempt; preserve full validation and stale-state rejection.
-- Distinguish future rendering policy from observed scene POV; guide continued scenes to omit conflicting optional POV and repair scene-POV conflicts within the same shared retry.
+## [0.3.025] - 2026-10-12
+
+### Story defaults and preset compatibility
+
+- Default new stories to **Closed Story** across all narrative presets. Existing saved personal defaults and session choices take precedence; the foundation migration keeps pre-Narrative stories **Open-ended**. **Ask before finale** remains off by default (#521).
+- Remove the three bundled legacy TXT examples, `balanced.txt`, `concise.txt` and `natural.txt`, from the distributed System Prompt examples. Retain the four writer JSON examples; System Prompt still defaults **Off**. Installed copies and user-owned presets are not deleted (#523).
+- Add the contributor development handbook covering isolated setup, architecture, implementation, focused testing, review and release handoff (#520).
+
+### Optimizer and Mini App recovery
+
+- Preserve raw JSON segment boundaries during optimizer continuation, including split escapes and string whitespace, while retaining request, continuation and usage accounting (#517).
+- Clarify optimizer validation and provider-unavailability failures. Keep progress evidence and suggestions when completion is uncertain, retain the shared Operations recovery path, and prevent stale views from applying late results (#518).
+- Keep the NPC search button label on one line (#519).
+
+### Structured extraction, ending admission and Director recovery
+
+- Reject explicitly capped structured tracker responses on the **nonstreaming Chat Completions `json_once`** path, even when partial JSON parses. Applicable helper paths use their existing bounded canonical-input repair; direct curator calls reject capped output before publication. Preserve audience/source guards and independently valid uncapped simulation when NPC repair fails. Capped partial output is never accepted. Clarify the simulation helper's change-only output contract and extraction-specific context (#522).
+- Allow readiness assessment during a reconciled resolution phase while the ending lifecycle remains open, and check finale admission after an accepted Telegram Director reassessment. Admission still requires the ordinary finale guards. Allow at most one additional Utility call for malformed, invalid-shape or explicitly capped narrative output, using bounded format re-extraction from the same committed transcript and accepted state, with reconciliation diagnostics and stale-source suppression (#524).
+- Distinguish narrative publication guards and Director policy rejections using precise content-free diagnostic codes, without raw proposals, story text, extracted entity identifiers or exception messages. Revision/source metadata remain logged (#525, #526).
+- Give Director POV-policy conflicts targeted feedback within the existing single repair attempt; preserve full validation and stale-state rejection (#527).
+- Distinguish future rendering policy from observed scene POV; guide continued scenes to omit conflicting optional POV and repair scene-POV conflicts within the same shared retry. Preserve the selected rendering style and the established scene observation instead of inventing a transition (#528).
+- Retain user-authorship, reference, audience, revision, source and ending-lifecycle guards. These changes do not rewrite saved settings or history or grant additional Director retries.
+
+### Verification limits and compatibility
+
+- Live verification observed a Director continue decision with empty optional POV after one shared repair, preserving the configured rendering policy and accepted scene state. The initial rejection code was not retained, so the specific repaired guard is unproven.
+- Full finale-to-epilogue-to-persisted-closure acceptance has not been demonstrated. Story output caps and separate scene/curator capped-extraction failures remain unresolved by this release.
+- The explicit-cap guard above does not establish streaming, Responses or Anthropic cap fixes. Release publication requires the exact metadata revision's protected hosted CI and CodeQL gates before signing.
+- No new database migration, schema-version change, dependency-lock change or service-unit change occurs in the v0.3.024-to-source range. New-story narrative defaults change; the historical migration implementation in `narrative_schema.py` is pinned for **Open-ended** compatibility. Production remains on Python 3.11. Install only from the independently trusted signed tag and verified versioned ZIP/checksum assets after publication.
 
 ## [0.3.024] - 2026-10-11
 

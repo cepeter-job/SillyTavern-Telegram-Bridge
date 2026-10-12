@@ -262,7 +262,9 @@ class DirectorService:
                         {"role": "assistant", "content": raw[:16384]},
                         {
                             "role": "user",
-                            "content": director_repair_instruction(exc, settings.pov_mode),
+                            "content": director_repair_instruction(
+                                exc, settings.pov_mode, action=proposal.action if proposal is not None else ""
+                            ),
                         },
                     ]
             if proposal is None:

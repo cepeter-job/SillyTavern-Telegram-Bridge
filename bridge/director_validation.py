@@ -96,7 +96,10 @@ def validate_director_proposal(
             )
         if proposal.pov and state.pov_mode and proposal.pov != state.pov_mode:
             raise DirectorProposalError(
-                "policy", "A viewpoint-mode change requires a scene transition", rejection_code="continue_pov_change"
+                "policy",
+                "A viewpoint-mode change requires a scene transition",
+                repairable=True,
+                rejection_code="continue_pov_change",
             )
         if proposal.user_present is not None and state.user_present is not None:
             if proposal.user_present != state.user_present:

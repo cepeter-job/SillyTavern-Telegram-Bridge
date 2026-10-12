@@ -9,6 +9,7 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 ## [Unreleased]
 
 - Give Director POV-policy conflicts targeted feedback within the existing single repair attempt; preserve full validation and stale-state rejection.
+- Distinguish future rendering policy from observed scene POV; guide continued scenes to omit conflicting optional POV and repair scene-POV conflicts within the same shared retry.
 
 ## [0.3.024] - 2026-10-11
 

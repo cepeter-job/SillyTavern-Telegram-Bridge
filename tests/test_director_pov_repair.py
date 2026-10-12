@@ -31,7 +31,12 @@ def test_policy_conflict_gets_targeted_feedback_and_one_valid_retry(directed, tr
         assert "pov_policy_conflict" in feedback
         assert "narrative_policy.pov_mode" in feedback
         assert "third_person_rotating" in feedback
-        assert "omit pov" in feedback
+        if transition:
+            assert "set a nonempty pov" in feedback.lower()
+        else:
+            assert "omit pov" in feedback.lower()
+            assert "keep action continue" in feedback.lower()
+            assert "transition_type continue" in feedback.lower()
         assert "PRIVATE_" not in feedback
         assert messages[:2] == calls[0]
         return response(db, pov="third_person_rotating", **changes)

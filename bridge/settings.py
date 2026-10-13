@@ -55,6 +55,7 @@ class AppSettings:
     context_input_cap_tokens: int
     context_output_reserve_tokens: int
     context_history_candidates: int
+    memory_curator_max_tokens: int
     live_sync_api_url: str
     live_sync_api_handle: str
     live_sync_api_password: str | None = field(repr=False)
@@ -173,6 +174,9 @@ def load_app_settings(environ: Mapping[str, str], *, home: Path) -> AppSettings:
         ),
         context_history_candidates=read_int(
             values, "SILLYTAVERN_CONTEXT_HISTORY_CANDIDATES", 96, minimum=8, maximum=512
+        ),
+        memory_curator_max_tokens=read_int(
+            values, "SILLYTAVERN_MEMORY_CURATOR_MAX_TOKENS", 1400, minimum=1, maximum=16000
         ),
         live_sync_api_url=values.get("SILLYTAVERN_SYNC_API_URL", "").strip().rstrip("/"),
         live_sync_api_handle=values.get("SILLYTAVERN_SYNC_API_HANDLE", "").strip(),

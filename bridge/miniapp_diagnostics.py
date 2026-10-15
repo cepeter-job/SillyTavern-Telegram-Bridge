@@ -64,7 +64,7 @@ def _runtime_metadata(services: Any) -> dict[str, Any]:
     return {
         "deployment": deployment,
         "log_level": logging.getLevelName(logging.getLogger().getEffectiveLevel()),
-        "logging": logging_health(),
+        "logging": logging_health(services.config.log_file),
         "scope": "authorized_active_session",
     }
 

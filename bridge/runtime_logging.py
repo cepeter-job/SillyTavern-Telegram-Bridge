@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -40,10 +41,16 @@ def configure_logging(log_file: Path | None = None, *, app_settings: AppSettings
     root.setLevel(level)
 
 
-def logging_health() -> dict[str, bool | str]:
+def logging_health(log_file: Path) -> dict[str, bool | str]:
     """Observe existing counters without log I/O or exposing other sessions' failure counts."""
     handlers = tuple(logging.getLogger().handlers)
-    files = [handler for handler in handlers if isinstance(handler, PrivateRotatingHandler)]
+    # Compare the same lexical absolute path used by FileHandler, without filesystem probes.
+    target = os.path.abspath(Path(log_file).expanduser())
+    files = [
+        handler
+        for handler in handlers
+        if isinstance(handler, PrivateRotatingHandler) and handler.baseFilename == target
+    ]
     consoles = [handler for handler in handlers if isinstance(handler, DiagnosticConsoleHandler)]
     return {
         "scope": "process",

@@ -15,7 +15,10 @@ The warning covers the current process, not only the active story. It shares
 Boolean failure flags, never another session's events or failure counts. The
 health snapshot reads existing counters only: it adds no disk probes, timers,
 model calls or logging framework. A configured handler is not proof that its
-destination is currently writable.
+destination is currently writable. File-handler presence and failure flags apply
+only to the configured log file being exported; a handler writing to another path
+does not establish capture for this view. Event and journal flags remain
+process-wide. No server path is included in the snapshot or export.
 
 A file-write or event-delivery failure makes usage completeness unknown, even
 when every retained start has a matching finish: an entire attempt may be missing.

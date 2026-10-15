@@ -14,7 +14,9 @@ from bridge.miniapp_diagnostics import diagnostic_export
 from bridge.runtime_logging import configure_logging
 
 
-@pytest.mark.parametrize("failure", ["none", "file", "console", "event", "missing_file"])
+@pytest.mark.parametrize(
+    "failure", ["none", "file", "console", "event", "missing_file", "wrong_file", "other_file_failure"]
+)
 def test_known_capture_failure_invalidates_usage_without_exporting_counts(tmp_path, monkeypatch, failure):
     root = logging.getLogger()
     previous_level = root.level
@@ -57,6 +59,14 @@ def test_known_capture_failure_invalidates_usage_without_exporting_counts(tmp_pa
             monkeypatch.setattr(logging.getLogger("bridge.events"), "log", broken)
         elif failure == "missing_file":
             root.removeHandler(file_handler)
+        elif failure in {"wrong_file", "other_file_failure"}:
+            configure_logging(tmp_path / "unrelated.log", app_settings=services.config)
+            other_handler = next(handler for handler in root.handlers if handler not in handlers)
+            handlers.append(other_handler)
+            if failure == "wrong_file":
+                root.removeHandler(file_handler)
+            else:
+                monkeypatch.setattr(other_handler, "shouldRollover", broken)
         # Process-wide failures must not expose another session's activity counts or events.
         with diagnostic_events.diagnostic_scope(inherit=False):
             diagnostic_events.event("provider.start", call_id="unscoped-call", attempt=1)
@@ -64,13 +74,13 @@ def test_known_capture_failure_invalidates_usage_without_exporting_counts(tmp_pa
         result = diagnostic_export(services, who, {"session_id": session["session_id"]})
         health = result["runtime"]["logging"]
         assert health["scope"] == "process"
-        assert health["file_configured"] is (failure != "missing_file")
+        assert health["file_configured"] is (failure not in {"missing_file", "wrong_file"})
         assert health["console_configured"] is True
         assert health["file_failures_observed"] is (failure == "file")
         assert health["console_failures_observed"] is (failure == "console")
         assert health["event_failures_observed"] is (failure == "event")
         assert all(type(value) is bool for key, value in health.items() if key != "scope")
-        expected = failure in {"none", "console"}
+        expected = failure in {"none", "console", "other_file_failure"}
         assert result["usage"]["complete"] is expected
         assert result["usage_by_purpose"][0]["complete"] is expected
         assert result["usage"]["input_tokens"] == 12

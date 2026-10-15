@@ -39,10 +39,10 @@ def unavailable(*args, **kwargs):
     raise OSError("PRIVATE_DISK_ERROR PRIVATE_STORY")
 
 
-def test_health_reports_unconfigured_sinks_without_claiming_success(monkeypatch):
+def test_health_reports_unconfigured_sinks_without_claiming_success(tmp_path, monkeypatch):
     monkeypatch.setattr(logging.getLogger(), "handlers", [])
     monkeypatch.setattr(diagnostic_events, "_DROPPED", 0)
-    assert runtime_logging.logging_health() == {
+    assert runtime_logging.logging_health(tmp_path / "unconfigured.log") == {
         "scope": "process",
         "file_configured": False,
         "console_configured": False,
@@ -57,7 +57,7 @@ def test_health_snapshot_is_read_only_and_content_free(runtime):
     diagnostic_events.event("diagnostic.test")
     before = config.log_file.read_bytes(), console.stream.getvalue()
     for _ in range(5):
-        health = runtime_logging.logging_health()
+        health = runtime_logging.logging_health(runtime[0].log_file)
         assert health["file_configured"] is True
         assert health["console_configured"] is True
         assert health["event_failures_observed"] is False
@@ -74,7 +74,7 @@ def test_file_failure_is_visible_after_success_without_disabling_console(runtime
         patch.setattr(file_handler, "shouldRollover", unavailable)
         diagnostic_events.event("diagnostic.failed_write")
     diagnostic_events.event("diagnostic.recovered_write")
-    health = runtime_logging.logging_health()
+    health = runtime_logging.logging_health(runtime[0].log_file)
     assert health["file_failures_observed"] is True
     assert health["console_failures_observed"] is False
     assert health["event_failures_observed"] is False
@@ -87,7 +87,7 @@ def test_console_failure_does_not_hide_successful_file_write(runtime, monkeypatc
     config, _, console = runtime
     monkeypatch.setattr(console.stream, "write", unavailable)
     diagnostic_events.event("diagnostic.console_failed")
-    health = runtime_logging.logging_health()
+    health = runtime_logging.logging_health(runtime[0].log_file)
     assert health["console_failures_observed"] is True
     assert health["file_failures_observed"] is False
     assert health["event_failures_observed"] is False
@@ -98,7 +98,7 @@ def test_event_failures_are_visible_under_concurrent_submission(runtime, monkeyp
     monkeypatch.setattr(logging.getLogger("bridge.events"), "log", unavailable)
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(lambda _: diagnostic_events.event("diagnostic.failure"), range(100)))
-    health = runtime_logging.logging_health()
+    health = runtime_logging.logging_health(runtime[0].log_file)
     assert diagnostic_events.diagnostic_failures() == 100
     assert health["event_failures_observed"] is True
     assert health["file_failures_observed"] is False
@@ -122,7 +122,13 @@ def test_trusted_log_source_has_basename_function_and_line(structured):
 
 def test_external_log_source_details_remain_omitted():
     record = logging.LogRecord(
-        "PRIVATE_LOGGER", logging.ERROR, "/private/PRIVATE_FILE.py", 42, "PRIVATE_MESSAGE", (), None,
+        "PRIVATE_LOGGER",
+        logging.ERROR,
+        "/private/PRIVATE_FILE.py",
+        42,
+        "PRIVATE_MESSAGE",
+        (),
+        None,
         func="PRIVATE_FUNCTION",
     )
     data = json.loads(DiagnosticFormatter().format(record))

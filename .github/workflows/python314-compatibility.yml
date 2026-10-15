@@ -47,6 +47,9 @@ jobs:
     if: ${{ !inputs.native_debug_backtrace && !inputs.trace_resource_allocations }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    env:
+      PYTHONDEVMODE: "1"
+      PYTHONWARNINGS: "error::ResourceWarning"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -59,7 +62,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          version: "0.12.22"
+          version: "0.12.23"
           enable-cache: true
           cache-dependency-glob: requirements-dev-py314.lock
       - name: Confirm final interpreter and install full hash-locked development environment
@@ -70,7 +73,7 @@ jobs:
           uv pip check --python python
       - name: Verify native voice-enabled integrations and CPU-compatible NumPy
         run: |
-          python -c 'import av, ctranslate2, faster_whisper, numpy, onnxruntime, hindsight_client, aiohttp, yaml, sqlite3, ssl; assert numpy.__version__ == "2.3.5"; print("Python3.14.8 native_voice_imports=passed")'
+          python -X dev -W error::ResourceWarning -c 'import sys; from pathlib import Path; import av, ctranslate2, ctranslate2._ext as ext, faster_whisper, numpy, onnxruntime, hindsight_client, aiohttp, yaml, sqlite3, ssl; assert ctranslate2.__version__ == "4.8.3"; assert numpy.__version__ == "2.3.5"; assert Path(ext.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()); print("Python3.14.8 official_native_voice_imports=passed", ctranslate2.__version__, ext.__file__)'
           # Runtime ownership checks must cover extension finalizers at process exit.
           # The target VPS has reproduced a CTranslate2 shutdown abort under -X dev.
           python -X dev -W error::ResourceWarning -c 'import ctranslate2; print("Python3.14.8 native_extension_exit_probe=started")'
@@ -96,7 +99,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          version: "0.12.22"
+          version: "0.12.23"
           enable-cache: true
           cache-dependency-glob: |
             requirements-py314.lock
@@ -146,7 +149,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          version: "0.12.22"
+          version: "0.12.23"
           enable-cache: true
           cache-dependency-glob: requirements-dev-py314.lock
       - name: Install native voice-enabled developer lock
@@ -208,7 +211,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          version: "0.12.22"
+          version: "0.12.23"
           enable-cache: true
           cache-dependency-glob: requirements-py314.lock
       - name: Install full hash-locked voice runtime and OS debugger

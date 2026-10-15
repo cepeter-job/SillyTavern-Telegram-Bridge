@@ -6,16 +6,50 @@ The previous Python 3.15 track (#487) was superseded by the
 
 ## Native dependencies and actual production CPU
 
-The live VPS uses a KVM CPU exposing SSE2 but no x86-64-v2 features.
-CPython 3.14.8 and CTranslate2 4.8.2/faster-whisper 1.2.1 are
+The live VPS uses a KVM CPU that exposes SSE2 but lacks x86-64-v2 support.
+CPython 3.14.8 and CTranslate2 4.8.3/faster-whisper 1.2.1 are
 installable on Linux x86-64. However, NumPy 2.4.6 imports fail
 on this VPS with "RuntimeError ... X86_V2".
 
 The separate config/python314-constraints.txt therefore pins
 **NumPy 2.3.5** for compatibility with the existing CPU. With
 this constraint, the isolated Python 3.14.8 hash-locked environment
-successfully installed 42 runtime and 78 combined development
-packages, preserving reviewed Python 3.11 transitive versions except NumPy. The dependency checker and native imports passed on the VPS.
+initially installed 42 runtime and 78 combined development packages.
+Those older import results predate the official allocator repair and do not
+establish strict clean exit for the current release.
+
+### Official release refresh: October 15, 2026
+
+The migration locks now follow reviewed `main` at
+`a612a6b4a1e7ac8dfa4c403a75377a52d9d0d37b`: aiohttp **3.14.4**,
+yarl **1.25.1**, uv **0.12.23**, and NumPy **2.3.5** (also the
+Python 3.11 baseline). Only the separate Python 3.14 CTranslate2 pin
+advances from **4.8.2** to **4.8.3**. The Python 3.11 manifests and
+locks remain byte-for-byte identical to that main revision.
+
+Official [v4.8.3](https://github.com/OpenNMT/CTranslate2/releases/tag/v4.8.3),
+published October 13, includes the pybind11 2.13.6 allocator repair from
+[upstream #2108](https://github.com/OpenNMT/CTranslate2/pull/2108).
+The regular CPython 3.14 Linux x86-64 wheel is
+`ctranslate2-4.8.3-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl`.
+Its SHA-256, checked against [official PyPI metadata](https://pypi.org/pypi/ctranslate2/4.8.3/json)
+and independently downloaded bytes before execution, is:
+
+`7039b9b9f0520a891108b795c7bd960413cd54df9db319f9afc4c164d28336dc`
+
+Use the official hash-locked environment for current compatibility evidence.
+The pinned unreleased candidate and old debugger results below remain historical
+evidence; neither substitutes for the official-wheel full regression gate.
+
+A new disposable Python **3.14.8 final** environment installed all **42** runtime
+and **78** combined development packages with mandatory hashes and passed
+`uv pip check`. On the actual old CPU, the combined CTranslate2/faster-whisper,
+NumPy, AV, ONNX Runtime and bridge dependency imports exited **0** under
+`-X dev -W error::ResourceWarning`. The loaded extension was inside the new
+environment and its bytes matched the verified official wheel. Native threads
+were limited to one and the process ran at nice 19. An ONNX Runtime telemetry-ID
+persistence warning was retained unsuppressed. This establishes import and shutdown
+compatibility only; performance, full regression and promotion gates remain open.
 
 Python interpreter provenance: Astral python-build-standalone,
 GitHub release 20261001, CPython 3.14.8 standard x86-64 Linux
@@ -31,23 +65,36 @@ Use a **different** virtual environment to verify Python 3.14.
 Do not recreate or alter the running Python 3.11 .venv.
 
     uv venv --python 3.14.8 .venv314-staging
+    uv pip install --python .venv314-staging/bin/python --require-hashes -r requirements-py314.lock
     uv pip install --python .venv314-staging/bin/python --require-hashes -r requirements-dev-py314.lock
     uv pip check --python .venv314-staging/bin/python
-    .venv314-staging/bin/python -c 'import numpy, ctranslate2, faster_whisper; assert numpy.__version__ == "2.3.5"'
+    PYTHONDEVMODE=1 PYTHONWARNINGS=error::ResourceWarning \
+      OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+      .venv314-staging/bin/python -X dev -W error::ResourceWarning - <<'PY'
+    import sys
+    from pathlib import Path
+    import numpy, ctranslate2, ctranslate2._ext as ext, faster_whisper, av, onnxruntime
+    assert sys.version_info[:3] == (3, 14, 8) and sys.version_info.releaselevel == "final"
+    assert numpy.__version__ == "2.3.5"
+    assert ctranslate2.__version__ == "4.8.3"
+    assert Path(ext.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
+    print(ext.__file__)
+    PY
 
 The independent Python 3.14 locks are requirements-py314.lock
 and requirements-dev-py314.lock. The Python 3.11 requirements.lock
 and requirements-dev.lock are unchanged for rollback.
 
-Reviewed regeneration procedure, which must not silently replace
-the old locks:
+Use uv **0.12.23** for the reviewed regeneration procedure. Reconcile
+constraints with the current reviewed baseline first; the combined development
+resolution also uses the exact Python 3.14 runtime lock:
 
     uv pip compile requirements.txt --python-version 3.14 --constraint config/python314-constraints.txt --generate-hashes --output-file requirements-py314.lock
-    uv pip compile requirements.txt requirements-dev.txt --python-version 3.14 --constraint config/python314-constraints.txt --generate-hashes --output-file requirements-dev-py314.lock
+    uv pip compile requirements.txt requirements-dev.txt --python-version 3.14 --constraint config/python314-constraints.txt --constraint requirements-py314.lock --generate-hashes --output-file requirements-dev-py314.lock
 
 ## Validation and release gates
 
-## Current blockers and diagnostic evidence
+## Historical failures and remaining acceptance gates
 
 The original SQLite connection-lifecycle failures are repaired by
 [#503](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/pull/503),
@@ -71,8 +118,10 @@ heap-type `tp_doc` with `PyObject_MALLOC`, while Python 3.14 frees it with
 as `_PyMem_DebugRawFree: bad ID`. The same minimal binding exits cleanly
 with pybind11 2.13.6 or 3.0.1. Upstream
 [PR #2108](https://github.com/OpenNMT/CTranslate2/pull/2108) merged on
-2026-10-10 and issue #2107 closed. The latest official release remains
-**v4.8.2** at this checkpoint; the published wheel is still unfixed.
+2026-10-10 and issue #2107 closed. At that historical checkpoint,
+the latest official release was **v4.8.2**, whose published wheel was unfixed.
+Official **v4.8.3** now includes the repair; its current full regression
+and remaining promotion criteria still require their own evidence.
 Do not disable the developer allocator or substitute plain imports for
 strict clean-exit verification.
 
@@ -169,23 +218,29 @@ This stage is a migration candidate, not production activation.
 
 ### Isolated debugger workflow (Issue #501)
 
+This retained manual diagnostic was designed for the **4.8.2** allocator
+failure. The current official locks install **4.8.3**, so its expected-abort
+check no longer describes the release being validated. Do not dispatch it or
+the custom binding rebuild as part of official-release acceptance. A future
+debugger experiment needs its own reviewed historical inputs.
+
 Manual `python314-compatibility.yml` with `native_debug_backtrace=true`
-selects only the GitHub-hosted `native-debugger` job. It installs reviewed
-CPython 3.14.8 dependencies, GDB in that disposable runner, and reproduces
-the native extension finalization abort under `-X dev`, retaining its
-native stack trace for 14 days. This diagnostic is intentionally **not**
-a passing runtime gate or an authorization to deploy. It does not run on
-normal pull requests and never accesses the live VPS or story data.
+selects only the GitHub-hosted `native-debugger` job. It was designed to
+install reviewed CPython 3.14.8 dependencies and GDB in a disposable runner,
+reproduce the native extension finalization abort under `-X dev`, and retain
+its stack trace for 14 days. This diagnostic is intentionally **not** a
+passing runtime gate or an authorization to deploy. It does not run on
+normal pull requests or access the live VPS or story data.
 
 ### Experimental pybind11-rebuilt binding
 
-An isolated `native-debugger` trial also recompiles **only** the CTranslate2
+An isolated `native-debugger` trial also recompiled **only** the CTranslate2
 v4.8.2 Python extension at verified upstream commit
 `d44d2d069eb88c7b7804da864c10c201501cb4a9` using pybind11 2.13.6
-instead of the upstream-pinned 2.11.1. It links against the *reviewed
-official CTranslate2 core library* obtained from the existing hash-locked
-wheel. This tests the actual fix to `tp_doc` allocator ownership
+instead of the upstream-pinned 2.11.1. It historically linked against the *reviewed
+official CTranslate2 4.8.2 core library* from the then-current hash-locked
+wheel. That experiment tested the fix to `tp_doc` allocator ownership
 without shipping a private unreviewed native wheel or switching runtime.
-Any successful diagnostic is not an authorization to deploy; wait for a
-verified upstream build/release and the full resource/quality/performance
-gates. See CTranslate2 upstream issue #2107.
+Any successful diagnostic is not an authorization to deploy. The upstream
+release is now available; full resource/quality/performance gates remain.
+See CTranslate2 upstream issue #2107.

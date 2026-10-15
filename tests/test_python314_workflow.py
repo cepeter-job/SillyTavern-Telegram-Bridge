@@ -22,6 +22,34 @@ def _steps():
     return data["jobs"]["full-regression"], data["jobs"]["resource-owner-trace"]
 
 
+@pytest.mark.parametrize("filename", ["python314-compatibility.yml", "python314-candidate-pr500.yml"])
+def test_migration_workflows_use_reviewed_compiler_pin(filename):
+    from packaging.requirements import Requirement
+
+    development = (ROOT / "requirements-dev.txt").read_text().splitlines()
+    expected = next(
+        str(Requirement(line).specifier).removeprefix("==") for line in development if line.startswith("uv==")
+    )
+    jobs = yaml.safe_load((WORKFLOW.parent / filename).read_text())["jobs"]
+    installers = [
+        step for job in jobs.values() for step in job["steps"] if step.get("uses", "").startswith("astral-sh/setup-uv@")
+    ]
+    assert installers
+    assert all(step["with"]["version"] == expected for step in installers)
+
+
+def test_official_native_preflight_checks_combined_stack_under_strict_allocator():
+    job = yaml.safe_load(WORKFLOW.read_text())["jobs"]["voice-enabled-native-preflight"]
+    assert job["env"]["PYTHONDEVMODE"] == "1"
+    assert job["env"]["PYTHONWARNINGS"] == "error::ResourceWarning"
+    commands = "\n".join(step.get("run", "") for step in job["steps"])
+    probe = next(line for line in commands.splitlines() if "import av, ctranslate2" in line)
+    assert shlex.split(probe)[:5] == ["python", "-X", "dev", "-W", "error::ResourceWarning"]
+    assert 'ctranslate2.__version__ == "4.8.3"' in probe
+    assert 'numpy.__version__ == "2.3.5"' in probe
+    assert "is_relative_to(Path(sys.prefix).resolve())" in probe
+
+
 def test_official_native_preflight_installs_hash_locked_test_prerequisites():
     job = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]["voice-enabled-native-preflight"]
     commands = "\n".join(step.get("run", "") for step in job["steps"])

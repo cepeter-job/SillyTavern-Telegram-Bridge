@@ -48,6 +48,29 @@ def test_python314_runtime_and_development_locks_preserve_cpu_baseline():
     assert "httpx==0.28.1" in constraint.splitlines()
 
 
+@pytest.mark.parametrize(
+    "baseline,migration",
+    [
+        ("requirements.lock", "requirements-py314.lock"),
+        ("requirements-dev.lock", "requirements-dev-py314.lock"),
+        ("requirements-dev.lock", "config/python314-constraints.txt"),
+    ],
+)
+def test_python314_pins_follow_reviewed_baseline_except_official_ctranslate2(baseline, migration):
+    from packaging.utils import canonicalize_name
+
+    def pins(name):
+        errors = []
+        records = guard().read_records((ROOT / name).read_text(), name, errors, hashed=name.endswith(".lock"))
+        assert errors == []
+        return {canonicalize_name(record.name): str(record.specifier) for record in records}
+
+    expected = pins(baseline)
+    assert expected["numpy"] == "==2.3.5"
+    expected["ctranslate2"] = "==4.8.3"
+    assert pins(migration) == expected
+
+
 def test_valid_flat_lock_and_development_pin():
     assert guard().validate("demo>=1,<2\n", f"demo==1.4 --hash=sha256:{HASH}\n", "pytest==9.1.1\n") == ()
 

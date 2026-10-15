@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import wraps
 from pathlib import Path
+from threading import Lock
 from types import TracebackType
 from typing import ParamSpec, TypeVar
 
@@ -22,6 +23,7 @@ _CONTEXT: ContextVar[dict[str, object] | None] = ContextVar("bridge_diagnostics"
 _IDENTITY_KEY = secrets.token_bytes(32)
 _LOG = logging.getLogger("bridge.events")
 _DROPPED = 0
+_DROPPED_LOCK = Lock()
 _NAME = re.compile(r"[a-z][a-z0-9_.]{0,79}\Z")
 _VALUE = re.compile(r"[A-Za-z0-9_./:@+\-]{1,160}\Z")
 _TEXT_FIELDS = frozenset(
@@ -218,11 +220,18 @@ def event(name: str, *, level: int = logging.INFO, exc_info: bool = False, **fie
     values["event"] = name if _NAME.fullmatch(name) else "diagnostic.invalid_event"
     try:
         details = exception_metadata(sys.exc_info()[0], sys.exc_info()[2]) if exc_info else {}
-        _LOG.log(level, values["event"], extra={"diagnostic_fields": values, "diagnostic_exception": details})
+        _LOG.log(
+            level,
+            values["event"],
+            extra={"diagnostic_fields": values, "diagnostic_exception": details},
+            stacklevel=2,
+        )
     except Exception:
         # A broken/custom handler must not fail a generation or worker.
-        _DROPPED += 1
+        with _DROPPED_LOCK:
+            _DROPPED += 1
 
 
 def diagnostic_failures() -> int:
-    return _DROPPED
+    with _DROPPED_LOCK:
+        return _DROPPED

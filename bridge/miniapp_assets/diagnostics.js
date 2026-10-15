@@ -14,11 +14,30 @@ function usageView(data) {
   }
   return view;
 }
+function loggingHealthView(data) {
+  const health=data.runtime?.logging;
+  const view=el('section',{},el('h3',{},'Logging health'));
+  if(!health) {
+    view.append(el('p',{},'Logging health unavailable. Check the running version and service journal.'));
+    return view;
+  }
+  const missing=health.file_configured!==true||health.file_failures_observed===true||health.event_failures_observed===true;
+  const degraded=missing||health.console_configured!==true||health.console_failures_observed===true;
+  view.append(el('p',{class:'info-note',role:degraded?'alert':'status'},degraded
+    ?'Logging is degraded.':'No logging failures observed. This does not prove a complete log.'));
+  if(missing)view.append(el('p',{},'Some diagnostic events may be missing. Check disk space, log permissions and the service journal.'));
+  if(health.console_failures_observed)view.append(el('p',{},'Journal writes have failed; the private log may still be available.'));
+  if(!health.console_configured)view.append(el('p',{},'Journal logging is not configured.'));
+  view.append(el('p',{class:'muted'},'Status covers this process, not only this story. Failures remain flagged until logging is restarted; counts and private content are not shared.'));
+  return view;
+}
+
 function eventView(item) {
-  const heading=[item.event,item.status].filter(Boolean).join(' · ');
+  const heading=[item.level,item.event,item.status].filter(Boolean).join(' · ');
   const view=el('li',{},el('strong',{},heading),el('p',{class:'muted'},String(item.timestamp||'')));
   const keys=['request_id','job_id','worker_id','call_id','attempt','purpose','provider','model','reason','phase',
-    'previous_model','next_model','http_status','elapsed_ms','queue_ms','source_message_id','revision'];
+    'previous_model','next_model','http_status','elapsed_ms','queue_ms','source_message_id','revision',
+    'error_type','rejection_code','npc_rejection_code','simulation_rejection_code','output_cap_reached','retryable','accepted','coverage'];
   const values=keys.filter(key=>item[key]!==undefined).map(key=>key.replaceAll('_',' ')+': '+String(item[key]));
   if(values.length)view.append(el('p',{},values.join(' · ')));
   return view;
@@ -68,7 +87,7 @@ export function diagnosticsCard(session) {
       }
       const events=Array.isArray(data.events)?data.events.slice(0,500):[];
       const timeline=el('ol',{'aria-label':'Diagnostic event timeline'},...events.map(eventView));
-      output.replaceChildren(status,el('p',{class:'muted'},String(data.limitations||'')),usageView(data),traces,
+      output.replaceChildren(status,loggingHealthView(data),el('p',{class:'muted'},String(data.limitations||'')),usageView(data),traces,
         events.length?timeline:empty('No matching events in the retained window. This does not prove that no work occurred.'));
     } catch(error) {
       if(sequence===generation)output.replaceChildren(el('p',{role:'alert'},error.message||'Diagnostics could not be loaded.'));

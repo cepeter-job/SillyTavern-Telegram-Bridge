@@ -6,7 +6,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from bridge.diagnostic_events import configure_identity
+from bridge.diagnostic_events import configure_identity, diagnostic_failures
 from bridge.diagnostic_logging import (
     DiagnosticConsoleHandler,
     DiagnosticFormatter,
@@ -38,6 +38,21 @@ def configure_logging(log_file: Path | None = None, *, app_settings: AppSettings
         console.setFormatter(formatter)
         root.addHandler(console)
     root.setLevel(level)
+
+
+def logging_health() -> dict[str, bool | str]:
+    """Observe existing counters without log I/O or exposing other sessions' failure counts."""
+    handlers = tuple(logging.getLogger().handlers)
+    files = [handler for handler in handlers if isinstance(handler, PrivateRotatingHandler)]
+    consoles = [handler for handler in handlers if isinstance(handler, DiagnosticConsoleHandler)]
+    return {
+        "scope": "process",
+        "file_configured": bool(files),
+        "console_configured": bool(consoles),
+        "event_failures_observed": diagnostic_failures() > 0,
+        "file_failures_observed": any(handler.dropped > 0 for handler in files),
+        "console_failures_observed": any(handler.dropped > 0 for handler in consoles),
+    }
 
 
 def enforce_runtime_permissions(*, app_settings: AppSettings) -> None:

@@ -482,8 +482,7 @@ def _unit_value(value: str, *, executable: bool = False, quoted: bool = True) ->
     if any(ord(ch) < 32 for ch in value):
         raise ValueError("Control characters are not allowed in installation paths")
     value = value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%")
-    escaped = value.replace("$", "$$") if executable else value
-    return '"' + escaped + '"' if quoted else escaped
+    return '"' + (value.replace("$", "$$") if executable else value) + '"' if quoted else value
 
 
 def _unit(source: Path, settings: AppSettings, env_path: Path) -> str:

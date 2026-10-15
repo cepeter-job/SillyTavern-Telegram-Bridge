@@ -12,7 +12,7 @@ from test_memory_completion_safety import session_db as session_db
 from bridge.extraction_contracts import REJECTION_CODES, tracker_repair_instruction
 from bridge.memory_store import claim_jobs
 from bridge.memory_workers import run_memory_claim
-from bridge.npc_extraction import _parse_payload
+from bridge.npc_extraction_format import parse_npc_payload
 from bridge.simulation_extraction import normalize_simulation_payload, parse_simulation_payload
 
 
@@ -46,7 +46,7 @@ def npc_payload(operations):
 def test_mixed_npc_operations_fail_closed(bad, code, caplog):
     caplog.set_level(logging.INFO, logger="bridge.events")
     diagnostics = {}
-    result = _parse_payload(
+    result = parse_npc_payload(
         json.dumps(npc_payload([operation(), bad])), primary_name="Primary", user_name="User", diagnostics=diagnostics
     )
     assert result == ([], False)
@@ -57,15 +57,15 @@ def test_mixed_npc_operations_fail_closed(bad, code, caplog):
 def test_invalid_supporting_group_cannot_hide_behind_valid_group():
     payload = npc_payload([operation()])
     payload["npcs"].append({"name": "Jon", "operations": [operation(op="invalid")]})
-    assert _parse_payload(json.dumps(payload), primary_name="Primary", user_name="User") == ([], False)
+    assert parse_npc_payload(json.dumps(payload), primary_name="Primary", user_name="User") == ([], False)
 
 
 @pytest.mark.parametrize("name", ["Primary", "User"])
 def test_intentional_exclusions_and_empty_npcs_remain_valid(name):
     payload = npc_payload([operation(known_by=42)])
     payload["npcs"][0]["name"] = name
-    assert _parse_payload(json.dumps(payload), primary_name="Primary", user_name="User") == ([], True)
-    assert _parse_payload('{"npcs":[]}', primary_name="Primary", user_name="User") == ([], True)
+    assert parse_npc_payload(json.dumps(payload), primary_name="Primary", user_name="User") == ([], True)
+    assert parse_npc_payload('{"npcs":[]}', primary_name="Primary", user_name="User") == ([], True)
 
 
 SIMULATION_REJECTIONS = [

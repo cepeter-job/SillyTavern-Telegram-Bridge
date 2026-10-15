@@ -26,7 +26,12 @@ class SimulationContractError(ValueError):
 
     def __init__(self, code: str):
         self.rejection_code = safe_rejection_code(code)
-        super().__init__(self.rejection_code)
+        # Preserve the public mechanics error while diagnostics use the fixed code.
+        super().__init__(
+            "positive BOND changes must come from Sparks conversion"
+            if self.rejection_code == "simulation_relationship_invalid"
+            else self.rejection_code
+        )
 
 
 def _supported_fields(value: dict, allowed: set[str]) -> None:

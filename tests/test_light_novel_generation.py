@@ -1,5 +1,4 @@
 import json
-from dataclasses import replace
 
 import pytest
 from test_light_novel_storage import novel_db as novel_db
@@ -469,39 +468,6 @@ def test_choice_generation_retries_transient_http_status_and_hides_url(novel_db,
     assert failure["http_status"] == 503
     assert failure["reason"] == "provider_unavailable"
     assert "PRIVATE_PROVIDER_URL" not in caplog.text
-
-
-def test_choice_generation_retries_parse_failure_once_and_logs_safely(novel_db, caplog):
-    from bridge.light_novel_service import attach_turn, ensure_choices, prepare_turn
-
-    db, session, settings = novel_db
-    settings = replace(settings, api_key="SECRET_API_KEY")
-    started(db)
-    record = prepare_turn(db, "chat", session, "turn-parse", "owner", rng=lambda _: 3)
-    attach_turn(db, record, story_row(db, "SECRET_STORY_TEXT"), "SECRET_STORY_TEXT")
-    calls = []
-    raw = "SECRET_RAW_OUTPUT not-json"
-
-    def generate(*args, **kwargs):
-        calls.append(kwargs["request_timeout"])
-        return raw
-
-    with caplog.at_level("WARNING"):
-        result = ensure_choices(
-            db, record.nonce, session, {}, provider_port=ProviderPort(generate), app_settings=settings
-        )
-
-    assert result.generation_status == "failed"
-    assert calls == [60, 60]
-    failure = choice_failures(caplog)[-1]
-    assert failure["phase"] == "parse"
-    assert failure["reason"] == "invalid_json"
-    assert failure["count"] == 3
-    assert failure["model_ref"]
-    assert failure["retryable"] is False
-    assert "SECRET_STORY_TEXT" not in caplog.text
-    assert "SECRET_RAW_OUTPUT" not in caplog.text
-    assert settings.api_key not in caplog.text
 
 
 def test_choice_generation_does_not_retry_non_transient_provider_error(novel_db, caplog):

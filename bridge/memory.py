@@ -269,10 +269,11 @@ def generate_session_summary(
     ).summary
 
 
-def summary_output_budget(previous: dict[str, object]) -> int:
-    """Reserve enough output for accepted JSON state without runaway generation."""
+def summary_output_budget(previous: dict[str, object], source: str = "") -> int:
+    """Allocate bounded headroom for retained JSON and the complete new source."""
     previous_bytes = len(json.dumps(previous, ensure_ascii=False).encode("utf-8"))
-    estimated = (previous_bytes + 2) // 3 + 320
+    # This is an allocation estimate, not a tokenizer or a completeness proof.
+    estimated = (previous_bytes + len(source.encode("utf-8")) + 2) // 3 + 320
     return min(4096, max(SUMMARY_MAX_OUTPUT_TOKENS, estimated))
 
 
@@ -313,7 +314,7 @@ def extract_summary_segment(db, chat_id, session, previous, source, *, provider_
     if eligible and not continuing:
         origin, digest = current_through, digest_value(previous["blocks"])
     prompt_previous = {"blocks": previous.get("blocks", [])} if continuing else {"blocks": []} if eligible else previous
-    settings["max_tokens"] = summary_output_budget(prompt_previous)
+    settings["max_tokens"] = summary_output_budget(prompt_previous, source.content)
     length_contract = summary_length_contract(prompt_previous)
     reference = load_short_reply_reference(db, source)
     window_contract = (

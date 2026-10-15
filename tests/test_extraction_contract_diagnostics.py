@@ -69,7 +69,7 @@ def test_scene_contract_diagnostics_and_precise_canonical_repair(
         ({"simulation": {}}, "npc_root_missing", "accepted", False, True),
         ({"npcs": {}, "simulation": []}, "npc_root_type", "simulation_root_type", False, False),
         ({"npcs": []}, "accepted", "simulation_root_missing", True, False),
-        ({"npcs": [], "simulation": {"actor": []}}, "accepted", "simulation_invalid", True, False),
+        ({"npcs": [], "simulation": {"actor": []}}, "accepted", "simulation_type_invalid", True, False),
         (
             {
                 "npcs": [
@@ -149,11 +149,11 @@ def test_tracker_independent_contracts_failed_repair_preserves_coverage(
 def test_parser_root_fields_are_fixed_and_content_free(
     raw, npc_code, sim_code, npcs_present, npcs_type, sim_present, sim_type, caplog
 ):
-    from bridge.npc_extraction import _parse_payload
+    from bridge.npc_extraction_format import parse_npc_payload
     from bridge.simulation_extraction import parse_simulation_payload
 
     caplog.set_level(logging.INFO, logger="bridge.events")
-    _, npc_valid = _parse_payload(raw, primary_name="Primary", user_name="User")
+    _, npc_valid = parse_npc_payload(raw, primary_name="Primary", user_name="User")
     _, sim_valid = parse_simulation_payload(raw)
     npc = events(caplog, "npc.contract_parsed")[0]
     sim = events(caplog, "simulation.contract_parsed")[0]
@@ -185,13 +185,13 @@ def test_parser_root_fields_are_fixed_and_content_free(
     ],
 )
 def test_tracker_parsers_handle_non_string_raw_without_diagnostic_failure(kind, raw, root_fields, caplog):
-    from bridge.npc_extraction import _parse_payload
+    from bridge.npc_extraction_format import parse_npc_payload
     from bridge.simulation_extraction import parse_simulation_payload
 
     caplog.set_level(logging.INFO, logger="bridge.events")
     diagnostics = {}
     if kind == "npc":
-        result = _parse_payload(raw, primary_name="Primary", user_name="User", diagnostics=diagnostics)
+        result = parse_npc_payload(raw, primary_name="Primary", user_name="User", diagnostics=diagnostics)
         assert result == ([], False)
     else:
         result = parse_simulation_payload(raw, diagnostics=diagnostics)

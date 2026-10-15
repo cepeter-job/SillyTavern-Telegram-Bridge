@@ -137,10 +137,14 @@ def extract_scene_segment(
     if len(source.content) > 12000:
         raise ValueError("Scene extraction requires a bounded source part")
     settings = get_generation_settings(db, chat_id, session["session_id"])
+    previous_bytes = len(json.dumps(previous, ensure_ascii=False).encode("utf-8"))
+    # Scene output repeats facts in state and classified blocks. Account for both
+    # without truncating canonical input or treating this estimate as acceptance.
+    estimated = (previous_bytes + 2 * len(source.content.encode("utf-8")) + 2) // 3 + 320
     settings.update(
         {
             "temperature": 0.0,
-            "max_tokens": 1000,
+            "max_tokens": min(8192, max(1000, estimated)),
             "stop_sequences": "",
             "reasoning_budget": utility_reasoning_for_session(db, chat_id, session["session_id"]),
         }

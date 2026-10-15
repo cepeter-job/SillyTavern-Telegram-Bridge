@@ -131,6 +131,9 @@ LOW_LEVEL_IMPORTS = {
             "bridge.light_novel_format",
             "bridge.light_novel_repository",
             "bridge.model_selection",
+            # Content-free diagnostics and completion types; no transport or application root.
+            "bridge.diagnostic_events",
+            "bridge.provider_completion",
             "bridge.provider_errors",
             "bridge.provider_port",
             "bridge.settings",

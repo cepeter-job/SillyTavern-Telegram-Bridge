@@ -113,6 +113,20 @@ a failed runtime write does not change a saved story or provider outcome.
 Higher log levels omit lower-level events and therefore produce incomplete
 troubleshooting timelines. Keep `INFO` for ordinary operation.
 
+Choice-only failures use `light_novel.choice_failed`: `phase` identifies preparation,
+provider or parsing; `reason` is a fixed failure code; `attempt` and `retryable`
+show the bounded retry decision. `count` is the requested choice count and `kind`
+is the strategy. Model and choice references are opaque, not raw model output.
+Malformed choices may use one re-extraction from the same context within the
+existing two-attempt limit. Repeated failure leaves the saved story intact;
+use **Retry Choices** rather than regenerating that story.
+
+Scene and Summary output allocations grow with the bounded source and retained
+state, but remain capped. A larger allocation does not validate an incomplete
+response. Repeated `output_capped` failures now follow the existing eight-failure
+autonomous parking rule; manual retry remains available. Check accepted coverage,
+not just provider success, before treating memory processing as complete.
+
 ### Session troubleshooting and export
 
 Open the Mini App's **System** page, then **Troubleshooting diagnostics**.

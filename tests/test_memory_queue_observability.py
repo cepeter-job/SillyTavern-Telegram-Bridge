@@ -191,3 +191,22 @@ def test_memory_off_does_not_block_retirement_cleanup(db):
     assert dispatch_memory_backlog(services, db) == 1
     assert db.execute("SELECT lease_token<>'' FROM memory_retired_documents").fetchone() == (1,)
     assert db.execute("SELECT attempts,lease_token FROM memory_jobs").fetchone() == (0, "")
+
+
+@pytest.mark.parametrize("layer", ["summary", "scene", "episodes", "npc", "curator", "hindsight"])
+@pytest.mark.parametrize("attempts", [7, 8])
+def test_output_capped_parking_preserves_manual_retry_and_hindsight(db, layer, attempts):
+    from bridge.memory_queue import queue_counters
+
+    job(db, "c", layer, message_at=100, pending_at=90)
+    db.execute("UPDATE memory_jobs SET attempts=?,last_error='output_capped'", (attempts,))
+    db.commit()
+    parked = attempts >= 8 and layer != "hindsight"
+    counters = queue_counters(db, now=110)
+    assert counters["memory.jobs.parked"] == int(parked)
+    assert counters["memory.jobs.eligible"] == int(not parked)
+    claims = claim_jobs(db, now=110, autonomous=True)
+    if parked:
+        assert claims == []
+        claims = claim_jobs(db, now=110, autonomous=False)
+    assert len(claims) == 1 and claims[0].layer == layer

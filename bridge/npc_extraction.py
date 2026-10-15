@@ -14,19 +14,17 @@ from bridge.extension_registry import extension_registry_snapshot as _extension_
 from bridge.extension_registry import register_post_retain_hook as _register_post_retain_hook
 from bridge.extraction_contracts import NPC_EXTRACTION_CONTRACT, record_tracker_contract, tracker_repair_instruction
 from bridge.generation_settings import get_generation_settings
-from bridge.json_fences import unfence_json
 from bridge.memory_draft_publish import publish_derived, publish_simulation, restore_derived
 from bridge.memory_draft_store import run_session_draft
 from bridge.memory_store import enqueue_memory
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
+from bridge.npc_extraction_format import parse_npc_payload
 from bridge.npc_repository import (
     get_npc_extraction_coverage,
     list_npc_entities,
     load_npc_fields,
     load_npc_fields_as_of,
 )
-from bridge.npc_service import _expected_mode, normalize_npc_name, validate_npc_operation
-from bridge.npc_types import NpcExtractionGroup, NpcOperation
 from bridge.persona_sync import persona_name
 from bridge.provider_completion import StructuredOutputCapped
 from bridge.provider_port import ProviderPort
@@ -65,94 +63,6 @@ def publish_valid_simulation_from_npc_error(db, chat_id, session_id, error, sour
         primary_name=error.primary_name,
         user_name=error.user_name,
     )
-
-
-def _parse_payload(
-    raw: str, *, primary_name: str, user_name: str, diagnostics=None
-) -> tuple[list[NpcExtractionGroup], bool]:
-    try:
-        payload = json.loads(unfence_json(raw))
-    except (TypeError, json.JSONDecodeError):
-        record_tracker_contract(raw, "npc", False, "malformed_json", diagnostics)
-        return [], False
-    groups_raw = payload.get("npcs") if isinstance(payload, dict) else payload
-    if not isinstance(groups_raw, list):
-        code = "npc_root_missing" if isinstance(payload, dict) and "npcs" not in payload else "npc_root_type"
-        record_tracker_contract(raw, "npc", False, code, diagnostics)
-        return [], False
-
-    blocked = {normalize_npc_name(primary_name), normalize_npc_name(user_name)}
-    groups: list[NpcExtractionGroup] = []
-    supporting_candidate_seen = False
-    invalid_mode_seen = False
-    for item in groups_raw[: _limits.NPC_EXTRACTION_MAX_GROUPS]:
-        if not isinstance(item, dict):
-            continue
-        name = " ".join(str(item.get("name") or "").split()).strip()[: _limits.NPC_NAME_MAX_CHARS]
-        if not name or normalize_npc_name(name) in blocked:
-            continue
-        supporting_candidate_seen = True
-        aliases_raw = item.get("aliases") or []
-        aliases = []
-        if isinstance(aliases_raw, list):
-            seen = set()
-            for alias in aliases_raw[: _limits.NPC_MAX_ALIASES]:
-                value = " ".join(str(alias or "").split()).strip()[: _limits.NPC_NAME_MAX_CHARS]
-                key = normalize_npc_name(value)
-                if value and key and key != normalize_npc_name(name) and key not in blocked and key not in seen:
-                    seen.add(key)
-                    aliases.append(value)
-
-        operations_raw = item.get("operations")
-        if not isinstance(operations_raw, list):
-            continue
-        operations: list[NpcOperation] = []
-        for raw_op in operations_raw[: _limits.NPC_EXTRACTION_MAX_OPERATIONS_PER_GROUP]:
-            if not isinstance(raw_op, dict):
-                continue
-            field = str(raw_op.get("field") or "").strip().casefold()
-            operation = str(raw_op.get("op") or "").strip().casefold()
-            mode = str(raw_op.get("mode") or "").strip().casefold()
-            visibility_raw = raw_op.get("visibility")
-            visibility = (
-                "restricted"
-                if visibility_raw is None and field == "secrets"
-                else str(visibility_raw or "shared").strip().casefold()
-            )
-            known_by_raw = raw_op.get("known_by") or []
-            known_by = (
-                tuple(
-                    " ".join(str(value or "").split()).strip()[: _limits.NPC_NAME_MAX_CHARS]
-                    for value in known_by_raw[: _limits.NPC_MAX_ALIASES]
-                )
-                if isinstance(known_by_raw, list)
-                else ()
-            )
-            value = raw_op.get("value")
-            if isinstance(value, str):
-                value = value[: _limits.NPC_FIELD_VALUE_MAX_CHARS]
-            elif isinstance(value, list):
-                value = [str(part)[: _limits.NPC_FIELD_VALUE_MAX_CHARS] for part in value[: _limits.NPC_LIST_MAX_ITEMS]]
-            else:
-                continue
-            if (expected_mode := _expected_mode(field)) is not None and mode != expected_mode:
-                invalid_mode_seen = True
-            candidate = NpcOperation(field, operation, value, mode, visibility, known_by)
-            try:
-                validated = validate_npc_operation(candidate)
-            except ValueError:
-                validated = None
-            if validated is not None:
-                operations.append(validated)
-        if operations:
-            groups.append(NpcExtractionGroup(name, tuple(aliases), tuple(operations)))
-    # A model that offered supporting-character updates but had every operation
-    # rejected did not satisfy the contract. Trigger the existing bounded repair
-    # instead of silently publishing an empty, complete extraction.
-    valid = bool(groups) or not supporting_candidate_seen
-    code = "accepted" if valid else "npc_mode_invalid" if invalid_mode_seen else "npc_operations_invalid"
-    record_tracker_contract(raw, "npc", valid, code, diagnostics)
-    return groups, valid
 
 
 def _existing_state_text(
@@ -279,7 +189,9 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
         record_tracker_contract("", "npc", False, "output_capped", npc_diagnostics)
         record_tracker_contract("", "simulation", False, "output_capped", simulation_diagnostics)
     else:
-        groups, valid = _parse_payload(raw, primary_name=primary_name, user_name=user_name, diagnostics=npc_diagnostics)
+        groups, valid = parse_npc_payload(
+            raw, primary_name=primary_name, user_name=user_name, diagnostics=npc_diagnostics
+        )
         simulation, simulation_valid = parse_simulation_payload(raw, diagnostics=simulation_diagnostics)
     repair_instruction = tracker_repair_instruction(
         npc_diagnostics["rejection_code"], simulation_diagnostics["rejection_code"], repair_npcs=not valid
@@ -319,7 +231,7 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
                 raise NpcExtractionMalformed(preserved, primary_name, user_name) from error
             raise
         if repair_npcs:
-            groups, valid = _parse_payload(repaired, primary_name=primary_name, user_name=user_name)
+            groups, valid = parse_npc_payload(repaired, primary_name=primary_name, user_name=user_name)
         repaired_simulation, repaired_valid = parse_simulation_payload(repaired)
         if repaired_valid and not simulation_valid:
             simulation, simulation_valid = repaired_simulation, True

@@ -23,6 +23,7 @@ SUMMARY_TARGET_CHARS = SUMMARY_MAX_CHARS * 9 // 10
 SUMMARY_PRESSURE_CHARS = SUMMARY_MAX_CHARS * 4 // 5
 SUMMARY_SHORT_LENGTH_CONTRACT = (
     "Return no more than 32 classified blocks in the complete JSON object. "
+    f"Each individual block text must be at most {MAX_SINGLE_BLOCK_CHARS:,} characters. "
     "Merge related facts only when visibility and known_by are identical, "
     "and preserve all distinct facts, promises, and causal links. "
     f"Their combined block text including newline separators must be at most {SUMMARY_MAX_CHARS:,} characters. "
@@ -43,6 +44,7 @@ SUMMARY_AUDIENCE_OUTPUT_CONTRACT = (
 )
 SUMMARY_COMPACTION_CONTRACT = (
     "Complete updated summary JSON must contain no more than 32 classified blocks. "
+    f"Each individual block text must be at most {MAX_SINGLE_BLOCK_CHARS:,} characters. "
     f"Their combined text including newline separators must be at most {SUMMARY_MAX_CHARS:,} characters; "
     f"aim for at most {SUMMARY_TARGET_CHARS:,} characters to leave room for future source parts. "
     "Count characters across ALL blocks, not each block or the serialized JSON. "

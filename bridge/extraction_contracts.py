@@ -36,6 +36,13 @@ REJECTION_CODES = frozenset(
         "simulation_root_missing",
         "simulation_root_type",
         "simulation_invalid",
+        "simulation_actor_conflict",
+        "simulation_bounds_invalid",
+        "simulation_enum_invalid",
+        "simulation_identity_invalid",
+        "simulation_relationship_invalid",
+        "simulation_type_invalid",
+        "simulation_unsupported_field",
     }
 )
 SCENE_REPAIR_CONTRACT = (
@@ -65,6 +72,33 @@ NPC_EXTRACTION_CONTRACT = (
     "and nonempty exact knowers. Use compact JSON; return changes, not the existing fields/state schema. "
     "Preserve exact audience restrictions."
 )
+
+
+_SIMULATION_REPAIR_GUIDANCE = {
+    "simulation_type_invalid": (
+        "Use an object for simulation/actor and an array for each plural group and actor change list. "
+        "Names/descriptions are strings; progress/deltas/modifier are integers; apology/complete are booleans. "
+        "Faction relations is an object of strings; lies and task step lists are arrays of strings. "
+    ),
+    "simulation_enum_invalid": (
+        "Use quest kind main|side; quest/task status active|paused|completed|failed; "
+        "agenda status active|paused|completed; foreshadowing status planted|developing|resolved|abandoned. "
+        "Task actor must be user. Preserve established facts; do not guess a replacement enum. "
+    ),
+    "simulation_actor_conflict": (
+        "One source part cannot both add and remove the same actor item. "
+        "Re-extract the established change from canonical source; do not arbitrarily discard either operation. "
+    ),
+    "simulation_unsupported_field": (
+        "Use only supported simulation fields: relationships, agendas, factions, quests, foreshadowing, tasks, "
+        "on_screen_npcs, actor. Actor changes use inventory_add/inventory_remove, skills_add/skills_remove, "
+        "conditions_add/conditions_remove; actor items use name/domain/modifier. "
+        "Use only supported entry fields in the supplied schema; do not silently omit established changes. "
+    ),
+    "simulation_identity_invalid": "Every entity/item requires its nonempty name or id string from canonical source. ",
+    "simulation_bounds_invalid": "Keep collections/text bounded and task progress integers within 0..20. ",
+    "simulation_relationship_invalid": "Do not extract positive BOND deltas; Sparks conversion is bridge-owned. ",
+}
 
 
 def safe_rejection_code(code: object) -> str:
@@ -117,6 +151,12 @@ def tracker_repair_instruction(npc_code: str, simulation_code: str, *, repair_np
         rejection += (
             "The provider reported truncation. Re-extract compact complete JSON from canonical input; "
             "partial output is not accepted state. Use concise values without dropping established changes. "
+        )
+    rejection += _SIMULATION_REPAIR_GUIDANCE.get(simulation_code, "")
+    if npc_code == "invalid_audience":
+        rejection += (
+            "Use explicit shared visibility with known_by=[] or restricted visibility with a nonempty array "
+            "of exact knower strings. Secrets must be restricted. Never broaden or guess audiences. "
         )
     if repair_npcs:
         return (

@@ -8,6 +8,30 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+## [0.3.026] - 2026-10-15
+
+### Choice recovery and diagnostics
+
+- Make the choice JSON example contain exactly the requested 3 or 4 distinct entries instead of two duplicate examples.
+- Share the existing two-attempt maximum across transient provider errors, empty output, malformed choice JSON, invalid choice contracts and explicitly capped output. Re-extract from the same canonical context with fixed feedback; never replay rejected model text or regenerate the saved story.
+- Preserve content-free failure reasons, stage, attempt, count, response shape and opaque correlation references in structured runtime logs. Keep the privacy formatter's omission of arbitrary legacy arguments intact.
+- Enable the existing nonstreaming Chat Completions `json_once` truncation guard for choice-only calls. Exact counts, 1200-token allocation, timeout, lease, source/epoch guards and final validation remain enforced.
+
+### Memory and tracker reliability
+
+- Size Summary first-request allocations from retained JSON plus the complete bounded source, within 1200–4096 tokens. Scene allocations account for both state and classified blocks, within 1000–8192 tokens. These are bounded estimates, not completeness proofs; explicitly capped output still fails validation and each helper retains its single repair attempt.
+- Park autonomous memory work after the existing eight-failure limit for `output_capped` too. Explicit manual retries and Hindsight's separate retention behavior remain unchanged.
+- State the existing 5000-character individual Summary block limit in initial and repair guidance, alongside the unchanged total-text and audience limits.
+- Reject partial supporting-NPC extractions containing invalid operations or contradictory explicit audiences rather than silently discarding changes and advancing complete coverage.
+- Reject populated unsupported simulation fields at the external extraction boundary. Emit fixed, content-free reasons and targeted repair guidance for invalid types, enums, identities, bounds, relationship changes and conflicting actor operations. Empty updates, canonical-input repair and source/publication guards remain intact.
+
+### Maintenance and verification boundaries
+
+- Include the configurable curator output budget from #530 and consolidated dependency updates from #534. The runtime lock changes aiohttp from 3.14.3 to 3.14.4; use the manual signed-update procedure rather than bypassing the updater's dependency guard.
+- Pin NumPy 2.3.5 for the deployed pre-x86-64-v2 CPU: NumPy 2.4.6 fails to import on the target host. Regenerate both hash-locked Python dependency manifests and validate the pinned wheel on that CPU before deployment.
+- Production remains on Python 3.11. No new database migration, history-pruning activation, provider-route change or service-unit change is introduced by the audit fixes.
+- Regression tests establish bounded recovery and fail-closed contracts, not the cause of the historical choice failure, guaranteed model quality, elimination of every truncation, or acceptance of the live memory backlog. The structured cap guard remains scoped to the supported nonstreaming Chat Completions path; this release does not claim new streaming, Responses or Anthropic cap handling.
+
 ## [0.3.025] - 2026-10-12
 
 ### Story defaults and preset compatibility

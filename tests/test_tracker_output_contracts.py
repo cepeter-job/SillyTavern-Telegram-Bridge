@@ -10,6 +10,7 @@ from test_memory_json_transport import routed_provider
 from bridge import npc_extraction, scene_state, simulation_context, simulation_prompt
 from bridge.memory_artifact_store import parse_classified_response
 from bridge.memory_response import MemorySourceChanged, generate_memory_response, memory_failure_code
+from bridge.npc_extraction_format import parse_npc_payload
 from bridge.simulation_extraction import parse_simulation_payload
 
 
@@ -168,7 +169,7 @@ def test_initial_and_both_tracker_repair_paths_supply_parser_valid_typed_example
             assert set(example) == ({"npcs", "simulation"} if combined else {"simulation"})
             assert parse_simulation_payload(json.dumps(example))[1]
             if combined:
-                assert npc_extraction._parse_payload(json.dumps(example), primary_name="Primary", user_name="User")[1]
+                assert parse_npc_payload(json.dumps(example), primary_name="Primary", user_name="User")[1]
         full = [item["simulation"] for item in examples if item.get("simulation", {}).get("actor")]
         marker = 'Simulation member fragment (not a complete response): "simulation":'
         for message in call["messages"]:

@@ -43,7 +43,17 @@ def test_fresh_install_has_private_config_starters_service_and_idempotency(tmp_p
     assert len(cards) == 1
 
 
-@pytest.mark.parametrize("source_name", ["bridge", "bridge with spaces", "bridge%literal"])
+@pytest.mark.parametrize(
+    "source_name",
+    [
+        "bridge",
+        "bridge with spaces",
+        "bridge%literal",
+        "bridge" + chr(92) + "slash",
+        "bridge" + chr(34) + "quoted",
+        "bridge ",
+    ],
+)
 def test_managed_service_working_directory_is_unquoted_absolute_path(tmp_path, source_name):
     from bridge.install_support import prepare_install
 
@@ -54,7 +64,7 @@ def test_managed_service_working_directory_is_unquoted_absolute_path(tmp_path, s
         source = destination
     prepare_install(source, home, env, units)
     contents = (units / "sillytavern-telegram.service").read_text()
-    expected = str(source).replace("%", "%%")
+    expected = str(source).replace("%", "%%") + "/"
     assert [line for line in contents.splitlines() if line.startswith("WorkingDirectory=")] == [
         f"WorkingDirectory={expected}"
     ]

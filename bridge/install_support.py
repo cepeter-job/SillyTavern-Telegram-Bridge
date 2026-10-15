@@ -481,8 +481,8 @@ def installation_settings(source: Path, home: Path, env_path: Path) -> AppSettin
 def _unit_value(value: str, *, executable: bool = False, quoted: bool = True) -> str:
     if any(ord(ch) < 32 for ch in value):
         raise ValueError("Control characters are not allowed in installation paths")
-    value = value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%")
-    return '"' + (value.replace("$", "$$") if executable else value) + '"' if quoted else value
+    value = (value.replace("\\", "\\\\").replace('"', '\\"') if quoted else value).replace("%", "%%")
+    return '"' + (value.replace("$", "$$") if executable else value) + '"' if quoted else value + "/"
 
 
 def _unit(source: Path, settings: AppSettings, env_path: Path) -> str:

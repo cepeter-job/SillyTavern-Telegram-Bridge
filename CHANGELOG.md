@@ -8,6 +8,14 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+## [0.3.027] - 2026-10-15
+
+### Installer systemd hotfix
+
+- Generate an unquoted absolute `WorkingDirectory=` path in the managed user service. systemd rejects a quoted absolute path as non-absolute, so a manual `install.sh --no-start` from v0.3.026 could leave the regenerated unit unloadable. Keep existing path escaping and argument/environment quoting, including custom source paths with spaces and literal percent signs.
+- Preserve the existing signed-source deployment, Python 3.11 runtime locks and trust configuration, database schema, private settings and saved stories. No provider, model, or narrative changes.
+
+
 ## [0.3.026] - 2026-10-15
 
 ### Choice recovery and diagnostics

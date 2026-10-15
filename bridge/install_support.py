@@ -478,11 +478,12 @@ def installation_settings(source: Path, home: Path, env_path: Path) -> AppSettin
     return load_app_settings(values, home=home)
 
 
-def _unit_value(value: str, *, executable: bool = False) -> str:
+def _unit_value(value: str, *, executable: bool = False, quoted: bool = True) -> str:
     if any(ord(ch) < 32 for ch in value):
         raise ValueError("Control characters are not allowed in installation paths")
     value = value.replace("\\", "\\\\").replace('"', '\\"').replace("%", "%%")
-    return '"' + (value.replace("$", "$$") if executable else value) + '"'
+    escaped = value.replace("$", "$$") if executable else value
+    return '"' + escaped + '"' if quoted else escaped
 
 
 def _unit(source: Path, settings: AppSettings, env_path: Path) -> str:
@@ -505,7 +506,7 @@ Description=SillyTavern Telegram Bridge and private Mini App
 After=network-online.target
 [Service]
 Type=simple
-WorkingDirectory={_unit_value(str(source))}
+WorkingDirectory={_unit_value(str(source), quoted=False)}
 Environment={_unit_value("SILLYTAVERN_ENV_FILE=" + str(env_path))}
 Environment={_unit_value("SILLYTAVERN_BRIDGE_SOURCE_DIR=" + str(source))}
 Environment=MALLOC_ARENA_MAX=2

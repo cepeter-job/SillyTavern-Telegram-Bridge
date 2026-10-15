@@ -1,0 +1,10 @@
+{
+  "verified_at_utc": "2026-10-10T15:26:44.624647+00:00",
+  "physical_calls": 24,
+  "known_usage_calls": 24,
+  "plan_unchanged": true,
+  "semantic_requirements_unchanged": true,
+  "runtime_revision_unchanged": true,
+  "service_active": true,
+  "native_complete_is_not_quality_approval": true
+}

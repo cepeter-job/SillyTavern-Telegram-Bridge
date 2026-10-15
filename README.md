@@ -1,7 +1,7 @@
 # SillyTavern Telegram Bridge
 
-[![CI](https://github.com/cepeter/SillyTavern-Telegram-Bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/cepeter/SillyTavern-Telegram-Bridge/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/cepeter/SillyTavern-Telegram-Bridge?display_name=tag)](https://github.com/cepeter/SillyTavern-Telegram-Bridge/releases/latest)
+[![CI](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/cepeter-job/SillyTavern-Telegram-Bridge?display_name=tag)](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/releases/latest)
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 
 Chat with your SillyTavern characters from Telegram. Choose a character, pick an
@@ -43,7 +43,7 @@ normal Linux user who will own the installation; do not run the installer with
 
 ```bash
 curl --proto '=https' --tlsv1.2 --fail --location \
-  https://raw.githubusercontent.com/cepeter/SillyTavern-Telegram-Bridge/main/install.sh \
+  https://raw.githubusercontent.com/cepeter-job/SillyTavern-Telegram-Bridge/main/install.sh \
   -o /tmp/sillytavern-telegram-install.sh &&
 chmod 700 /tmp/sillytavern-telegram-install.sh &&
 /tmp/sillytavern-telegram-install.sh
@@ -136,8 +136,10 @@ that session and use the [retry and recovery guide](docs/user-guide.md#retry-reg
 | Restart, update, back up or troubleshoot the bridge | [Operations](docs/operations.md) |
 | Use the Telegram management interface | [Mini App](docs/miniapp.md) |
 | Understand reported model usage and missing counts | [Token usage](docs/token-usage.md) |
+| Set up development, understand the code and contribute a PR | [Developer handbook](docs/development/README.md) |
 
-The six guides above describe how to use and maintain the bot. Dated files under
+The user and operations guides above describe how to use and maintain the bot;
+the developer handbook covers contributing to its source. Dated files under
 `docs/audits/` and `docs/superpowers/` are development records, not alternative
 installation instructions.
 

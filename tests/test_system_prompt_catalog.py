@@ -1,9 +1,11 @@
 """Native System Prompt catalogues must not partially import full presets."""
 
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from settings_test_support import make_test_settings
 
 from bridge import card_content, system_prompt_panels
 
@@ -12,6 +14,31 @@ from bridge import card_content, system_prompt_panels
 def settings(tmp_path, app_settings_builder):
     app_settings_builder.system_prompts_dir = tmp_path
     return app_settings_builder.build()
+
+
+def test_example_catalog_contains_only_writer_profiles(tmp_path):
+    examples = Path(__file__).resolve().parents[1] / "config/system_prompts.example"
+    settings = make_test_settings(home=tmp_path, system_prompts_dir=examples)
+
+    prompts = card_content.load_system_prompts(app_settings=settings)
+
+    assert set(prompts) == {"writer_continuity", "writer_dialogue", "writer_ensemble", "writer_magical_realism"}
+    assert all(item["name"] and item["prompt"].strip() for item in prompts.values())
+
+
+@pytest.mark.parametrize("prompt_id", ["balanced", "concise", "natural"])
+@pytest.mark.parametrize("suffix", ["txt", "json"])
+def test_removed_example_ids_remain_valid_in_user_catalog(tmp_path, settings, prompt_id, suffix):
+    prompt = f"User-owned {prompt_id} prompt"
+    content = prompt if suffix == "txt" else json.dumps({"id": prompt_id, "name": prompt_id.title(), "content": prompt})
+    path = tmp_path / f"{prompt_id}.{suffix}"
+    path.write_text(content, encoding="utf-8")
+
+    assert card_content.load_system_prompts(app_settings=settings) == {
+        prompt_id: {"name": prompt_id.title(), "prompt": prompt}
+    }
+    assert card_content.get_system_prompt_choice(prompt_id, app_settings=settings) == prompt
+    assert path.read_text(encoding="utf-8") == content
 
 
 @pytest.mark.parametrize(

@@ -59,7 +59,7 @@ step from running if the download or permission change fails.
 
 ```bash
 curl --proto '=https' --tlsv1.2 --fail --location \
-  https://raw.githubusercontent.com/cepeter/SillyTavern-Telegram-Bridge/main/install.sh \
+  https://raw.githubusercontent.com/cepeter-job/SillyTavern-Telegram-Bridge/main/install.sh \
   -o /tmp/sillytavern-telegram-install.sh &&
 chmod 700 /tmp/sillytavern-telegram-install.sh &&
 /tmp/sillytavern-telegram-install.sh

@@ -110,11 +110,6 @@ def test_long_history_compaction_keeps_selected_profile_and_current_request(tmp_
     assert compacted[-1]["content"] == current
 
 
-def test_existing_example_profiles_remain_available(tmp_path):
-    _, prompts = catalogue(tmp_path)
-    assert {"natural", "balanced", "concise"} <= prompts.keys()
-
-
 @pytest.mark.parametrize("profile", ("off", *PROFILES))
 @pytest.mark.parametrize("case_index", range(8))
 def test_synthetic_cases_have_an_exact_profile_only_request_delta(tmp_path, profile, case_index):

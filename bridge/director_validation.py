@@ -34,29 +34,48 @@ def validate_director_proposal(
         if established is None:
             raise DirectorProposalError("reference", "Director arc reference is not established")
         if update.status and update.status != established:
-            raise DirectorProposalError("policy", "Director plans cannot replace committed arc outcomes")
+            raise DirectorProposalError(
+                "policy", "Director plans cannot replace committed arc outcomes", rejection_code="arc_outcome_change"
+            )
     if proposal.ending_goal_update is not None or proposal.finale_ready is not None:
         if policy.settings.ending_mode != "closed_story":
-            raise DirectorProposalError("policy", "Ending proposals require Closed Story mode")
+            raise DirectorProposalError(
+                "policy", "Ending proposals require Closed Story mode", rejection_code="ending_mode_required"
+            )
         if ending_state not in {"open", "finale_ready"}:
             raise DirectorProposalError("lifecycle", "The ending goal and finale path are locked after finale entry")
     if proposal.finale_ready is True and state.story_phase not in {"escalation", "climax", "resolution"}:
-        raise DirectorProposalError("policy", "Finale readiness needs developed, reconciled story state")
+        raise DirectorProposalError(
+            "policy",
+            "Finale readiness needs developed, reconciled story state",
+            rejection_code="finale_phase_undeveloped",
+        )
     users = {name.casefold() for name in (user_characters or set())} | {"user", "{{user}}"}
     cast = {name.casefold() for name in valid_characters}
     speaker = proposal.speaker.casefold()
     viewpoint = proposal.viewpoint.casefold()
     if speaker in users:
-        raise DirectorProposalError("policy", "The user cannot be selected as an autonomous speaker")
+        raise DirectorProposalError(
+            "policy", "The user cannot be selected as an autonomous speaker", rejection_code="user_speaker"
+        )
     if speaker and speaker not in cast:
         raise DirectorProposalError("reference", "Director speaker is not an established cast member")
     if proposal.pov and proposal.pov != policy.settings.pov_mode:
-        raise DirectorProposalError("policy", "Director viewpoint mode conflicts with Narrative Style")
+        raise DirectorProposalError(
+            "policy",
+            "Director viewpoint mode conflicts with Narrative Style",
+            repairable=True,
+            rejection_code="pov_policy_conflict",
+        )
     if viewpoint in users:
         if proposal.pov == "first_person" or policy.settings.pov_mode == "first_person":
-            raise DirectorProposalError("policy", "First-person narration cannot take over the user")
+            raise DirectorProposalError(
+                "policy", "First-person narration cannot take over the user", rejection_code="user_first_person"
+            )
         if proposal.user_present is False:
-            raise DirectorProposalError("policy", "An absent user cannot be the viewpoint character")
+            raise DirectorProposalError(
+                "policy", "An absent user cannot be the viewpoint character", rejection_code="absent_user_viewpoint"
+            )
     elif viewpoint and viewpoint not in cast:
         raise DirectorProposalError("reference", "Director viewpoint is not an established character")
     if proposal.scene_id and proposal.scene_id != state.active_scene_id:
@@ -64,16 +83,31 @@ def validate_director_proposal(
     threads = valid_threads if valid_threads is not None else {state.active_thread_id}
     if proposal.action == "continue":
         if proposal.new_thread is not None or proposal.transition_type != "continue":
-            raise DirectorProposalError("policy", "Continuing a scene cannot create a new thread or transition")
+            raise DirectorProposalError(
+                "policy",
+                "Continuing a scene cannot create a new thread or transition",
+                rejection_code="continue_transition",
+            )
         if proposal.thread_id and proposal.thread_id != state.active_thread_id:
             raise DirectorProposalError("reference", "Continuing a scene cannot switch threads")
         if viewpoint and viewpoint != state.viewpoint_character.casefold():
-            raise DirectorProposalError("policy", "A viewpoint change requires a scene transition")
+            raise DirectorProposalError(
+                "policy", "A viewpoint change requires a scene transition", rejection_code="continue_viewpoint_change"
+            )
         if proposal.pov and state.pov_mode and proposal.pov != state.pov_mode:
-            raise DirectorProposalError("policy", "A viewpoint-mode change requires a scene transition")
+            raise DirectorProposalError(
+                "policy",
+                "A viewpoint-mode change requires a scene transition",
+                repairable=True,
+                rejection_code="continue_pov_change",
+            )
         if proposal.user_present is not None and state.user_present is not None:
             if proposal.user_present != state.user_present:
-                raise DirectorProposalError("policy", "Continuing a scene cannot invent user arrival or departure")
+                raise DirectorProposalError(
+                    "policy",
+                    "Continuing a scene cannot invent user arrival or departure",
+                    rejection_code="continue_presence_change",
+                )
         return
     if proposal.action != "transition_scene":
         raise DirectorProposalError("parse", "Director action is unsupported")

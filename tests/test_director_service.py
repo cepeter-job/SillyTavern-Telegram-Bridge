@@ -147,7 +147,8 @@ def test_repair_prompt_is_specific_and_failure_log_stays_sanitized(directed, cap
     assert "field 'direction'" in repair
     assert "Omit optional string fields instead of null" in repair
     assert "Do not use Markdown or code fences" in repair
-    assert "field 'direction'" in caplog.text
+    assert "field 'direction'" not in caplog.text
+    assert "director.rejected" in caplog.text
     assert "PRIVATE_RAW" not in caplog.text
 
 

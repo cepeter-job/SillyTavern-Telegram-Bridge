@@ -52,6 +52,7 @@ def test_normal_cadence_stops_during_ending_pipeline(phase):
         completed_turns=200,
         now=1000,
         event="manual",
+        ending_lifecycle="finale",
     )
 
 

@@ -43,7 +43,8 @@ comments, SARIF uploads and Action summaries are disabled.
 
 | Job | Scope | Retained evidence |
 | --- | --- | --- |
-| `python-tests` | Complete pytest discovery, at most four workers, resource warnings as errors, whole-application statement and branch coverage, security coverage floors | `application-coverage`: coverage JSON/XML, JUnit XML, pytest log with the 20 slowest tests |
+| `python-test-shards` | Four disjoint pytest shards, at most four workers per machine, resource warnings as errors | `pytest-shard-N`: raw coverage, test-ID manifest, JUnit XML and pytest log with the 20 slowest tests |
+| `python-tests` | Successful execution and complete disjoint inventory of all shards, combined whole-application statement and branch coverage, security coverage floors | `application-coverage`: combined coverage JSON/XML and the retained shard reports |
 | `miniapp-smoke` | Focused DOM regressions and loopback integration, plus pinned Chromium and WebKit tests of accepted-response loss, polling recovery, native dialogs, focus and narrow viewports | `miniapp-smoke-chromium` and `miniapp-smoke-webkit`: DOM, integration and browser logs, browser HTML report and failure traces/screenshots |
 | `secret-scan` | Full-history CLI v8.30.1 scan with SHA-256-verified binary on every event; trusted same-repository events also run the SHA-pinned licensed Gitleaks Action v3.0.0 commit-range scan | Findings, scanner errors or integrity mismatch fail the required job; a selected licensed wrapper also requires its organization license |
 | `dependency-audit` | Complete hash-locked Python runtime/development sets and both npm development toolchains | `dependency-audit`: per-scan reports and JSON/Markdown summaries |
@@ -116,14 +117,13 @@ the scheduling input. Compare complete exact-head job and step measurements befo
 changing allocation. Startup and the slowest indivisible file can limit scaling.
 
 `setup-uv` and `setup-node` already cache lockfile-keyed Python and npm downloads.
-`miniapp-smoke` also caches Chromium and WebKit binaries in
-`~/.cache/ms-playwright`, keyed by runner OS, architecture and the locked
-`tests/miniapp-browser/package-lock.json` (Playwright pins the browser
-revisions). The SHA-pinned cache action is best-effort: every run still invokes
-`playwright install --with-deps "$BROWSER_ENGINE"` to install system libraries
-and repair missing browser binaries. Caches never skip tests or security scans.
-Playwright cautions that browser cache restore can cost about as much as a
-download; compare cold and warm `miniapp-smoke` runs before keeping this cache.
+`miniapp-smoke` uses the digest-pinned Playwright 1.63.0 Noble container declared
+in `ci.yml`, with Chromium/WebKit binaries and their OS libraries already
+installed. Each engine's matrix job verifies that the locked Playwright package
+matches the image version and its engine binary exists under `/ms-playwright`.
+There is no separate browser-cache action or per-run browser/system-library
+installation. Each matrix job has a 20-minute timeout. Dependency caches and
+bundled binaries never skip tests or security scans.
 Only the external provider response is synthetic; the summary handler, utility
 executor, API adapter and SQLite records are real. Browser emulation does not
 claim native Telegram Android/iOS acceptance. See

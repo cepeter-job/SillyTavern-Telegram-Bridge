@@ -32,12 +32,12 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from bridge.database_backup import create_database_backup
-from bridge.deployment_payload import APPLICATION, MARKER
+from bridge.deployment_payload import APPLICATION, CANONICAL_REPOSITORY, MARKER
 from bridge.deployment_payload import live_matches_release as _live_matches_release
 from bridge.deployment_payload import prepare_payload as _prepare_payload
 from bridge.subprocess_security import minimal_subprocess_environment
 
-CANONICAL_GIT_URL = f"https://github.com/{APPLICATION}.git"
+CANONICAL_GIT_URL = f"https://github.com/{CANONICAL_REPOSITORY}.git"
 _VERSION = re.compile(r"[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}\Z")
 _UNIT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.@:-]{0,120}\.service\Z")
 _MAX_ARCHIVE_BYTES = 128 * 1024 * 1024

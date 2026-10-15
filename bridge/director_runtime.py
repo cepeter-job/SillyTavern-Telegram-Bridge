@@ -40,11 +40,8 @@ _ENDING = frozenset({"resolution_committed", "epilogue_pending", "epilogue_commi
 
 def _due(db: sqlite3.Connection, chat_id: str, session_id: str, event: str) -> bool:
     clock = load_narrative_clock(db, chat_id, session_id)
-    if (
-        not narrative_clock_is_current(clock)
-        or clock is None
-        or director_ending_lifecycle(db, chat_id, session_id) in _ENDING
-    ):
+    ending_lifecycle = director_ending_lifecycle(db, chat_id, session_id)
+    if not narrative_clock_is_current(clock) or clock is None or ending_lifecycle in _ENDING:
         return False
     state = load_narrative_state(db, chat_id, session_id)
     if not state.active_scene_id:
@@ -82,6 +79,7 @@ def _due(db: sqlite3.Connection, chat_id: str, session_id: str, event: str) -> b
         now=time.time(),
         event=event,
         event_key=key,
+        ending_lifecycle=ending_lifecycle,
     )
 
 

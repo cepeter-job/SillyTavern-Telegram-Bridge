@@ -299,7 +299,7 @@ rolls NPC state back to the applicable revision before regeneration.
 | Explicit `/check <domain> <DC> <action>` | A local d20 roll and saved receipt, with no model request. |
 | Narrative continuity | A bounded Utility reconciliation after committed replies; older or edited history can need more than one batch. |
 | Current Scene image | Utility preparation of the visual prompt, then an image-provider request. |
-| AI Director | One planning call on an event or cadence threshold, with at most one repair for malformed version-1 output. Groups reuse the accepted plan without another planning call. |
+| AI Director | One planning call on an event or cadence threshold, with at most one shared repair for malformed version-1 output, a POV-mode conflict with the selected rendering policy, or a continue proposal that conflicts with the accepted observed scene POV. Groups reuse the accepted plan without another planning call. |
 | Autonomous groups | Bounded multi-character Story replies; not another independent story planner. |
 
 Review reported counts in the Mini App's **Settings → Usage**.
@@ -583,6 +583,13 @@ scene or thread changes can trigger a check sooner. Advanced controls offer fixe
 4/6/10-turn intervals or a custom whole-number interval from 1 to 100. Ordinary
 turns below the threshold make no extra Director call.
 
+The bridge can request one shared repair for malformed version-1 output, a
+POV-mode conflict with your selected rendering policy, or a continue proposal that conflicts
+with the accepted observed scene POV. For continue, the repair requests omission of
+`pov`; any supplied POV must still match the selected policy and preserve the accepted
+observed scene POV. Every replacement must pass the same validation; a repeated
+conflict leaves the last accepted direction intact.
+
 A Director outage does not change your Narrative Style or erase a reply. The bridge
 keeps valid guidance and otherwise continues conservatively from committed state.
 Stale or malformed plans are not applied. The Mini App and Telegram controls reject
@@ -590,10 +597,12 @@ edits from an old panel rather than silently overwrite a newer decision.
 
 ## Closed Story and the epilogue
 
-Choose **Closed Story** in the Advanced step after selecting a character, or open
-**Director Room → Ending settings** for an existing story. The default remains
-Open-ended. An optional Ending Goal gives the Director a destination without
-scripting your character's decisions. Its revisions and reasons remain visible.
+New stories default to **Closed Story**. Choose **Open-ended** in the Advanced
+step after selecting a character, or open **Director Room → Ending settings**
+to change an existing story. Saved story settings and personal defaults keep
+their selected ending mode. An optional Ending Goal gives the Director a
+destination without scripting your character's decisions. Its revisions and
+reasons remain visible.
 
 A finale starts automatically when current story evidence supports it. Turn on
 **Ask before finale** to review the Director's reason and press **Begin finale**

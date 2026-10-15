@@ -137,9 +137,15 @@ deleting migration records. See [backup and restore](operations.md#database-migr
 Scene planning appears under `director`. Updating the helper record to match
 saved story messages appears under `director_reconcile`. An automatic
 reassessment runs only when an event or
-cadence requires it. A malformed version-1 proposal may get one repair request; an
-unsupported schema version is rejected without repair. Those requests remain
-visible as actual usage, not a fabricated billing amount.
+cadence requires it. A malformed version-1 Director planning proposal or one that
+conflicts with the selected POV mode may get one repair request. Both share the
+same single-repair budget; an unsupported planning schema version is rejected
+without repair.
+Those requests remain visible as actual usage, not a fabricated billing amount.
+
+Narrative reconciliation may make one additional Utility extraction call after a
+formatting, schema-shape, or explicit output-cap failure. It reuses the same
+committed source, and both calls appear under `director_reconcile` usage.
 
 Group speaker selection consumes the accepted plan locally and makes no second
 planning request. Opening Director Room, viewing its history or changing a manual

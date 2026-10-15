@@ -1,0 +1,6 @@
+{
+  "metadata_probe_only": true,
+  "error_type": "HTTPError",
+  "http_status": 403,
+  "generation_requests": 0
+}

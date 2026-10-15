@@ -92,6 +92,12 @@ class DiagnosticFormatter(logging.Formatter):
             else:
                 data["message"] = "[non-text log]"
             data["line"] = record.lineno
+        if trusted_source:
+            # Code locations make static templates useful without exposing arguments or host paths.
+            data["file"] = self.redact(Path(record.pathname).name)[:80]
+            if isinstance(record.funcName, str):
+                data["function"] = self.redact(record.funcName)[:80]
+            data["line"] = record.lineno
         details = getattr(record, "diagnostic_exception", {})
         if record.exc_info and record.exc_info[0]:
             details = exception_metadata(record.exc_info[0], record.exc_info[2])

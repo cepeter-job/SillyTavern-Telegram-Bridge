@@ -152,7 +152,10 @@ def test_branch_readiness_enqueues_complete_local_extraction_of_all_rows(session
     assert seed_alternate_ending_memory(db, "chat", session, app_settings=settings) == "ready"
     assert remote == []
     provider = make_test_provider_port(
-        generate_backend=lambda _key, _model, messages, **k: extracted.append(messages[-1]["content"]) or "[]"
+        generate_backend=lambda _key, _model, messages, **k: (
+            extracted.append(messages[-1]["content"])
+            or '{"memories":[],"no_memory_reason":"Only synthetic transient text was present."}'
+        )
     )
     for _ in range(20):
         claims = claim_jobs(db, layers=("episodes",))

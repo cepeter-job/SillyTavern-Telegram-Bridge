@@ -13,7 +13,7 @@ from bridge.memory_workers import run_memory_claim
 @pytest.mark.parametrize(
     "layer,response,root_key",
     [
-        ("episodes", '{"memories":[]}', "memories"),
+        ("episodes", '{"memories":[],"no_memory_reason":"Only quiet transient scene detail was present."}', "memories"),
         ("npc", '{"npcs":[],"simulation":{}}', "npcs"),
         ("curator", '{"memories":[]}', "memories"),
         ("scene", '{"state":{},"blocks":[]}', "state"),

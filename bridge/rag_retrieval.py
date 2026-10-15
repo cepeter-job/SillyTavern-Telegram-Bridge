@@ -9,16 +9,18 @@ from __future__ import annotations
 import heapq
 import math
 import sqlite3
-from typing import Any
+from types import ModuleType
 
 from bridge import rag_repository as repository
 
-_numpy: Any
+_numpy: ModuleType | None
 try:
-    import numpy as _numpy
+    import numpy
 except (ImportError, RuntimeError):
     # Optional wheels may require CPU instructions hidden by a VPS hypervisor.
     _numpy = None
+else:
+    _numpy = numpy
 
 
 DEFAULT_SEMANTIC_CANDIDATE_LIMIT = 384

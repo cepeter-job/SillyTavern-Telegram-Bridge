@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from functools import wraps
 from pathlib import Path
+from threading import Lock
 from types import TracebackType
 from typing import ParamSpec, TypeVar
 
@@ -22,6 +23,7 @@ _CONTEXT: ContextVar[dict[str, object] | None] = ContextVar("bridge_diagnostics"
 _IDENTITY_KEY = secrets.token_bytes(32)
 _LOG = logging.getLogger("bridge.events")
 _DROPPED = 0
+_DROPPED_LOCK = Lock()
 _NAME = re.compile(r"[a-z][a-z0-9_.]{0,79}\Z")
 _VALUE = re.compile(r"[A-Za-z0-9_./:@+\-]{1,160}\Z")
 _TEXT_FIELDS = frozenset(
@@ -56,6 +58,18 @@ _TEXT_FIELDS = frozenset(
         "transport",
         "prefix_scope",
         "section_attribution",
+        "rejection_code",
+        "npc_rejection_code",
+        "simulation_rejection_code",
+        "root_type",
+        "state_type",
+        "blocks_type",
+        "npcs_type",
+        "simulation_type",
+        "finish_reason",
+        "attempt_ref",
+        "document_ref",
+        "server_operation_ref",
     }
 )
 _NUMBER_FIELDS = frozenset(
@@ -106,6 +120,13 @@ _BOOL_FIELDS = frozenset(
         "prefix_observed",
         "non_text_payload_present",
         "full_prompt_token_count_known",
+        "state_present",
+        "blocks_present",
+        "npcs_present",
+        "simulation_present",
+        "npc_valid",
+        "simulation_valid",
+        "output_cap_reached",
     }
 )
 
@@ -199,11 +220,18 @@ def event(name: str, *, level: int = logging.INFO, exc_info: bool = False, **fie
     values["event"] = name if _NAME.fullmatch(name) else "diagnostic.invalid_event"
     try:
         details = exception_metadata(sys.exc_info()[0], sys.exc_info()[2]) if exc_info else {}
-        _LOG.log(level, values["event"], extra={"diagnostic_fields": values, "diagnostic_exception": details})
+        _LOG.log(
+            level,
+            values["event"],
+            extra={"diagnostic_fields": values, "diagnostic_exception": details},
+            stacklevel=2,
+        )
     except Exception:
         # A broken/custom handler must not fail a generation or worker.
-        _DROPPED += 1
+        with _DROPPED_LOCK:
+            _DROPPED += 1
 
 
 def diagnostic_failures() -> int:
-    return _DROPPED
+    with _DROPPED_LOCK:
+        return _DROPPED

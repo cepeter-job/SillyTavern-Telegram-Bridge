@@ -13,6 +13,7 @@ from bridge.miniapp_auth import MiniAppIdentity
 from bridge.miniapp_context import session_scope
 from bridge.miniapp_errors import MiniAppError
 from bridge.miniapp_types import ApiRoute
+from bridge.runtime_logging import logging_health
 
 _FILTER = re.compile(r"[A-Za-z0-9_./:@+\-]{1,160}\Z")
 _ALLOWED = frozenset({"session_id", "request_id", "purpose", "level", "limit"})
@@ -63,6 +64,7 @@ def _runtime_metadata(services: Any) -> dict[str, Any]:
     return {
         "deployment": deployment,
         "log_level": logging.getLevelName(logging.getLogger().getEffectiveLevel()),
+        "logging": logging_health(services.config.log_file),
         "scope": "authorized_active_session",
     }
 
@@ -83,10 +85,16 @@ def diagnostic_timeline(services: Any, who: MiniAppIdentity, values: dict[str, A
             **filters,
         )
     result["runtime"] = _runtime_metadata(services)
+    capture = result["runtime"]["logging"]
+    if not capture["file_configured"] or capture["file_failures_observed"] or capture["event_failures_observed"]:
+        # An entire attempt can disappear; matching retained starts/finishes cannot prove coverage.
+        result["usage"]["complete"] = False
+        for summary in result["usage_by_purpose"]:
+            summary["complete"] = False
     result["limitations"] = (
         "A bounded retained-log window, not a complete audit trail. "
         "Legacy free-form logs and other sessions are excluded. "
-        "Rotation, log levels, filters, unreadable files and credential rotation can omit events. "
+        "Rotation, log levels, filters, unreadable files, logging failures and credential rotation can omit events. "
         "Missing usage is unknown, not zero; reported totals include failed and fallback attempts in this window."
     )
     return result

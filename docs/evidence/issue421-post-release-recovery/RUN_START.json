@@ -1,0 +1,6 @@
+{
+  "started_at_utc": "2026-10-10T15:15:29.772657+00:00",
+  "plan_sha256": "0bced88e5d1405d78b4deca3009bee203addc952239a46662a99ed890d406fe4",
+  "pre_inference_commit": "6d2543f68136b7f65d2af280c87b235cb657b7bd",
+  "production_writes_allowed": false
+}

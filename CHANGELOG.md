@@ -8,6 +8,100 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+## [0.3.027] - 2026-10-15
+
+### Installer systemd hotfix
+
+- Generate an unquoted absolute `WorkingDirectory=` path in the managed user service. systemd rejects a quoted absolute path as non-absolute, so a manual `install.sh --no-start` from v0.3.026 could leave the regenerated unit unloadable. Keep existing path escaping and argument/environment quoting, including custom source paths with spaces and literal percent signs.
+- Preserve the existing signed-source deployment, Python 3.11 runtime locks and trust configuration, database schema, private settings and saved stories. No provider, model, or narrative changes.
+
+
+## [0.3.026] - 2026-10-15
+
+### Choice recovery and diagnostics
+
+- Make the choice JSON example contain exactly the requested 3 or 4 distinct entries instead of two duplicate examples.
+- Share the existing two-attempt maximum across transient provider errors, empty output, malformed choice JSON, invalid choice contracts and explicitly capped output. Re-extract from the same canonical context with fixed feedback; never replay rejected model text or regenerate the saved story.
+- Preserve content-free failure reasons, stage, attempt, count, response shape and opaque correlation references in structured runtime logs. Keep the privacy formatter's omission of arbitrary legacy arguments intact.
+- Enable the existing nonstreaming Chat Completions `json_once` truncation guard for choice-only calls. Exact counts, 1200-token allocation, timeout, lease, source/epoch guards and final validation remain enforced.
+
+### Memory and tracker reliability
+
+- Size Summary first-request allocations from retained JSON plus the complete bounded source, within 1200–4096 tokens. Scene allocations account for both state and classified blocks, within 1000–8192 tokens. These are bounded estimates, not completeness proofs; explicitly capped output still fails validation and each helper retains its single repair attempt.
+- Park autonomous memory work after the existing eight-failure limit for `output_capped` too. Explicit manual retries and Hindsight's separate retention behavior remain unchanged.
+- State the existing 5000-character individual Summary block limit in initial and repair guidance, alongside the unchanged total-text and audience limits.
+- Reject partial supporting-NPC extractions containing invalid operations or contradictory explicit audiences rather than silently discarding changes and advancing complete coverage.
+- Reject populated unsupported simulation fields at the external extraction boundary. Emit fixed, content-free reasons and targeted repair guidance for invalid types, enums, identities, bounds, relationship changes and conflicting actor operations. Empty updates, canonical-input repair and source/publication guards remain intact.
+
+### Maintenance and verification boundaries
+
+- Include the configurable curator output budget from #530 and consolidated dependency updates from #534. The runtime lock changes aiohttp from 3.14.3 to 3.14.4; use the manual signed-update procedure rather than bypassing the updater's dependency guard.
+- Pin NumPy 2.3.5 for the deployed pre-x86-64-v2 CPU: NumPy 2.4.6 fails to import on the target host. Regenerate both hash-locked Python dependency manifests and validate the pinned wheel on that CPU before deployment.
+- Production remains on Python 3.11. No new database migration, history-pruning activation, provider-route change or service-unit change is introduced by the audit fixes.
+- Regression tests establish bounded recovery and fail-closed contracts, not the cause of the historical choice failure, guaranteed model quality, elimination of every truncation, or acceptance of the live memory backlog. The structured cap guard remains scoped to the supported nonstreaming Chat Completions path; this release does not claim new streaming, Responses or Anthropic cap handling.
+
+## [0.3.025] - 2026-10-12
+
+### Story defaults and preset compatibility
+
+- Default new stories to **Closed Story** across all narrative presets. Existing saved personal defaults and session choices take precedence; the foundation migration keeps pre-Narrative stories **Open-ended**. **Ask before finale** remains off by default (#521).
+- Remove the three bundled legacy TXT examples, `balanced.txt`, `concise.txt` and `natural.txt`, from the distributed System Prompt examples. Retain the four writer JSON examples; System Prompt still defaults **Off**. Installed copies and user-owned presets are not deleted (#523).
+- Add the contributor development handbook covering isolated setup, architecture, implementation, focused testing, review and release handoff (#520).
+
+### Optimizer and Mini App recovery
+
+- Preserve raw JSON segment boundaries during optimizer continuation, including split escapes and string whitespace, while retaining request, continuation and usage accounting (#517).
+- Clarify optimizer validation and provider-unavailability failures. Keep progress evidence and suggestions when completion is uncertain, retain the shared Operations recovery path, and prevent stale views from applying late results (#518).
+- Keep the NPC search button label on one line (#519).
+
+### Structured extraction, ending admission and Director recovery
+
+- Reject explicitly capped structured tracker responses on the **nonstreaming Chat Completions `json_once`** path, even when partial JSON parses. Applicable helper paths use their existing bounded canonical-input repair; direct curator calls reject capped output before publication. Preserve audience/source guards and independently valid uncapped simulation when NPC repair fails. Capped partial output is never accepted. Clarify the simulation helper's change-only output contract and extraction-specific context (#522).
+- Allow readiness assessment during a reconciled resolution phase while the ending lifecycle remains open, and check finale admission after an accepted Telegram Director reassessment. Admission still requires the ordinary finale guards. Allow at most one additional Utility call for malformed, invalid-shape or explicitly capped narrative output, using bounded format re-extraction from the same committed transcript and accepted state, with reconciliation diagnostics and stale-source suppression (#524).
+- Distinguish narrative publication guards and Director policy rejections using precise content-free diagnostic codes, without raw proposals, story text, extracted entity identifiers or exception messages. Revision/source metadata remain logged (#525, #526).
+- Give Director POV-policy conflicts targeted feedback within the existing single repair attempt; preserve full validation and stale-state rejection (#527).
+- Distinguish future rendering policy from observed scene POV; guide continued scenes to omit conflicting optional POV and repair scene-POV conflicts within the same shared retry. Preserve the selected rendering style and the established scene observation instead of inventing a transition (#528).
+- Retain user-authorship, reference, audience, revision, source and ending-lifecycle guards. These changes do not rewrite saved settings or history or grant additional Director retries.
+
+### Verification limits and compatibility
+
+- Live verification observed a Director continue decision with empty optional POV after one shared repair, preserving the configured rendering policy and accepted scene state. The initial rejection code was not retained, so the specific repaired guard is unproven.
+- Full finale-to-epilogue-to-persisted-closure acceptance has not been demonstrated. Story output caps and separate scene/curator capped-extraction failures remain unresolved by this release.
+- The explicit-cap guard above does not establish streaming, Responses or Anthropic cap fixes. Release publication requires the exact metadata revision's protected hosted CI and CodeQL gates before signing.
+- No new database migration, schema-version change, dependency-lock change or service-unit change occurs in the v0.3.024-to-source range. New-story narrative defaults change; the historical migration implementation in `narrative_schema.py` is pinned for **Open-ended** compatibility. Production remains on Python 3.11. Install only from the independently trusted signed tag and verified versioned ZIP/checksum assets after publication.
+
+## [0.3.024] - 2026-10-11
+
+### Verified code-quality audit fixes
+
+- Use the canonical `cepeter-job` repository for release discovery and signed self-update fetches; align current installation, release and security links (#515).
+- Preserve the existing persistent deployment identity so managed installations remain recognized after the repository move (#515).
+- Handle bare and qualified rebuild calls safely in the leak scanner, with regression coverage for the previously crashing forms (#515).
+- Keep optional NumPy import typing valid when NumPy is absent, preserving the existing pure-Python vector-math fallback (#515).
+- Document logging limits, request observation and context-selection controls; keep context-selection defaults off (#515).
+- Includes the settings validation and content-free memory diagnostics recorded under 0.3.023. Production remains on Python 3.11; dependency locks, database schema, private provider configuration and history-pruning policy are unchanged.
+
+## [0.3.023] - 2026-10-11
+
+### Settings validation and content-free memory diagnostics
+
+- Share on/off setting validation for grounded-user and Humanizer preferences (#511).
+- Record content-free extraction contract rejection codes and root-shape diagnostics; provide safe compact schema guidance for the existing bounded repair (#513).
+- Record allowlisted provider finish reasons and explicit output-cap metadata, without inferring truncation from token counts (#513).
+- Correlate Hindsight retention using per-attempt and per-document opaque references; report allowlisted server operation references only when returned (#513).
+- Preserve repair/call limits and output allocations, the 90-second retain timeout, canonical source/audience/coverage guards, and ambiguous-timeout/late-write fences.
+- Python remains 3.11.16 and history pruning remains off. No migration, dependency, database-schema, routing or configuration change; no tracker recovery, historical completion matching, idempotency, cancellation or measured token-savings claim.
+
+## [0.3.022] - 2026-10-10
+
+### Memory extraction reliability
+
+- Reject supporting-NPC results with no accepted operations instead of advancing coverage. Use the existing single repair attempt; repeated invalid output remains pending (#510).
+- Require a text exclusion reason for an empty episodic result. Reject populated results with no accepted candidates, and re-check durable facts during the single bounded repair. Failed repair preserves canonical source coverage (#510).
+- Classify Hindsight retention failures with content-free upstream-response, HTTP, timeout or generic diagnostics. Existing retry/backoff and provider routes remain unchanged (#510).
+- Align synthetic episodic providers with the explicit-empty contract and preserve the frozen post-release findings. Upstream Hindsight recovery and the issue #421 efficiency/quality goals remain unverified.
+- No dependency-lock or database-schema change. Production history pruning remains off; install from the trusted signed release and verify the running revision after restart.
+
 ## [0.3.021] - 2026-10-10
 
 ### Conversation setup and helper reliability

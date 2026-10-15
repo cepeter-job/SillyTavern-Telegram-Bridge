@@ -27,7 +27,7 @@ async function renderCharacters({signal}={}) {
     let context=sessionContext(session),locked=false;
     const view={
       session,body:scope.body,status,portraits,
-      active:()=>currentView===view&&!locked,
+      active:()=>currentView===view&&!locked&&!signal?.aborted,
       lock() {locked=true;for(const control of controls) {control.setAttribute('aria-disabled','true');control.disabled=true;}},
       control(label,action,kind='') {
         const control=button(label,()=>{if(view.active())return action();},kind);controls.push(control);return control;
@@ -61,7 +61,7 @@ async function renderCharacters({signal}={}) {
   async function load() {
     const generation=++readGeneration;
     const data=await api('/characters?q='+enc(query)+'&offset='+offset);
-    if(generation!==readGeneration)return;
+    if(generation!==readGeneration||signal?.aborted)return;
     const view=createView(data.session),sessionBody=view.body;
     const search=el('input',{type:'search',value:query,placeholder:'Search characters',maxlength:120,'aria-label':'Search characters'});
     const searchButton=view.control('Search',async()=>{query=search.value;offset=0;await load();},'secondary icon-button');searchButton.replaceChildren(icon('search'));searchButton.setAttribute('aria-label','Search characters');
@@ -83,7 +83,7 @@ async function renderCharacters({signal}={}) {
     });
     async function restoreBackups() {
       const generation=++readGeneration,data=await api('/character-backups');
-      if(generation!==readGeneration)return;
+      if(generation!==readGeneration||signal?.aborted)return;
       const backupsView=createView(data.session),backupBody=backupsView.body;
       const content=card('Restore character backups',backupsView.control('Back to characters',load,'secondary'));
       if(!data.backups.length)content.append(empty('No verified character backups are available yet.'));
@@ -136,7 +136,7 @@ async function renderCharacters({signal}={}) {
   }
   async function details(item,session) {
     const generation=++readGeneration,info=await api('/characters/'+enc(item.filename));
-    if(generation!==readGeneration)return;
+    if(generation!==readGeneration||signal?.aborted)return;
     const view=createView(session);
     const entries=Object.entries(info.fields).map(([key,value])=>
       el('details',{},el('summary',{},key.replaceAll('_',' ')),
@@ -165,9 +165,9 @@ async function renderCharacters({signal}={}) {
       status.replaceChildren();back.disabled=true;
       try {
         const result=await runJob('/characters/'+enc(item.filename)+'/optimize',sessionBody({digest:item.digest,suggestion:guidance.value}),progress);
-        await preview(result,view.session);
+        if(view.active())await preview(result,view.session);
       } catch(error) {
-        progress.replaceChildren();
+        if(!view.active())return;
         uncertain=error.uncertain===true;
         const recovery=uncertain
           ? ' Your suggestion is kept. Open Operations to check the result before requesting another preview.'
@@ -175,7 +175,6 @@ async function renderCharacters({signal}={}) {
         status.replaceChildren(feedback((error.message||'Could not generate the preview.')+recovery));
         if(uncertain) {
           generate.setAttribute('aria-disabled','true');
-          status.append(button('Open operations',()=>navigate('system'),'secondary'));
         } else if(error.status===409)status.append(button('Refresh and review',load,'secondary'));
       } finally {back.disabled=back.getAttribute('aria-disabled')==='true';}
     });

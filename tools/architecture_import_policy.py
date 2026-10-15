@@ -131,6 +131,9 @@ LOW_LEVEL_IMPORTS = {
             "bridge.light_novel_format",
             "bridge.light_novel_repository",
             "bridge.model_selection",
+            # Content-free diagnostics and completion types; no transport or application root.
+            "bridge.diagnostic_events",
+            "bridge.provider_completion",
             "bridge.provider_errors",
             "bridge.provider_port",
             "bridge.settings",
@@ -148,7 +151,8 @@ LOW_LEVEL_IMPORTS = {
         ]
     ),
     "bridge.humanize": frozenset(["bridge.config", "bridge.provider_port"]),
-    "bridge.humanizer_settings": frozenset(["bridge.metadata"]),
+    "bridge.boolean_settings": frozenset(),
+    "bridge.humanizer_settings": frozenset(["bridge.boolean_settings", "bridge.metadata"]),
     "bridge.character_quality": frozenset(
         [
             "bridge.limits",

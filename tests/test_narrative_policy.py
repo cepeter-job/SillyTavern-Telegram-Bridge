@@ -3,8 +3,10 @@
 import json
 import sqlite3
 from contextlib import closing
+from dataclasses import replace
 
 import pytest
+from test_memory_completion_safety import session_db as session_db
 
 from bridge.migrations import run_migrations
 from bridge.narrative_values import NarrativeSettings, NarrativeState
@@ -15,13 +17,15 @@ from bridge.schema import SCHEMA_MIGRATIONS
 def db():
     with closing(sqlite3.connect(":memory:")) as connection:
         connection.execute("PRAGMA foreign_keys=ON")
-        run_migrations(connection, tuple(m for m in SCHEMA_MIGRATIONS if m.version < 10))
+        run_migrations(connection, SCHEMA_MIGRATIONS)
         connection.execute(
             "INSERT INTO sessions(chat_id,session_id,title,character_file,model_id,persona_id,world_file,"
             "created_at,updated_at) VALUES('chat','story','Story','','model','','',1,1)"
         )
         connection.commit()
-        run_migrations(connection, SCHEMA_MIGRATIONS)
+        from bridge.narrative_settings import initialize_session_narrative_settings
+
+        initialize_session_narrative_settings(connection, "chat", "story")
         connection.commit()
         yield connection
 
@@ -45,9 +49,46 @@ def test_presets_pin_all_effective_controls(preset, pov, role, focus, offscreen)
     assert settings.user_control == "physical_continuity"
     assert settings.director_cadence_mode == "adaptive"
     assert settings.director_fixed_interval == 6
-    assert settings.ending_mode == "open_ended"
+    assert settings.ending_mode == "closed_story"
     assert settings.require_finale_confirmation is False
     assert normalize_narrative_settings(settings.to_dict()) == settings
+
+
+def test_new_story_is_persisted_with_closed_story_default(session_db):
+    from bridge.narrative_settings import load_session_narrative_settings
+
+    _, connection, _ = session_db
+    settings = load_session_narrative_settings(connection, "chat", "s1")
+    assert settings.ending_mode == "closed_story"
+    assert settings.require_finale_confirmation is False
+    stored = json.loads(
+        connection.execute(
+            "SELECT settings_json FROM narrative_settings WHERE chat_id='chat' AND session_id='s1'"
+        ).fetchone()[0]
+    )
+    assert stored["ending_mode"] == "closed_story"
+
+
+@pytest.mark.parametrize("confirmation", [False, True])
+def test_saved_open_ended_choices_survive_default_initialization(db, confirmation):
+    from bridge.narrative_settings import (
+        initialize_session_narrative_settings,
+        load_session_narrative_settings,
+        load_user_narrative_default,
+        save_session_narrative_settings,
+        save_user_narrative_default,
+    )
+
+    saved = replace(
+        NarrativeSettings(), preset="custom", ending_mode="open_ended", require_finale_confirmation=confirmation
+    )
+    save_session_narrative_settings(db, "chat", "story", saved)
+    save_user_narrative_default(db, "owner", saved)
+    before = db.total_changes
+    initialize_session_narrative_settings(db, "chat", "story")
+    assert load_session_narrative_settings(db, "chat", "story") == saved
+    assert load_user_narrative_default(db, "owner") == saved
+    assert db.total_changes == before
 
 
 def test_advanced_override_is_custom_and_reselecting_preset_restores_defaults():

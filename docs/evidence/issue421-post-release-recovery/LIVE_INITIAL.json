@@ -1,0 +1,201 @@
+{
+  "captured_at": 1791644793.5722468,
+  "jobs": [
+    {
+      "layer": "curator",
+      "total": 3,
+      "pending": 1,
+      "due": 1,
+      "active_leases": 1,
+      "max_attempts": 2,
+      "oldest_pending": 1791644542.05101
+    },
+    {
+      "layer": "episodes",
+      "total": 3,
+      "pending": 0,
+      "due": 0,
+      "active_leases": 0,
+      "max_attempts": 0,
+      "oldest_pending": null
+    },
+    {
+      "layer": "hindsight",
+      "total": 3,
+      "pending": 1,
+      "due": 1,
+      "active_leases": 0,
+      "max_attempts": 1,
+      "oldest_pending": 1791603724.7799888
+    },
+    {
+      "layer": "npc",
+      "total": 3,
+      "pending": 3,
+      "due": 3,
+      "active_leases": 0,
+      "max_attempts": 315,
+      "oldest_pending": 1791592051.9419954
+    },
+    {
+      "layer": "scene",
+      "total": 3,
+      "pending": 3,
+      "due": 3,
+      "active_leases": 0,
+      "max_attempts": 313,
+      "oldest_pending": 1791456608.6920156
+    },
+    {
+      "layer": "summary",
+      "total": 3,
+      "pending": 1,
+      "due": 1,
+      "active_leases": 0,
+      "max_attempts": 8,
+      "oldest_pending": 1791532886.8019967
+    }
+  ],
+  "pending_errors": [
+    {
+      "layer": "curator",
+      "last_error": "work_failed",
+      "count": 1
+    },
+    {
+      "layer": "hindsight",
+      "last_error": "retain_failed",
+      "count": 1
+    },
+    {
+      "layer": "npc",
+      "last_error": "invalid_npc_output",
+      "count": 2
+    },
+    {
+      "layer": "npc",
+      "last_error": "work_failed",
+      "count": 1
+    },
+    {
+      "layer": "scene",
+      "last_error": "invalid_shape",
+      "count": 1
+    },
+    {
+      "layer": "scene",
+      "last_error": "malformed_json",
+      "count": 1
+    },
+    {
+      "layer": "scene",
+      "last_error": "work_failed",
+      "count": 1
+    },
+    {
+      "layer": "summary",
+      "last_error": "malformed_json",
+      "count": 1
+    }
+  ],
+  "layers": [
+    {
+      "layer": "curator",
+      "count": 3,
+      "min_covered": 185,
+      "max_covered": 1299,
+      "invalidated": null
+    },
+    {
+      "layer": "episodes",
+      "count": 3,
+      "min_covered": 185,
+      "max_covered": 1303,
+      "invalidated": null
+    },
+    {
+      "layer": "hindsight",
+      "count": 4,
+      "min_covered": 0,
+      "max_covered": 1225,
+      "invalidated": null
+    },
+    {
+      "layer": "npc",
+      "count": 3,
+      "min_covered": 49,
+      "max_covered": 1260,
+      "invalidated": 1
+    },
+    {
+      "layer": "scene",
+      "count": 3,
+      "min_covered": 0,
+      "max_covered": 1262,
+      "invalidated": 2
+    },
+    {
+      "layer": "summary",
+      "count": 3,
+      "min_covered": 185,
+      "max_covered": 1303,
+      "invalidated": null
+    }
+  ],
+  "external_retired": [
+    {
+      "deleted": 0,
+      "count": 604,
+      "max_attempts": 1041,
+      "due": 0
+    },
+    {
+      "deleted": 1,
+      "count": 310,
+      "max_attempts": 7,
+      "due": 310
+    }
+  ],
+  "archival": [
+    {
+      "kind": "native_fact",
+      "finished": 0,
+      "count": 1139
+    },
+    {
+      "kind": "raw",
+      "finished": 0,
+      "count": 19
+    }
+  ],
+  "fact_index": [
+    {
+      "state": "pending",
+      "last_error": "",
+      "count": 18
+    },
+    {
+      "state": "pending",
+      "last_error": "retain_failed",
+      "count": 1
+    },
+    {
+      "state": "retained",
+      "last_error": "",
+      "count": 34
+    },
+    {
+      "state": "retired",
+      "last_error": "",
+      "count": 881
+    },
+    {
+      "state": "retired",
+      "last_error": "retain_failed",
+      "count": 6
+    }
+  ],
+  "other_tables": [
+    "token_usage_events"
+  ]
+}

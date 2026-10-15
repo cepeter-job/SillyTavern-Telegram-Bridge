@@ -10,7 +10,8 @@ from settings_test_support import make_test_settings
 from bridge import codex_transport, memory_backend, npc_extraction, persona_sync, provider_transport
 from bridge.application_composition import initialize_extensions
 from bridge.extension_registry import extension_registry_snapshot
-from bridge.npc_extraction import _parse_payload, refresh_npc_state_now
+from bridge.npc_extraction import refresh_npc_state_now
+from bridge.npc_extraction_format import parse_npc_payload
 from bridge.npc_repository import get_npc_extraction_coverage, set_npc_extraction_coverage
 from bridge.schema import initialize_database_schema
 from bridge.sqlite_store import write_transaction
@@ -100,7 +101,7 @@ def _payload(
     )
 
 
-def test_parser_accepts_valid_groups_and_rejects_invalid_identity_and_secret_scope():
+def test_parser_rejects_partial_secret_scope_and_preserves_identity_exclusions():
     raw = """
     {"npcs":[
       {"name":"Maya Torres","aliases":["Maya","Alice","User"],"operations":[
@@ -115,17 +116,59 @@ def test_parser_accepts_valid_groups_and_rejects_invalid_identity_and_secret_sco
       ]}
     ]}
     """
-    groups = _parse_payload(raw, primary_name="Alice", user_name="User")[0]
-    assert len(groups) == 1
+    assert parse_npc_payload(raw, primary_name="Alice", user_name="User") == ([], False)
+    payload = json.loads(raw)
+    payload["npcs"][0]["operations"].pop()
+    groups, valid = parse_npc_payload(json.dumps(payload), primary_name="Alice", user_name="User")
+    assert valid and len(groups) == 1
     assert groups[0].name == "Maya Torres"
     assert groups[0].aliases == ("Maya",)
     assert [op.field_key for op in groups[0].operations] == ["role"]
 
 
+def test_parser_rejects_populated_supporting_npc_when_every_operation_is_invalid():
+    raw = _payload(name="Maya", field="role", value="Archivist", mode="public")
+    groups, valid = parse_npc_payload(raw, primary_name="Alice", user_name="User")
+    assert groups == []
+    assert valid is False
+
+
+def test_parser_accepts_explicit_empty_or_blocked_only_npc_results():
+    assert parse_npc_payload('{"npcs":[]}', primary_name="Alice", user_name="User") == ([], True)
+    blocked = _payload(name="Alice", field="role", value="Hero")
+    assert parse_npc_payload(blocked, primary_name="Alice", user_name="User") == ([], True)
+
+
 def test_parser_returns_empty_for_malformed_or_unsupported_payload():
-    assert _parse_payload("not-json", primary_name="Alice", user_name="User")[0] == []
+    assert parse_npc_payload("not-json", primary_name="Alice", user_name="User")[0] == []
     raw = _payload(name="Maya", field="unsupported", value="x")
-    assert _parse_payload(raw, primary_name="Alice", user_name="User")[0] == []
+    assert parse_npc_payload(raw, primary_name="Alice", user_name="User")[0] == []
+
+
+def test_all_invalid_supporting_operations_repair_once_without_advancing_coverage(synthetic_settings):
+    db = _db()
+    _messages(db)
+    calls = []
+
+    def generate(*_args, **_kwargs):
+        calls.append(1)
+        return _payload(name="Maya", field="role", value="Archivist", mode="public")
+
+    try:
+        applied = refresh_npc_state_now(
+            db,
+            "chat",
+            _session(),
+            _fields(),
+            provider_port=make_test_provider_port(generate_backend=generate),
+            app_settings=synthetic_settings,
+        )
+        assert applied == 0
+        assert len(calls) == 2
+        assert get_npc_extraction_coverage(db, "chat", "s1") == 0
+        assert find_test_npc(db, "chat", "s1", "maya") is None
+    finally:
+        db.close()
 
 
 def test_refresh_extracts_once_and_advances_coverage(synthetic_settings):

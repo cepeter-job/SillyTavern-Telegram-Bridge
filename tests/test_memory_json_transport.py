@@ -11,6 +11,7 @@ import bridge.provider_transport as transport
 from bridge.memory_artifact_store import parse_classified_response
 from bridge.memory_response import generate_memory_response
 from bridge.model_router import ModelRoute
+from bridge.provider_completion import StructuredOutputCapped
 from bridge.provider_port import ProviderPort
 
 
@@ -84,13 +85,33 @@ def test_memory_json_length_response_reextracts_from_canonical_input_without_dia
     assert sent[0]["max_tokens"] == sent[1]["max_tokens"] == 1200
 
 
-def test_memory_json_empty_length_response_fails_once_without_transport_retry(tmp_path, monkeypatch):
+@pytest.mark.parametrize("content", [None, ""])
+def test_memory_json_empty_length_response_signals_cap_once_without_transport_retry(tmp_path, monkeypatch, content):
     port, sent = routed_provider(
         tmp_path,
         monkeypatch,
-        [{"choices": [{"message": {"content": ""}, "finish_reason": "length"}]}],
+        [{"choices": [{"message": {"content": content}, "finish_reason": "length"}]}],
     )
-    with pytest.raises(RuntimeError):
+    with pytest.raises(StructuredOutputCapped) as error:
+        port.generate(
+            "",
+            "openrouter::test/model",
+            [{"role": "user", "content": "Canon"}],
+            session_id="synthetic",
+            settings={"max_tokens": 1200, "json_once": True},
+            force_non_stream=True,
+        )
+    assert error.value.output == ""
+    assert len(sent) == 1
+    assert sent[0]["max_tokens"] == 1200 and sent[0]["stream"] is False
+
+
+@pytest.mark.parametrize("reason", ["stop", "SYNTHETIC_UNKNOWN_REASON"])
+def test_empty_json_without_explicit_cap_remains_a_provider_failure(tmp_path, monkeypatch, reason):
+    port, sent = routed_provider(
+        tmp_path, monkeypatch, [{"choices": [{"message": {"content": None}, "finish_reason": reason}]}]
+    )
+    with pytest.raises(RuntimeError, match="backend returned no assistant content"):
         generate_memory_response(
             port.generate,
             "",
@@ -100,7 +121,7 @@ def test_memory_json_empty_length_response_fails_once_without_transport_retry(tm
             session_id="synthetic",
             settings={"max_tokens": 1200},
         )
-    assert len(sent) == 1
+    assert len(sent) == 1 and sent[0]["max_tokens"] == 1200
 
 
 def test_adaptive_summary_output_budget_never_reduces_or_exceeds_bounded_allocation():

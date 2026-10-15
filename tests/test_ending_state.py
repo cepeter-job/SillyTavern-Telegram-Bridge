@@ -1,6 +1,6 @@
 """Ending goals and readiness are durable, revision-bound and never model-authored facts."""
 
-from dataclasses import asdict
+from dataclasses import asdict, replace
 
 import pytest
 from test_memory_completion_safety import session_db as session_db
@@ -208,7 +208,9 @@ def test_finale_readiness_cannot_guess_from_ineligible_state(session_db, change)
     if change == "stale":
         add_story(db)
     elif change == "open_mode":
-        save_session_narrative_settings(db, "chat", "s1", preset_narrative_settings("world_driven"))
+        save_session_narrative_settings(
+            db, "chat", "s1", replace(preset_narrative_settings("world_driven"), ending_mode="open_ended")
+        )
     elif change == "early_phase":
         with write_transaction(db):
             db.execute("UPDATE narrative_state SET story_phase='setup'")

@@ -373,7 +373,7 @@ test('an optimizer failure preserves the suggestion and original story while rep
   assert.match(page.document.querySelector('[role="alert"]').textContent,/provider could not generate/);
 });
 
-test('an uncertain optimization keeps the suggestion but locks repeat submission and opens Operations',async t=>{
+test('an uncertain optimization keeps the suggestion but locks repeat submission',async t=>{
   let requests=0;
   const page=await renderOptimizer({runJob:async(path,body,target)=>{
     requests++;target.replaceChildren(target.ownerDocument.createTextNode('Working…'));
@@ -384,6 +384,6 @@ test('an uncertain optimization keeps the suggestion but locks repeat submission
   await until(()=>generate.getAttribute('aria-busy')!=='true','uncertain preview reported');
   assert.equal(labelled(page.document,'Manual suggestion').value,'Preserve the setting.');
   assert.equal(generate.getAttribute('aria-disabled'),'true');
-  generate.click();assert.equal(requests,1);
-  await press(page.document,'Open operations');assert.deepEqual(page.navigations,['system']);
+  generate.click();generate.dispatchEvent(new page.window.Event('click'));assert.equal(requests,1);
+  // Shared Operations navigation is exercised with the real app in optimizer-recovery.test.mjs.
 });

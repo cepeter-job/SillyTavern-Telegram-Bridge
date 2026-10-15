@@ -14,10 +14,12 @@ from bridge.card_content import build_world_info, replace_macros
 from bridge.closed_session_guard import guard_story_mutation, story_mutation_message
 from bridge.context_compaction import budget_chat_messages
 from bridge.conversation_lifecycle import conversation_state
+from bridge.diagnostic_events import event, scope_reference
 from bridge.job_store import enqueue_job
 from bridge.light_novel_format import (
     CHOICE_MATURITY_POLICY,
     CHOICE_MOTIVE_POLICY,
+    light_novel_response_shape,
     parse_choice_response,
     validate_choices,
 )
@@ -34,6 +36,7 @@ from bridge.light_novel_repository import (
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.narrative_context import narrative_context_for_session
 from bridge.persona_service import PersonaService
+from bridge.provider_completion import StructuredOutputCapped
 from bridge.provider_errors import ProviderRequestError
 from bridge.provider_port import ProviderPort
 from bridge.settings import AppSettings
@@ -61,7 +64,7 @@ def _choice_http_status(exc: BaseException) -> int | None:
 
 
 def _retryable_choice_provider_error(exc: BaseException) -> bool:
-    if isinstance(exc, _EmptyChoiceResponse):
+    if isinstance(exc, (_EmptyChoiceResponse, StructuredOutputCapped)):
         return True
     if isinstance(exc, ProviderRequestError):
         return exc.category in {"rate_limit", "timeout", "provider_unavailable", "network"}
@@ -72,6 +75,8 @@ def _retryable_choice_provider_error(exc: BaseException) -> bool:
 
 
 def _choice_failure_reason(exc: BaseException, stage: str) -> str:
+    if isinstance(exc, StructuredOutputCapped):
+        return "output_capped"
     if stage == "parse":
         if isinstance(exc, json.JSONDecodeError):
             return "invalid_json"
@@ -109,20 +114,28 @@ def _log_choice_failure(
     started_at: float,
     *,
     retrying: bool,
+    attempt: int = 0,
+    response_shape: str | None = None,
 ) -> None:
-    # Never log prompts, story/model output, provider URLs, credentials, or arbitrary exception text.
-    logging.warning(
-        "Light Novel choices unavailable: stage=%s strategy=%s model=%s requested_count=%s "
-        "elapsed_ms=%s error_type=%s http_status=%s reason=%s retrying=%s",
-        stage,
-        record.strategy,
-        model,
-        record.requested_count,
-        max(0, int((time.monotonic() - started_at) * 1000)),
-        type(exc).__name__,
-        _choice_http_status(exc),
-        _choice_failure_reason(exc, stage),
-        retrying,
+    # Legacy log arguments are intentionally discarded by the privacy formatter.
+    event(
+        "light_novel.choice_failed",
+        level=logging.WARNING,
+        purpose="choices",
+        chat_id=record.chat_id,
+        session_id=record.session_id,
+        attempt_ref=scope_reference("choices", record.nonce),
+        model_ref=scope_reference("model", model),
+        phase=stage,
+        kind=record.strategy,
+        count=record.requested_count,
+        attempt=attempt,
+        elapsed_ms=max(0, int((time.monotonic() - started_at) * 1000)),
+        error_type=type(exc).__name__,
+        http_status=_choice_http_status(exc),
+        reason=_choice_failure_reason(exc, stage),
+        retryable=retrying,
+        root_type=response_shape,
     )
 
 
@@ -340,6 +353,7 @@ def ensure_choices(
             npc_context_for_prompt=npc_context_for_prompt,
         )
         grounding = _GROUNDED_CHOICE_POLICY if str(session.get("grounded_user") or "").casefold() == "on" else ""
+        example = json.dumps({"choices": [f"action {index + 1}" for index in range(record.requested_count)]})
         messages = [
             {
                 "role": "system",
@@ -347,7 +361,7 @@ def ensure_choices(
                     f"Generate exactly {record.requested_count} distinct next choices suited to the current scene. "
                     "Follow the Narrative choice policy: in-world user actions require the user's presence; "
                     "off-screen scenes use narrative steering of threads, focus, or scene transitions. "
-                    'Return only JSON: {"choices":["action", "action"]}. Each action must be 1–160 characters. '
+                    f"Return only JSON: {example}. Each action must be 1–160 characters. "
                     "For an in-world user action, use the user persona, not the assistant character. "
                     "Do not continue or rewrite the story, "
                     "reveal future outcomes, repeat equivalent actions, or generate bot commands. "
@@ -368,37 +382,69 @@ def ensure_choices(
     except Exception as exc:
         _log_choice_failure(record, model, "prepare", exc, started_at, retrying=False)
     else:
-        raw = None
+        repair_reason = None
         for attempt in range(_CHOICE_PROVIDER_ATTEMPTS):
+            latest = load_choice_set(db, nonce)
+            if latest is None or current_choice_story(db, latest) is None:
+                break
+            raw = None
+            stage = "prepare"
             try:
+                request_messages = messages
+                if repair_reason is not None:
+                    # Retry from canonical context, never replay rejected model text.
+                    request_messages = [
+                        {
+                            **messages[0],
+                            "content": str(messages[0]["content"])
+                            + "\n\nThe previous choice response was rejected ("
+                            + repair_reason
+                            + "). Re-extract a complete, concise JSON choice set from the same context. "
+                            "Obey the exact count, distinctness, type and length requirements above.",
+                        },
+                        *messages[1:],
+                    ]
+                    request_messages, _ = budget_chat_messages(request_messages, model, 1200, app_settings=app_settings)
+                stage = "provider"
                 raw = provider_port.for_usage(record.chat_id, record.session_id, "choices").generate(
                     app_settings.api_key,
                     model,
-                    messages,
+                    request_messages,
                     session_id=f"lightnovel:{record.session_id}:{nonce}",
                     settings={
                         "max_tokens": 1200,
                         "temperature": 0.7,
                         "reasoning_budget": choice_reasoning,
                         "stop_sequences": "",
+                        "json_once": True,
                     },
                     force_non_stream=True,
                     request_timeout=_CHOICE_REQUEST_TIMEOUT_SECONDS,
                 )
                 if not raw.strip():
                     raise _EmptyChoiceResponse()
+                stage = "parse"
+                choices = parse_choice_response(raw, record.requested_count)
                 break
             except Exception as exc:
-                will_retry = attempt + 1 < _CHOICE_PROVIDER_ATTEMPTS and _retryable_choice_provider_error(exc)
-                _log_choice_failure(record, model, "provider", exc, started_at, retrying=will_retry)
-                raw = None
+                invalid_output = stage == "parse" and isinstance(exc, ValueError)
+                will_retry = attempt + 1 < _CHOICE_PROVIDER_ATTEMPTS and (
+                    invalid_output or _retryable_choice_provider_error(exc)
+                )
+                _log_choice_failure(
+                    record,
+                    model,
+                    stage,
+                    exc,
+                    started_at,
+                    retrying=will_retry,
+                    attempt=attempt + 1,
+                    response_shape=light_novel_response_shape(raw) if stage == "parse" else None,
+                )
                 if not will_retry:
                     break
-        if raw is not None:
-            try:
-                choices = parse_choice_response(raw, record.requested_count)
-            except Exception as exc:
-                _log_choice_failure(record, model, "parse", exc, started_at, retrying=False)
+                if invalid_output or isinstance(exc, StructuredOutputCapped):
+                    repair_reason = _choice_failure_reason(exc, stage)
     with write_transaction(db):
         latest = load_choice_set(db, nonce)
         if latest and current_choice_story(db, latest) is not None:

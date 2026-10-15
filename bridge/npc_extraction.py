@@ -85,11 +85,17 @@ def _parse_payload(
     groups: list[NpcExtractionGroup] = []
     supporting_candidate_seen = False
     invalid_mode_seen = False
+    invalid_operations_seen = len(groups_raw) > _limits.NPC_EXTRACTION_MAX_GROUPS
+    invalid_audience_seen = False
     for item in groups_raw[: _limits.NPC_EXTRACTION_MAX_GROUPS]:
         if not isinstance(item, dict):
+            invalid_operations_seen = True
             continue
         name = " ".join(str(item.get("name") or "").split()).strip()[: _limits.NPC_NAME_MAX_CHARS]
-        if not name or normalize_npc_name(name) in blocked:
+        if not name:
+            invalid_operations_seen = True
+            continue
+        if normalize_npc_name(name) in blocked:
             continue
         supporting_candidate_seen = True
         aliases_raw = item.get("aliases") or []
@@ -105,10 +111,14 @@ def _parse_payload(
 
         operations_raw = item.get("operations")
         if not isinstance(operations_raw, list):
+            invalid_operations_seen = True
             continue
+        if not operations_raw or len(operations_raw) > _limits.NPC_EXTRACTION_MAX_OPERATIONS_PER_GROUP:
+            invalid_operations_seen = True
         operations: list[NpcOperation] = []
         for raw_op in operations_raw[: _limits.NPC_EXTRACTION_MAX_OPERATIONS_PER_GROUP]:
             if not isinstance(raw_op, dict):
+                invalid_operations_seen = True
                 continue
             field = str(raw_op.get("field") or "").strip().casefold()
             operation = str(raw_op.get("op") or "").strip().casefold()
@@ -119,21 +129,31 @@ def _parse_payload(
                 if visibility_raw is None and field == "secrets"
                 else str(visibility_raw or "shared").strip().casefold()
             )
-            known_by_raw = raw_op.get("known_by") or []
-            known_by = (
-                tuple(
-                    " ".join(str(value or "").split()).strip()[: _limits.NPC_NAME_MAX_CHARS]
-                    for value in known_by_raw[: _limits.NPC_MAX_ALIASES]
-                )
-                if isinstance(known_by_raw, list)
-                else ()
+            known_by_raw = raw_op.get("known_by", [])
+            audience_invalid = (
+                ("visibility" in raw_op and not isinstance(visibility_raw, str))
+                or visibility not in {"shared", "restricted"}
+                or not isinstance(known_by_raw, list)
+                or len(known_by_raw) > _limits.NPC_MAX_ALIASES
+                or any(not isinstance(knower, str) or not knower.strip() for knower in known_by_raw)
+                or (visibility == "shared" and bool(known_by_raw))
+                or (visibility == "restricted" and not known_by_raw)
+                or (field == "secrets" and visibility != "restricted")
             )
+            if audience_invalid:
+                invalid_audience_seen = True
+                continue
+            known_by = tuple(" ".join(value.split()).strip()[: _limits.NPC_NAME_MAX_CHARS] for value in known_by_raw)
             value = raw_op.get("value")
             if isinstance(value, str):
                 value = value[: _limits.NPC_FIELD_VALUE_MAX_CHARS]
-            elif isinstance(value, list):
+            elif isinstance(value, list) and all(isinstance(part, str) for part in value):
+                if field not in {"secrets", "status"} or operation != "set":
+                    invalid_operations_seen = True
+                    continue
                 value = [str(part)[: _limits.NPC_FIELD_VALUE_MAX_CHARS] for part in value[: _limits.NPC_LIST_MAX_ITEMS]]
             else:
+                invalid_operations_seen = True
                 continue
             if (expected_mode := _expected_mode(field)) is not None and mode != expected_mode:
                 invalid_mode_seen = True
@@ -144,15 +164,28 @@ def _parse_payload(
                 validated = None
             if validated is not None:
                 operations.append(validated)
+            else:
+                invalid_operations_seen = True
         if operations:
             groups.append(NpcExtractionGroup(name, tuple(aliases), tuple(operations)))
-    # A model that offered supporting-character updates but had every operation
-    # rejected did not satisfy the contract. Trigger the existing bounded repair
-    # instead of silently publishing an empty, complete extraction.
-    valid = bool(groups) or not supporting_candidate_seen
-    code = "accepted" if valid else "npc_mode_invalid" if invalid_mode_seen else "npc_operations_invalid"
+    # Never publish a partial supporting-character extraction as complete coverage.
+    valid = (
+        (bool(groups) or not supporting_candidate_seen)
+        and not invalid_operations_seen
+        and not invalid_audience_seen
+        and not invalid_mode_seen
+    )
+    code = (
+        "accepted"
+        if valid
+        else "npc_mode_invalid"
+        if invalid_mode_seen
+        else "invalid_audience"
+        if invalid_audience_seen
+        else "npc_operations_invalid"
+    )
     record_tracker_contract(raw, "npc", valid, code, diagnostics)
-    return groups, valid
+    return groups if valid else [], valid
 
 
 def _existing_state_text(

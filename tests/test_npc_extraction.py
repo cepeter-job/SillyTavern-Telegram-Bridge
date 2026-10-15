@@ -100,7 +100,7 @@ def _payload(
     )
 
 
-def test_parser_accepts_valid_groups_and_rejects_invalid_identity_and_secret_scope():
+def test_parser_rejects_partial_secret_scope_and_preserves_identity_exclusions():
     raw = """
     {"npcs":[
       {"name":"Maya Torres","aliases":["Maya","Alice","User"],"operations":[
@@ -115,8 +115,11 @@ def test_parser_accepts_valid_groups_and_rejects_invalid_identity_and_secret_sco
       ]}
     ]}
     """
-    groups = _parse_payload(raw, primary_name="Alice", user_name="User")[0]
-    assert len(groups) == 1
+    assert _parse_payload(raw, primary_name="Alice", user_name="User") == ([], False)
+    payload = json.loads(raw)
+    payload["npcs"][0]["operations"].pop()
+    groups, valid = _parse_payload(json.dumps(payload), primary_name="Alice", user_name="User")
+    assert valid and len(groups) == 1
     assert groups[0].name == "Maya Torres"
     assert groups[0].aliases == ("Maya",)
     assert [op.field_key for op in groups[0].operations] == ["role"]

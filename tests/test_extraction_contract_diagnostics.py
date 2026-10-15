@@ -69,7 +69,7 @@ def test_scene_contract_diagnostics_and_precise_canonical_repair(
         ({"simulation": {}}, "npc_root_missing", "accepted", False, True),
         ({"npcs": {}, "simulation": []}, "npc_root_type", "simulation_root_type", False, False),
         ({"npcs": []}, "accepted", "simulation_root_missing", True, False),
-        ({"npcs": [], "simulation": {"actor": []}}, "accepted", "simulation_invalid", True, False),
+        ({"npcs": [], "simulation": {"actor": []}}, "accepted", "simulation_type_invalid", True, False),
         (
             {
                 "npcs": [

@@ -8,6 +8,14 @@ from bridge.provider_port import ProviderPort
 from bridge.sqlite_store import write_transaction
 
 
+def choice_failures(caplog):
+    return [
+        record.diagnostic_fields
+        for record in caplog.records
+        if getattr(record, "diagnostic_fields", {}).get("event") == "light_novel.choice_failed"
+    ]
+
+
 def started(db):
     from bridge.conversation_lifecycle import configure_conversation, conversation_state, mark_started
 
@@ -400,10 +408,11 @@ def test_choice_generation_retries_transient_timeout_once(novel_db, caplog):
     assert result.generation_status == "ready"
     assert result.choices == ("Go inside", "Wait outside", "Look around")
     assert calls == [60, 60]
-    assert "stage=provider" in caplog.text
-    assert "error_type=ProviderRequestError" in caplog.text
-    assert "reason=timeout" in caplog.text
-    assert "retrying" in caplog.text
+    failure = choice_failures(caplog)[0]
+    assert failure["phase"] == "provider"
+    assert failure["error_type"] == "ProviderRequestError"
+    assert failure["reason"] == "timeout"
+    assert failure["retryable"] is True
 
 
 def test_choice_generation_retries_empty_response_once(novel_db):
@@ -456,12 +465,13 @@ def test_choice_generation_retries_transient_http_status_and_hides_url(novel_db,
 
     assert result.generation_status == "ready"
     assert calls == [60, 60]
-    assert "http_status=503" in caplog.text
-    assert "reason=provider_unavailable" in caplog.text
+    failure = choice_failures(caplog)[0]
+    assert failure["http_status"] == 503
+    assert failure["reason"] == "provider_unavailable"
     assert "PRIVATE_PROVIDER_URL" not in caplog.text
 
 
-def test_choice_generation_does_not_retry_parse_failure_and_logs_safely(novel_db, caplog):
+def test_choice_generation_retries_parse_failure_once_and_logs_safely(novel_db, caplog):
     from bridge.light_novel_service import attach_turn, ensure_choices, prepare_turn
 
     db, session, settings = novel_db
@@ -482,11 +492,13 @@ def test_choice_generation_does_not_retry_parse_failure_and_logs_safely(novel_db
         )
 
     assert result.generation_status == "failed"
-    assert calls == [60]
-    assert "stage=parse" in caplog.text
-    assert "reason=invalid_json" in caplog.text
-    assert "requested_count=3" in caplog.text
-    assert "model=story::test" in caplog.text
+    assert calls == [60, 60]
+    failure = choice_failures(caplog)[-1]
+    assert failure["phase"] == "parse"
+    assert failure["reason"] == "invalid_json"
+    assert failure["count"] == 3
+    assert failure["model_ref"]
+    assert failure["retryable"] is False
     assert "SECRET_STORY_TEXT" not in caplog.text
     assert "SECRET_RAW_OUTPUT" not in caplog.text
     assert settings.api_key not in caplog.text
@@ -512,9 +524,10 @@ def test_choice_generation_does_not_retry_non_transient_provider_error(novel_db,
 
     assert result.generation_status == "failed"
     assert calls == [60]
-    assert "stage=provider" in caplog.text
-    assert "error_type=RuntimeError" in caplog.text
-    assert "reason=provider_error" in caplog.text
+    failure = choice_failures(caplog)[0]
+    assert failure["phase"] == "provider"
+    assert failure["error_type"] == "RuntimeError"
+    assert failure["reason"] == "provider_error"
     assert "PRIVATE_DETAIL" not in caplog.text
 
 

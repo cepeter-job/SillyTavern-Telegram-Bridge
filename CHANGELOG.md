@@ -28,6 +28,7 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 ### Maintenance and verification boundaries
 
 - Include the configurable curator output budget from #530 and consolidated dependency updates from #534. The runtime lock changes aiohttp from 3.14.3 to 3.14.4; use the manual signed-update procedure rather than bypassing the updater's dependency guard.
+- Pin NumPy 2.3.5 for the deployed pre-x86-64-v2 CPU: NumPy 2.4.6 fails to import on the target host. Regenerate both hash-locked Python dependency manifests and validate the pinned wheel on that CPU before deployment.
 - Production remains on Python 3.11. No new database migration, history-pruning activation, provider-route change or service-unit change is introduced by the audit fixes.
 - Regression tests establish bounded recovery and fail-closed contracts, not the cause of the historical choice failure, guaranteed model quality, elimination of every truncation, or acceptance of the live memory backlog. The structured cap guard remains scoped to the supported nonstreaming Chat Completions path; this release does not claim new streaming, Responses or Anthropic cap handling.
 

@@ -439,7 +439,7 @@ def ensure_choices(
                     started_at,
                     retrying=will_retry,
                     attempt=attempt + 1,
-                    response_shape=light_novel_response_shape(raw) if stage == "parse" else None,
+                    response_shape=light_novel_response_shape(raw or "") if stage == "parse" else None,
                 )
                 if not will_retry:
                     break

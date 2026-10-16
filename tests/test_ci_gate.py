@@ -98,9 +98,9 @@ def test_shared_support_helpers_are_not_imported_from_feature_tests():
     modules = {module for module, _name in forbidden}
     for path in (ROOT / "tests").glob("test_*.py"):
         source = path.read_text(encoding="utf-8")
-        # Every forbidden import contains its literal module name. Skip AST work
-        # for unrelated files, while comments/strings still receive real parsing.
-        if not any(module in source for module in modules):
+        # ASCII imports contain the literal module name. Unicode identifiers
+        # can normalize to that name, so non-ASCII sources always need parsing.
+        if source.isascii() and not any(module in source for module in modules):
             continue
         tree = ast.parse(source)
         for node in ast.walk(tree):

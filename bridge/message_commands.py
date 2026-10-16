@@ -67,11 +67,11 @@ from bridge.rag_service import RagService
 from bridge.regeneration import regenerate_last
 from bridge.reply_history import load_history_rows
 from bridge.request_types import PreparedMessage, RequestContext
+from bridge.reset_cleanup import finish_reset_cleanup, snapshot_reset_cleanup
 from bridge.reset_panel import reset_confirmation_request
 from bridge.response_delivery import (
     TelegramDeletionReport,
     collect_session_telegram_ids,
-    delete_tracked_panel_messages,
     queue_user_quote_tts,
     send_reply,
 )
@@ -99,30 +99,29 @@ def reset_session(
     memory_service: MemoryService,
     npc_service: NpcService,
 ) -> TelegramDeletionReport | None:
-    guard_story_reset(db, chat_id, session["session_id"])
+    session_id = session["session_id"]
     if db.in_transaction:
         raise RuntimeError("Reset cannot join a caller transaction")
-    with hindsight_session_lock(chat_id, session["session_id"]), write_transaction(db):
+    message_ids: list[int] = []
+    with hindsight_session_lock(chat_id, session_id), write_transaction(db):
         if operation_was_applied(db, operation_id) or not begin_operation(db, operation_id, "reset"):
             return
-        if operation_phase(db, operation_id) == "local_committed":
-            record_operation(db, operation_id, "reset")
-            return
-        guard_story_reset(db, chat_id, session["session_id"])
-        telegram_ids = collect_session_telegram_ids(db, chat_id, session["session_id"])
-        memory_service.queue_cleanup(db, chat_id, session["session_id"])
-        npc_service.purge_session(db, chat_id, session["session_id"])
-        SimulationService().purge_session(db, chat_id, session["session_id"])
-        delete_reset_turn_rows(db, chat_id, session["session_id"])
-        clear_session_summary(db, chat_id, session["session_id"])
-        purge_episodic_memories(db, chat_id, session["session_id"])
-        clear_curated_memory_state(db, chat_id, session["session_id"])
-        _repo_delete_scene_state(db, chat_id, session["session_id"])
-        clear_narrative_story_state(db, chat_id, session["session_id"])
-        old_choice_panels = reset_conversation(db, chat_id, session["session_id"])
-        set_operation_phase(db, operation_id, "reset", "local_committed")
-    telegram_ids.extend(old_choice_panels)
-    deletion = delete_tracked_panel_messages(token, chat_id, sorted(set(telegram_ids)), request=telegram_request)
+        if operation_phase(db, operation_id) != "local_committed":
+            guard_story_reset(db, chat_id, session_id)
+            message_ids = collect_session_telegram_ids(db, chat_id, session_id)
+            memory_service.queue_cleanup(db, chat_id, session_id)
+            npc_service.purge_session(db, chat_id, session_id)
+            SimulationService().purge_session(db, chat_id, session_id)
+            delete_reset_turn_rows(db, chat_id, session_id)
+            clear_session_summary(db, chat_id, session_id)
+            purge_episodic_memories(db, chat_id, session_id)
+            clear_curated_memory_state(db, chat_id, session_id)
+            _repo_delete_scene_state(db, chat_id, session_id)
+            clear_narrative_story_state(db, chat_id, session_id)
+            message_ids.extend(reset_conversation(db, chat_id, session_id))
+            snapshot_reset_cleanup(db, operation_id, chat_id, session_id, message_ids)
+            set_operation_phase(db, operation_id, "reset", "local_committed")
+    deletion = finish_reset_cleanup(db, token, chat_id, session_id, operation_id, message_ids, request=telegram_request)
     record_operation(db, operation_id, "reset")
     optimize_database(db)
     return deletion

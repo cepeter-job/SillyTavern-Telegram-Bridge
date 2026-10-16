@@ -24,24 +24,21 @@ const context=dom.getInternalVMContext(),errors=[],expectedFailures=new Set(),ob
 let portraitMode='success',forcedFailure='',scrollResets=0;
 let trackerScenario=null,trackerReads=0,trackerInspection=false;
 let summaryScenario=null,memoryStatusScenario=null,contextStatusScenario=null,memoryDetailScenario=null,memoryDetailRequests=0;
-const fixtureRequestTimes=[];
+let fixtureRequestCount=0,fixtureWindowAdvances=0;
 async function reserveFixtureCapacity(count) {
-  // Keep phases below the unchanged production 120/minute rule. Only this DOM
-  // fixture opts into a controlled HTTP clock; real browser fixtures use real time.
-  // Advancing a window replaces wall-clock waiting, not the limiter or its state.
+  // The fixture's HTTP clock moves only on explicit control requests. Count
+  // reservations against that same window, never against wall-clock expiry.
+  // Production authentication, the 120/minute rule and request history stay real.
   assert.ok(Number.isInteger(count)&&count>0&&count<=100);
-  for(;;) {
-    const now=performance.now();
-    while(fixtureRequestTimes.length&&fixtureRequestTimes[0]<=now-61000)fixtureRequestTimes.shift();
-    if(fixtureRequestTimes.length+count<=100)return;
-    assert.equal(ready.rate_clock?.path,'/fixture/rate-window','Clock control must be explicitly enabled');
-    const advanced=await fetch(ready.url+ready.rate_clock.path,{
-      method:'POST',headers:{'X-Fixture-Rate-Clock':ready.rate_clock.key},
-    });
-    assert.equal(advanced.status,200,'Only the owning fixture may advance its clock');
-    assert.deepEqual(await advanced.json(),{advanced_seconds:61});
-    fixtureRequestTimes.length=0;
-  }
+  if(fixtureRequestCount+count<=100)return;
+  assert.equal(ready.rate_clock?.path,'/fixture/rate-window','Clock control must be explicitly enabled');
+  const advanced=await fetch(ready.url+ready.rate_clock.path,{
+    method:'POST',headers:{'X-Fixture-Rate-Clock':ready.rate_clock.key},
+  });
+  assert.equal(advanced.status,200,'Only the owning fixture may advance its clock');
+  assert.deepEqual(await advanced.json(),{advanced_seconds:61});
+  fixtureRequestCount=0;
+  fixtureWindowAdvances++;
 }
 
 const memoryThresholds={warning:262144,tracing:327680,capture:393216};
@@ -91,7 +88,7 @@ dom.window.fetch=async (path,options)=>{
     }}),{status:200,headers:{'Content-Type':'application/json'}});
   }
   const response=await fetch(ready.url+path,options);
-  fixtureRequestTimes.push(performance.now());
+  fixtureRequestCount++;
   if((memoryStatusScenario||contextStatusScenario)&&String(path)==='/api/v1/status'&&response.ok) {
     const data=await response.json();
     if(memoryStatusScenario)data.memory_diagnostics=memoryStatusScenario;
@@ -556,6 +553,8 @@ try {
   const newView=document.createElement('div');newView.textContent='Current view';finishNew(newView);await newNavigation;
   assert.equal(document.querySelector('main').textContent,'Current view','Only the latest page is committed');
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
+  assert.ok(fixtureWindowAdvances>0,'The smoke exercised controlled window expiry');
+  console.log('fixture-clock-windows='+fixtureWindowAdvances+'; production-rate-rule=unchanged');
   console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=19 passed; browser-errors=0');
 } finally {
   dom.window.close();lines.close();child.kill('SIGTERM');

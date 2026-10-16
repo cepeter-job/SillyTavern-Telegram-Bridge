@@ -82,27 +82,9 @@ def test_unexpected_or_incomplete_job_report_fails_closed(tmp_path):
     assert "| python-tests | missing |" in summary
 
 
-def test_reviewed_test_consolidation_does_not_fragment_again():
-    retired = {
-        "test_final_budget_routes.py",
-        "test_late_budget_delivery.py",
-        "test_memory_failure_backoff.py",
-        "test_native_message_edit.py",
-        "test_optional_numeric_acceleration.py",
-        "test_pdf_worker.py",
-        "test_pr169_followup.py",
-        "test_codex_review_regressions.py",
-        "test_session_command_routing.py",
-        "test_simulation_review_aliases.py",
-        "test_simulation_review_budget.py",
-        "test_simulation_review_history.py",
-        "test_simulation_review_types.py",
-        "test_swipe_panels.py",
-        "test_telegram_preview.py",
-        "test_voice_conversation_boundary.py",
-    }
-    assert not {path.name for path in (ROOT / "tests").glob("test_*.py")} & retired
-
+def test_shared_support_helpers_are_not_imported_from_feature_tests():
+    # These helpers have stable support owners. Historical test filenames are not
+    # a product contract and must remain available for new, unrelated tests.
     forbidden = {
         ("test_character_mutation_safety", "_card_png"),
         ("test_character_upload_confirmation", "_card_png"),
@@ -113,8 +95,14 @@ def test_reviewed_test_consolidation_does_not_fragment_again():
         ("test_provider_attempt_budget", "setup_route"),
     }
     observed = set()
+    modules = {module for module, _name in forbidden}
     for path in (ROOT / "tests").glob("test_*.py"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        source = path.read_text(encoding="utf-8")
+        # Every forbidden import contains its literal module name. Skip AST work
+        # for unrelated files, while comments/strings still receive real parsing.
+        if not any(module in source for module in modules):
+            continue
+        tree = ast.parse(source)
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module:
                 observed.update((node.module, alias.name) for alias in node.names)

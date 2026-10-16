@@ -65,6 +65,32 @@ def test_resume_after_local_commit_deletes_frozen_messages_only(reset_case):
     assert operation_phase(case.db, "reset-recovery") == "applied"
 
 
+
+def test_resume_after_new_story_enters_finale_only_deletes_old_messages(reset_case):
+    case = reset_case
+    with patch.object(commands, "telegram_request", side_effect=ProcessStopped), pytest.raises(ProcessStopped):
+        reset(case)
+    case.db.execute(
+        "INSERT INTO messages(chat_id,session_id,role,content,telegram_message_ids,created_at) "
+        "VALUES(?,?,'assistant','new story reply','[99]',2)",
+        ("chat", case.session["session_id"]),
+    )
+    case.db.execute(
+        "INSERT INTO ending_state(chat_id,session_id,lifecycle) VALUES(?,?,'finale')",
+        ("chat", case.session["session_id"]),
+    )
+    case.db.commit()
+
+    deleted = []
+    with patch.object(commands, "telegram_request", side_effect=lambda _t, _m, p: deleted.append(p["message_id"])):
+        report = reset(case)
+
+    assert deleted == [41, 42]
+    assert report == (2, 2, 0)
+    assert case.db.execute("SELECT telegram_message_ids FROM messages").fetchone()[0] == "[99]"
+    assert case.db.execute("SELECT lifecycle FROM ending_state").fetchone()[0] == "finale"
+
+
 def test_midway_crash_survives_reopening_database(reset_case):
     case = reset_case
     with patch.object(commands, "telegram_request", side_effect=[{}, ProcessStopped()]), pytest.raises(ProcessStopped):

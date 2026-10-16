@@ -100,7 +100,6 @@ def reset_session(
     npc_service: NpcService,
 ) -> TelegramDeletionReport | None:
     session_id = session["session_id"]
-    guard_story_reset(db, chat_id, session_id)
     if db.in_transaction:
         raise RuntimeError("Reset cannot join a caller transaction")
     message_ids: list[int] = []

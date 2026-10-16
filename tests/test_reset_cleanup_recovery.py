@@ -92,7 +92,6 @@ def test_resume_after_new_story_enters_finale_only_deletes_old_messages(reset_ca
     assert case.db.execute("SELECT lifecycle FROM ending_state").fetchone()[0] == "finale"
 
 
-
 def test_resume_after_panel_binding_expires_uses_durable_job_scope(reset_case):
     case = reset_case
     callback = {
@@ -102,9 +101,7 @@ def test_resume_after_panel_binding_expires_uses_durable_job_scope(reset_case):
         "_queued": True,
         "message": {"message_id": 77, "chat": {"id": "chat"}},
     }
-    job_id = enqueue_job(
-        case.db, 880, "chat", case.session["session_id"], 77, "callback", {"actor_id": "owner"}
-    )
+    job_id = enqueue_job(case.db, 880, "chat", case.session["session_id"], 77, "callback", {"actor_id": "owner"})
     with patch.object(commands, "telegram_request", side_effect=ProcessStopped), pytest.raises(ProcessStopped):
         reset(case, operation_id=job_id)
     assert operation_phase(case.db, job_id) == "local_committed"
@@ -128,6 +125,7 @@ def test_resume_after_panel_binding_expires_uses_durable_job_scope(reset_case):
 
     assert deleted == [41, 42]
     assert operation_phase(case.db, job_id) == "applied"
+
 
 def test_midway_crash_survives_reopening_database(reset_case):
     case = reset_case

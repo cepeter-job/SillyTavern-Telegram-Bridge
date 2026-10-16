@@ -58,6 +58,18 @@ def write_operation_phase(db: sqlite3.Connection, operation_id: str, kind: str, 
     )
 
 
+
+def committed_reset_callback_session(db: sqlite3.Connection, operation_id: int, chat_id: str) -> str | None:
+    """Recover only the original session of an already-committed reset callback."""
+    row = db.execute(
+        "SELECT j.session_id FROM jobs j JOIN operations o ON o.operation_id=CAST(j.job_id AS TEXT) "
+        "WHERE j.job_id=? AND j.chat_id=? AND j.kind='callback' "
+        "AND o.kind='reset' AND o.state='local_committed'",
+        (operation_id, chat_id),
+    ).fetchone()
+    return str(row[0]) if row else None
+
+
 def delivery_user_source(db: sqlite3.Connection, assistant_rowid: int, user_rowid: int) -> tuple | None:
     return db.execute(
         "SELECT u.content,u.telegram_message_id FROM messages u JOIN messages a "

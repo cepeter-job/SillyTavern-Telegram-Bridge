@@ -12,7 +12,7 @@
 
 ## Global constraints
 
-- Change test/support code and contributor guidance only; preserve production, workflows, locks and coverage/security gates.
+- Change test/support code, contributor guidance and the shortened test file's size cap only; preserve production, workflows, locks and coverage/security gates.
 - Preserve function-scoped `tmp_path`, persona seed, session identity, yielded values and database teardown.
 - Keep existing autouse transport guards in their original modules; do not widen their scope.
 - Keep all distinct negative cases and all surviving assertions. Do not add historical-filename blacklists.
@@ -28,6 +28,7 @@ Fixture imports must not register unrelated autouse behavior. No consumer may re
 - [ ] Copy `session_db(tmp_path)` with its decorator and body unchanged to `tests/session_test_support.py`, importing only its actual dependencies.
 - [ ] Redirect the 47 explicit imports and import the fixture in `tests/test_memory_completion_safety.py`; remove its now-unused settings-builder import.
 - [ ] Remove `HumanizerPersistenceTests.test_update_session_accepts_humanizer_column`; retain `test_set_humanizer_persists_on`, whose setup, input and assertions are identical.
+- [ ] Tighten `tools/module_size_baseline.json` for the shortened test file from 619 to 606 lines; do not relax any cap.
 - [ ] Document shared-fixture ownership in `docs/development/testing.md`.
 
 This is the refactor stage of an already-green contract, not new behavior. Do not manufacture new product failures or permanent migration-only tests.

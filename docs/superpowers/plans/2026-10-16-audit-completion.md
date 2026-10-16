@@ -9,23 +9,26 @@ independent migration/context research acceptance gates and production unchanged
 
 ## Execution and acceptance
 
-- [ ] Reuse an immutable full context replay plan only as observation-test input;
+- [x] Reuse an immutable full context replay plan only as observation-test input;
   run the real CLI for each validation and retain fresh-process end-to-end cases.
-- [ ] Run generated-answer rejection matrices through the actual parser/main with
+- [x] Run generated-answer rejection matrices through the actual parser/main with
   per-test environment restoration; retain real subprocess and wire smoke cases.
-- [ ] Limit replay-only retrieval tests to their asserted backend; preserve the
+- [x] Limit replay-only retrieval tests to their asserted backend; preserve the
   full default study, corpus, real wire, lifecycle, and no-external-I/O assertions.
-- [ ] Replace the historical filename blacklist with the existing specific helper
+- [x] Replace the historical filename blacklist with the existing specific helper
   ownership guard; avoid parsing unrelated source files without changing matches.
-- [ ] Replace DOM smoke rate-window wall-clock sleeps with explicit fixture-only
+- [x] Replace DOM smoke rate-window wall-clock sleeps with explicit fixture-only
   HTTP clock control. Prove auth, 120-request limit, unauthorized-reset rejection,
   expiry and default absence of the control route; real browser fixtures stay unmodified.
-- [ ] Evaluate current sharding using matched CI measurements. Keep the current
+- [x] Evaluate current sharding using matched CI measurements. Keep the current
   algorithm unless measured evidence justifies change.
-- [ ] Verify exact inventory differences, all security/coverage/warning gates,
-  independent review, current head/base and merged-main CI before closing scope.
+- [x] Verify exact inventory differences, all security/coverage/warning gates,
+  independent source review and pre-merge evidence. Final-head and merged-main
+  checks are integration gates recorded in PR #540, not preclaimed here.
 
 All execution stays on GitHub-hosted runners; local work is source/static only.
 Do not lower coverage, suppress resource failures, weaken authentication, change
 provider/production settings, or merge research branches without their evidence.
 No speedup is established until runner measurements are recorded.
+
+Measured outcomes and retained design decisions: [audit completion report](../../audits/2026-10-16-regression-audit-completion.md).

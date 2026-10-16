@@ -58,7 +58,6 @@ def write_operation_phase(db: sqlite3.Connection, operation_id: str, kind: str, 
     )
 
 
-
 def committed_reset_callback_session(db: sqlite3.Connection, operation_id: int, chat_id: str) -> str | None:
     """Recover only the original session of an already-committed reset callback."""
     row = db.execute(

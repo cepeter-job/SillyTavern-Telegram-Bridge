@@ -8,7 +8,7 @@ import {createInterface} from 'node:readline';
 import vm from 'node:vm';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const {JSDOM}=await import(pathToFileURL(resolve(process.env.MINIAPP_JSDOM_ROOT||root,'node_modules/jsdom/lib/api.js')));
-const child=spawn(process.env.PYTHON||'python3',[resolve(root,'tests/miniapp_browser_fixture.py')],{cwd:root,stdio:['ignore','pipe','inherit']});
+const child=spawn(process.env.PYTHON||'python3',[resolve(root,'tests/miniapp_browser_fixture.py')],{cwd:root,stdio:['ignore','pipe','inherit'],env:{...process.env,MINIAPP_FIXTURE_RATE_CLOCK:'1'}});
 const lines=createInterface({input:child.stdout});
 const ready=await Promise.race([new Promise((ok,bad)=>{lines.once('line',line=>{try{ok(JSON.parse(line));}catch(e){bad(e);}});child.once('exit',code=>bad(new Error('Fixture exited '+code)));}),new Promise((_,bad)=>setTimeout(()=>bad(new Error('Fixture startup timed out')),10000).unref())]);
 const html=await readFile(resolve(root,'bridge/miniapp_assets/index.html'),'utf8');
@@ -26,14 +26,21 @@ let trackerScenario=null,trackerReads=0,trackerInspection=false;
 let summaryScenario=null,memoryStatusScenario=null,contextStatusScenario=null,memoryDetailScenario=null,memoryDetailRequests=0;
 const fixtureRequestTimes=[];
 async function reserveFixtureCapacity(count) {
-  // Keep real integration phases below the unchanged 120/minute server limit.
-  // Response times conservatively follow admission; reserve extra polling headroom.
+  // Keep phases below the unchanged production 120/minute rule. Only this DOM
+  // fixture opts into a controlled HTTP clock; real browser fixtures use real time.
+  // Advancing a window replaces wall-clock waiting, not the limiter or its state.
   assert.ok(Number.isInteger(count)&&count>0&&count<=100);
   for(;;) {
     const now=performance.now();
     while(fixtureRequestTimes.length&&fixtureRequestTimes[0]<=now-61000)fixtureRequestTimes.shift();
     if(fixtureRequestTimes.length+count<=100)return;
-    await new Promise(resolve=>setTimeout(resolve,Math.max(1,fixtureRequestTimes[0]+61000-now)));
+    assert.equal(ready.rate_clock?.path,'/fixture/rate-window','Clock control must be explicitly enabled');
+    const advanced=await fetch(ready.url+ready.rate_clock.path,{
+      method:'POST',headers:{'X-Fixture-Rate-Clock':ready.rate_clock.key},
+    });
+    assert.equal(advanced.status,200,'Only the owning fixture may advance its clock');
+    assert.deepEqual(await advanced.json(),{advanced_seconds:61});
+    fixtureRequestTimes.length=0;
   }
 }
 
@@ -446,8 +453,8 @@ try {
     {name:'complete',incomplete:false,explainsSaved:false},
   ],'Incomplete summary regeneration must be reported for partial work and old-summary fallback; complete regeneration retains its normal flow');
   console.log('summary-regeneration=partial-notice,old-fallback-notice,complete-normal; summary-session-scope=preserved');
-  // Extra real reads make the rolling-window regression reproducible on fast runners.
-  // Reserve the burst and the following phase together before sending either.
+  // Exercise a real request burst before the next reserved fixture-clock window.
+  // The separate HTTP fixture tests prove 120 accepted requests, 429 and expiry.
   await reserveFixtureCapacity(12+60);
   for(let extra=0;extra<12;extra++)await app.namespace.api('/status');
   await app.namespace.navigate('models');

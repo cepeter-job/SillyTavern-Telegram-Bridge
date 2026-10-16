@@ -116,6 +116,14 @@ not reserve old test filenames. Keep current behavioral gate tests independent
 of historical refactor naming. Never skip coverage or security checks to improve
 CI timing.
 
+The DOM smoke runner opts into a loopback-fixture-only HTTP clock so reserving a
+new request window does not sleep for a real minute. The production limiter,
+authentication and request history are unchanged. The fixture control requires an
+ephemeral owner key and is absent by default. Dedicated HTTP tests exercise 120
+accepted requests, rejection of request 121, rejection of unauthorized clock
+changes, expiry and a second complete rate window. Chromium/WebKit fixtures keep
+real clocks. Controlled-fixture timing is not production request-latency evidence.
+
 ## Run the Python and static gates
 
 Run the required local verification from

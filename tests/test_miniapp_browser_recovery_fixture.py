@@ -15,12 +15,16 @@ import pytest
 
 
 @contextmanager
-def fixture_process():
+def fixture_process(*, rate_clock=False):
     root = Path(__file__).resolve().parents[1]
     child = subprocess.Popen(
         [sys.executable, "tests/miniapp_browser_fixture.py"],
         cwd=root,
-        env={**os.environ, "MINIAPP_FIXTURE_RECOVERY": "1"},
+        env={
+            **os.environ,
+            "MINIAPP_FIXTURE_RECOVERY": "1",
+            "MINIAPP_FIXTURE_RATE_CLOCK": "1" if rate_clock else "0",
+        },
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
@@ -42,10 +46,11 @@ def fixture_process():
         assert child.returncode == 0, stderr
 
 
-def request(ready, path, *, body=None, authorized=False, discard=False):
+def request(ready, path, *, body=None, authorized=False, discard=False, extra_headers=None):
     headers = {"Authorization": "tma " + ready["initData"]} if authorized else {}
     if body is not None:
         headers["Content-Type"] = "application/json"
+    headers.update(extra_headers or {})
     endpoint = urlsplit(ready["url"])
     assert endpoint.scheme == "http" and endpoint.hostname == "127.0.0.1"
     with closing(HTTPConnection(endpoint.hostname, endpoint.port, timeout=10)) as connection:
@@ -88,3 +93,33 @@ def test_browser_fixture_runs_one_real_summary_handler_and_synthetic_provider():
             "providers": 1,
             "jobs": [{"id": result["id"], "operation_id": "fixture-lost-response", "state": "succeeded"}],
         }
+
+
+def test_fixture_clock_preserves_auth_rate_limit_and_next_window_recovery():
+    # Control changes only the isolated fixture's HTTP clock, never auth, the
+    # production 120-request threshold or the process-wide clock/timer functions.
+    with fixture_process(rate_clock=True) as ready:
+        control = ready.get("rate_clock")
+        assert control is not None, "Opt-in fixture clock control is missing"
+        assert request(ready, "/api/v1/me")[0] == 401
+        for _ in range(120):
+            assert request(ready, "/api/v1/me", authorized=True)[0] == 200
+        status, result = request(ready, "/api/v1/me", authorized=True)
+        assert status == 429 and result["error"]["code"] == "rate_limit"
+        assert request(ready, control["path"], body={})[0] == 403
+        assert request(ready, control["path"], body={}, extra_headers={"X-Fixture-Rate-Clock": "wrong"})[0] == 403
+        assert request(ready, "/api/v1/me", authorized=True)[0] == 429
+        status, result = request(
+            ready, control["path"], body={}, extra_headers={"X-Fixture-Rate-Clock": control["key"]}
+        )
+        assert status == 200 and result == {"advanced_seconds": 61}
+        for _ in range(120):
+            assert request(ready, "/api/v1/me", authorized=True)[0] == 200
+        assert request(ready, "/api/v1/me", authorized=True)[0] == 429
+
+
+def test_fixture_rate_clock_control_requires_explicit_opt_in():
+    with fixture_process() as ready:
+        assert "rate_clock" not in ready
+        assert request(ready, "/fixture/rate-window", body={})[0] == 404
+        assert request(ready, "/api/v1/me", authorized=True)[0] == 200

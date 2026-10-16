@@ -17,8 +17,11 @@ independent migration/context research acceptance gates and production unchanged
   full default study, corpus, real wire, lifecycle, and no-external-I/O assertions.
 - [ ] Replace the historical filename blacklist with the existing specific helper
   ownership guard; avoid parsing unrelated source files without changing matches.
-- [ ] Evaluate Mini App fixture isolation and current sharding using matched CI
-  measurements. Keep the current algorithm unless measured evidence justifies change.
+- [ ] Replace DOM smoke rate-window wall-clock sleeps with explicit fixture-only
+  HTTP clock control. Prove auth, 120-request limit, unauthorized-reset rejection,
+  expiry and default absence of the control route; real browser fixtures stay unmodified.
+- [ ] Evaluate current sharding using matched CI measurements. Keep the current
+  algorithm unless measured evidence justifies change.
 - [ ] Verify exact inventory differences, all security/coverage/warning gates,
   independent review, current head/base and merged-main CI before closing scope.
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,7 @@ def make_database(path: Path, value: str) -> sqlite3.Connection:
 
 
 def read_value(path: Path) -> str:
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(path)) as db, db:
         return str(db.execute("SELECT value FROM sample").fetchone()[0])
 
 

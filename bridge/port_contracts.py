@@ -103,6 +103,12 @@ class ProviderPolicy(Protocol):
     def cancel(self, attempt: HealthAttempt) -> None: ...
 
 
+class RequestObserver(Protocol):
+    def profile_identity(self, messages: list[dict], session: dict) -> dict[str, str] | None: ...
+
+    def bind(self, scope: object, identity: dict[str, str] | None) -> Callable[[], None]: ...
+
+
 class ProviderGenerate(Protocol):
     def __call__(
         self,

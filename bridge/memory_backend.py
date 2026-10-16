@@ -16,10 +16,16 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any
 
+from bridge.hindsight_client_runtime import close_hindsight_client as close_hindsight_client
+from bridge.hindsight_client_runtime import hindsight_client as hindsight_client
+from bridge.hindsight_diagnostics import (
+    handle_hindsight_retain_failure,
+    hindsight_retain_scope,
+    report_hindsight_completion,
+)
 from bridge.hindsight_endpoint import (
     _ensure_hindsight_loopback_proxy_bypass as _ensure_hindsight_loopback_proxy_bypass,
 )
-from bridge.hindsight_endpoint import prepare_compatible_hindsight_endpoint
 from bridge.limits import (
     HINDSIGHT_RECALL_MAX_TOKENS,
     HINDSIGHT_RETAIN_MAX_MESSAGES,
@@ -36,7 +42,6 @@ from bridge.memory_retirement_store import RETIREMENT_SCOPE_UNPAUSED
 from bridge.memory_scope_store import eligible_fact, ranked_fact_block, resolve_memory_scope, scope_is_current
 from bridge.memory_store import (
     ARCHIVAL_PENDING,
-    ARCHIVAL_WATCH_SECONDS,
     archival_attempts_outstanding,
     purge_external_memory,
     reconcile_archival_attempts,
@@ -59,31 +64,12 @@ def hindsight_tags(chat_id: str, session_id: str, character_name: str) -> list[s
     return [f"user:telegram-{user_key}", f"session:{session_id}", f"character:{character_key}"]
 
 
-def hindsight_client(*, app_settings: AppSettings) -> Any:
-    base_url = prepare_compatible_hindsight_endpoint(app_settings)
-
-    from hindsight_client import Hindsight
-
-    api_key = app_settings.environ.get("HINDSIGHT_API_KEY") or None
-    return Hindsight(base_url=base_url, api_key=api_key, timeout=30.0, user_agent="SillyTavernTelegramBridge/1.0")
-
-
 _HINDSIGHT_SESSION_LOCKS: weakref.WeakValueDictionary[tuple[str, str], threading.RLock] = weakref.WeakValueDictionary()
 _HINDSIGHT_SESSION_LOCKS_GUARD = threading.Lock()
 
 
-def close_hindsight_client(client: Any) -> None:
-    """Close the supported SDK wrapper on its own synchronous lifecycle."""
-    if client is None:
-        return
-    try:
-        client.close()
-    except Exception:
-        logging.debug("Could not close Hindsight client cleanly", exc_info=True)
-
-
 @contextmanager
-def hindsight_client_scope(*, app_settings: AppSettings) -> Iterator[Any]:
+def hindsight_client_scope(*, app_settings: AppSettings, request_timeout: float | None = None) -> Iterator[Any]:
     """Own the loop used by one synchronous SDK client, including its cleanup.
 
     The SDK's sync API reuses the thread's current loop but does not close it.
@@ -91,7 +77,11 @@ def hindsight_client_scope(*, app_settings: AppSettings) -> Iterator[Any]:
     the transport, even when client construction, requests, or cleanup fail.
     """
     with asyncio.Runner():
-        client = hindsight_client(app_settings=app_settings)
+        client = (
+            hindsight_client(app_settings=app_settings)
+            if request_timeout is None
+            else hindsight_client(app_settings=app_settings, request_timeout=request_timeout)
+        )
         try:
             yield client
         finally:
@@ -367,14 +357,16 @@ def cleanup_retired_memory_documents(
                 terminal = succeeded and not outstanding_at_start and not archival_attempts_outstanding(db, document_id)
                 db.execute(
                     "UPDATE memory_retired_documents SET deleted=?,attempts=attempts+1,"
-                    "next_attempt_at=CASE WHEN ? THEN 0 WHEN ? THEN ? ELSE ?+MIN(300,5*(1 << MIN(attempts,6))) END "
+                    "next_attempt_at=CASE WHEN ? THEN 0 "
+                    "WHEN ? THEN ?+MIN(3600,300*(1 << MIN(attempts/4,4))) "
+                    "ELSE ?+MIN(3600,5*(1 << MIN(attempts,10))) END "
                     "WHERE chat_id=? AND session_id=? AND document_id=? AND deleted=0 AND lease_token=? "
                     "AND retirement_revision=?",
                     (
                         int(terminal),
                         int(terminal),
                         int(succeeded),
-                        time.time() + ARCHIVAL_WATCH_SECONDS,
+                        time.time(),
                         time.time(),
                         chat_id,
                         session_id,
@@ -483,25 +475,22 @@ def _retain_with_client(
     """Retain an accepted native summary; mapping acceptance belongs to its fenced worker."""
     if kind != "native_fact":
         raise ValueError("Only native facts may be retained in Hindsight")
-    try:
-        with hindsight_client_scope(app_settings=app_settings) as client:
-            client.retain(
-                bank_id=hindsight_bank_id(chat_id),
-                content=content,
-                context=context,
-                document_id=document_id,
-                metadata={
-                    "source": "sillytavern_telegram_bridge",
-                    "session_id": session_id,
-                    "character": character_name,
-                },
-                tags=[*hindsight_tags(chat_id, session_id, character_name), "native-fact", *generation_tags],
-                retain_async=False,
-            )
-            return True
-    except Exception:
-        logging.warning("Hindsight native fact retain unavailable for chat %s", chat_id, exc_info=True)
-        return False
+    with hindsight_retain_scope(document_id, session_id, character_name) as metadata:
+        try:
+            with hindsight_client_scope(app_settings=app_settings, request_timeout=90.0) as client:
+                response = client.retain(
+                    bank_id=hindsight_bank_id(chat_id),
+                    content=content,
+                    context=context,
+                    document_id=document_id,
+                    metadata=metadata,
+                    tags=[*hindsight_tags(chat_id, session_id, character_name), "native-fact", *generation_tags],
+                    retain_async=False,
+                )
+                report_hindsight_completion(response)
+                return True
+        except Exception as error:
+            return handle_hindsight_retain_failure(error, chat_id, session_id)
 
 
 def _memory_hindsight_epoch_key(

@@ -21,7 +21,7 @@ from bridge.generation import build_chat_messages, format_user_dialogue_action
 from bridge.light_novel_format import add_inline_contract
 from bridge.settings import load_app_settings
 
-FIXTURE = Path(__file__).resolve().parents[1] / "tests/fixtures/story_memory/context_efficiency_v1.json"
+FIXTURE = Path(__file__).resolve().parents[1] / "tests/fixtures/story_memory/context_efficiency_v2.json"
 QUERIES = ("Q01", "Q02", "Q03", "Q16", "Q17", "Q23")
 
 

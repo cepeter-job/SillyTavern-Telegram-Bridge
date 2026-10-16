@@ -134,6 +134,7 @@ def process_image_message(
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
     generation_settings = get_generation_settings(db, chat_id, session["session_id"])
+    provider_port = provider_port.with_request_context(messages, session)
     messages = finalize_generation_messages(
         db,
         chat_id,

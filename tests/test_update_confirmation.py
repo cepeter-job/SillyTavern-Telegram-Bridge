@@ -23,6 +23,7 @@ def test_latest_release_uses_explicit_github_network_policy(monkeypatch):
     version, notes = update.latest_bridge_release()
     assert version == "0.2.030"
     assert "\x00" not in notes and "\u202e" not in notes
+    assert calls[0][0] == "https://api.github.com/repos/cepeter-job/SillyTavern-Telegram-Bridge/releases/latest"
     assert calls[0][2].allowed_hosts == frozenset({"api.github.com"})
     assert calls[0][2].allow_loopback is False
 

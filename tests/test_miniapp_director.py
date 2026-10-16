@@ -200,7 +200,7 @@ def test_ending_preferences_share_canonical_revision_and_private_scope(tmp_path)
             services, identity("67890"), body | {"mode": "closed_story", "require_confirmation": True}
         )
     other = api.get_director(services, identity("67890"), {})
-    assert other["ending"]["mode"] == "open_ended"
+    assert other["ending"]["mode"] == "closed_story"
 
 
 def test_saved_ending_read_rejects_the_previously_displayed_story(tmp_path):

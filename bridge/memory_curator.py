@@ -145,8 +145,9 @@ def extract_curator_segment(
     settings.update(
         {
             "temperature": 0.0,
-            "max_tokens": 1400,
+            "max_tokens": app_settings.memory_curator_max_tokens,
             "stop_sequences": "",
+            "json_once": True,
             "reasoning_budget": utility_reasoning_for_session(db, chat_id, session["session_id"]),
         }
     )

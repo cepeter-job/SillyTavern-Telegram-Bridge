@@ -7,7 +7,9 @@ import json
 import shutil
 from pathlib import Path
 
+# Persistent deployment identity; changing the GitHub owner must not invalidate installed markers.
 APPLICATION = "cepeter/SillyTavern-Telegram-Bridge"
+CANONICAL_REPOSITORY = "cepeter-job/SillyTavern-Telegram-Bridge"
 MARKER = ".bridge-deployment.json"
 _ROOT_FILES = ("sillytavern_telegram_bridge.py", "CHANGELOG.md", "requirements.lock")
 

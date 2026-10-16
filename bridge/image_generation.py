@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import io
 import json
 import logging
 import math
@@ -12,6 +11,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import closing
 from pathlib import Path
 
 from bridge.card_content import card_fields_from_file, safe_character_path
@@ -167,26 +167,26 @@ def image_provider_error_message(error: ProviderRequestError) -> str:
 
 
 def _provider_prompt_too_long(exc: urllib.error.HTTPError) -> bool:
-    if exc.code not in {400, 413, 422}:
-        return False
-    try:
-        raw = exc.read(8193)
-    except OSError:
-        return False
-    exc.fp = io.BytesIO(raw)
-    if len(raw) > 8192:
-        return False
-    try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeError, json.JSONDecodeError):
-        return False
-    if not isinstance(payload, dict):
-        return False
-    error = payload.get("error")
-    code = payload.get("code")
-    if isinstance(error, dict):
-        code = code or error.get("code")
-    return str(code or "").casefold() == "prompt_too_long"
+    with closing(exc):
+        if exc.code not in {400, 413, 422}:
+            return False
+        try:
+            raw = exc.read(8193)
+        except OSError:
+            return False
+        if len(raw) > 8192:
+            return False
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError):
+            return False
+        if not isinstance(payload, dict):
+            return False
+        error = payload.get("error")
+        code = payload.get("code")
+        if isinstance(error, dict):
+            code = code or error.get("code")
+        return str(code or "").casefold() == "prompt_too_long"
 
 
 def _image_bytes_from_response(payload: dict, spec: dict, *, app_settings: AppSettings) -> tuple[bytes, str]:

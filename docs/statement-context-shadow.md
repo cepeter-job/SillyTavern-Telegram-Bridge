@@ -48,7 +48,7 @@ character names or session identifiers. This does not reconstruct full
 production prompts and cannot establish provider-measured savings.
 
 Exact source reconstruction is not proof of exhaustive causal interpretation
-by a language model. Even if estimates exceed 30%, history pruning remains
+by a language model. Even if estimates exceed 20%, history pruning remains
 OFF until matched provider input-token evaluation, independent blinded
 narrative review and explicit human approval.
 

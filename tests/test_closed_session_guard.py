@@ -187,9 +187,7 @@ def test_reset_during_finale_is_rejected_before_deleting_telegram_or_external_me
     _, db, session = session_db
     prepared(session_db)
     enter(db)
-    monkeypatch.setattr(
-        message_commands, "delete_tracked_panel_messages", lambda *a, **k: pytest.fail("Deleted user input")
-    )
+    monkeypatch.setattr(message_commands, "finish_reset_cleanup", lambda *a, **k: pytest.fail("Deleted user input"))
     with pytest.raises(ValueError, match="finale"):
         message_commands.reset_session(
             db,

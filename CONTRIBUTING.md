@@ -1,5 +1,18 @@
 # Contributing
 
+New contributors should start with the [Developer handbook](docs/development/README.md).
+It connects local setup, architecture, implementation, testing, PR review and the
+maintenance/release handoff. The sections below remain the contribution policy
+and detailed ownership rules.
+
+| I want to… | Read |
+|---|---|
+| Set up a local checkout and run my first tests | [Local setup](docs/development/setup.md) |
+| Find the module that owns a behavior | [Architecture](docs/development/architecture.md) |
+| Take a change from an issue to a reviewed PR | [Development workflow](docs/development/workflow.md) |
+| Choose tests or diagnose a failed CI job | [Testing and CI](docs/development/testing.md) |
+| Update dependencies or prepare a release handoff | [Maintenance and releases](docs/development/maintenance.md) |
+
 ## Branch-first changes
 
 Work from a clean, up-to-date `main` in a feature branch or isolated worktree.
@@ -289,8 +302,10 @@ narrow canonical lifecycle functions in `session_core.py`, never session helpers
 re-exported by the Telegram transport. `session_repository.py` is SQL-only and
 requires an active caller-owned write transaction. Session creation/selection,
 updates and local deletion each commit at their lifecycle boundary, not inside
-repository primitives. Hindsight cleanup precedes local deletion outside the
-write transaction. `session_panels.py` owns deletion views; `native_imports.py`
+repository primitives. Local deletion and durable Hindsight cleanup obligations
+commit in the same transaction; memory workers perform remote cleanup afterward.
+See [local-first reset and deletion](docs/story-memory-runtime.md#local-first-reset-and-deletion-migration-27).
+`session_panels.py` owns deletion views; `native_imports.py`
 owns character/World Info installation and document routing. `telegram.py` owns
 transport, bounded file transfer, text splitting and panel-message binding only.
 
@@ -430,7 +445,7 @@ Do not re-resolve the active session after a queued upload has begun.
 The Humanizer prompt changes through reviewed source changes. There is no weekly
 reference fetch or automatic prompt promotion in the runtime.
 
-### Narrative ending foundation
+### Narrative ending lifecycle
 
 The canonical Director proposes plans; only committed-story reconciliation may
 change arc facts. Resolved or abandoned arc updates require exact owned transcript
@@ -447,8 +462,11 @@ parent ownership first and then cleans dependent data atomically.
 
 Director Room arc guidance is user-authored planning metadata, not permission to
 manually fabricate a resolved arc. Ending Goal controls lock at finale entry.
-At this foundation increment, the epilogue and hard-close workflow still requires
-its owning implementation before Closed Story execution is exposed.
+`ending_runtime.py` and `epilogue_service.py` own the implemented Closed Story
+workflow through a committed resolution, separate epilogue and hard closure.
+Recovery resumes unfinished work or delivery without regenerating committed
+ending text. Preserve the lifecycle checks in `closed_session_guard.py`; see
+[Closed Story and the epilogue](docs/user-guide.md#closed-story-and-the-epilogue).
 
 
 ### File-size and reference audit guardrails

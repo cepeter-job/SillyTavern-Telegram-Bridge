@@ -201,8 +201,7 @@ def handle_director_callback(
                         persona_service=persona_service,
                         app_settings=request_context.app_settings,
                     )
-                    if result.result != "accepted":
-                        maybe_enter_finale(db, chat_id, session_id)
+                    maybe_enter_finale(db, chat_id, session_id)
                     send_text(token, chat_id, result.reason)
                 else:
                     raise ValueError("This Director action expired. Reopen /director.")

@@ -6,6 +6,7 @@ import logging
 import sqlite3
 from collections.abc import Callable
 
+from bridge.conversation_setup_state import setup_panel_markup
 from bridge.panel_bindings import panel_binding_revision
 
 BUSY_CALLBACK_DATA = "panelbusy"
@@ -24,6 +25,14 @@ def remember_panel_busy_state(db: sqlite3.Connection, chat_id: str, callback: di
     markup = message.get("reply_markup")
     if not message_id or not isinstance(markup, dict):
         return False
+    if str(callback.get("data") or "").startswith("setup:"):
+        actor_id = str((callback.get("from") or {}).get("id") or "")
+        try:
+            markup = setup_panel_markup(db, chat_id, actor_id, message_id)
+        except sqlite3.Error:
+            return False
+        if markup is None:
+            return False
     revision = panel_binding_revision(db, chat_id, message_id)
     if revision is None:
         return False

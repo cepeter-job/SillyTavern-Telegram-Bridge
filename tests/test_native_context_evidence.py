@@ -41,7 +41,15 @@ def test_locked_original_trial_recomputes_without_network():
     state = json.loads((EVIDENCE / "state.json").read_text())
     report = json.loads((EVIDENCE / "report.json").read_text())
     validate_trial_state(plan, state)
-    assert report == summarize_trial(plan, state)
+    recomputed = summarize_trial(plan, state)
+    # Python versions may round summation by one ULP. Only this aggregate
+    # estimate may differ; frozen artifact hashes and all other evidence
+    # fields must still match exactly, including every quality/rollout gate.
+    frozen_weighted = report["measured"]["case_weighted_reduction_fraction"]
+    actual_weighted = recomputed["measured"]["case_weighted_reduction_fraction"]
+    assert abs(actual_weighted - frozen_weighted) <= 1e-15
+    recomputed["measured"]["case_weighted_reduction_fraction"] = frozen_weighted
+    assert report == recomputed
     assert report["matched_target_met"] is True
     assert report["automated_review_passed"] is False
     assert report["human_approved"] is False

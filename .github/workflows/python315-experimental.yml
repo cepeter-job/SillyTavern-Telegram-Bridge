@@ -1,0 +1,286 @@
+name: Python 3.15 experimental compatibility
+
+on:
+  workflow_dispatch:
+    inputs:
+      trace_resource_allocations:
+        description: "Run focused resource-allocation diagnostics, NOT the full regression suite"
+        required: false
+        type: boolean
+        default: false
+      resource_trace_tests:
+        description: "Space-separated tests/test_*.py paths (one to four, no shell expressions)"
+        required: false
+        type: string
+        default: "tests/test_expressions.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python315-experimental-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Both jobs are deliberately excluded from the Python 3.11 release gate.
+  full-dependency-preflight:
+    # Probe failure is recorded as a BLOCKED finding; this experiment is not a release gate.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.23"
+          enable-cache: true
+      - name: Test complete native dependency install on Python 3.15
+        id: native-dependency-install
+        continue-on-error: true
+        run: |
+          uv python install 3.15
+          uv venv --python 3.15 .venv315-full
+          .venv315-full/bin/python --version
+          uv pip compile requirements.txt --python-version 3.15 \
+            --generate-hashes --output-file "$RUNNER_TEMP/requirements-py315.lock"
+          uv pip install --python .venv315-full/bin/python \
+            --require-hashes -r "$RUNNER_TEMP/requirements-py315.lock"
+          uv pip check --python .venv315-full/bin/python
+          .venv315-full/bin/python -c "import aiohttp, faster_whisper, hindsight_client, yaml"
+      - name: Report full compatibility result without approving migration
+        if: ${{ always() }}
+        env:
+          NATIVE_INSTALL_OUTCOME: ${{ steps.native-dependency-install.outcome }}
+        run: |
+          if [[ "$NATIVE_INSTALL_OUTCOME" == "success" ]]; then
+            echo "Full Python 3.15 native dependency preflight: INSTALLED (not deployment approval)." \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Full Python 3.15 native dependency preflight: BLOCKED." \
+              >> "$GITHUB_STEP_SUMMARY"
+            echo "No production upgrade is authorized; inspect dependency resolver logs." \
+              >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=Python 3.15 full native dependencies blocked::See dependency resolver logs; do not migrate production"
+          fi
+
+  # Core-only excludes voice transcription to isolate independent blockers.
+  # Success here NEVER authorizes deployment or replacement of production locks.
+  core-smoke-and-benchmarks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.23"
+          enable-cache: true
+      - name: Prepare isolated Python 3.11 and 3.15 runtimes
+        run: |
+          uv python install 3.11 3.15
+          uv venv --python 3.11 .venv311-core
+          uv venv --python 3.15 .venv315-core
+          .venv311-core/bin/python --version
+          .venv315-core/bin/python --version
+      - name: Resolve temporary, hash-locked core dependencies
+        run: |
+          grep -v '^faster-whisper' requirements.txt > "$RUNNER_TEMP/core-requirements.txt"
+          uv pip compile "$RUNNER_TEMP/core-requirements.txt" --python-version 3.11 \
+            --generate-hashes --output-file "$RUNNER_TEMP/core-py311.lock"
+          uv pip compile "$RUNNER_TEMP/core-requirements.txt" --python-version 3.15 \
+            --generate-hashes --output-file "$RUNNER_TEMP/core-py315.lock"
+          uv pip install --python .venv311-core/bin/python \
+            --require-hashes -r "$RUNNER_TEMP/core-py311.lock"
+          uv pip install --python .venv315-core/bin/python \
+            --require-hashes -r "$RUNNER_TEMP/core-py315.lock"
+          uv pip check --python .venv311-core/bin/python
+          uv pip check --python .venv315-core/bin/python
+          uv pip install --python .venv311-core/bin/python pytest pytest-xdist httpx
+          uv pip install --python .venv315-core/bin/python pytest pytest-xdist httpx
+      - name: Run focused offline regression tests
+        run: |
+          for runtime in .venv311-core .venv315-core; do
+            "$runtime/bin/python" -m pytest -q \
+              tests/test_benchmark_python_runtime.py \
+              tests/test_context_section_metrics.py \
+              tests/test_context_selection.py \
+              tests/test_context_compaction.py
+          done
+      - name: Compare interpreter-only work using identical synthetic fixtures
+        run: |
+          mkdir -p runtime-benchmarks
+          .venv311-core/bin/python tools/benchmark_python_runtime.py \
+            > runtime-benchmarks/python311.json
+          .venv315-core/bin/python tools/benchmark_python_runtime.py \
+            > runtime-benchmarks/python315.json
+          .venv311-core/bin/python - <<'PY'
+          import json
+          from pathlib import Path
+
+          directory = Path("runtime-benchmarks")
+          old = json.loads((directory / "python311.json").read_text())
+          new = json.loads((directory / "python315.json").read_text())
+          assert old["workload_version"] == new["workload_version"]
+          for name, before in old["cases"].items():
+              after = new["cases"][name]
+              assert before["output_identity"] == after["output_identity"], name
+              gain = 100 * (1 - after["cpu_ns_per_call_median"] / before["cpu_ns_per_call_median"])
+              print(f"{name}: local CPU improvement {gain:+.1f}%")
+          print("NOT end-to-end latency: no Telegram or model calls were made.")
+          PY
+      - name: Retain synthetic benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: python315-experimental-benchmarks
+          path: runtime-benchmarks/*.json
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Expensive, manually dispatched FINAL-release compatibility experiment.
+  # The full native suite is NOT green until faster-whisper/ctranslate2 installs.
+  stable-final-core-regression:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install CPython final source build dependencies on ephemeral runner
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential libbz2-dev liblzma-dev zlib1g-dev libssl-dev \
+            libffi-dev libsqlite3-dev libreadline-dev libncurses-dev \
+            libgdbm-dev libexpat1-dev libzstd-dev
+      - name: Install pinned uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.23"
+          enable-cache: true
+      - name: Build verified upstream CPython 3.15.0 FINAL outside repository
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cpython-315-source"
+          cd "$RUNNER_TEMP/cpython-315-source"
+          curl --proto '=https' --tlsv1.2 --fail --location --retry 2 --silent --show-error \
+            "https://www.python.org/ftp/python/3.15.0/Python-3.15.0.tar.xz" -o "Python-3.15.0.tar.xz"
+          echo "ba4bed1ba346b916890b76d9e320451420aa69f6408997d33c66482eeae3d575  Python-3.15.0.tar.xz" | sha256sum -c -
+          tar xf "Python-3.15.0.tar.xz"
+          cd "Python-3.15.0"
+          CFLAGS='-O1 -g0' ./configure --prefix="$RUNNER_TEMP/cpython-315-final" --disable-test-modules > "$RUNNER_TEMP/python315-configure.log" 2>&1
+          make -j2 > "$RUNNER_TEMP/python315-build.log" 2>&1
+          make install > "$RUNNER_TEMP/python315-install.log" 2>&1
+          "$RUNNER_TEMP/cpython-315-final/bin/python3.15" -c \
+            'import sys, ssl, sqlite3, lzma, bz2; assert sys.version_info[:3] == (3,15,0) and sys.version_info.releaselevel == "final"; print(sys.version)'
+          echo "STTB_FINAL_PY315=$RUNNER_TEMP/cpython-315-final/bin/python3.15" >> "$GITHUB_ENV"
+      - name: Resolve and install temporary hash-locked core and dev dependencies
+        run: |
+          set -euo pipefail
+          grep -v '^faster-whisper' requirements.txt > "$RUNNER_TEMP/python315-core-only.txt"
+          # The existing network-isolation test fixture imports httpx; when
+          # faster-whisper is removed it is no longer available transitively.
+          printf '%s\n' 'httpx>=0.28,<1' >> "$RUNNER_TEMP/python315-core-only.txt"
+          uv pip compile "$RUNNER_TEMP/python315-core-only.txt" requirements-dev.txt \
+            --python-version 3.15 --generate-hashes --output-file "$RUNNER_TEMP/python315-core-dev.lock"
+          uv venv --python "$STTB_FINAL_PY315" .venv315-stable-core
+          .venv315-stable-core/bin/python -VV
+          uv pip install --python .venv315-stable-core/bin/python \
+            --require-hashes -r "$RUNNER_TEMP/python315-core-dev.lock"
+          uv pip check --python .venv315-stable-core/bin/python
+          .venv315-stable-core/bin/python -c \
+            'import ssl, sqlite3, httpx, pytest, aiohttp, yaml; print("core_and_dev_imports_pass")'
+      - name: Provisional full test discovery without native voice module
+        if: ${{ !inputs.trace_resource_allocations }}
+        id: core-suite
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          .venv315-stable-core/bin/python -X dev -W error::ResourceWarning \
+            -m pytest -q -n auto --maxprocesses=4 --dist=loadfile \
+            --cov=bridge --cov-fail-under=0 \
+            --cov-report=json:python315-stable-coverage.json \
+            --cov-report=xml:python315-stable-coverage.xml \
+            --junitxml=python315-stable-junit.xml \
+            --durations=20 --durations-min=1 \
+            2>&1 | tee python315-stable-pytest.log
+      - name: Targeted Python 3.15 resource-owner trace (NOT full regression)
+        if: ${{ inputs.trace_resource_allocations }}
+        id: resource-trace
+        continue-on-error: true
+        env:
+          TRACE_TEST_FILES: ${{ inputs.resource_trace_tests }}
+        run: |
+          set -euo pipefail
+          # Never inject user-supplied workflow inputs into a shell command.
+          # Check each target strictly and pass it as an ordinary array element.
+          if [[ -z "$TRACE_TEST_FILES" || "$TRACE_TEST_FILES" == *$'\n'* ]]; then
+            echo "::error::Specify one to four existing test modules on one line"
+            exit 2
+          fi
+          read -r -a targets <<< "$TRACE_TEST_FILES"
+          if (( ${#targets[@]} < 1 || ${#targets[@]} > 4 )); then
+            echo "::error::Resource tracing supports one to four test files"
+            exit 2
+          fi
+          for target in "${targets[@]}"; do
+            if [[ ! "$target" =~ ^tests/test_[a-zA-Z0-9_]+\.py$ || ! -f "$target" ]]; then
+              echo "::error::Invalid trace test target (tests/test_*.py files only)"
+              exit 2
+            fi
+          done
+          echo "Focused resource tracing for ${#targets[@]} test module(s); NOT a full regression."
+          # Serial pytest isolates actual resource ownership and avoids tracing
+          # subprocess-heavy unrelated tests with hardcoded timeouts.
+          PYTHONTRACEMALLOC=8 .venv315-stable-core/bin/python -X dev -W error::ResourceWarning \
+            -m pytest -q -n 0 "${targets[@]}" \
+            --junitxml=python315-stable-junit.xml \
+            --durations=20 --durations-min=1 \
+            2>&1 | tee python315-stable-pytest.log
+      - name: Record stable runtime gate without granting promotion
+        if: always()
+        env:
+          PROVISIONAL_SUITE_RESULT: ${{ steps.core-suite.outcome }}
+          RESOURCE_TRACE_RESULT: ${{ steps.resource-trace.outcome }}
+        run: |
+          echo "Python 3.15.0 FINAL — isolated core-plus-dev suite" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$RESOURCE_TRACE_RESULT" != "skipped" ]]; then
+            echo "Focused allocation trace (NOT a full regression): $RESOURCE_TRACE_RESULT" >> "$GITHUB_STEP_SUMMARY"
+            echo "Full Python 3.15 regression was intentionally NOT run in diagnostic mode." >> "$GITHUB_STEP_SUMMARY"
+            if [[ "$RESOURCE_TRACE_RESULT" != "success" ]]; then
+              echo "::warning title=Python 3.15 focused allocation trace failed::Review resource-allocation logs"
+            fi
+          else
+            echo "Provisional (no faster-whisper): $PROVISIONAL_SUITE_RESULT" >> "$GITHUB_STEP_SUMMARY"
+            if [[ "$PROVISIONAL_SUITE_RESULT" != "success" ]]; then
+              echo "::warning title=Provisional Python 3.15 final tests failed::Review JUnit and logs; migration remains blocked"
+            fi
+          fi
+          echo "Full runtime native dependency gate remains BLOCKED until ctranslate2 cp315 wheel exists." >> "$GITHUB_STEP_SUMMARY"
+          echo "Source build is not PGO or JIT optimized; do not compare its CPU time to a production interpreter." >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload core-only final-release regression evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: python315-final-core-regression
+          path: |
+            python315-stable-pytest.log
+            python315-stable-junit.xml
+            python315-stable-coverage.json
+            python315-stable-coverage.xml
+          if-no-files-found: ignore
+          retention-days: 14

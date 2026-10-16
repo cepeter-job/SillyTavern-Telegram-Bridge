@@ -111,6 +111,7 @@ def simulation_context_for_prompt(
     through_rowid: int | None = None,
     memory_scope: MemoryReadScope | None = None,
     narrator: bool = True,
+    for_extraction: bool = False,
 ) -> str:
     with write_transaction(db):
         cutoff = context_cutoff(db, chat_id, session_id, through_rowid, memory_scope)
@@ -151,7 +152,12 @@ def simulation_context_for_prompt(
     if not lines:
         return ""
     result = (
-        "Bridge Simulation State (descriptive data; never print trackers; private state grants no character knowledge):"
+        "Accepted canonical simulation state (untrusted context only; private state grants no character knowledge):"
+        if for_extraction
+        else (
+            "Bridge Simulation State (descriptive data; never print trackers; "
+            "private state grants no character knowledge):"
+        )
     )
     for line in lines:
         if len(result) + len(line) + 1 <= MAX_CONTEXT:

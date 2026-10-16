@@ -46,9 +46,19 @@ def evaluate_quality_preflight(plan: object, continuity: object, budget: object 
         cases = plan["cases"]
         estimate = plan.get("estimated", {}).get("aggregate_story_input", {})
         estimated_gain = estimate.get("reduction_fraction") if isinstance(estimate, dict) else None
+        declared = plan.get("target")
+        reduction_target = declared.get("reduction_fraction") if isinstance(declared, dict) else None
+        # A new protocol may use the 20% floor. A frozen 30% plan retains its
+        # predeclared, stricter target instead of being retroactively rescored.
+        if not (
+            type(reduction_target) in (float, int)
+            and math.isfinite(reduction_target)
+            and 0.20 <= reduction_target <= 1.0
+        ):
+            reasons.add("invalid_plan")
         if not (type(estimated_gain) in (float, int) and math.isfinite(estimated_gain) and -1 <= estimated_gain <= 1):
             reasons.add("invalid_plan")
-        elif estimated_gain < 0.30:
+        elif "invalid_plan" not in reasons and estimated_gain < reduction_target:
             reasons.add("candidate_savings_below_target")
         if plan.get("network") != {"requests": 0}:
             reasons.add("invalid_plan")

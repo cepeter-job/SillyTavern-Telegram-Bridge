@@ -7,6 +7,7 @@ import json
 from bridge.callback_tokens import dynamic_callback_token
 from bridge.card_content import card_fields_from_file, system_prompt_choices, world_file_paths
 from bridge.conversation_lifecycle import conversation_state, is_group_conversation
+from bridge.conversation_setup_state import remember_setup_render
 from bridge.narrative_panels import narrative_options, narrative_style_summary
 from bridge.narrative_settings import normalize_narrative_settings
 from bridge.panel_utils import panel_label, panel_page
@@ -123,7 +124,7 @@ def send_setup_panel(
     if message_id is not None:
         payload["message_id"] = message_id
     try:
-        send_panel_request(
+        result = send_panel_request(
             token,
             "editMessageText" if message_id is not None else "sendMessage",
             payload,
@@ -132,3 +133,14 @@ def send_setup_panel(
     except RuntimeError as exc:
         if "not modified" not in str(exc).casefold():
             raise
+        result = {}
+    rendered_message_id = result.get("message_id") or message_id
+    if rendered_message_id is not None:
+        remember_setup_render(
+            request_context.db,
+            chat_id,
+            request_context.actor_id,
+            state["nonce"],
+            rendered_message_id,
+            payload["reply_markup"],
+        )

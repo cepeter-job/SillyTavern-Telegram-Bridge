@@ -13,7 +13,7 @@ def test_readme_quick_start_uses_guided_installer_instead_of_manual_bootstrap():
     blocks = re.findall(r"```bash\n(.*?)\n```", quick, flags=re.DOTALL)
     assert blocks, "Quick start must contain one copy/paste Bash install block"
     script = blocks[0]
-    assert "raw.githubusercontent.com/cepeter/SillyTavern-Telegram-Bridge/main/install.sh" in script
+    assert "raw.githubusercontent.com/cepeter-job/SillyTavern-Telegram-Bridge/main/install.sh" in script
     assert "sillytavern-telegram-install.sh" in script
     assert "Standard install" in quick
     assert "Install + Tailscale Mini App" in quick

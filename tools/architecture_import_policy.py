@@ -23,8 +23,10 @@ LOW_LEVEL_IMPORTS = {
         ["bridge.light_novel_repository", "bridge.meta_repository", "bridge.sqlite_store"]
     ),
     "bridge.conversation_schema": frozenset([]),
+    "bridge.conversation_setup_state": frozenset(["bridge.metadata", "bridge.sqlite_store"]),
     "bridge.conversation_setup": frozenset(
         [
+            "bridge.conversation_setup_state",
             "bridge.narrative_settings",
             "bridge.card_content",
             "bridge.conversation_lifecycle",
@@ -43,6 +45,7 @@ LOW_LEVEL_IMPORTS = {
             "bridge.callbacks",
             "bridge.conversation_setup",
             "bridge.conversation_setup_panels",
+            "bridge.conversation_setup_state",
             "bridge.metadata",
             "bridge.persona_service",
             "bridge.request_types",
@@ -51,6 +54,7 @@ LOW_LEVEL_IMPORTS = {
     ),
     "bridge.conversation_setup_panels": frozenset(
         [
+            "bridge.conversation_setup_state",
             "bridge.narrative_panels",
             "bridge.narrative_settings",
             "bridge.callback_tokens",
@@ -127,6 +131,9 @@ LOW_LEVEL_IMPORTS = {
             "bridge.light_novel_format",
             "bridge.light_novel_repository",
             "bridge.model_selection",
+            # Content-free diagnostics and completion types; no transport or application root.
+            "bridge.diagnostic_events",
+            "bridge.provider_completion",
             "bridge.provider_errors",
             "bridge.provider_port",
             "bridge.settings",
@@ -144,7 +151,8 @@ LOW_LEVEL_IMPORTS = {
         ]
     ),
     "bridge.humanize": frozenset(["bridge.config", "bridge.provider_port"]),
-    "bridge.humanizer_settings": frozenset(["bridge.metadata"]),
+    "bridge.boolean_settings": frozenset(),
+    "bridge.humanizer_settings": frozenset(["bridge.boolean_settings", "bridge.metadata"]),
     "bridge.character_quality": frozenset(
         [
             "bridge.limits",

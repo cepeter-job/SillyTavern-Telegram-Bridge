@@ -17,8 +17,7 @@ Copy only the desired example JSON file into the directory configured by
 `SILLYTAVERN_SYSTEM_PROMPTS_DIR` (see [Configuration](configuration.md#paths-and-native-sillytavern-data)).
 Do not replace an existing customized file: back it up or choose a different
 `id`, `name` and filename for a separate variant. Examples are not automatically
-installed or selected, and existing `natural`, `balanced` and `concise` examples
-are unchanged.
+installed or selected.
 
 Open `/systemprompt` in the intended session and select the corresponding menu
 label. The native selector stores that selected text for the session. Editing

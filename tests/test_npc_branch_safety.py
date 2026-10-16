@@ -167,7 +167,7 @@ def test_reset_purges_npc_bank(monkeypatch):
     service = NpcService()
     try:
         _set_relationship(service, db, 1, "cautious")
-        monkeypatch.setattr(message_commands, "delete_tracked_panel_messages", lambda *_a, **_k: None)
+        monkeypatch.setattr(message_commands, "finish_reset_cleanup", lambda *_a, **_k: None)
         monkeypatch.setattr(message_commands, "telegram_request", lambda *_a, **_k: {})
 
         message_commands.reset_session(

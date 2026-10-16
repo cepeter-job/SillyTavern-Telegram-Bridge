@@ -82,3 +82,6 @@ Hindsight retirement, cleanup and archival recovery continue while mode is off.
 Regression tests use temporary SQLite databases and synthetic provider/delivery
 boundaries. No production database, configuration, credential or live model call
 is needed to verify these contracts.
+
+For failed log writes, incomplete capture warnings and code locations, see
+[Logging health and source locations](logging-health.md).

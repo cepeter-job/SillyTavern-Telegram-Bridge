@@ -113,7 +113,7 @@ class HindsightSessionCleanupTests(SettingsTestCase):
             app_settings=self.app_settings_builder.build(),
         )
         fake = _FakeHindsight()
-        memory_backend.hindsight_client = lambda *, app_settings=None: fake
+        memory_backend.hindsight_client = lambda *, app_settings=None, request_timeout=30.0: fake
 
         self.assertTrue(
             _owner_memory_backend.remember_fact(

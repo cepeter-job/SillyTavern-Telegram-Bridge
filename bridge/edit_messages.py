@@ -214,6 +214,7 @@ def regenerate_edited_turn(
     novel_turn = begin_novel_turn(db, chat_id, session, "edit", operation_id)
     if novel_turn:
         messages = novel_turn.messages(messages, session.get("response_language") or "auto")
+    provider_port = provider_port.with_request_context(messages, session)
     messages = finalize_generation_messages(
         db,
         chat_id,

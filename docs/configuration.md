@@ -198,6 +198,19 @@ Hindsight origins and explicitly bypasses environment proxy routing for loopback
 | `SILLYTAVERN_CONTEXT_HISTORY_CANDIDATES` | `96` | `8..512`; recent transcript messages considered before compaction. |
 | `SILLYTAVERN_PERF_LOG` | `false` | Boolean (`true/yes/on/1` or `false/no/off/0`); logs low-overhead timing spans. |
 | `SILLYTAVERN_MEMORY_DIAGNOSTICS` | disabled | Exact opt-in: only `1` enables low-overhead OOM diagnostics; never enabled automatically. |
+| `SILLYTAVERN_LOG_LEVEL` | `INFO` | Private JSON log threshold: `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
+| `SILLYTAVERN_LOG_MAX_MIB` | `10` | Maximum size of each rotating log file; range `1..100` MiB. |
+| `SILLYTAVERN_LOG_BACKUPS` | `5` | Number of rotated log files retained in addition to the current file; range `1..10`. |
+| `SILLYTAVERN_REQUEST_OBSERVATION` | `off` | Opt-in provider-request metrics with keyed fingerprints and counts; `on` enables observation without storing prompts. |
+| `SILLYTAVERN_CONTEXT_SELECTION_MODE` | `off` | `off`, `shadow`, or `enabled`; unknown values fall back to `off`. Shadow evaluates candidates locally and sends the full baseline to the provider. |
+| `SILLYTAVERN_CONTEXT_SELECTION_SLICES` | empty | Comma-separated explicit slice approvals for `enabled` mode: `dedup`, `history`, `summary`. Empty approves no slices. |
+
+Context selection is an evaluation control, not a general token-saving switch.
+Shadow mode evaluates deduplication and history candidates without changing the
+dispatched prompt. Enabled mode still requires each slice's source and scope
+checks. History pruning remains blocked because summary coverage alone does not
+prove continuity preservation; the `summary` slice currently has no selection
+implementation. Keep the default `off` unless running a reviewed evaluation.
 
 The bridge also keeps a conservative context safety margin (2% of the resolved
 window, bounded to 512..8192 tokens) in addition to the configured output
@@ -258,6 +271,23 @@ sent to the model; it does not delete the stored conversation.
 |---|---|---|
 | `HINDSIGHT_API_URL` | `http://127.0.0.1:8890` | Numeric-loopback Hindsight origin. |
 | `HINDSIGHT_API_KEY` | empty | Optional Hindsight credential. Secret. |
+| `SILLYTAVERN_MEMORY_CURATOR_MAX_TOKENS` | `1400` | Output-token budget per Memory Curator request; integer range `1..16000`, independent of Story `max_tokens`. |
+
+To give the Memory Curator more room to produce its JSON, set an explicit budget
+in the existing private `.env`, for example:
+
+```dotenv
+SILLYTAVERN_MEMORY_CURATOR_MAX_TOKENS=4096
+```
+
+The default stays `1400` when the variable is absent. Blank, non-integer and
+out-of-range values fail configuration loading rather than being silently
+clamped. This setting is captured at startup; apply it with the validated
+restart workflow above. It does not change the selected Utility model, Story
+or Director output budgets, or other memory helpers. Keep it within the
+selected model's supported output/context limits: a larger budget can increase
+cost and reduce room for input, and does not guarantee that the provider will
+return complete JSON.
 
 Hindsight is optional. Its SDK transport is not treated as equivalent to the bridge's
 DNS-pinned provider transport, so direct external/LAN/tailnet Hindsight URLs are

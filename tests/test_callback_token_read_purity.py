@@ -80,3 +80,26 @@ def test_missing_token_does_not_commit(db):
     assert db.in_transaction
     db.rollback()
     assert db.execute("SELECT count(*) FROM probe").fetchone()[0] == 0
+
+
+def test_unavailable_storage_is_distinct_from_expiry_and_retryable(db):
+    seed(db, expires=1001.0)
+    db.execute("INSERT INTO probe VALUES ('pending')")
+    failed_reads = []
+
+    def deny_one_read(action, table, _column, _database, _trigger):
+        if action == sqlite3.SQLITE_READ and table == "callback_tokens" and not failed_reads:
+            failed_reads.append(table)
+            return sqlite3.SQLITE_DENY
+        return sqlite3.SQLITE_OK
+
+    db.set_authorizer(deny_one_read)
+    try:
+        with pytest.raises(callback_tokens.CallbackTokenError, match="read callback token"):
+            callback_tokens.resolve_dynamic_callback_token("token", "character", "owner", db=db)
+        assert db.in_transaction
+        assert callback_tokens.resolve_dynamic_callback_token("token", "character", "owner", db=db) == "card.png"
+        db.rollback()
+        assert db.execute("SELECT count(*) FROM probe").fetchone()[0] == 0
+    finally:
+        db.set_authorizer(None)

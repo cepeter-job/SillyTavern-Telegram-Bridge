@@ -17,7 +17,7 @@ from bridge.director_cadence import DIRECTOR_LEASE_SECONDS, director_event_key, 
 from bridge.director_contracts import DirectorProposal, DirectorProposalError, parse_director_proposal
 from bridge.director_goal_repository import store_director_goal
 from bridge.director_guidance import active_director_plan
-from bridge.director_prompt import DIRECTOR_INSTRUCTION, build_director_input
+from bridge.director_prompt import DIRECTOR_INSTRUCTION, build_director_input, director_repair_instruction
 from bridge.director_repository import (
     append_director_decision,
     claim_director_run,
@@ -71,11 +71,11 @@ def _record_failure(
     token: str,
     source: dict[str, Any],
     revision: int,
-    category: str,
+    error: ValueError | RuntimeError,
     expected_ending: EndingState | None = None,
-    *,
-    detail: str = "",
 ) -> DirectorDecision:
+    category = error.category if isinstance(error, (DirectorProposalError, ProviderRequestError)) else "unavailable"
+    rejection_code = error.rejection_code if isinstance(error, DirectorProposalError) else ""
     message = f"Director could not update ({category}). The saved story and accepted direction are unchanged."
     decision_id = None
     with write_transaction(db):
@@ -106,11 +106,16 @@ def _record_failure(
                     reason=message,
                     created_at=time.time(),
                 )
-    event("director.rejected", chat_id=chat, session_id=session, revision=revision, status="rejected", reason=category)
-    if detail:
-        logging.warning("Director update not published: %s (%s)", category, detail)
-    else:
-        logging.warning("Director update not published: %s", category)
+    event(
+        "director.rejected",
+        level=logging.WARNING,
+        chat_id=chat,
+        session_id=session,
+        revision=revision,
+        status="rejected",
+        reason=category,
+        rejection_code=rejection_code,
+    )
     return DirectorDecision(decision_id, revision, "ai", "rejected", message)
 
 
@@ -257,16 +262,8 @@ class DirectorService:
                         {"role": "assistant", "content": raw[:16384]},
                         {
                             "role": "user",
-                            "content": (
-                                "Repair once. Return exactly one JSON object and nothing else. "
-                                "Do not use Markdown or code fences. Use schema_version 1 and copy the original "
-                                "expected_revision exactly. Omit optional string fields instead of null. "
-                                "Use only allowed references from the original request. "
-                                "Allowed action: continue|transition_scene; transition_type: "
-                                "continue|cut|pov_switch|time_jump|thread_switch; pov: "
-                                "first_person|third_person_user|third_person_rotating|omniscient|cinematic; "
-                                "story_phase: setup|development|escalation|climax|resolution. "
-                                f"Validation error: {exc}"
+                            "content": director_repair_instruction(
+                                exc, settings.pov_mode, action=proposal.action if proposal is not None else ""
                             ),
                         },
                     ]
@@ -338,8 +335,6 @@ class DirectorService:
                 )
             return DirectorDecision(decision_id, revision, "ai", "accepted", "Direction updated.", proposal)
         except (ValueError, RuntimeError) as exc:
-            category = exc.category if isinstance(exc, (DirectorProposalError, ProviderRequestError)) else "unavailable"
-            detail = str(exc) if isinstance(exc, DirectorProposalError) else ""
             return _record_failure(
                 db,
                 chat_id,
@@ -347,9 +342,8 @@ class DirectorService:
                 token,
                 source,
                 revision,
-                category,
+                exc,
                 ending_before,
-                detail=detail,
             )
         finally:
             with write_transaction(db):

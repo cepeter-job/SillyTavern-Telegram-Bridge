@@ -19,20 +19,53 @@ SIMULATION_OUTPUT_POLICY = (
     "A scheduled agenda step is background progress, not proof that an unseen consequential scene happened."
 )
 
-SIMULATION_EXTRACTION_POLICY = (
-    "\nAlso return a simulation object (omit unchanged groups): "
+SIMULATION_EXTRACTION_SCHEMA = (
+    '\nSimulation member fragment (not a complete response): "simulation":{'
+    '"relationships":[{"npc":"Supporting NPC","bond_delta":0,"sparks_delta":1,"grudge_delta":0,"apology":false}],'
+    '"agendas":[{"npc":"Supporting NPC","objective":"Established objective","step":0,"max_steps":3,'
+    '"status":"active","location":"Established place"}],"on_screen_npcs":["Supporting NPC"],'
+    '"actor":{"inventory_add":[{"name":"Established item","domain":"utility","modifier":0}],'
+    '"inventory_remove":[],"skills_add":[],"skills_remove":[],"conditions_add":[],"conditions_remove":[]},'
+    '"factions":[{"name":"Established faction","goal":"Established goal","intel":"Established intel",'
+    '"lies":["Established lie"],"morale":"steady","conflict":"Established conflict",'
+    '"relations":{"Other faction":"Established relation"}}],'
+    '"quests":[{"id":"existing-quest-id","kind":"side","status":"active","objective":"Established objective",'
+    '"progress_current":0,"progress_target":3,"reward":"Established reward"}],'
+    '"foreshadowing":[{"id":"existing-seed-id","status":"planted","seed":"Established seed",'
+    '"payoff":"Established payoff"}],'
+    '"tasks":[{"id":"existing-task-id","actor":"user","objective":"Established objective",'
+    '"stage":"Established stage","status":"active","progress_current":0,"progress_target":3,'
+    '"completed_steps":[],"pending_steps":["Established unfinished step"],"complications":[], '
+    '"consequence":"Established consequence"}]}. '
+    "Include this member inside the required response roots; never copy these placeholder facts. "
+)
+
+SIMULATION_EXTRACTION_POLICY = SIMULATION_EXTRACTION_SCHEMA + (
+    "Return simulation as an object of changes, not a copy of saved state. Omit unchanged groups and unproven "
+    "optional fields rather than sending null. Every plural group and on_screen_npcs is a JSON array; "
+    "group entries are objects except on_screen_npcs entries are name strings. "
+    "Use only supported schema fields at every level; use quests, never quest, "
+    "and actor changes, never saved inventory. "
+    "actor is an object; inventory_add, inventory_remove, skills_add, skills_remove, conditions_add, "
+    "conditions_remove are each ARRAYS, even for one entry. Actor entries are name strings or objects "
+    "with name/domain strings and an integer modifier. Faction morale is a string, never a number. "
+    "All descriptive fields, names and IDs are strings; progress, step, max_steps and deltas are JSON integers, "
+    "not quoted numbers; apology/complete are JSON booleans. Faction lies and task step lists are arrays "
+    "of strings; faction relations is an object mapping faction names to strings. Use compact JSON. "
     "relationships:[{npc,bond_delta:-2..0,sparks_delta:-2..2,grudge_delta:-1..1,apology:boolean}], "
-    "agendas:[{npc,objective,step,max_steps:1..20,status:active|paused|completed,location}], "
+    "agendas:[{npc,objective,step:0..20,max_steps:1..20,status:active|paused|completed,location}], "
     "on_screen_npcs:[names], actor:{inventory_add,inventory_remove,skills_add,skills_remove,"
-    "conditions_add,conditions_remove}, each actor entry {name,domain,modifier:-2..2}; "
+    "conditions_add,conditions_remove}, actor objects use {name,domain,modifier:-2..2}; "
     "factions:[{name,goal,intel,lies:[text],morale,conflict,relations:{name:text}}], "
     "quests:[{id,kind:main|side,status:active|paused|completed|failed,objective,progress_current,"
-    "progress_target,reward,arc_id}], foreshadowing:[{id,status:planted|developing|resolved|abandoned,"
+    "progress_target,reward,arc_id}] (quest progress integers 0..100000), "
+    "foreshadowing:[{id,status:planted|developing|resolved|abandoned,"
     "seed,payoff,thread_id,arc_id}]. Use at most 32 updates per group/part and bounded short text. "
     "tasks:[{id,actor:user,objective,stage,status:active|paused|completed|failed,progress_current:0..20,"
     "progress_target:0..20,completed_steps:[text],pending_steps:[text],complications:[text],"
     "consequence,last_check_key}]. "
     "Tasks describe established user activity, not private NPC activity or a second plot engine. "
+    "Do not both add and remove the same actor item in one source part. "
     "Only record progress/steps/consequences established in committed narration; a roll alone proves no progress. "
     "Keep each step list within 16 entries and reuse existing task/quest IDs exactly; "
     "do not respell or regenerate IDs. "
@@ -54,7 +87,7 @@ SIMULATION_EXTRACTION_POLICY = (
 
 
 def extraction_tracker_context(db: sqlite3.Connection, chat_id: str, session_id: str, through_rowid: int) -> str:
-    lines = [simulation_context_for_prompt(db, chat_id, session_id, through_rowid=through_rowid)]
+    lines = [simulation_context_for_prompt(db, chat_id, session_id, through_rowid=through_rowid, for_extraction=True)]
     for row in list_arc_rows(db, chat_id, session_id, limit=16):
         if row["source_revision"] <= through_rowid:
             lines.append(f"Narrative arc ID {row['arc_id']}: {row['title'][:100]}")

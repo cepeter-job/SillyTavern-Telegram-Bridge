@@ -2,6 +2,7 @@
 
 import copy
 import json
+from contextlib import closing
 from dataclasses import replace
 
 import pytest
@@ -113,7 +114,7 @@ def test_read_only_input_connection_is_supported(tmp_path):
     path = tmp_path / "native.sqlite3"
     db, scope, messages, _ = native_fixture(tmp_path, db=sqlite3.connect(path))
     db.close()
-    with sqlite3.connect(path.as_uri() + "?mode=ro", uri=True) as readonly:
+    with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as readonly, readonly:
         result = evaluate_hybrid_shadow(readonly, scope, messages, query="astrolabe")
         assert result.metrics["candidate_status"] == "preview"
         assert readonly.total_changes == 0

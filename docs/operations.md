@@ -113,6 +113,20 @@ a failed runtime write does not change a saved story or provider outcome.
 Higher log levels omit lower-level events and therefore produce incomplete
 troubleshooting timelines. Keep `INFO` for ordinary operation.
 
+Choice-only failures use `light_novel.choice_failed`: `phase` identifies preparation,
+provider or parsing; `reason` is a fixed failure code; `attempt` and `retryable`
+show the bounded retry decision. `count` is the requested choice count and `kind`
+is the strategy. Model and choice references are opaque, not raw model output.
+Malformed choices may use one re-extraction from the same context within the
+existing two-attempt limit. Repeated failure leaves the saved story intact;
+use **Retry Choices** rather than regenerating that story.
+
+Scene and Summary output allocations grow with the bounded source and retained
+state, but remain capped. A larger allocation does not validate an incomplete
+response. Repeated `output_capped` failures now follow the existing eight-failure
+autonomous parking rule; manual retry remains available. Check accepted coverage,
+not just provider success, before treating memory processing as complete.
+
 ### Session troubleshooting and export
 
 Open the Mini App's **System** page, then **Troubleshooting diagnostics**.
@@ -345,7 +359,7 @@ to install a specific reviewed release. This procedure is for an
 installer-managed **Git checkout**. Back up the database, private configuration
 and native SillyTavern data first; see [Backup and restore](#database-migrations-backup-and-restore).
 
-Open the [releases page](https://github.com/cepeter/SillyTavern-Telegram-Bridge/releases),
+Open the [releases page](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/releases),
 read the notes, and copy the exact tag of the release you chose. The terminal
 block below asks for that tag rather than guessing from the highest tag in Git.
 Run it from an interactive Bash terminal as the bridge user. Check the two paths
@@ -469,6 +483,52 @@ Open Director Room to see whether the ending is waiting for generation, already
 saved, or only missing from Telegram. After a provider error, use `/retry` or
 **Recover saved ending**. Check the result before submitting another recovery.
 A failed model call does not start an unlimited automatic retry loop.
+
+For `narrative.reconciliation_rejected` events with `phase=publish`, the fixed
+`reason` code identifies the rejected update without logging its content:
+
+| Reason | Publication guard |
+| --- | --- |
+| `scene_thread_missing` | The scene's thread was neither established nor included in the update. |
+| `arc_thread_missing` | An arc references a thread that was neither established nor included in the update. |
+| `scene_id_reused` | A completed scene identifier was reused. |
+| `scene_viewpoint_changed` | An existing scene changed its thread, viewpoint or POV without a new identifier. |
+| `scene_transition_missing` | A new scene omitted an explicit transition. |
+| `epilogue_identity_mismatch` | The update did not match the committed epilogue. |
+| `state_revision_conflict` | The conditional state update could not publish at its expected revision. |
+| `state_rejected` | Another publication error occurred; its message is not logged. |
+
+These codes do not add retries or weaken validation. Rejected updates leave the
+saved story intact; do not manufacture missing records or reset the story to
+bypass a guard.
+
+For `director.rejected`, `reason` retains the broad failure category. When it is
+`policy`, the warning-level event also carries a fixed `rejection_code`:
+
+| Rejection code | Policy guard |
+| --- | --- |
+| `user_authorship` | The response contains a user dialogue, thought, decision or action field. |
+| `arc_outcome_change` | An arc plan attempts to change a committed arc status. |
+| `ending_mode_required` | An ending-goal or readiness proposal requires Closed Story mode. |
+| `finale_phase_undeveloped` | The committed story phase is not escalation, climax or resolution. |
+| `user_speaker` | The user is selected as an autonomous speaker. |
+| `pov_policy_conflict` | The proposed POV mode conflicts with Narrative Style. |
+| `user_first_person` | First-person narration selects the user as viewpoint. |
+| `absent_user_viewpoint` | The proposed viewpoint is the user while user presence is false. |
+| `continue_transition` | A continuing scene proposes a new thread or non-continuing transition. |
+| `continue_viewpoint_change` | A continuing scene changes the viewpoint character. |
+| `continue_pov_change` | A continuing scene changes the established POV mode. |
+| `continue_presence_change` | A continuing scene changes established user presence. |
+| `policy` | A policy failure has no recognized code; its exception text is omitted. |
+
+The code identifies the first failed guard, not every possible problem with the
+proposal. Parse, reference, stale, lifecycle and provider failures retain their
+existing broad categories; unrecognized exceptions remain `unavailable`. Codes
+survive the production JSON formatter without including proposals, story text,
+private entity identifiers or exception messages. The retained decision and
+user-facing message remain generic, and rejected proposals remain empty.
+Existing logs cannot recover a specific rule that was not recorded at the time.
+These diagnostics do not change validation, retry budgets or ending admission.
 
 The bridge resumes the unfinished step. It does not write a second epilogue just
 because Telegram failed to deliver the first one. Read-only recovery does not

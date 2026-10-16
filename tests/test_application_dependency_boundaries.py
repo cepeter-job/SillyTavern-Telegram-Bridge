@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import MISSING
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -80,7 +81,11 @@ def test_telegram_runtime_requires_download_transport():
     from bridge.composition import TelegramRuntime
 
     assert "download_file" in TelegramRuntime.__dataclass_fields__
-    assert TelegramRuntime.__dataclass_fields__["download_file"].default.__class__.__name__ == "_MISSING_TYPE"
+    download = TelegramRuntime.__dataclass_fields__["download_file"]
+    # Python 3.15 changed the implementation of MISSING to a public sentinel.
+    # Its identity, rather than its private class name, is the contract.
+    assert download.default is MISSING
+    assert download.default_factory is MISSING
 
 
 def _image_services(download_file, sent):

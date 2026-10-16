@@ -17,7 +17,7 @@ from bridge.memory_workers import run_memory_claim
     [
         ("summary", '{"blocks":[{"text":"Established event","visibility":"shared","known_by":[]}]}'),
         ("scene", '{"state":{},"blocks":[]}'),
-        ("episodes", "[]"),
+        ("episodes", '{"memories":[],"no_memory_reason":"Only transient dialogue was present."}'),
     ],
 )
 def test_malformed_json_repairs_once_then_completes(session_db, layer, valid):
@@ -107,7 +107,7 @@ def test_conflicting_audience_is_not_repaired_or_published(session_db, caplog):
     [
         ("summary", '{"blocks":[{"text":"Established event","visibility":"shared","known_by":[]}]}'),
         ("scene", '{"state":{},"blocks":[]}'),
-        ("episodes", "[]"),
+        ("episodes", '{"memories":[],"no_memory_reason":"Only transient dialogue was present."}'),
     ],
 )
 def test_claim_replaced_during_repair_never_publishes(session_db, layer, valid):

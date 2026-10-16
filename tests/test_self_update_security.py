@@ -7,6 +7,7 @@ import os
 import shutil
 import sqlite3
 import subprocess
+from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -80,6 +81,21 @@ def make_plan(engine, data):
         release_version="0.0.2",
         remote_url=str(data.remote),
     )
+
+
+def test_default_update_source_uses_canonical_organization(engine, release_tree):
+    data = release_tree
+    plan = engine.UpdatePlan(source=data.source, live=data.live, trusted_signers=data.signers, release_version="0.0.2")
+    assert plan.remote_url == "https://github.com/cepeter-job/SillyTavern-Telegram-Bridge.git"
+
+
+def test_existing_deployment_identity_remains_recognized(engine, release_tree):
+    import json
+
+    (release_tree.live / engine.MARKER).write_text(
+        json.dumps({"application": "cepeter/SillyTavern-Telegram-Bridge", "format": 1}), encoding="utf-8"
+    )
+    engine._validate_live_contents(release_tree.live)
 
 
 def fake_supervisor(monkeypatch, engine):
@@ -220,7 +236,7 @@ def test_two_key_rotation_overlap_accepts_release_signed_by_new_key(engine, rele
 def test_verified_release_snapshots_database_before_source_activation(engine, release_tree, monkeypatch):
     data = release_tree
     database = data.live.parent / "bridge.sqlite3"
-    with sqlite3.connect(database) as db:
+    with closing(sqlite3.connect(database)) as db, db:
         db.execute("CREATE TABLE sample(value TEXT NOT NULL)")
         db.execute("INSERT INTO sample VALUES('preserved')")
         db.commit()
@@ -248,7 +264,7 @@ def test_verified_release_snapshots_database_before_source_activation(engine, re
     assert events.index("backup") < events.index("activate-source")
     backups = list(backup_dir.glob("*.sqlite3"))
     assert len(backups) == 1
-    with sqlite3.connect(backups[0]) as db:
+    with closing(sqlite3.connect(backups[0])) as db, db:
         assert db.execute("SELECT value FROM sample").fetchone()[0] == "preserved"
 
 

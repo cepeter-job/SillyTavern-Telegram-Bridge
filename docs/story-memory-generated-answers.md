@@ -171,7 +171,7 @@ context-efficiency savings. For paired **full-story** prompt replay, use
 checkpoint captures the actual native `MemoryService.prompt_context`, runs the actual story
 builder and final budget gate, preserves matched settings and protected story
 state, and reports estimates separately from supplied provider usage. Its
-30% reduction remains a goal until complete paired accounting and a separately
+20% reduction remains a goal until complete paired accounting and a separately
 recorded blinded human review are available. Neither tool's default offline
 plan executes a real model.
 

@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "frozen_at_utc": "2026-10-10T15:14:18.370541+00:00",
+  "plan_sha256": "0bced88e5d1405d78b4deca3009bee203addc952239a46662a99ed890d406fe4",
+  "baseline_revision": "5370e435f56804fd37b1d57f21b82a3bba6efd7b",
+  "candidate_revision": "3c94d3ca5ee91e1574a0db2c47b415de2fc67188",
+  "cases": [
+    {
+      "case_id": "gate_promise:episodes",
+      "required_facts": [
+        "It is before dawn and the northern gate remains locked.",
+        "Rowan promised not to open the gate before dawn.",
+        "Ari refused use of the compass; Mira retains the cupboard key.",
+        "Rowan does not know the sealed dispatch password."
+      ],
+      "forbidden_inferences": [
+        "Ari accepts the invitation",
+        "Ari receives the key",
+        "Rowan knows the password"
+      ]
+    },
+    {
+      "case_id": "gate_promise:npc",
+      "required_facts": [
+        "It is before dawn and the northern gate remains locked.",
+        "Rowan promised not to open the gate before dawn.",
+        "Ari refused use of the compass; Mira retains the cupboard key.",
+        "Rowan does not know the sealed dispatch password."
+      ],
+      "forbidden_inferences": [
+        "Ari accepts the invitation",
+        "Ari receives the key",
+        "Rowan knows the password"
+      ]
+    },
+    {
+      "case_id": "gate_promise:scene",
+      "required_facts": [
+        "It is before dawn and the northern gate remains locked.",
+        "Rowan promised not to open the gate before dawn.",
+        "Ari refused use of the compass; Mira retains the cupboard key.",
+        "Rowan does not know the sealed dispatch password."
+      ],
+      "forbidden_inferences": [
+        "Ari accepts the invitation",
+        "Ari receives the key",
+        "Rowan knows the password"
+      ]
+    },
+    {
+      "case_id": "gate_promise:curator",
+      "required_facts": [
+        "It is before dawn and the northern gate remains locked.",
+        "Rowan promised not to open the gate before dawn.",
+        "Ari refused use of the compass; Mira retains the cupboard key.",
+        "Rowan does not know the sealed dispatch password."
+      ],
+      "forbidden_inferences": [
+        "Ari accepts the invitation",
+        "Ari receives the key",
+        "Rowan knows the password"
+      ]
+    },
+    {
+      "case_id": "gate_promise:story",
+      "required_facts": [
+        "It is before dawn and the northern gate remains locked.",
+        "Rowan promised not to open the gate before dawn.",
+        "Ari refused use of the compass; Mira retains the cupboard key.",
+        "Rowan does not know the sealed dispatch password."
+      ],
+      "forbidden_inferences": [
+        "Ari accepts the invitation",
+        "Ari receives the key",
+        "Rowan knows the password"
+      ]
+    },
+    {
+      "case_id": "ferry_branch:episodes",
+      "required_facts": [
+        "Ari memilih feri selatan karena jembatan utara rusak akibat banjir.",
+        "Utang tiket feri belum dibayar.",
+        "Peti tetap tertutup sampai fajar dan fajar belum tiba.",
+        "Ari menolak menyerahkan kunci dan tetap memegangnya."
+      ],
+      "forbidden_inferences": [
+        "Utang sudah dibayar",
+        "Ari memilih jembatan utara",
+        "Peti telah dibuka"
+      ]
+    },
+    {
+      "case_id": "ferry_branch:npc",
+      "required_facts": [
+        "Ari memilih feri selatan karena jembatan utara rusak akibat banjir.",
+        "Utang tiket feri belum dibayar.",
+        "Peti tetap tertutup sampai fajar dan fajar belum tiba.",
+        "Ari menolak menyerahkan kunci dan tetap memegangnya."
+      ],
+      "forbidden_inferences": [
+        "Utang sudah dibayar",
+        "Ari memilih jembatan utara",
+        "Peti telah dibuka"
+      ]
+    },
+    {
+      "case_id": "ferry_branch:scene",
+      "required_facts": [
+        "Ari memilih feri selatan karena jembatan utara rusak akibat banjir.",
+        "Utang tiket feri belum dibayar.",
+        "Peti tetap tertutup sampai fajar dan fajar belum tiba.",
+        "Ari menolak menyerahkan kunci dan tetap memegangnya."
+      ],
+      "forbidden_inferences": [
+        "Utang sudah dibayar",
+        "Ari memilih jembatan utara",
+        "Peti telah dibuka"
+      ]
+    },
+    {
+      "case_id": "ferry_branch:curator",
+      "required_facts": [
+        "Ari memilih feri selatan karena jembatan utara rusak akibat banjir.",
+        "Utang tiket feri belum dibayar.",
+        "Peti tetap tertutup sampai fajar dan fajar belum tiba.",
+        "Ari menolak menyerahkan kunci dan tetap memegangnya."
+      ],
+      "forbidden_inferences": [
+        "Utang sudah dibayar",
+        "Ari memilih jembatan utara",
+        "Peti telah dibuka"
+      ]
+    },
+    {
+      "case_id": "ferry_branch:story",
+      "required_facts": [
+        "Ari memilih feri selatan karena jembatan utara rusak akibat banjir.",
+        "Utang tiket feri belum dibayar.",
+        "Peti tetap tertutup sampai fajar dan fajar belum tiba.",
+        "Ari menolak menyerahkan kunci dan tetap memegangnya."
+      ],
+      "forbidden_inferences": [
+        "Utang sudah dibayar",
+        "Ari memilih jembatan utara",
+        "Peti telah dibuka"
+      ]
+    }
+  ],
+  "checks": [
+    "Inspect accepted native fixture state, not only raw JSON or job-complete status.",
+    "For episodes, a source containing declared durable facts must retain those essential facts; an empty memories array fails semantic acceptance.",
+    "Check promise/refusal/ownership, unpaid obligations, active-branch causality and character knowledge/audience fences.",
+    "Inspect the final NPC repair result and durable job outcome; preserve any independently valid simulation and never force-complete failed extraction.",
+    "Report all physical requests, repairs, retries, failures and reported input/output; unknown usage halts that arm.",
+    "No production state, route, pruning, defaults or external-memory document mutation is part of this synthetic trial."
+  ],
+  "limits": {
+    "maximum_requests": 24,
+    "maximum_input_tokens": 300000,
+    "maximum_output_tokens": 32000,
+    "subscription_only": true,
+    "allow_overage": false,
+    "automatic_resume": false
+  },
+  "quality_approval": false
+}

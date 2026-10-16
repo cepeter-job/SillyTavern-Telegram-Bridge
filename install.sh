@@ -489,8 +489,8 @@ if ((DEPS)); then
       exit 1
     }
     curl --proto '=https' --tlsv1.2 --fail --location --silent --show-error --max-time 90 \
-      https://astral.sh/uv/0.12.19/install.sh -o "$TMP/uv-install.sh"
-    printf '%s  %s\n' '61b349611f1b6e1ba33645f30c36da5287df2609dd7af8605d96a031435eb35b' "$TMP/uv-install.sh" |
+      https://astral.sh/uv/0.12.23/install.sh -o "$TMP/uv-install.sh"
+    printf '%s  %s\n' 'b8e6c43099ee9f9a550984d3ad56948457c689e7a99c090b35377234ac241491' "$TMP/uv-install.sh" |
       sha256sum --check --status
     UV_INSTALL_DIR="$HOME/.local/bin" UV_NO_MODIFY_PATH=1 sh "$TMP/uv-install.sh"
     UV="$HOME/.local/bin/uv"

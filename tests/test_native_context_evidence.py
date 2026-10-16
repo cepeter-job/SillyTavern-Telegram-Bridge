@@ -4,8 +4,10 @@ import hashlib
 import json
 from pathlib import Path
 
+import pytest
+
 from tools.native_context_trial import summarize_trial
-from tools.run_native_context_trial import validate_trial_state
+from tools.run_native_context_trial import protocol_digest, validate_trial_state
 
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "docs/evidence/issue421-native-continuity-v1"
@@ -40,7 +42,12 @@ def test_locked_original_trial_recomputes_without_network():
     plan = json.loads((EVIDENCE / "frozen-plan.json").read_text())
     state = json.loads((EVIDENCE / "state.json").read_text())
     report = json.loads((EVIDENCE / "report.json").read_text())
-    validate_trial_state(plan, state)
+    # The immutable v1 plan describes the historical implementation. Lifecycle
+    # maintenance changes the current source digest, so it must not authorize
+    # current execution. Replaying recorded results does not dispatch requests.
+    assert plan["implementation_sha256"] != protocol_digest()
+    with pytest.raises(ValueError, match=r"^native_trial_protocol_changed$"):
+        validate_trial_state(plan, state)
     recomputed = summarize_trial(plan, state)
     # Python versions may round summation by one ULP. Only this aggregate
     # estimate may differ; frozen artifact hashes and all other evidence

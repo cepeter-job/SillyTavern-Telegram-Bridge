@@ -10,6 +10,7 @@ import socket
 import sys
 import tempfile
 import time
+from contextlib import closing
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -48,7 +49,7 @@ async def serve() -> None:
             from bridge.sqlite_store import write_transaction
             from bridge.token_usage_repository import insert_event
 
-            with services.db_factory() as usage_db:
+            with closing(services.db_factory()) as usage_db, usage_db:
                 with write_transaction(usage_db):
                     for day in range(7):
                         for call in range(3):

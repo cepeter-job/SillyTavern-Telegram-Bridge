@@ -2,8 +2,8 @@
 
 import pytest
 from application_test_setup import make_test_application_services, make_test_provider_port
+from session_test_support import session_db as session_db
 from test_action_runtime import output
-from test_memory_completion_safety import session_db as session_db
 from test_simulation_trackers import _assistant_row
 
 from bridge.conversation_lifecycle import mark_started

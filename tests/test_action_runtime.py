@@ -4,8 +4,8 @@ import json
 
 import pytest
 from application_test_setup import make_test_provider_port
+from session_test_support import session_db as session_db
 from test_action_adjudication import proposal
-from test_memory_completion_safety import session_db as session_db
 from test_simulation_trackers import _assistant_row
 
 from bridge.metadata import set_meta

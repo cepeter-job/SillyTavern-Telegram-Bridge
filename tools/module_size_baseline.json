@@ -32,7 +32,7 @@
     "tests/test_light_novel_flow.py": 743,
     "tests/test_light_novel_generation.py": 588,
     "tests/test_live_sync.py": 911,
-    "tests/test_memory_completion_safety.py": 619,
+    "tests/test_memory_completion_safety.py": 606,
     "tests/test_memory_diagnostics.py": 856,
     "tests/test_memory_native_backend.py": 503,
     "tests/test_memory_service.py": 865,

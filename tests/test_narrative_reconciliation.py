@@ -5,7 +5,7 @@ from dataclasses import asdict
 
 import pytest
 from application_test_setup import make_test_provider_port
-from test_memory_completion_safety import session_db as session_db
+from session_test_support import session_db as session_db
 
 from bridge.narrative_repository import load_narrative_scene, load_narrative_thread
 from bridge.narrative_settings import preset_narrative_settings, save_session_narrative_settings

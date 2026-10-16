@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from test_memory_completion_safety import session_db as session_db
+from session_test_support import session_db as session_db
 
 from bridge.director_goals import director_goal_policy, get_director_goal, set_director_goal
 from bridge.director_repository import load_director_state

@@ -4,7 +4,7 @@ import json
 
 import pytest
 from application_test_setup import make_test_provider_port
-from test_memory_completion_safety import session_db as session_db
+from session_test_support import session_db as session_db
 from test_narrative_reconciliation import add_story, run_reconciliation
 
 from bridge.director_guidance import director_guidance_for_session

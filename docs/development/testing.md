@@ -63,6 +63,14 @@ the test author's responsibility. Mock external transports before constructing o
 sending their requests. See [network_test_support.py](../../tests/network_test_support.py)
 and [test_network_test_guard.py](../../tests/test_network_test_guard.py).
 
+Shared fixture implementations belong in focused `tests/*_test_support.py` modules,
+not in another test module. Import `session_db` explicitly from
+[session_test_support.py](../../tests/session_test_support.py) when a case needs
+the standard temporary session database. It remains function-scoped: every test
+gets its own settings, persona seed and SQLite connection, closed at teardown.
+Keep domain-specific autouse transport guards local to the tests that need them;
+sharing a database fixture must not silently enable or disable those guards.
+
 Release every resource the test owns: connections, cursors, response bodies,
 threads, executors, servers and child processes. Fixture teardown must also work
 after a failed assertion. The session-finish hook drains background work and

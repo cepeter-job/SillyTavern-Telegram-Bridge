@@ -6,8 +6,8 @@ import logging
 import pytest
 from application_test_setup import make_test_provider_port
 from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
+from session_test_support import session_db as session_db
 from test_durable_memory_workers import add
-from test_memory_completion_safety import session_db as session_db
 
 from bridge.extraction_contracts import REJECTION_CODES, tracker_repair_instruction
 from bridge.memory_store import claim_jobs

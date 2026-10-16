@@ -4,8 +4,8 @@ from contextlib import closing
 
 import pytest
 from miniapp_test_support import identity, make_services
+from session_test_support import session_db as session_db
 from test_ending_state import goal, ready_case
-from test_memory_completion_safety import session_db as session_db
 
 from bridge import director_input, director_panels
 from bridge import director_room as room

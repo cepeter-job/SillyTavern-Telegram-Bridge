@@ -5,9 +5,9 @@ from unittest.mock import patch
 
 import pytest
 from application_test_setup import make_test_persona_service, make_test_provider_port
+from session_test_support import session_db as session_db
 from test_director_service import directed as directed
 from test_director_service import reassess
-from test_memory_completion_safety import session_db as session_db
 from test_narrative_reconciliation import add_story, proposal, run_reconciliation
 
 from bridge import director_runtime, extension_registry, narrative_reconciliation

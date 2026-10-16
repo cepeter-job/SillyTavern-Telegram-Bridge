@@ -4,8 +4,8 @@ import json
 from dataclasses import replace
 
 import pytest
+from session_test_support import session_db as session_db
 from test_ending_state import goal, ready_case
-from test_memory_completion_safety import session_db as session_db
 
 from bridge.director_contracts import DirectorProposalError, parse_director_proposal
 from bridge.director_guidance import director_guidance_for_session

@@ -65,7 +65,6 @@ def test_resume_after_local_commit_deletes_frozen_messages_only(reset_case):
     assert operation_phase(case.db, "reset-recovery") == "applied"
 
 
-
 def test_resume_after_new_story_enters_finale_only_deletes_old_messages(reset_case):
     case = reset_case
     with patch.object(commands, "telegram_request", side_effect=ProcessStopped), pytest.raises(ProcessStopped):
@@ -90,6 +89,47 @@ def test_resume_after_new_story_enters_finale_only_deletes_old_messages(reset_ca
     assert case.db.execute("SELECT telegram_message_ids FROM messages").fetchone()[0] == "[99]"
     assert case.db.execute("SELECT lifecycle FROM ending_state").fetchone()[0] == "finale"
 
+
+
+def test_resume_after_panel_binding_expires_uses_durable_job_scope(reset_case):
+    from application_test_setup import make_test_application_services
+    from bridge import callback_dispatch, conversation_callbacks
+    from bridge.job_store import enqueue_job
+
+    case = reset_case
+    callback = {
+        "id": "reset-callback",
+        "from": {"id": "owner"},
+        "data": "reset:confirm",
+        "_queued": True,
+        "message": {"message_id": 77, "chat": {"id": "chat"}},
+    }
+    job_id = enqueue_job(
+        case.db, 880, "chat", case.session["session_id"], 77, "callback", {"actor_id": "owner"}
+    )
+    with patch.object(commands, "telegram_request", side_effect=ProcessStopped), pytest.raises(ProcessStopped):
+        reset(case, operation_id=job_id)
+    assert operation_phase(case.db, job_id) == "local_committed"
+
+    deleted = []
+    with (
+        patch.object(commands, "telegram_request", side_effect=lambda _t, _m, p: deleted.append(p["message_id"])),
+        patch.object(callback_dispatch, "send_text"),
+        patch.object(callback_dispatch, "close_panel_message"),
+        patch.object(conversation_callbacks, "send_text"),
+        patch.object(conversation_callbacks, "remove_inline_keyboard"),
+    ):
+        callback_dispatch.process_callback(
+            case.db,
+            "token",
+            callback,
+            operation_id=job_id,
+            actor_id="owner",
+            services=make_test_application_services(app_settings=case.app_settings_builder.build()),
+        )
+
+    assert deleted == [41, 42]
+    assert operation_phase(case.db, job_id) == "applied"
 
 def test_midway_crash_survives_reopening_database(reset_case):
     case = reset_case

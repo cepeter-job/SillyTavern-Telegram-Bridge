@@ -75,7 +75,9 @@ def test_require_backends_makes_a_skipped_component_nonzero(tmp_path):
     from compare_story_memory_retrieval import main
 
     output = tmp_path / "result.json"
-    assert main(["--output", str(output), "--repeats", "1", "--require-backends", "blob"]) == 1
+    # Only blob availability is under test; the full default study above retains
+    # standalone FTS coverage and this run still builds the entire real corpus.
+    assert main(["--output", str(output), "--repeats", "1", "--backends", "blob", "--require-backends", "blob"]) == 1
     report = json.loads(output.read_text())
     assert report["required_backend_failures"] == ["blob"]
     assert report["backends"]["blob"]["reason"] == "capability_or_budget_unverified"
@@ -152,6 +154,8 @@ def test_fake_transport_artifact_replays_offline_and_hindsight_fuses_verified_re
                 str(replay_path),
                 "--repeats",
                 "1",
+                "--backends",
+                "blob",
                 "--embedding-artifact",
                 str(artifact_path),
                 "--require-backends",

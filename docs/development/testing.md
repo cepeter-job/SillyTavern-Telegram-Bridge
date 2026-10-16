@@ -100,6 +100,30 @@ verification to the development environment, not as the normal testing setup.
 CI's four independent machines, each with up to four workers, are not a suitable
 single-machine concurrency setting for a shared VPS.
 
+## Keep expensive regression setup proportional
+
+Reuse immutable synthetic observation input rather than rebuilding the same plan
+before every validation. Decode a fresh copy per test; do not share SQLite
+connections, mutable reports, provider transports or corpus state. Keep actual
+CLI entrypoint subprocess cases and full default/wire replays, while rejection
+matrices may exercise the real parser and main function in-process with restored
+environment and captured output. Report those as in-process tests, not subprocess
+execution evidence. Backend-specific replays need only their asserted backends.
+
+Test filenames do not encode permanent architecture. The specific helper-owner
+check in `test_ci_gate.py` protects existing extracted support functions; it does
+not reserve old test filenames. Keep current behavioral gate tests independent
+of historical refactor naming. Never skip coverage or security checks to improve
+CI timing.
+
+The DOM smoke runner opts into a loopback-fixture-only HTTP clock so reserving a
+new request window does not sleep for a real minute. The production limiter,
+authentication and request history are unchanged. The fixture control requires an
+ephemeral owner key and is absent by default. Dedicated HTTP tests exercise 120
+accepted requests, rejection of request 121, rejection of unauthorized clock
+changes, expiry and a second complete rate window. Chromium/WebKit fixtures keep
+real clocks. Controlled-fixture timing is not production request-latency evidence.
+
 ## Run the Python and static gates
 
 Run the required local verification from

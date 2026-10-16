@@ -10,6 +10,7 @@ import socket
 import sys
 import tempfile
 import time
+from contextlib import ExitStack
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,7 +32,7 @@ from bridge.provider_port import ProviderPort
 
 
 async def serve() -> None:
-    with tempfile.TemporaryDirectory(prefix="miniapp-dom-") as directory:
+    with tempfile.TemporaryDirectory(prefix="miniapp-dom-") as directory, ExitStack() as stack:
         services = make_services(Path(directory))
         services.memory_diagnostics = MemoryDiagnostics(services.config.bridge_home, {})
 
@@ -95,6 +96,11 @@ async def serve() -> None:
         # fixture must authorize its own loopback origin, not the example URL.
         config = replace(load_miniapp_config(services.config), public_url=f"http://127.0.0.1:{port}/miniapp/")
         app = create_miniapp_app(services, config)
+        rate_clock = None
+        if os.environ.get("MINIAPP_FIXTURE_RATE_CLOCK") == "1":
+            from miniapp_rate_clock_test_support import rate_clock_control
+
+            rate_clock = stack.enter_context(rate_clock_control(app))
         if recovery is not None:
             recovery.install(app)
         runner = web.AppRunner(app, access_log=None)
@@ -103,7 +109,10 @@ async def serve() -> None:
         try:
             await site.start()
             port = site._server.sockets[0].getsockname()[1]
-            print(json.dumps({"url": f"http://127.0.0.1:{port}", "initData": signed_data()}), flush=True)
+            ready = {"url": f"http://127.0.0.1:{port}", "initData": signed_data()}
+            if rate_clock is not None:
+                ready["rate_clock"] = rate_clock
+            print(json.dumps(ready), flush=True)
             stopped = asyncio.Event()
             loop = asyncio.get_running_loop()
             loop.add_signal_handler(signal.SIGTERM, stopped.set)

@@ -23,6 +23,16 @@ def run_cli(tmp_path, *args):
     return result, json.loads(output.read_text()) if output.exists() else None
 
 
+@pytest.fixture(scope="module")
+def offline_plan(tmp_path_factory):
+    # Only immutable observation input is shared; every validator invocation still
+    # runs the real CLI against a fresh corpus and each test decodes its own copy.
+    result, report = run_cli(tmp_path_factory.mktemp("context-observation-plan"))
+    assert result.returncode == 0, result.stderr
+    assert report is not None
+    return json.dumps(report)
+
+
 def observations(plan):
     return {
         "schema_version": 1,
@@ -111,8 +121,8 @@ def test_default_cli_builds_actual_story_prompts_without_measured_claim(tmp_path
         assert case["variants"]["baseline"]["settings"] == case["variants"]["candidate"]["settings"]
 
 
-def test_observations_include_cached_and_all_accepted_work_costs(tmp_path):
-    _, plan = run_cli(tmp_path)
+def test_observations_include_cached_and_all_accepted_work_costs(tmp_path, offline_plan):
+    plan = json.loads(offline_plan)
     source = tmp_path / "observations.json"
     source.write_text(json.dumps(observations(plan)))
     result, report = run_cli(tmp_path, "--observations", source, "--review-output", tmp_path / "blind.json")
@@ -130,8 +140,8 @@ def test_observations_include_cached_and_all_accepted_work_costs(tmp_path):
 
 
 @pytest.mark.parametrize("usage_field", ["input_tokens", "output_tokens"])
-def test_unknown_helper_usage_stays_unknown_and_blocks_approval(tmp_path, usage_field):
-    _, plan = run_cli(tmp_path)
+def test_unknown_helper_usage_stays_unknown_and_blocks_approval(tmp_path, usage_field, offline_plan):
+    plan = json.loads(offline_plan)
     data = observations(plan)
     data["cases"][0]["variants"]["candidate"]["requests"][1][usage_field] = None
     source = tmp_path / "unknown.json"
@@ -156,8 +166,8 @@ def test_unknown_helper_usage_stays_unknown_and_blocks_approval(tmp_path, usage_
         "accepted_output_mismatch",
     ],
 )
-def test_cli_rejects_unmatched_or_invalid_accounting(tmp_path, mutation):
-    _, plan = run_cli(tmp_path)
+def test_cli_rejects_unmatched_or_invalid_accounting(tmp_path, mutation, offline_plan):
+    plan = json.loads(offline_plan)
     data = observations(plan)
     variant = data["cases"][0]["variants"]["candidate"]
     if mutation == "wrong_hash":
@@ -183,8 +193,8 @@ def test_cli_rejects_unmatched_or_invalid_accounting(tmp_path, mutation):
     assert "invalid" in result.stderr.lower() or "mismatch" in result.stderr.lower()
 
 
-def test_review_requires_all_blinded_axes_and_accounting_before_readiness(tmp_path):
-    _, plan = run_cli(tmp_path)
+def test_review_requires_all_blinded_axes_and_accounting_before_readiness(tmp_path, offline_plan):
+    plan = json.loads(offline_plan)
     data = observations(plan)
     source = tmp_path / "observed.json"
     source.write_text(json.dumps(data))
@@ -314,8 +324,8 @@ def test_audience_capture_matches_rowan_knowledge_and_excludes_private_canary(tm
 
 
 @pytest.mark.parametrize("kind", ["story", "repair", "fallback"])
-def test_accepted_observations_require_a_successful_answer_producing_attempt(tmp_path, kind):
-    _, plan = run_cli(tmp_path)
+def test_accepted_observations_require_a_successful_answer_producing_attempt(tmp_path, kind, offline_plan):
+    plan = json.loads(offline_plan)
     data = observations(plan)
     value = data["cases"][0]["variants"]["candidate"]
     for request in value["requests"]:

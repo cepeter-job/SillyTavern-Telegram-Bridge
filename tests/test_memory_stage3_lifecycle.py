@@ -6,9 +6,9 @@ import time
 import pytest
 from application_test_setup import ensure_application_extensions, make_test_provider_port
 from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
+from session_test_support import session_db as session_db
 from settings_test_support import make_test_settings
 from test_memory_complete_parts import FIELDS, SESSION, backend, long_source, published, run
-from test_memory_completion_safety import session_db as session_db
 from test_story_memory_scope import append
 from test_story_memory_scope import db as db
 

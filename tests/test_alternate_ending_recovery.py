@@ -3,8 +3,8 @@
 from unittest.mock import patch
 
 import pytest
+from session_test_support import session_db as session_db
 from test_alternate_ending import branch, close_story
-from test_memory_completion_safety import session_db as session_db
 
 from bridge.sqlite_store import write_transaction
 

@@ -4,11 +4,11 @@ import json
 from dataclasses import replace
 
 import pytest
+from session_test_support import session_db as session_db
 from test_director_service import directed as directed
 from test_director_service import reassess, response
 from test_light_novel_generation import story_row
 from test_light_novel_storage import novel_db as novel_db
-from test_memory_completion_safety import session_db as session_db
 from test_npc_service import _group, _op
 from test_simulation_integration import refresh
 from test_simulation_projection import npc

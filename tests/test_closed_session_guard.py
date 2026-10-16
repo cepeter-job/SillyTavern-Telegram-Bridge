@@ -5,8 +5,8 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
+from session_test_support import session_db as session_db
 from test_epilogue_service import complete, producer_for, resolved
-from test_memory_completion_safety import session_db as session_db
 from test_narrative_generation import invoke_story_flow
 
 from bridge import message_commands

@@ -9,7 +9,7 @@ from application_test_setup import (
     make_test_delivery_port,
     make_test_provider_port,
 )
-from test_memory_completion_safety import session_db as session_db
+from session_test_support import session_db as session_db
 from test_npc_generation_wiring import _fields
 
 from bridge.conversation_lifecycle import conversation_state, mark_started

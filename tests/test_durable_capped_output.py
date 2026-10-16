@@ -2,8 +2,8 @@
 
 import pytest
 from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
+from session_test_support import session_db as session_db
 from test_durable_memory_workers import add
-from test_memory_completion_safety import session_db as session_db
 from test_tracker_output_contracts import nanogpt_port, response
 
 from bridge.memory_curator import get_curated_memory_state

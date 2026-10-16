@@ -3,8 +3,8 @@
 import json
 
 from application_test_setup import make_test_provider_port
+from session_test_support import session_db as session_db
 from test_durable_memory_workers import add
-from test_memory_completion_safety import session_db as session_db
 
 from bridge.memory_store import claim_jobs
 

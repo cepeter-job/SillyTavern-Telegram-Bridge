@@ -130,20 +130,6 @@ class HumanizerPersistenceTests(SettingsTestCase):
         )
         self.assertEqual(reloaded["humanizer"], "on")
 
-    def test_update_session_accepts_humanizer_column(self):
-        session = session_core.ensure_session(
-            self.db, "chat", self.app_settings_builder.default_model, app_settings=self.app_settings
-        )
-        session_core.update_session(self.db, "chat", session["session_id"], humanizer="on")
-        reloaded = session_core.load_session(
-            self.db,
-            "chat",
-            session["session_id"],
-            self.app_settings_builder.default_model,
-            app_settings=self.app_settings,
-        )
-        self.assertEqual(reloaded["humanizer"], "on")
-
 
 class HumanizerGenerationWiringTests(unittest.TestCase):
     def test_render_session_response_chains_humanizer_when_enabled(self):

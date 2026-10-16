@@ -6,7 +6,7 @@ from contextlib import closing
 from dataclasses import replace
 
 import pytest
-from test_memory_completion_safety import session_db as session_db
+from session_test_support import session_db as session_db
 
 from bridge.migrations import run_migrations
 from bridge.narrative_values import NarrativeSettings, NarrativeState

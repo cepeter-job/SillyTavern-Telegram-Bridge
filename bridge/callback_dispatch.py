@@ -19,6 +19,7 @@ from bridge.enum_callbacks import handle_enum_callback
 from bridge.failed_turn_retry_callbacks import handle_failed_turn_retry_callback
 from bridge.group_callbacks import handle_group_panel_callback
 from bridge.light_novel_commands import handle_light_novel_mode_callback
+from bridge.operation_repository import committed_reset_callback_session
 from bridge.panel_bindings import panel_owner_for_message, panel_session_for_message
 from bridge.panel_callback_routes import handle_entity_panel_callback, handle_primary_panel_callback
 from bridge.provider_callbacks import handle_provider_model_callback
@@ -36,6 +37,7 @@ def _prepare_callback_scope(
     *,
     actor_id: str,
     services: BridgeServices,
+    operation_id: int | None = None,
 ) -> _CallbackScope | None:
     """Validate ownership before resolving the panel-bound session and request context."""
     sender = str(actor_id or (callback.get("from") or {}).get("id", ""))
@@ -62,6 +64,9 @@ def _prepare_callback_scope(
         else:
             callback_answer(token, str(callback.get("id", "")), feedback)
         return
+
+    if message_id and not bound_session_id and data == "reset:confirm" and operation_id is not None:
+        bound_session_id = committed_reset_callback_session(db, operation_id, chat_id)
 
     if message_id and is_session_scoped_panel_callback(data) and not bound_session_id:
         feedback = "Panel expired; reopen it"
@@ -244,6 +249,8 @@ def process_callback(
     services: BridgeServices,
     message_worker: Callable[..., None] | None = None,
 ) -> None:
-    scope = _prepare_callback_scope(db, token, callback, actor_id=actor_id, services=services)
+    scope = _prepare_callback_scope(
+        db, token, callback, actor_id=actor_id, services=services, operation_id=operation_id
+    )
     if scope is not None:
         _route_callback(db, token, callback, scope, operation_id, services=services, message_worker=message_worker)

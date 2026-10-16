@@ -6,9 +6,11 @@ from unittest.mock import patch
 
 import pytest
 import test_reset_behavior as reset_tests
-from application_test_setup import make_test_memory_service, make_test_npc_service
+from application_test_setup import make_test_application_services, make_test_memory_service, make_test_npc_service
 
+from bridge import callback_dispatch, conversation_callbacks
 from bridge import message_commands as commands
+from bridge.job_store import enqueue_job
 from bridge.operations import operation_phase
 
 
@@ -92,10 +94,6 @@ def test_resume_after_new_story_enters_finale_only_deletes_old_messages(reset_ca
 
 
 def test_resume_after_panel_binding_expires_uses_durable_job_scope(reset_case):
-    from application_test_setup import make_test_application_services
-    from bridge import callback_dispatch, conversation_callbacks
-    from bridge.job_store import enqueue_job
-
     case = reset_case
     callback = {
         "id": "reset-callback",

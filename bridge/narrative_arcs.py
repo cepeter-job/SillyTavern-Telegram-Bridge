@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from collections.abc import Collection
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,9 +33,12 @@ class NarrativeArc:
 
 
 def _text(value: Any, maximum: int, *, field: str, identifier: bool = False, required: bool = False) -> str:
-    if not isinstance(value, str) or len(value) > maximum or (required and not value.strip()):
-        code = "invalid_type" if not isinstance(value, str) else "too_long" if len(value) > maximum else "empty"
-        raise ExtractionValidationError("Arc text is invalid or oversized", field, code)
+    if not isinstance(value, str):
+        raise ExtractionValidationError("Arc text is invalid or oversized", field, "invalid_type")
+    if len(value) > maximum:
+        raise ExtractionValidationError("Arc text is invalid or oversized", field, "too_long")
+    if required and not value.strip():
+        raise ExtractionValidationError("Arc text is invalid or oversized", field, "empty")
     if identifier and not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", value):
         raise ExtractionValidationError(
             "Arc identifiers must use letters, numbers, underscore or hyphen", field, "invalid_identifier"
@@ -55,6 +59,13 @@ def _strings(value: Any, maximum: int, *, field: str, identifier: bool = False) 
     return items
 
 
+def _choice(value: Any, field: str, allowed: Collection[str]) -> str:
+    if not isinstance(value, str) or value not in allowed:
+        code = "invalid_enum" if isinstance(value, str) else "invalid_type"
+        raise ExtractionValidationError("Arc status, phase or importance is invalid", field, code)
+    return value
+
+
 def parse_arc_updates(value: Any) -> tuple[NarrativeArc, ...]:
     if not isinstance(value, list) or len(value) > 8:
         raise ExtractionValidationError(
@@ -68,15 +79,9 @@ def parse_arc_updates(value: Any) -> tuple[NarrativeArc, ...]:
         if not isinstance(item, dict):
             raise ExtractionValidationError("Arc updates must be objects", "arcs", "invalid_type")
         identifier = _text(item.get("arc_id"), 100, field="arcs.arc_id", identifier=True)
-        status, phase, importance = item.get("status"), item.get("phase"), item.get("importance")
-        for field, selected, allowed in (
-            ("arcs.status", status, ARC_STATUSES),
-            ("arcs.phase", phase, ARC_PHASES),
-            ("arcs.importance", importance, ("major", "minor")),
-        ):
-            if not isinstance(selected, str) or selected not in allowed:
-                code = "invalid_enum" if isinstance(selected, str) else "invalid_type"
-                raise ExtractionValidationError("Arc status, phase or importance is invalid", field, code)
+        status = _choice(item.get("status"), "arcs.status", ARC_STATUSES)
+        phase = _choice(item.get("phase"), "arcs.phase", ARC_PHASES)
+        importance = _choice(item.get("importance"), "arcs.importance", ("major", "minor"))
         if identifier in seen:
             raise ExtractionValidationError("Arc updates cannot repeat an arc identifier", "arcs.arc_id", "duplicate")
         for field_name, maximum in (("open_questions", 4000), ("related_threads", 4000), ("evidence", 4096)):

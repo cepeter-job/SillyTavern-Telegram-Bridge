@@ -19,6 +19,7 @@ from bridge.extension_registry import extension_registry_snapshot as _extension_
 from bridge.extension_registry import register_command_route as _register_command_route
 from bridge.extension_registry import register_post_retain_hook as _register_post_retain_hook
 from bridge.generation_settings import get_generation_settings
+from bridge.json_fences import unfence_json
 from bridge.memory_backend import _retain_with_client as _retain_with_client
 from bridge.memory_backend import clear_curated_memory_state as clear_curated_memory_state
 from bridge.memory_backend import (
@@ -27,7 +28,8 @@ from bridge.memory_backend import (
 )
 from bridge.memory_draft_publish import publish_derived, restore_derived
 from bridge.memory_draft_store import run_session_draft
-from bridge.memory_store import enqueue_memory
+from bridge.memory_response import generate_memory_response
+from bridge.memory_store import enqueue_memory, source_is_valid
 from bridge.meta_repository import load_meta_value as _repo_load_meta_value
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.provider_port import ProviderPort
@@ -37,6 +39,12 @@ from bridge.sqlite_store import db_connect
 
 _MEMORY_CURATOR_MAX_ITEMS = 24
 _MEMORY_CURATOR_MIN_NEW_MESSAGES = 4
+_CURATOR_REPAIR_CONTRACT = (
+    'Required schema: {"memories":[{"key":"stable-key","text":"durable fact","kind":"fact","confidence":1.0}]}. '
+    "memories must be an array of objects with nonempty text. Preserve valid accepted prior facts; "
+    'use {"memories":[]} only when no durable facts remain established. '
+    "This private panel accumulator grants no character knowledge and is not classified audience output."
+)
 
 
 def memory_curator_key(chat_id: str, session_id: str) -> str:
@@ -51,20 +59,8 @@ def _clean_curated_text(value: object, maximum: int) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()[:maximum]
 
 
-def parse_curated_memories(raw: str) -> list[dict[str, object]] | None:
-    text = str(raw or "").strip()
-    if not text:
-        return None
-    match = re.search(r"\{.*\}", text, flags=re.DOTALL)
-    try:
-        payload = json.loads(match.group(0) if match else text)
-    except (TypeError, json.JSONDecodeError, AttributeError):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    memories = payload.get("memories")
-    if not isinstance(memories, list):
-        return None
+def _normalize_curated_memories(memories: list[object]) -> list[dict[str, object]]:
+    """Retain the panel's bounded normalization and stable-key behavior."""
 
     by_key: dict[str, dict[str, object]] = {}
     for item in memories[: _MEMORY_CURATOR_MAX_ITEMS * 2]:
@@ -93,6 +89,20 @@ def parse_curated_memories(raw: str) -> list[dict[str, object]] | None:
         if len(by_key) >= _MEMORY_CURATOR_MAX_ITEMS:
             break
     return list(by_key.values())
+
+
+def parse_curator_response(raw: str) -> dict[str, object]:
+    """Classify extraction failures without accepting rejected items as an empty accumulator."""
+    payload = json.loads(unfence_json(str(raw or "").strip()))
+    if not isinstance(payload, dict):
+        raise ValueError("Curator response must be a JSON object")
+    memories = payload.get("memories")
+    if not isinstance(memories, list):
+        raise ValueError("Curator response requires a memories array")
+    items = _normalize_curated_memories(memories)
+    if memories and not items:
+        raise ValueError("Curator populated response has no accepted memories")
+    return {"memories": items}
 
 
 def get_curated_memory_state(
@@ -178,18 +188,20 @@ def extract_curator_segment(
         },
     ]
     model = task_model_for_session(db, chat_id, session, "memory_curator", app_settings=app_settings)
-    raw = provider_port.for_usage(chat_id, session["session_id"], "memory").generate(
+    return generate_memory_response(
+        provider_port.for_usage(chat_id, session["session_id"], "memory").generate,
         api_key,
         model,
         messages,
+        parser=parse_curator_response,
         session_id=f"memory-curator:{chat_id}:{session['session_id']}",
         settings=settings,
-        force_non_stream=True,
+        source_valid=lambda: source_is_valid(db, source) and memory_mode(db, chat_id) == "on",
+        repair_contract=_CURATOR_REPAIR_CONTRACT,
+        # Curator remains a private panel; it never supplies audience-scoped
+        # prompt authority or external fact evidence.
+        classified_output=False,
     )
-    items = parse_curated_memories(raw)
-    if items is None:
-        raise ValueError("Curator returned malformed output")
-    return {"memories": items}
 
 
 def curate_memory_now(

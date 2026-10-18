@@ -127,6 +127,24 @@ response. Repeated `output_capped` failures now follow the existing eight-failur
 autonomous parking rule; manual retry remains available. Check accepted coverage,
 not just provider success, before treating memory processing as complete.
 
+For NPC `invalid_audience` rejections, inspect `audience_rejection_code` on
+`npc.contract_parsed` or `npc_audience_rejection_code` on `tracker.repair_start`
+and `tracker.repair_finish`. The fixed subtype identifies a wrong visibility
+type/value, wrong knower type/size/entry, shared visibility with knowers,
+restricted visibility without knowers, or a secret that is not restricted.
+These codes contain no names or response text. The existing repair receives
+matching guidance and re-extracts from canonical input; it never clears knowers
+or widens an audience just to make validation pass. Independently valid tracker
+output may still be published while NPC coverage remains pending.
+
+Curator format failures use `malformed_json` or `invalid_shape`, with at most one
+`phase=json_repair` call from the same canonical source and accepted prior state.
+A populated result with no valid memories cannot replace the accepted panel or
+advance coverage. Curator is a private panel, so its output has no character
+audience fields. Its repair does not change the audience checks on other memory
+layers. Model quality, explicit output caps, and provider cooldowns still matter;
+do not reset all retry counters to conceal repeated failures.
+
 ### Session troubleshooting and export
 
 Open the Mini App's **System** page, then **Troubleshooting diagnostics**.

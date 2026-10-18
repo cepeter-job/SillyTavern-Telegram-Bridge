@@ -2,6 +2,7 @@
 
 import io
 import json
+import time
 from functools import partial
 from types import SimpleNamespace
 
@@ -13,6 +14,8 @@ import bridge.provider_transport as transport
 from bridge.config_values import ConfigurationError
 from bridge.generation_settings import get_generation_settings, update_generation_settings
 from bridge.memory_curator import extract_curator_segment
+from bridge.memory_response import memory_failure_code
+from bridge.memory_store import next_source_segment
 from bridge.model_router import ModelRouter
 from bridge.model_selection import set_task_model
 from bridge.provider_port import ProviderPort
@@ -118,7 +121,12 @@ def test_curator_budget_reaches_transport_and_keeps_schema_validation(tmp_path, 
     db = db_connect(app_settings=settings)
     try:
         session = create_session(db, "fixture-chat", "fixture::model", app_settings=settings)
-        source = SimpleNamespace(role="user", start_id=1, start_offset=0, end_offset=18, content="Find the lost map.")
+        db.execute(
+            "INSERT INTO messages(chat_id,session_id,role,content,created_at) VALUES(?,?,?,?,?)",
+            ("fixture-chat", session["session_id"], "user", "Find the lost map.", time.time()),
+        )
+        db.commit()
+        source = next_source_segment(db, "fixture-chat", session["session_id"], "curator")
 
         def extract():
             return extract_curator_segment(
@@ -135,11 +143,12 @@ def test_curator_budget_reaches_transport_and_keeps_schema_validation(tmp_path, 
         if succeeds:
             assert extract() == {"memories": []}
         else:
-            with pytest.raises(ValueError, match="Curator returned malformed output"):
+            with pytest.raises(ValueError, match="Curator response requires a memories array") as error:
                 extract()
-        assert len(sent) == 1
-        assert sent[0]["max_tokens"] == 4096
-        assert sent[0]["model"] == "model"
-        assert sent[0]["stream"] is False
+            assert memory_failure_code(error.value) == "invalid_shape"
+        assert len(sent) == (1 if succeeds else 2)
+        assert all(request["max_tokens"] == 4096 for request in sent)
+        assert all(request["model"] == "model" for request in sent)
+        assert all(request["stream"] is False for request in sent)
     finally:
         db.close()

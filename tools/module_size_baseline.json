@@ -12,7 +12,6 @@
     "bridge/memory_diagnostics.py": 684,
     "bridge/memory_store.py": 541,
     "bridge/message_commands.py": 601,
-    "bridge/narrative_reconciliation.py": 514,
     "bridge/native_imports.py": 545,
     "bridge/npc_service.py": 572,
     "bridge/provider_callbacks.py": 698,

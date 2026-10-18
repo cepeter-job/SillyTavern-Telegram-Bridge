@@ -37,7 +37,7 @@ from bridge.model_selection import director_reasoning_for_session, task_model_fo
 from bridge.narrative_arc_repository import list_arc_rows, load_arc_row
 from bridge.narrative_context import load_narrative_state, narrative_clock_is_current
 from bridge.narrative_policy import narrative_policy
-from bridge.narrative_reconciliation import ensure_narrative_state_current
+from bridge.narrative_reconciliation import NarrativeStateUnavailable, ensure_narrative_state_current
 from bridge.narrative_repository import list_narrative_threads, load_narrative_clock, load_narrative_thread
 from bridge.narrative_settings import load_session_narrative_settings
 from bridge.persona_service import PersonaService
@@ -77,6 +77,9 @@ def _record_failure(
     category = error.category if isinstance(error, (DirectorProposalError, ProviderRequestError)) else "unavailable"
     rejection_code = error.rejection_code if isinstance(error, DirectorProposalError) else ""
     message = f"Director could not update ({category}). The saved story and accepted direction are unchanged."
+    if isinstance(error, NarrativeStateUnavailable) and error.rejection_code:
+        category, rejection_code = "reconciliation", error.rejection_code
+        message = error.director_message()
     decision_id = None
     with write_transaction(db):
         if (

@@ -234,7 +234,7 @@ def test_reconciliation_failure_never_marks_oversized_source_as_covered(session_
 
 
 def test_background_admission_coalesces_duplicate_session_requests(session_db, monkeypatch):
-    from bridge import narrative_reconciliation as owner
+    from bridge import narrative_runtime as owner
 
     settings, db, session = session_db
     add_story(db)
@@ -250,7 +250,7 @@ def test_background_admission_coalesces_duplicate_session_requests(session_db, m
 
 
 def test_rejected_background_submission_releases_session_admission(session_db, monkeypatch):
-    from bridge import narrative_reconciliation as owner
+    from bridge import narrative_runtime as owner
 
     settings, db, session = session_db
     add_story(db)

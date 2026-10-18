@@ -8,6 +8,15 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+## [0.3.030] - 2026-10-18
+
+### Director Room reassessment recovery
+
+- Clarify narrative reconciliation's changed-arc contract: omit unchanged accepted arcs, leave nonterminal outcome evidence empty, and copy required outcome quotations directly from the cited committed row. Continued scenes preserve the established thread, viewpoint and POV mode; observed changes require a new scene identity and explicit transition.
+- Preserve fixed reconciliation rejection codes through the Director prerequisite and report actionable failures instead of a generic unavailable result. Source changes cannot carry forward an obsolete rejection cause; provider output and story text remain excluded from diagnostics and user-facing errors.
+- Treat a completed Mini App reassessment with `accepted: false` as a failure. Keep unsaved Director form values, display the returned failure message, and retain the retry path instead of showing success and replacing the editor.
+- Retain strict evidence validation, atomic narrative publication, existing model inheritance, bounded format repair, source guards and Director leases. No dependency, database schema or service-unit change.
+
 ## [0.3.029] - 2026-10-18
 
 ### Helper extraction recovery

@@ -44,6 +44,43 @@ _PUBLICATION_ERRORS = {
     "Epilogue facts require the committed epilogue identity": "epilogue_identity_mismatch",
     "Narrative state changed before publication": "state_revision_conflict",
 }
+_REJECTION_CODES = frozenset(
+    {
+        "output_capped",
+        "provider_failed",
+        "malformed_json",
+        "invalid_collection",
+        "invalid_evidence",
+        "invalid_shape",
+        "state_rejected",
+        *_PUBLICATION_ERRORS.values(),
+    }
+)
+
+
+class NarrativeStateUnavailable(RuntimeError):
+    """Current facts could not be established; retain only a fixed rejection code."""
+
+    def __init__(self, *args: object, rejection_code: str = "") -> None:
+        super().__init__(*args)
+        self.rejection_code = rejection_code if rejection_code in _REJECTION_CODES else ""
+
+    def director_message(self) -> str:
+        if self.rejection_code == "invalid_evidence":
+            message = (
+                "Narrative continuity rejected unverified story evidence. "
+                "Reassess again; if this repeats, review the narrative helper model."
+            )
+        elif self.rejection_code in {"malformed_json", "invalid_shape", "invalid_collection", "output_capped"}:
+            message = (
+                "The narrative helper did not return complete, valid JSON. "
+                "Reassess again; if this repeats, review the narrative helper model."
+            )
+        elif self.rejection_code == "provider_failed":
+            message = "The narrative update failed at the provider. Check provider health, then reassess."
+        else:
+            message = "The narrative update conflicted with accepted story state. Refresh Director Room and reassess."
+        return message + " The saved story and accepted direction are unchanged."
 
 
 def narrative_failure_reason(error: Exception, phase: str) -> str:
@@ -75,6 +112,7 @@ def generate_narrative_response(
     allow_epilogue: bool,
     revision: int,
     through_rowid: int,
+    on_rejection: Callable[[str], None] | None = None,
 ) -> NarrativeExtraction | None:
     canonical = [
         {"role": "system", "content": NARRATIVE_EXTRACTION_INSTRUCTION},
@@ -108,6 +146,8 @@ def generate_narrative_response(
                     source_message_id=through_rowid,
                     accepted=False,
                 )
+                if on_rejection is not None:
+                    on_rejection(reason)
                 return None
             if not source_valid():
                 event(

@@ -53,11 +53,11 @@
 - [x] Reproduce quote mismatch with current canonical input on an isolated snapshot; keep all source prose private.
 - [x] Clarify exact contiguous quotations, empty nonterminal evidence, unchanged-arc omission and exact continued-scene identity fields. Keep the instruction within the existing 4,200-character reserve.
 - [x] Preserve the nonterminal invalid-evidence rejection test and the canonical request contract checks. Existing publication guards and repair budgets stay unchanged.
-- [ ] Verify the exact revised prompt through full isolated reconciliation and Director planning.
+- [x] Verify the exact revised prompt through full isolated reconciliation and Director planning. The GLM 5.2 route completed four batches and accepted a plan in five calls without repair; the Utility route still reached an output cap.
 
 ## Task 4: Recover and release
 
-- [ ] Compare the current canonical reconciliation input using configured providers against isolated database snapshots; record only content-free outcomes.
+- [x] Compare the current canonical reconciliation input using configured providers against isolated database snapshots; record only content-free outcomes.
 - [ ] If supported by that comparison, change only the active session's explicit `director_reconcile` override, preserving its previous value for rollback.
 - [ ] Review the complete branch, run required checks, open and merge a PR at the verified head, then deploy and publish the next signed release.
 - [ ] Run normal reconciliation/reassessment with current revision and lease checks; verify an accepted plan and healthy service before reporting completion.

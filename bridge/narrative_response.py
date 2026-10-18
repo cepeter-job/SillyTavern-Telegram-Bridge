@@ -8,6 +8,7 @@ from collections.abc import Callable
 from typing import Any
 
 from bridge.diagnostic_events import event
+from bridge.extraction_validation import validation_diagnostics
 from bridge.narrative_extraction import (
     NARRATIVE_EXTRACTION_INSTRUCTION,
     NarrativeExtraction,
@@ -145,6 +146,7 @@ def generate_narrative_response(
                     revision=revision,
                     source_message_id=through_rowid,
                     accepted=False,
+                    **(validation_diagnostics(exc) if phase == "parse" else {}),
                 )
                 if on_rejection is not None:
                     on_rejection(reason)
@@ -167,6 +169,7 @@ def generate_narrative_response(
                 attempt=attempt + 1,
                 revision=revision,
                 source_message_id=through_rowid,
+                **(validation_diagnostics(exc) if phase == "parse" else {}),
             )
             # Never echo the rejected output, including capped partial JSON.
             messages = [{"role": "system", "content": NARRATIVE_REPAIR_INSTRUCTION + reason + "."}, *canonical]

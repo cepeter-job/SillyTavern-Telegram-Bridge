@@ -8,6 +8,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
+from bridge.extraction_validation import ExtractionValidationError
 from bridge.narrative_arc_repository import list_arc_rows
 from bridge.story_evidence import StoryEvidence, parse_story_evidence
 from bridge.transcript_repository import story_row_by_id
@@ -30,58 +31,71 @@ class NarrativeArc:
     evidence: tuple[StoryEvidence, ...] = ()
 
 
-def _text(value: Any, maximum: int, *, identifier: bool = False, required: bool = False) -> str:
+def _text(value: Any, maximum: int, *, field: str, identifier: bool = False, required: bool = False) -> str:
     if not isinstance(value, str) or len(value) > maximum or (required and not value.strip()):
-        raise ValueError("Arc text is invalid or oversized")
+        code = "invalid_type" if not isinstance(value, str) else "too_long" if len(value) > maximum else "empty"
+        raise ExtractionValidationError("Arc text is invalid or oversized", field, code)
     if identifier and not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", value):
-        raise ValueError("Arc identifiers must use letters, numbers, underscore or hyphen")
+        raise ExtractionValidationError(
+            "Arc identifiers must use letters, numbers, underscore or hyphen", field, "invalid_identifier"
+        )
     return value.strip()
 
 
-def _strings(value: Any, maximum: int, *, identifier: bool = False) -> tuple[str, ...]:
+def _strings(value: Any, maximum: int, *, field: str, identifier: bool = False) -> tuple[str, ...]:
     if not isinstance(value, list) or len(value) > 8:
-        raise ValueError("Arc collections are limited to eight items")
-    items = tuple(_text(item, maximum, identifier=identifier, required=True) for item in value)
+        raise ExtractionValidationError(
+            "Arc collections are limited to eight items",
+            field,
+            "too_many_items" if isinstance(value, list) else "invalid_type",
+        )
+    items = tuple(_text(item, maximum, field=field, identifier=identifier, required=True) for item in value)
     if len(set(items)) != len(items):
-        raise ValueError("Arc collections cannot repeat identical items")
+        raise ExtractionValidationError("Arc collections cannot repeat identical items", field, "duplicate")
     return items
 
 
 def parse_arc_updates(value: Any) -> tuple[NarrativeArc, ...]:
     if not isinstance(value, list) or len(value) > 8:
-        raise ValueError("Reconciliation accepts at most eight arc updates")
+        raise ExtractionValidationError(
+            "Reconciliation accepts at most eight arc updates",
+            "arcs",
+            "too_many_items" if isinstance(value, list) else "invalid_type",
+        )
     result = []
     seen = set()
     for item in value:
         if not isinstance(item, dict):
-            raise ValueError("Arc updates must be objects")
-        identifier = _text(item.get("arc_id"), 100, identifier=True)
+            raise ExtractionValidationError("Arc updates must be objects", "arcs", "invalid_type")
+        identifier = _text(item.get("arc_id"), 100, field="arcs.arc_id", identifier=True)
         status, phase, importance = item.get("status"), item.get("phase"), item.get("importance")
-        if (
-            not isinstance(status, str)
-            or status not in ARC_STATUSES
-            or not isinstance(phase, str)
-            or phase not in ARC_PHASES
-            or importance not in ("major", "minor")
+        for field, selected, allowed in (
+            ("arcs.status", status, ARC_STATUSES),
+            ("arcs.phase", phase, ARC_PHASES),
+            ("arcs.importance", importance, ("major", "minor")),
         ):
-            raise ValueError("Arc status, phase or importance is invalid")
+            if not isinstance(selected, str) or selected not in allowed:
+                code = "invalid_enum" if isinstance(selected, str) else "invalid_type"
+                raise ExtractionValidationError("Arc status, phase or importance is invalid", field, code)
         if identifier in seen:
-            raise ValueError("Arc updates cannot repeat an arc identifier")
+            raise ExtractionValidationError("Arc updates cannot repeat an arc identifier", "arcs.arc_id", "duplicate")
         for field_name, maximum in (("open_questions", 4000), ("related_threads", 4000), ("evidence", 4096)):
             if len(json.dumps(item.get(field_name, []), ensure_ascii=False, separators=(",", ":"))) > maximum:
-                raise ValueError("Arc collection exceeds its encoded storage bound")
+                raise ExtractionValidationError(
+                    "Arc collection exceeds its encoded storage bound", "arcs." + field_name, "storage_limit"
+                )
         seen.add(identifier)
         result.append(
             NarrativeArc(
                 identifier,
-                _text(item.get("title"), 200, required=True),
+                _text(item.get("title"), 200, field="arcs.title", required=True),
                 status,
                 phase,
                 importance,
-                _text(item.get("summary", ""), 2000),
-                _strings(item.get("open_questions", []), 400),
-                _strings(item.get("related_threads", []), 100, identifier=True),
-                evidence=parse_story_evidence(item.get("evidence", [])),
+                _text(item.get("summary", ""), 2000, field="arcs.summary"),
+                _strings(item.get("open_questions", []), 400, field="arcs.open_questions"),
+                _strings(item.get("related_threads", []), 100, field="arcs.related_threads", identifier=True),
+                evidence=parse_story_evidence(item.get("evidence", []), field="arcs.evidence"),
             )
         )
     return tuple(result)

@@ -9,6 +9,7 @@ from typing import Any
 
 from bridge.ending_service import load_ending_state, publish_ending_state, require_current_ending_facts
 from bridge.ending_values import EndingState
+from bridge.extraction_validation import ExtractionValidationError
 from bridge.narrative_arc_repository import load_arc_row, unresolved_major_arc_ids
 from bridge.narrative_arcs import validate_story_evidence
 from bridge.narrative_repository import load_narrative_clock
@@ -25,11 +26,17 @@ def parse_resolution_evidence(value: Any) -> ResolutionEvidence | None:
     if value is None:
         return None
     if not isinstance(value, dict) or type(value.get("resolved")) is not bool:
-        raise ValueError("Resolution evidence must explicitly state whether the committed story resolved")
-    evidence = parse_story_evidence(value.get("evidence", []))
+        raise ExtractionValidationError(
+            "Resolution evidence must explicitly state whether the committed story resolved",
+            "resolution.resolved" if isinstance(value, dict) else "resolution",
+            "invalid_type",
+        )
+    evidence = parse_story_evidence(value.get("evidence", []), field="resolution.evidence")
     encoded = json.dumps([asdict(item) for item in evidence], ensure_ascii=False, separators=(",", ":"))
     if len(encoded) > 4096:
-        raise ValueError("Resolution evidence exceeds the encoded storage bound")
+        raise ExtractionValidationError(
+            "Resolution evidence exceeds the encoded storage bound", "resolution.evidence", "storage_limit"
+        )
     return ResolutionEvidence(value["resolved"], evidence)
 
 

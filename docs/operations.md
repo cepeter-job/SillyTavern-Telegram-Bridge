@@ -145,6 +145,40 @@ audience fields. Its repair does not change the audience checks on other memory
 layers. Model quality, explicit output caps, and provider cooldowns still matter;
 do not reset all retry counters to conceal repeated failures.
 
+### Narrative field-level diagnostics
+
+For a Director reconciliation failure, find `narrative.extraction_retry` and
+`narrative.reconciliation_rejected` with the same `request_id` as
+`director.rejected`. At `phase=parse`, recognized parser failures also include
+`validation_field` and `validation_code`. For example, this synthetic event
+identifies an unsupported POV enum without exposing the supplied value:
+
+```json
+{"event":"narrative.reconciliation_rejected","phase":"parse","reason":"invalid_shape","attempt":2,"validation_field":"scene.pov_mode","validation_code":"invalid_enum"}
+```
+
+Fields are fixed schema paths, such as `threads.thread_id`, `arcs.importance`,
+`arcs.evidence.quote` or `resolution.evidence.rowid`. Collection paths do not
+include model-provided keys, entity names, identifiers or array indexes. Rules
+are a finite vocabulary: `invalid_type`, `invalid_enum`, `invalid_identifier`,
+`unsupported_version`, `empty`, `too_long`, `too_many_items`, `duplicate`,
+`out_of_range`, `storage_limit` and `malformed_json`. A missing required field or
+an invalid null uses `invalid_type`; optional defaults remain unchanged.
+
+Each event identifies the first failing parser check for that attempt, not every
+problem in the response. The repair can fail on a different field. Malformed
+JSON identifies only `output`; no response fragment, decoder message, submitted
+value or arbitrary exception text is included. The sanitizer accepts only the
+explicit schema-path and rule allowlists, even when a private string would pass
+its ordinary token-shaped text filter.
+
+Broad failure categories, Director messages, publication guards, provider
+settings, prompts and retry limits are unchanged. Provider failures and unknown
+exceptions do not acquire guessed parser fields. Publication-time evidence
+checks retain their existing rejection codes. Older log entries cannot reveal
+fields that were never recorded, and richer diagnostics do not guarantee valid
+model output.
+
 ### Session troubleshooting and export
 
 Open the Mini App's **System** page, then **Troubleshooting diagnostics**.

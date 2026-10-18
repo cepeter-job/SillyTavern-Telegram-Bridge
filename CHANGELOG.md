@@ -8,6 +8,14 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+## [0.3.031] - 2026-10-18
+
+### Field-specific narrative validation diagnostics
+
+- Add fixed `validation_field` and `validation_code` metadata to narrative parser retry and final-rejection events, including nested scene, thread, arc, evidence and resolution fields. Record only the first failing check for each attempt, never submitted values or private entity identifiers.
+- Enforce explicit field/rule allowlists at the diagnostic boundary. Keep arbitrary exception text and provider failures out of parser-field diagnostics; malformed JSON records only the output-level category.
+- Preserve the existing parser acceptance rules, broad rejection categories, canonical-input repair, retry limits, source/publication guards, helper routes and budgets. No dependency, database schema, prompt or service-unit change.
+
 ## [0.3.030] - 2026-10-18
 
 ### Director Room reassessment recovery

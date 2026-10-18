@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 import json
+from typing import TypedDict
 
 from bridge.diagnostic_events import VALIDATION_CODES, VALIDATION_FIELDS
+
+
+class ValidationDiagnostics(TypedDict, total=False):
+    validation_field: str
+    validation_code: str
 
 
 class ExtractionValidationError(ValueError):
@@ -16,7 +22,7 @@ class ExtractionValidationError(ValueError):
         self.validation_code = code if code in VALIDATION_CODES else ""
 
 
-def validation_diagnostics(error: Exception) -> dict[str, str]:
+def validation_diagnostics(error: Exception) -> ValidationDiagnostics:
     """Only use at the parser boundary; provider exceptions are not parser evidence."""
     if isinstance(error, json.JSONDecodeError):
         return {"validation_field": "output", "validation_code": "malformed_json"}

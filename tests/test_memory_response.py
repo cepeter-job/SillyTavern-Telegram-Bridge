@@ -30,6 +30,7 @@ def test_repair_preserves_inputs_and_does_not_replay_invalid_output():
     )
     assert len(calls) == 2
     assert calls[1][0][2][1:] == messages
+    assert "Preserve explicit visibility and known_by" in calls[1][0][2][0]["content"]
     assert "untrusted broken output" not in json.dumps(calls[1][0][2])
     assert settings["stop_sequences"] == "story stop"
     assert len(messages) == 2

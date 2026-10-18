@@ -16,6 +16,7 @@ from bridge.extraction_contracts import NPC_EXTRACTION_CONTRACT, record_tracker_
 from bridge.generation_settings import get_generation_settings
 from bridge.memory_draft_publish import publish_derived, publish_simulation, restore_derived
 from bridge.memory_draft_store import run_session_draft
+from bridge.memory_response import memory_failure_code
 from bridge.memory_store import enqueue_memory
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.npc_extraction_format import parse_npc_payload
@@ -194,7 +195,10 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
         )
         simulation, simulation_valid = parse_simulation_payload(raw, diagnostics=simulation_diagnostics)
     repair_instruction = tracker_repair_instruction(
-        npc_diagnostics["rejection_code"], simulation_diagnostics["rejection_code"], repair_npcs=not valid
+        npc_diagnostics["rejection_code"],
+        simulation_diagnostics["rejection_code"],
+        repair_npcs=not valid,
+        npc_audience_code=npc_diagnostics.get("audience_rejection_code"),
     )
     repair_npcs = not valid
     if repair_npcs or not simulation_valid:
@@ -213,6 +217,7 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
             npc_valid=valid,
             simulation_valid=simulation_valid,
             npc_rejection_code=npc_diagnostics["rejection_code"],
+            npc_audience_rejection_code=npc_diagnostics.get("audience_rejection_code"),
             simulation_rejection_code=simulation_diagnostics["rejection_code"],
         )
         try:
@@ -226,20 +231,39 @@ def extract_npc_segment(db, chat_id, session, fields, previous, source, *, provi
                     force_non_stream=True,
                 )
         except Exception as error:
+            event(
+                "tracker.repair_finish",
+                accepted=False,
+                npc_valid=valid,
+                simulation_valid=simulation_valid,
+                npc_rejection_code=npc_diagnostics["rejection_code"],
+                npc_audience_rejection_code=npc_diagnostics.get("audience_rejection_code"),
+                simulation_rejection_code=simulation_diagnostics["rejection_code"],
+                reason=memory_failure_code(error),
+                error_type=type(error).__name__,
+            )
             if repair_npcs and simulation_valid:
                 preserved = merge_simulation_payload(previous.get("simulation"), simulation)
                 raise NpcExtractionMalformed(preserved, primary_name, user_name) from error
             raise
         if repair_npcs:
-            groups, valid = parse_npc_payload(repaired, primary_name=primary_name, user_name=user_name)
-        repaired_simulation, repaired_valid = parse_simulation_payload(repaired)
-        if repaired_valid and not simulation_valid:
-            simulation, simulation_valid = repaired_simulation, True
+            groups, valid = parse_npc_payload(
+                repaired, primary_name=primary_name, user_name=user_name, diagnostics=npc_diagnostics
+            )
+        repaired_diagnostics = {}
+        repaired_simulation, repaired_valid = parse_simulation_payload(repaired, diagnostics=repaired_diagnostics)
+        if not simulation_valid:
+            simulation_diagnostics = repaired_diagnostics
+            if repaired_valid:
+                simulation, simulation_valid = repaired_simulation, True
         event(
             "tracker.repair_finish",
             accepted=valid and simulation_valid,
             npc_valid=valid,
             simulation_valid=simulation_valid,
+            npc_rejection_code=npc_diagnostics["rejection_code"],
+            npc_audience_rejection_code=npc_diagnostics.get("audience_rejection_code"),
+            simulation_rejection_code=simulation_diagnostics["rejection_code"],
         )
     merged_simulation = merge_simulation_payload(previous.get("simulation"), simulation) if simulation_valid else {}
     if not valid:

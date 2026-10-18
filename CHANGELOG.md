@@ -8,6 +8,28 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+## [0.3.029] - 2026-10-18
+
+### Helper extraction recovery
+
+- Distinguish the exact NPC audience contract violation with fixed, content-free subcodes. Feed the applicable guidance into the existing canonical-input repair and retain diagnostics for the repaired result, including provider failure. Keep the original audience validation, single repair allowance, NPC coverage guards, and independent publication of valid simulation updates.
+- Classify malformed curator JSON separately from invalid output shape. Allow one format repair from the same canonical source and accepted accumulator, with the same helper model and output budget. Suppress repair when the source changes or memory is disabled.
+- Reject populated curator results containing no valid memory entries. Repeated malformed or invalid output preserves accepted curated memory and pending coverage instead of publishing an empty accumulator as completed work.
+- Keep the curator's private-panel contract separate from classified character memory. Existing audience checks remain the default for Summary, Scene, and episodic repair; the private curator grants no character knowledge.
+
+### Compatibility and verification boundaries
+
+- Production remains on Python 3.11 with unchanged dependency locks, database schema, autonomous retry limits, helper budgets, and default routing. Provider output caps and HTTP rate limits remain explicit failures; these changes do not guarantee model quality or clear parked jobs automatically.
+- Includes the shared fixture and regression-suite maintenance from #539 and #540. Release and deployment verification apply to the final signed source revision; focused tests do not establish Telegram acceptance or complete memory recall.
+
+## [0.3.028] - 2026-10-16
+
+### Reset cleanup and logging health
+
+- Persist operation-scoped Telegram cleanup IDs atomically with `/reset`, checkpoint each deletion, and resume interrupted cleanup from the original snapshot. Preserve new-story messages and the existing best-effort policy for attempted API failures (#538).
+- Expose degraded log capture and bounded trusted caller locations. Improve Mini App diagnostics while retaining known usage and identifying capture gaps without logging raw story content (#537).
+- Production remained on Python 3.11 with the existing locked dependencies and no new database migration. This entry summarizes the previously published [v0.3.028 release notes](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/releases/tag/v0.3.028); it does not claim new live acceptance.
+
 ## [0.3.027] - 2026-10-15
 
 ### Installer systemd hotfix

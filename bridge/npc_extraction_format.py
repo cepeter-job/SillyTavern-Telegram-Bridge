@@ -11,6 +11,27 @@ from bridge.npc_service import _expected_mode, normalize_npc_name, validate_npc_
 from bridge.npc_types import NpcExtractionGroup, NpcOperation
 
 
+def _audience_rejection_code(raw_op: dict, field: str, visibility: str, known_by: object) -> str:
+    """Keep the original validation order; return only the first fixed audience rule."""
+    if "visibility" in raw_op and not isinstance(raw_op["visibility"], str):
+        return "visibility_type_invalid"
+    if visibility not in {"shared", "restricted"}:
+        return "visibility_value_invalid"
+    if not isinstance(known_by, list):
+        return "known_by_type_invalid"
+    if len(known_by) > _limits.NPC_MAX_ALIASES:
+        return "known_by_limit_exceeded"
+    if any(not isinstance(knower, str) or not knower.strip() for knower in known_by):
+        return "known_by_entry_invalid"
+    if visibility == "shared" and known_by:
+        return "shared_with_knowers"
+    if visibility == "restricted" and not known_by:
+        return "restricted_without_knowers"
+    if field == "secrets" and visibility != "restricted":
+        return "secrets_not_restricted"
+    return ""
+
+
 def parse_npc_payload(
     raw: str, *, primary_name: str, user_name: str, diagnostics: dict[str, object] | None = None
 ) -> tuple[list[NpcExtractionGroup], bool]:
@@ -30,7 +51,7 @@ def parse_npc_payload(
     supporting_candidate_seen = False
     invalid_mode_seen = False
     invalid_operations_seen = len(groups_raw) > _limits.NPC_EXTRACTION_MAX_GROUPS
-    invalid_audience_seen = False
+    audience_rejection_code = ""
     for item in groups_raw[: _limits.NPC_EXTRACTION_MAX_GROUPS]:
         if not isinstance(item, dict):
             invalid_operations_seen = True
@@ -74,18 +95,8 @@ def parse_npc_payload(
                 else str(visibility_raw or "shared").strip().casefold()
             )
             known_by_raw = raw_op.get("known_by", [])
-            audience_invalid = (
-                ("visibility" in raw_op and not isinstance(visibility_raw, str))
-                or visibility not in {"shared", "restricted"}
-                or not isinstance(known_by_raw, list)
-                or len(known_by_raw) > _limits.NPC_MAX_ALIASES
-                or any(not isinstance(knower, str) or not knower.strip() for knower in known_by_raw)
-                or (visibility == "shared" and bool(known_by_raw))
-                or (visibility == "restricted" and not known_by_raw)
-                or (field == "secrets" and visibility != "restricted")
-            )
-            if audience_invalid:
-                invalid_audience_seen = True
+            if audience_code := _audience_rejection_code(raw_op, field, visibility, known_by_raw):
+                audience_rejection_code = audience_rejection_code or audience_code
                 continue
             known_by = tuple(" ".join(value.split()).strip()[: _limits.NPC_NAME_MAX_CHARS] for value in known_by_raw)
             value = raw_op.get("value")
@@ -116,7 +127,7 @@ def parse_npc_payload(
     valid = (
         (bool(groups) or not supporting_candidate_seen)
         and not invalid_operations_seen
-        and not invalid_audience_seen
+        and not audience_rejection_code
         and not invalid_mode_seen
     )
     code = (
@@ -125,8 +136,8 @@ def parse_npc_payload(
         else "npc_mode_invalid"
         if invalid_mode_seen
         else "invalid_audience"
-        if invalid_audience_seen
+        if audience_rejection_code
         else "npc_operations_invalid"
     )
-    record_tracker_contract(raw, "npc", valid, code, diagnostics)
+    record_tracker_contract(raw, "npc", valid, code, diagnostics, audience_code=audience_rejection_code)
     return groups if valid else [], valid

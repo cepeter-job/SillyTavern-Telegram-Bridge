@@ -201,15 +201,17 @@ def test_reconciliation_uses_json_transport_without_story_continuations(session_
         assert all("response_format" not in request for request in sent)
 
 
-@pytest.mark.parametrize("bad", ["invented", "foreign", "old", "future", "missing", "malformed"])
+@pytest.mark.parametrize("bad", ["invented", "nonterminal_quote", "foreign", "old", "future", "missing", "malformed"])
 def test_evidence_rejections_are_never_repaired_or_published(session_db, caplog, bad):
     _, db, _ = session_db
     old = add_story(db, "An earlier committed fact.")
     run_reconciliation(session_db, lambda *a, **k: packet(arc()))
     rowid = add_story(db, "Mara waits at the gate.")
     candidate = arc(status="resolved", quote="Mara waits at the gate.", rowid=rowid)
-    if bad == "invented":
+    if bad in {"invented", "nonterminal_quote"}:
         candidate["evidence"][0]["quote"] = "PRIVATE_INVENTED_CANARY"
+        if bad == "nonterminal_quote":
+            candidate.update(status="active", phase="development")
     elif bad == "foreign":
         with write_transaction(db):
             foreign = db.execute(
@@ -294,4 +296,9 @@ def test_reconciliation_prompt_describes_parser_bounds(session_db):
         "500 characters",
     ):
         assert required in instruction
+    assert "shortest contiguous passage" in instruction and "Do not paraphrase, translate" in instruction
+    assert "planned, active or dormant" in instruction and "use evidence:[]" in instruction
+    assert "omission preserves their accepted state and evidence" in instruction
+    assert "resolution.resolved is false, use resolution.evidence:[]" in instruction
+    assert "preserve its exact scene_id, thread_id, viewpoint_character and pov_mode" in instruction
     assert len(instruction) < 4200

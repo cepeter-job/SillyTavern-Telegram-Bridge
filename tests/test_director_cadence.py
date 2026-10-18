@@ -10,7 +10,7 @@ from test_director_service import directed as directed
 from test_director_service import reassess
 from test_narrative_reconciliation import add_story, proposal, run_reconciliation
 
-from bridge import director_runtime, extension_registry, narrative_reconciliation
+from bridge import director_runtime, extension_registry, narrative_runtime
 from bridge.director_cadence import director_due, director_event_key, director_interval
 from bridge.director_repository import load_director_state
 from bridge.extension_context import PostRetainContext
@@ -190,7 +190,7 @@ def test_reconciliation_completion_triggers_planning_only_after_facts_are_curren
     add_story(db)
     queued = []
     monkeypatch.setattr(
-        narrative_reconciliation, "submit_background", lambda label, fn, *a, **k: queued.append((fn, a, k)) or True
+        narrative_runtime, "submit_background", lambda label, fn, *a, **k: queued.append((fn, a, k)) or True
     )
     observed = []
     monkeypatch.setattr(

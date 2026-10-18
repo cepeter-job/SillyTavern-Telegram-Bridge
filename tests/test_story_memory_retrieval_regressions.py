@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 def test_closure_handles_production_reconciliation_before_accept_returns(tmp_path, monkeypatch):
     from story_memory_retrieval_corpus import RetrievalCorpus
 
-    from bridge import director_runtime, extension_registry, narrative_reconciliation
+    from bridge import director_runtime, extension_registry, narrative_runtime
     from bridge.ending_service import load_ending_state
     from bridge.narrative_repository import load_narrative_clock
 
@@ -24,7 +24,7 @@ def test_closure_handles_production_reconciliation_before_accept_returns(tmp_pat
     # its synchronous finale reconciliation and all acceptance/evidence remain real.
     monkeypatch.setattr(extension_registry, "_POST_RETAIN_HOOKS", {"narrative": director_runtime._post_retain})
     monkeypatch.setattr(director_runtime, "submit_background", lambda *args, **kwargs: False)
-    monkeypatch.setattr(narrative_reconciliation, "submit_background", lambda *args, **kwargs: False)
+    monkeypatch.setattr(narrative_runtime, "submit_background", lambda *args, **kwargs: False)
     original = RetrievalCorpus.record_row
     observed = []
 

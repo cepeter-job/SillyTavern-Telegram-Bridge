@@ -46,6 +46,7 @@ LOW_LEVEL_IMPORTS = {
             "bridge.conversation_setup",
             "bridge.conversation_setup_panels",
             "bridge.conversation_setup_state",
+            "bridge.diagnostic_events",
             "bridge.metadata",
             "bridge.persona_service",
             "bridge.request_types",

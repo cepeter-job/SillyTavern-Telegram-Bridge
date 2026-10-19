@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 from application_test_setup import make_test_delivery_port, make_test_persona_service
+from session_test_support import session_db as session_db
 from test_finale_resolution import finale, resolved_packet
-from test_memory_completion_safety import session_db as session_db
 from test_narrative_reconciliation import add_story, proposal, run_reconciliation
 
 from bridge import epilogue_service as service

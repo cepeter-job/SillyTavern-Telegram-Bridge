@@ -124,8 +124,13 @@ matches the image version and its engine binary exists under `/ms-playwright`.
 There is no separate browser-cache action or per-run browser/system-library
 installation. Each matrix job has a 20-minute timeout. Dependency caches and
 bundled binaries never skip tests or security scans.
-Only the external provider response is synthetic; the summary handler, utility
-executor, API adapter and SQLite records are real. Browser emulation does not
+The standalone DOM smoke child additionally opts into a test-support HTTP clock:
+reserved rate windows advance without a real-minute sleep. Production
+rate-limit logic and authentication stay active; dedicated HTTP tests prove the
+120-request boundary, rejected unauthorized clock changes, expiry and default
+absence of the fixture control. The Chromium/WebKit fixtures keep real clocks.
+The summary handler, utility executor, API adapter and SQLite records are real;
+provider responses remain synthetic. Browser emulation does not
 claim native Telegram Android/iOS acceptance. See
 [`docs/miniapp-browser-validation.md`](../../docs/miniapp-browser-validation.md).
 
@@ -263,3 +268,10 @@ coverage. Consolidate duplicated setup when its behavior is demonstrably equal;
 retire an architectural guard only after identifying its protected invariant and
 retaining equivalent enforcement. Avoid replacing readable, local fixtures with
 a broad shared fixture that couples otherwise independent test domains.
+
+## 2026-10-16 audit disposition
+
+The [completion report](../../docs/audits/2026-10-16-regression-audit-completion.md)
+records three baseline and three candidate runs, exact retained inventories and
+reviewed test-fixture changes. Keep four whole-file shards and current protected
+checks; this comparison does not justify another allocation policy or workflow.

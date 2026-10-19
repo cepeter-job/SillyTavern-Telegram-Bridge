@@ -57,18 +57,20 @@ class MemoryCuratorTests(SettingsTestCase):
         self.db.commit()
 
     def test_parser_deduplicates_by_stable_key(self):
-        parsed = _m_memory_curator.parse_curated_memories(
+        parsed = _m_memory_curator.parse_curator_response(
             '{"memories":['
             '{"key":"family.sister","text":"Sister is Hana.","kind":"relationship","confidence":0.8},'
             '{"key":"family.sister","text":"The user\'s sister is Hana.","kind":"relationship","confidence":0.9}'
             "]}"
-        )
+        )["memories"]
         self.assertEqual(len(parsed), 1)
         self.assertEqual(parsed[0]["key"], "family.sister")
         self.assertEqual(parsed[0]["confidence"], 0.9)
 
     def test_parser_generates_key_when_model_omits_one(self):
-        parsed = _m_memory_curator.parse_curated_memories('{"memories":[{"text":"The user has a sister named Hana."}]}')
+        parsed = _m_memory_curator.parse_curator_response(
+            '{"memories":[{"text":"The user has a sister named Hana."}]}'
+        )["memories"]
         self.assertEqual(len(parsed), 1)
         self.assertRegex(parsed[0]["key"], r"^fact-[0-9a-f]{12}$")
 

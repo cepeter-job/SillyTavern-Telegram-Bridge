@@ -11,7 +11,6 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from bridge.background import chat_job_lock, submit_background
 from bridge.diagnostic_events import event
 from bridge.ending_reconciliation import reconcile_finale_outcome
 from bridge.ending_service import load_ending_state
@@ -40,17 +39,12 @@ from bridge.narrative_repository import (
     upsert_narrative_state_if_fresh,
     upsert_narrative_thread,
 )
-from bridge.narrative_response import generate_narrative_response, narrative_failure_reason
+from bridge.narrative_response import NarrativeStateUnavailable, generate_narrative_response, narrative_failure_reason
 from bridge.narrative_values import NarrativeState
 from bridge.provider_port import ProviderPort
 from bridge.scene_repository import load_scene_state_row
-from bridge.session_repository import load_session_row
 from bridge.settings import AppSettings
-from bridge.sqlite_store import db_connect, write_transaction
-
-
-class NarrativeStateUnavailable(RuntimeError):
-    """Current facts could not be established; planning must not guess from stale state."""
+from bridge.sqlite_store import write_transaction
 
 
 @dataclass
@@ -333,6 +327,7 @@ def reconcile_narrative_state_now(
     *,
     provider_port: ProviderPort,
     app_settings: AppSettings,
+    on_rejection: Callable[[str], None] | None = None,
 ) -> NarrativeState:
     if db.in_transaction:
         raise RuntimeError("Narrative reconciliation cannot call a provider inside a transaction")
@@ -375,6 +370,7 @@ def reconcile_narrative_state_now(
             allow_epilogue=load_ending_state(db, chat_id, session_id).lifecycle == "epilogue_committed",
             revision=clock["state_revision"],
             through_rowid=through,
+            on_rejection=on_rejection,
         )
         if extracted is None:
             return load_narrative_state(db, chat_id, session_id)
@@ -386,15 +382,18 @@ def reconcile_narrative_state_now(
         phase = "publish"
         return _publish(db, chat_id, session_id, base, clock, extracted, first[0][0], through)
     except (ValueError, RuntimeError) as exc:
+        reason = narrative_failure_reason(exc, phase)
         event(
             "narrative.reconciliation_rejected",
             level=logging.WARNING,
             phase=phase,
-            reason=narrative_failure_reason(exc, phase),
+            reason=reason,
             revision=clock["state_revision"],
             source_message_id=through,
             accepted=False,
         )
+        if on_rejection is not None:
+            on_rejection(reason)
         return load_narrative_state(db, chat_id, session_id)
 
 
@@ -408,107 +407,33 @@ def ensure_narrative_state_current(
     provider_port: ProviderPort,
     app_settings: AppSettings,
 ) -> NarrativeState:
+    rejection_code = ""
+    rejection_clock = None
     for _attempt in range(4):
         clock = load_narrative_clock(db, chat_id, session["session_id"])
         if clock is None or through_rowid > clock["latest_rowid"]:
             break
         if narrative_clock_is_current(clock, through_rowid):
             return load_narrative_state(db, chat_id, session["session_id"])
+        rejected: list[str] = []
         reconcile_narrative_state_now(
-            db, api_key, chat_id, session, through_rowid, provider_port=provider_port, app_settings=app_settings
+            db,
+            api_key,
+            chat_id,
+            session,
+            through_rowid,
+            provider_port=provider_port,
+            app_settings=app_settings,
+            on_rejection=rejected.append,
         )
         if load_narrative_clock(db, chat_id, session["session_id"]) == clock:
+            rejection_code = rejected[-1] if rejected else ""
+            rejection_clock = clock
             break
-    if narrative_clock_is_current(load_narrative_clock(db, chat_id, session["session_id"]), through_rowid):
+    current = load_narrative_clock(db, chat_id, session["session_id"])
+    if narrative_clock_is_current(current, through_rowid):
         return load_narrative_state(db, chat_id, session["session_id"])
-    raise NarrativeStateUnavailable("Narrative state is not current yet. Retry after reconciliation finishes.")
-
-
-def _reconciliation_worker(
-    chat_id: str,
-    session_id: str,
-    provider_port: ProviderPort,
-    app_settings: AppSettings,
-    admission: Any,
-    on_current: Callable[[sqlite3.Connection, str, dict[str, str]], object] | None = None,
-) -> None:
-    worker_db = None
-    continue_work = False
-    session = None
-    try:
-        worker_db = db_connect(app_settings=app_settings)
-        session = load_session_row(worker_db, chat_id, session_id)
-        before = load_narrative_clock(worker_db, chat_id, session_id)
-        if session and before:
-            result = reconcile_narrative_state_now(
-                worker_db, "", chat_id, session, provider_port=provider_port, app_settings=app_settings
-            )
-            after = load_narrative_clock(worker_db, chat_id, session_id)
-            continue_work = bool(
-                after
-                and not narrative_clock_is_current(after)
-                and (
-                    result.updated_through_rowid > before["updated_through_rowid"]
-                    or after["history_revision"] != before["history_revision"]
-                )
-            )
-    finally:
-        admission.release()
-        try:
-            if continue_work and worker_db is not None and session is not None:
-                queue_narrative_reconciliation(
-                    worker_db,
-                    chat_id,
-                    session,
-                    provider_port=provider_port,
-                    app_settings=app_settings,
-                    on_current=on_current,
-                )
-            elif worker_db is not None and session is not None and on_current is not None:
-                if narrative_clock_is_current(load_narrative_clock(worker_db, chat_id, session_id)):
-                    on_current(worker_db, chat_id, session)
-        finally:
-            if worker_db is not None:
-                worker_db.close()
-
-
-def queue_narrative_reconciliation(
-    db: sqlite3.Connection,
-    chat_id: str,
-    session: dict[str, str],
-    *,
-    provider_port: ProviderPort,
-    app_settings: AppSettings,
-    on_current: Callable[[sqlite3.Connection, str, dict[str, str]], object] | None = None,
-) -> bool:
-    if db.in_transaction:
-        return False
-    session_id = session["session_id"]
-    clock = load_narrative_clock(db, chat_id, session_id)
-    if clock is None:
-        return False
-    if narrative_clock_is_current(clock):
-        if on_current is not None:
-            on_current(db, chat_id, session)
-        return False
-    key = json.dumps(["narrative-reconciliation", str(app_settings.db_file.resolve()), chat_id, session_id])
-    admission = chat_job_lock(key)
-    if not admission.acquire(blocking=False):
-        return False
-    try:
-        accepted = submit_background(
-            "narrative_reconcile",
-            _reconciliation_worker,
-            chat_id,
-            session_id,
-            provider_port,
-            app_settings,
-            admission,
-            on_current,
-        )
-    except BaseException:
-        admission.release()
-        raise
-    if not accepted:
-        admission.release()
-    return accepted
+    raise NarrativeStateUnavailable(
+        "Narrative state is not current yet. Retry after reconciliation finishes.",
+        rejection_code=rejection_code if current == rejection_clock else "",
+    )

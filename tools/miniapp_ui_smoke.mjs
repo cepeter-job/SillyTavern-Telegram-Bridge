@@ -8,7 +8,7 @@ import {createInterface} from 'node:readline';
 import vm from 'node:vm';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
 const {JSDOM}=await import(pathToFileURL(resolve(process.env.MINIAPP_JSDOM_ROOT||root,'node_modules/jsdom/lib/api.js')));
-const child=spawn(process.env.PYTHON||'python3',[resolve(root,'tests/miniapp_browser_fixture.py')],{cwd:root,stdio:['ignore','pipe','inherit']});
+const child=spawn(process.env.PYTHON||'python3',[resolve(root,'tests/miniapp_browser_fixture.py')],{cwd:root,stdio:['ignore','pipe','inherit'],env:{...process.env,MINIAPP_FIXTURE_RATE_CLOCK:'1'}});
 const lines=createInterface({input:child.stdout});
 const ready=await Promise.race([new Promise((ok,bad)=>{lines.once('line',line=>{try{ok(JSON.parse(line));}catch(e){bad(e);}});child.once('exit',code=>bad(new Error('Fixture exited '+code)));}),new Promise((_,bad)=>setTimeout(()=>bad(new Error('Fixture startup timed out')),10000).unref())]);
 const html=await readFile(resolve(root,'bridge/miniapp_assets/index.html'),'utf8');
@@ -24,17 +24,21 @@ const context=dom.getInternalVMContext(),errors=[],expectedFailures=new Set(),ob
 let portraitMode='success',forcedFailure='',scrollResets=0;
 let trackerScenario=null,trackerReads=0,trackerInspection=false;
 let summaryScenario=null,memoryStatusScenario=null,contextStatusScenario=null,memoryDetailScenario=null,memoryDetailRequests=0;
-const fixtureRequestTimes=[];
+let fixtureRequestCount=0,fixtureWindowAdvances=0;
 async function reserveFixtureCapacity(count) {
-  // Keep real integration phases below the unchanged 120/minute server limit.
-  // Response times conservatively follow admission; reserve extra polling headroom.
+  // The fixture's HTTP clock moves only on explicit control requests. Count
+  // reservations against that same window, never against wall-clock expiry.
+  // Production authentication, the 120/minute rule and request history stay real.
   assert.ok(Number.isInteger(count)&&count>0&&count<=100);
-  for(;;) {
-    const now=performance.now();
-    while(fixtureRequestTimes.length&&fixtureRequestTimes[0]<=now-61000)fixtureRequestTimes.shift();
-    if(fixtureRequestTimes.length+count<=100)return;
-    await new Promise(resolve=>setTimeout(resolve,Math.max(1,fixtureRequestTimes[0]+61000-now)));
-  }
+  if(fixtureRequestCount+count<=100)return;
+  assert.equal(ready.rate_clock?.path,'/fixture/rate-window','Clock control must be explicitly enabled');
+  const advanced=await fetch(ready.url+ready.rate_clock.path,{
+    method:'POST',headers:{'X-Fixture-Rate-Clock':ready.rate_clock.key},
+  });
+  assert.equal(advanced.status,200,'Only the owning fixture may advance its clock');
+  assert.deepEqual(await advanced.json(),{advanced_seconds:61});
+  fixtureRequestCount=0;
+  fixtureWindowAdvances++;
 }
 
 const memoryThresholds={warning:262144,tracing:327680,capture:393216};
@@ -84,7 +88,7 @@ dom.window.fetch=async (path,options)=>{
     }}),{status:200,headers:{'Content-Type':'application/json'}});
   }
   const response=await fetch(ready.url+path,options);
-  fixtureRequestTimes.push(performance.now());
+  fixtureRequestCount++;
   if((memoryStatusScenario||contextStatusScenario)&&String(path)==='/api/v1/status'&&response.ok) {
     const data=await response.json();
     if(memoryStatusScenario)data.memory_diagnostics=memoryStatusScenario;
@@ -446,8 +450,8 @@ try {
     {name:'complete',incomplete:false,explainsSaved:false},
   ],'Incomplete summary regeneration must be reported for partial work and old-summary fallback; complete regeneration retains its normal flow');
   console.log('summary-regeneration=partial-notice,old-fallback-notice,complete-normal; summary-session-scope=preserved');
-  // Extra real reads make the rolling-window regression reproducible on fast runners.
-  // Reserve the burst and the following phase together before sending either.
+  // Exercise a real request burst before the next reserved fixture-clock window.
+  // The separate HTTP fixture tests prove 120 accepted requests, 429 and expiry.
   await reserveFixtureCapacity(12+60);
   for(let extra=0;extra<12;extra++)await app.namespace.api('/status');
   await app.namespace.navigate('models');
@@ -549,6 +553,8 @@ try {
   const newView=document.createElement('div');newView.textContent='Current view';finishNew(newView);await newNavigation;
   assert.equal(document.querySelector('main').textContent,'Current view','Only the latest page is committed');
   assert.equal(errors.length,0,errors.map(e=>e.message).join('\n'));
+  assert.ok(fixtureWindowAdvances>0,'The smoke exercised controlled window expiry');
+  console.log('fixture-clock-windows='+fixtureWindowAdvances+'; production-rate-rule=unchanged');
   console.log('mutations=5 passed; stale-session=blocked; optimizer-resume=passed; pages=19 passed; browser-errors=0');
 } finally {
   dom.window.close();lines.close();child.kill('SIGTERM');

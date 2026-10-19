@@ -3,7 +3,7 @@
 import json
 
 from application_test_setup import make_test_provider_port
-from test_memory_completion_safety import session_db as session_db
+from session_test_support import session_db as session_db
 from test_simulation_trackers import _assistant_row
 
 from bridge.npc_extraction import refresh_npc_state_now

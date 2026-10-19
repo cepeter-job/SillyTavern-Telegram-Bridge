@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from retrieval_http_test_support import wire_server
@@ -25,6 +26,27 @@ def run_cli(output, *args):
         timeout=60,
         env=env,
     )
+
+
+@pytest.fixture
+def answer_cli(monkeypatch, capsys):
+    # Rejection matrices need the real parser, corpus, transport and report, not
+    # a new interpreter each time. The offline and full-wire subprocess tests
+    # retain entrypoint/process coverage. No corpus or mutable result is shared.
+    monkeypatch.syspath_prepend(str(ROOT / "tools"))
+    monkeypatch.setenv("STORY_EVAL_TEST_KEY", "synthetic-test-key")
+    from evaluate_story_memory_answers import main
+
+    def invoke(output, *args):
+        capsys.readouterr()
+        try:
+            returncode = main(["--output", str(output), *args])
+        except SystemExit as error:
+            returncode = error.code
+        captured = capsys.readouterr()
+        return SimpleNamespace(returncode=returncode, stdout=captured.out, stderr=captured.err)
+
+    return invoke
 
 
 def live_args(endpoint, *extra):
@@ -149,22 +171,22 @@ def test_live_wire_scores_prose_leak_separately_from_valid_extraction(tmp_path):
         ["--queries", "Q99"],
     ],
 )
-def test_invalid_live_preflight_never_dispatches(tmp_path, extra):
+def test_invalid_live_preflight_never_dispatches(tmp_path, extra, answer_cli):
     with wire_server(lambda call: pytest.fail("Invalid preflight dispatched")) as (endpoint, calls):
-        process = run_cli(tmp_path / "invalid.json", *live_args(endpoint, *extra))
+        process = answer_cli(tmp_path / "invalid.json", *live_args(endpoint, *extra))
     assert process.returncode == 2
     assert not calls
 
 
-def test_live_configuration_without_opt_in_is_rejected(tmp_path):
+def test_live_configuration_without_opt_in_is_rejected(tmp_path, answer_cli):
     with wire_server(lambda call: pytest.fail("Missing opt-in dispatched")) as (endpoint, calls):
-        process = run_cli(tmp_path / "invalid.json", "--endpoint", endpoint)
+        process = answer_cli(tmp_path / "invalid.json", "--endpoint", endpoint)
     assert process.returncode == 2
     assert not calls
 
 
 @pytest.mark.parametrize("kind", ["http", "malformed", "over_usage", "truncated", "over_text", "secret_echo"])
-def test_bad_response_stops_without_retry_or_second_dispatch(tmp_path, kind):
+def test_bad_response_stops_without_retry_or_second_dispatch(tmp_path, kind, answer_cli):
     def respond(call):
         if kind == "http":
             return 429, {"error": {"message": "PRIVATE synthetic-test-key"}}, {}
@@ -184,7 +206,7 @@ def test_bad_response_stops_without_retry_or_second_dispatch(tmp_path, kind):
 
     output = tmp_path / "failed.json"
     with wire_server(respond) as (endpoint, calls):
-        process = run_cli(output, *live_args(endpoint))
+        process = answer_cli(output, *live_args(endpoint))
     assert process.returncode == 1, process.stderr
     assert len(calls) == 1
     report = json.loads(output.read_text())
@@ -198,7 +220,7 @@ def test_bad_response_stops_without_retry_or_second_dispatch(tmp_path, kind):
     ("escaped_text", "error"),
     [(r"\u0073ynthetic-test-key", "credential_echo"), (r"\ud800", "invalid_answer_unicode")],
 )
-def test_decoded_response_strings_fail_safely_before_next_dispatch(tmp_path, escaped_text, error):
+def test_decoded_response_strings_fail_safely_before_next_dispatch(tmp_path, escaped_text, error, answer_cli):
     def respond(call):
         status, result, headers = response(
             {"answer": COMPASS, "facts": [{"key": "M01", "statement": COMPASS}], "narrative": COMPASS + " MARKER"}
@@ -211,7 +233,7 @@ def test_decoded_response_strings_fail_safely_before_next_dispatch(tmp_path, esc
     output = tmp_path / "failed.json"
     output.write_text("previous report", encoding="utf-8")
     with wire_server(respond) as (endpoint, calls):
-        process = run_cli(output, *live_args(endpoint))
+        process = answer_cli(output, *live_args(endpoint))
     assert process.returncode == 1, process.stderr
     assert len(calls) == 1
     report_text = output.read_text(encoding="utf-8")

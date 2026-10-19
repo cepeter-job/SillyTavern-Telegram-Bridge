@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
-from test_memory_completion_safety import session_db as session_db
+from session_test_support import session_db as session_db
 
 from bridge import memory_backend
 from bridge.memory_store import claim_jobs

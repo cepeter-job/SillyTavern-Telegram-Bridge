@@ -2,8 +2,8 @@
 
 import pytest
 from memory_runtime_test_support import isolated_memory_runtime as isolated_memory_runtime
+from session_test_support import session_db as session_db
 from test_durable_memory_workers import add
-from test_memory_completion_safety import session_db as session_db
 from test_tracker_output_contracts import nanogpt_port, response
 
 from bridge.memory_curator import get_curated_memory_state
@@ -55,13 +55,18 @@ def test_durable_capped_final_failure_never_advances_coverage(
 
 
 @pytest.mark.parametrize("content", [None, '{"memories":[{"key":"synthetic","text":"Synthetic canary fact"}]}'])
-def test_durable_curator_cap_has_no_repair_or_coverage(tmp_path, monkeypatch, session_db, caplog, content):
+def test_durable_curator_capped_repair_never_advances_coverage(tmp_path, monkeypatch, session_db, caplog, content):
     settings, db, session = session_db
     add(db, "Synthetic curator source.")
     claim = claim_jobs(db, layers=("curator",))[0]
-    port, sent = nanogpt_port(tmp_path, monkeypatch, [response(content, "length", 1400)])
+    port, sent = nanogpt_port(
+        tmp_path, monkeypatch, [response(content, "length", 1400), response(content, "length", 1400)]
+    )
     result = run_memory_claim(db, claim, session, {"name": "Primary"}, provider_port=port, app_settings=settings)
     assert result == "output_capped"
-    assert len(sent) == 1 and sent[0]["max_tokens"] == 1400 and sent[0]["stream"] is False
+    assert len(sent) == 2
+    assert sent[0]["messages"][-1] == sent[1]["messages"][-1]
+    assert all(call["max_tokens"] == 1400 and call["stream"] is False for call in sent)
     assert_failed_before_publication(db, "curator")
     assert "Synthetic canary fact" not in caplog.text
+    assert "Synthetic curator source" not in caplog.text

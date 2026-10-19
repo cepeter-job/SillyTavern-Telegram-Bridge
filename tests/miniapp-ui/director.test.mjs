@@ -94,6 +94,30 @@ test('a rejected reassessment retains the draft, session scope and visible failu
   await until(()=>jobs.length===2&&!reassess.disabled,'explicit retry after known failure');
 });
 
+test('a resolved rejected reassessment preserves the draft and shows its recovery message',async t=>{
+  let page,reads=0,jobs=0;
+  const message='The Director could not safely reassess this story. Review the latest decision and try again.';
+  page=await createPage('director.js',{api:async path=>{assert.equal(path,'/director');reads++;return room();},
+    runJob:async(_path,_body,target)=>{
+      jobs++;target.replaceChildren(page.document.createElement('progress'));
+      return {accepted:false,message};
+    }});
+  t.after(page.close);page.document.querySelector('main').append(await page.pages.director());
+  const draft=namedInput(page.document,'Persistent objective');draft.value='Keep my unsaved plan.';
+  const reassess=namedButton(page.document,'Reassess now');reassess.click();await confirm(page.document);
+  await until(()=>jobs===1&&!reassess.hasAttribute('aria-busy'),'rejected reassessment response');
+  assert.equal(draft.isConnected,true,'A rejected result must not replace the editor');
+  assert.equal(draft.value,'Keep my unsaved plan.');
+  assert.equal(reads,1,'A rejected result must not reload the saved view');
+  assert.ok(page.document.querySelector('.feedback[role="alert"]')?.textContent.includes(message));
+  assert.match(page.document.querySelector('.feedback[role="alert"]').textContent,/Your edits are still shown here/);
+  assert.equal(page.document.querySelector('#notice').hidden,true,'A rejected result must not show a success notice');
+  assert.equal(reassess.disabled,false,'An explicit retry remains available after a known rejection');
+  reassess.click();await confirm(page.document);
+  await until(()=>jobs===2&&!reassess.hasAttribute('aria-busy'),'explicit retry after rejected response');
+  assert.equal(draft.isConnected,true);assert.equal(reads,1);
+});
+
 test('an uncertain operation routes to Operations without submitting another job',async t=>{
   let page,jobs=0;
   page=await createPage('director.js',{api:async()=>room(),runJob:async(_path,_body,target)=>{
@@ -117,7 +141,7 @@ test('an uncertain operation routes to Operations without submitting another job
 test('a completed reassessment followed by a failed refresh is still reported as completed',async t=>{
   let reads=0,jobs=0;
   const page=await createPage('director.js',{api:async()=>{if(++reads>1)throw new Error('Read connection unavailable.');return room();},
-    runJob:async()=>{jobs++;return {message:'Direction reassessed.'};}});
+    runJob:async()=>{jobs++;return {accepted:true,message:'Direction reassessed.'};}});
   t.after(page.close);page.document.querySelector('main').append(await page.pages.director());
   const draft=namedInput(page.document,'Persistent objective');draft.value='Do not discard this draft.';
   const reassess=namedButton(page.document,'Reassess now');reassess.click();await confirm(page.document);

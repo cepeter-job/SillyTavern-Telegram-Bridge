@@ -8,7 +8,7 @@ import json
 import socket
 import sys
 import time
-from contextlib import ExitStack
+from contextlib import ExitStack, suppress
 from dataclasses import dataclass
 from unittest.mock import patch
 from urllib.parse import urlsplit
@@ -46,6 +46,23 @@ class _PinnedResolver(aiohttp.abc.AbstractResolver):
         self.policy = policy
 
     async def resolve(self, host, port=0, family=socket.AF_INET):
+        # Nested request deadlines can cancel their caller more than once.
+        # Keep one owner alive until its subprocess and pipes are fully closed.
+        task = asyncio.create_task(self._resolve_process(host, port, family))
+        try:
+            return await asyncio.shield(task)
+        except asyncio.CancelledError:
+            task.cancel()
+            while not task.done():
+                try:
+                    await asyncio.wait({task})
+                except asyncio.CancelledError:
+                    pass
+            if not task.cancelled():
+                task.exception()
+            raise
+
+    async def _resolve_process(self, host, port, family):
         process = await asyncio.create_subprocess_exec(
             sys.executable,
             "-I",
@@ -57,8 +74,9 @@ class _PinnedResolver(aiohttp.abc.AbstractResolver):
             stderr=asyncio.subprocess.DEVNULL,
             env={},
         )
+        communication = asyncio.create_task(process.communicate())
         try:
-            output, _ = await process.communicate()
+            output, _ = await asyncio.shield(communication)
             require(process.returncode == 0 and len(output) <= 65536, "DNS resolution unavailable")
             rows = json.loads(output)
             require(0 < len(rows) <= 32, "Invalid DNS result count")
@@ -79,8 +97,10 @@ class _PinnedResolver(aiohttp.abc.AbstractResolver):
             ]
         finally:
             if process.returncode is None:
-                process.kill()
-            await process.wait()
+                with suppress(ProcessLookupError):
+                    process.kill()
+            # Join the same reader: wait() alone does not close cancelled pipes.
+            await communication
 
     async def close(self):
         return None

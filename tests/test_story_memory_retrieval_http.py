@@ -107,3 +107,109 @@ def test_dns_deadline_cancels_and_reaps_the_resolver_process(monkeypatch):
         assert time.monotonic() - started < 1
         assert len(children) == 1 and children[0].returncode is not None
         assert calls == []
+
+
+@pytest.mark.parametrize("cleanup_error", [False, True])
+def test_dns_cleanup_survives_repeated_cancellation_and_drains_pipes(monkeypatch, cleanup_error):
+    import asyncio
+
+    import story_memory_retrieval_http as transport
+
+    async def exercise():
+        started = asyncio.Event()
+        killed = asyncio.Event()
+        release = asyncio.Event()
+
+        class Process:
+            returncode = None
+            drained = False
+
+            async def communicate(self):
+                started.set()
+                await release.wait()
+                self.returncode = -9
+                self.drained = True
+                if cleanup_error:
+                    raise ValueError("communication failed during cleanup")
+                return b"", None
+
+            def kill(self):
+                killed.set()
+
+            async def wait(self):
+                await release.wait()
+                self.returncode = -9
+                return self.returncode
+
+        child = Process()
+
+        async def spawn(*args, **kwargs):
+            return child
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
+        resolver = transport._PinnedResolver(transport.EndpointPolicy(allowed_hosts=frozenset({"localhost"})))
+        pending = asyncio.create_task(resolver.resolve("localhost", 80))
+        try:
+            await asyncio.wait_for(started.wait(), 1)
+            pending.cancel()
+            await asyncio.wait_for(killed.wait(), 1)
+            pending.cancel()
+            await asyncio.sleep(0)
+            assert not pending.done()
+        finally:
+            release.set()
+            pending.cancel()
+            await asyncio.wait_for(asyncio.gather(pending, return_exceptions=True), 1)
+        assert pending.cancelled()
+        assert child.returncode == -9
+        assert child.drained
+
+    asyncio.run(exercise())
+
+
+def test_dns_creation_cleanup_survives_repeated_cancellation(monkeypatch):
+    import asyncio
+
+    import story_memory_retrieval_http as transport
+
+    async def exercise():
+        started = asyncio.Event()
+        cleaning = asyncio.Event()
+        release = asyncio.Event()
+        finished = asyncio.Event()
+        cancellations = []
+
+        async def spawn(*args, **kwargs):
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancellations.append("initial")
+                cleaning.set()
+                try:
+                    await release.wait()
+                except asyncio.CancelledError:
+                    cancellations.append("repeated")
+                    raise
+                finished.set()
+                raise
+
+        monkeypatch.setattr(asyncio, "create_subprocess_exec", spawn)
+        resolver = transport._PinnedResolver(transport.EndpointPolicy(allowed_hosts=frozenset({"localhost"})))
+        pending = asyncio.create_task(resolver.resolve("localhost", 80))
+        try:
+            await asyncio.wait_for(started.wait(), 1)
+            pending.cancel()
+            await asyncio.wait_for(cleaning.wait(), 1)
+            pending.cancel()
+            await asyncio.sleep(0)
+            assert not pending.done()
+        finally:
+            release.set()
+            pending.cancel()
+            await asyncio.wait_for(asyncio.gather(pending, return_exceptions=True), 1)
+        assert pending.cancelled()
+        assert finished.is_set()
+        assert cancellations == ["initial"]
+
+    asyncio.run(exercise())

@@ -57,6 +57,7 @@ class _PinnedResolver(aiohttp.abc.AbstractResolver):
                 try:
                     await asyncio.wait({task})
                 except asyncio.CancelledError:
+                    # A repeated caller cancellation must not interrupt the owner cleanup.
                     pass
             if not task.cancelled():
                 task.exception()

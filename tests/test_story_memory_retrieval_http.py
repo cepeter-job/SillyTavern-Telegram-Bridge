@@ -14,14 +14,14 @@ sys.path.insert(0, str(ROOT / "tools"))
 
 @pytest.mark.parametrize("options", [{"header_delay": 0.3}, {"chunk_size": 1, "chunk_delay": 0.01}])
 def test_http_wall_deadline_covers_slow_headers_and_body(options):
-    from story_memory_retrieval_http import BoundedHTTP, StudyHTTPError
+    import story_memory_retrieval_http as transport
 
     with wire_server(lambda call: (200, {"result": "x" * 100}, options)) as (endpoint, calls):
-        client = BoundedHTTP(
+        client = transport.BoundedHTTP(
             endpoint, request_budget=1, phase_limits={"embedding": 1}, deadline_seconds=2, request_timeout=0.08
         )
         start = time.monotonic()
-        with pytest.raises(StudyHTTPError) as raised:
+        with pytest.raises(transport.StudyHTTPError) as raised:
             client.request("POST", "", {"input": ["Synthetic text"]}, phase="embedding")
         assert raised.value.category == "timeout"
         assert raised.value.attempted
@@ -30,33 +30,33 @@ def test_http_wall_deadline_covers_slow_headers_and_body(options):
 
 
 def test_http_disables_redirects_proxies_retries_and_sanitizes_errors(monkeypatch):
-    from story_memory_retrieval_http import BoundedHTTP, StudyHTTPError
+    import story_memory_retrieval_http as transport
 
     monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
     for options, status in (({"redirect": "http://127.0.0.1:1/SECRET"}, 302), ({"disconnect": True}, 200)):
         with wire_server(
             lambda call, status=status, options=options: (status, {"secret": "PRIVATE RESPONSE"}, options)
         ) as (endpoint, calls):
-            client = BoundedHTTP(
+            client = transport.BoundedHTTP(
                 endpoint, request_budget=1, phase_limits={"check": 1}, deadline_seconds=2, token="PRIVATE CREDENTIAL"
             )
-            with pytest.raises(StudyHTTPError) as raised:
+            with pytest.raises(transport.StudyHTTPError) as raised:
                 client.request("GET", "", phase="check")
             assert len(calls) == 1
             assert "PRIVATE" not in str(raised.value)
             assert "PRIVATE" not in json.dumps(client.observations)
-            with pytest.raises(StudyHTTPError) as capped:
+            with pytest.raises(transport.StudyHTTPError) as capped:
                 client.request("GET", "", phase="check")
             assert not capped.value.attempted
             assert len(calls) == 1
 
 
 def test_explicit_http_does_not_unlock_other_offline_paths(tmp_path):
+    import story_memory_retrieval_http as transport
     from story_memory_retrieval_corpus import RetrievalRuntime
-    from story_memory_retrieval_http import BoundedHTTP
 
     with wire_server(lambda call: (200, {"ok": True}, {})) as (endpoint, calls):
-        client = BoundedHTTP(endpoint, request_budget=1, phase_limits={"check": 1}, deadline_seconds=2)
+        client = transport.BoundedHTTP(endpoint, request_budget=1, phase_limits={"check": 1}, deadline_seconds=2)
         with RetrievalRuntime(tmp_path) as runtime:
             assert client.request("GET", "", phase="check").data == {"ok": True}
             import socket
@@ -71,10 +71,10 @@ def test_explicit_http_does_not_unlock_other_offline_paths(tmp_path):
     "endpoint", ["file:///etc/passwd", "http://user:secret@localhost/", "http://localhost/?key=secret"]
 )
 def test_endpoint_credentials_and_implicit_schemes_are_rejected(endpoint):
-    from story_memory_retrieval_http import BoundedHTTP
+    import story_memory_retrieval_http as transport
 
     with pytest.raises(ValueError):
-        BoundedHTTP(endpoint, request_budget=1, phase_limits={"check": 1}, deadline_seconds=2)
+        transport.BoundedHTTP(endpoint, request_budget=1, phase_limits={"check": 1}, deadline_seconds=2)
 
 
 def test_dns_deadline_cancels_and_reaps_the_resolver_process(monkeypatch):

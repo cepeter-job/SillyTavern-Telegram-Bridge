@@ -67,7 +67,7 @@ python-dateutil==2.9.0.post0
 pyyaml==6.0.3
 requests==2.34.2
 rich==15.0.0
-ruff==0.16.10
+ruff==0.17.0
 six==1.17.0
 sortedcontainers==2.4.0
 tokenizers==0.23.2
@@ -77,5 +77,5 @@ tqdm==4.70.1
 typing-extensions==4.16.0
 typing-inspection==0.4.4
 urllib3==2.8.0
-uv==0.12.23
+uv==0.13.0
 yarl==1.25.1

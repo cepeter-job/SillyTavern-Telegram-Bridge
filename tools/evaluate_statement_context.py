@@ -10,6 +10,7 @@ import os
 import sqlite3
 import sys
 import tempfile
+from contextlib import closing
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -188,7 +189,7 @@ def build_report(directory: Path) -> dict:
 def build_live_metadata(database: Path, settings) -> dict:
     """Read-only live history-only estimate, omitting all private source strings."""
     samples = []
-    with sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True, timeout=9) as db:
+    with closing(sqlite3.connect(database.resolve().as_uri() + "?mode=ro", uri=True, timeout=9)) as db, db:
         if db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
             raise ValueError("statement_live_database_invalid")
         scoped = db.execute(

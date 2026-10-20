@@ -108,7 +108,7 @@ def generate():
         assert expected["ctranslate2"] == "4.8.2"
         expected["ctranslate2"] = "4.8.3"
         assert pins(current[migration]) == expected, "Cross-track drift"
-    installer_url = "https://astral.sh/uv/0.13.0/install.sh"
+    installer_url = "https://github.com/astral-sh/uv/releases/download/0.13.0/uv-installer.sh"
     installer, _ = fetch(installer_url, 200000)
     installer_hash = "283cbef4bdaca819bd896b0dacb8a085c4c05dbc880642aa5001d97bc4db74ba"
     assert hashlib.sha256(installer).hexdigest() == installer_hash, "Official uv installer hash mismatch"

@@ -27,7 +27,7 @@ frozenlist==1.8.0
 fsspec==2026.7.0
 h11==0.16.0
 hf-xet==1.6.0
-hindsight-client==0.10.2
+hindsight-client==0.10.3
 httpcore==1.0.9
 httpx==0.28.1
 huggingface-hub==1.31.0
@@ -67,15 +67,15 @@ python-dateutil==2.9.0.post0
 pyyaml==6.0.3
 requests==2.34.2
 rich==15.0.0
-ruff==0.16.10
+ruff==0.17.0
 six==1.17.0
 sortedcontainers==2.4.0
-tokenizers==0.23.2
+tokenizers==0.23.3
 tomli==2.4.1
 tomli-w==1.2.0
 tqdm==4.70.1
 typing-extensions==4.16.0
 typing-inspection==0.4.4
 urllib3==2.8.0
-uv==0.12.23
+uv==0.13.0
 yarl==1.25.1

@@ -4,9 +4,9 @@ import json
 import sqlite3
 
 import pytest
+from session_test_support import session_db as session_db
 from settings_test_support import make_test_settings
 from test_durable_memory_workers import add
-from test_memory_completion_safety import session_db as session_db
 
 from bridge import memory_backend
 from bridge.hindsight_diagnostics import hindsight_retain_failure_reason

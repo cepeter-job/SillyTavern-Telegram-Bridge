@@ -26,8 +26,9 @@ from bridge.extension_context import PostRetainContext
 from bridge.extension_registry import register_post_retain_hook
 from bridge.narrative_arc_repository import list_arc_rows
 from bridge.narrative_context import load_narrative_state, narrative_clock_is_current
-from bridge.narrative_reconciliation import ensure_narrative_state_current, queue_narrative_reconciliation
+from bridge.narrative_reconciliation import ensure_narrative_state_current
 from bridge.narrative_repository import list_narrative_threads, load_narrative_clock
+from bridge.narrative_runtime import queue_narrative_reconciliation
 from bridge.narrative_settings import load_session_narrative_settings
 from bridge.persona_service import PersonaService
 from bridge.provider_port import ProviderPort

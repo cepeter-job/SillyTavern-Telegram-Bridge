@@ -552,8 +552,9 @@ saved messages or settings; it does not mean your messages were lost. The record
 describes saved story facts, not proposed future events. It is separate from
 `/scene`, which tracks
 physical surroundings and continuity. Updating the narrative record in the
-background is called reconciliation. It uses the Utility model and is reported
-as `director_reconcile` usage. Opening a style
+background is called reconciliation. It uses the Utility model unless a separate
+`director_reconcile` task override is configured, and is reported as
+`director_reconcile` usage. Opening a style
 panel or status page makes no model request. If reconciliation fails, your
 saved story stays intact and generation keeps the selected policy rather than
 pretending stale facts are current.
@@ -566,9 +567,12 @@ facts, and characters do not learn them just because you opened the panel.
 
 The room shows the current scene, viewpoint, storyline (thread), accepted
 direction and recent decisions. You can read the plan without turning it into
-something that has happened in the story. **Reassess now** asks the configured
-Director model for a fresh plan.
-It can use provider quota. **Choose thread** plans a future scene without rewriting
+something that has happened in the story. **Reassess now** first brings the
+narrative record up to date, then asks the configured Director model for a fresh
+plan. Both steps can use provider quota. If the narrative helper cannot establish
+valid current facts, reassessment stops and reports that prerequisite failure.
+The Mini App keeps your unsaved form values when reassessment is rejected.
+**Choose thread** plans a future scene without rewriting
 anything already committed.
 
 Use **Next scene only** for a temporary instruction such as “Stay with Mara at the

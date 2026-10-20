@@ -4,10 +4,10 @@ from dataclasses import replace
 
 import pytest
 from application_test_setup import make_test_persona_service, make_test_provider_port
+from session_test_support import session_db as session_db
 from test_director_ending import decision
 from test_director_panels import payload
 from test_ending_state import ready_case
-from test_memory_completion_safety import session_db as session_db
 from test_narrative_arcs import arc, packet
 from test_narrative_reconciliation import add_story, run_reconciliation
 

@@ -10,6 +10,7 @@ import math
 import re
 import sqlite3
 import sys
+from contextlib import closing
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -141,7 +142,7 @@ def _build_case(directory: Path, case: dict, model: str, max_output_tokens: int)
         if selection["reason"] != case["expected_candidate"]:
             raise ValueError("native_fixture_selection_unexpected")
         snapshot = directory / (case_id + ".sqlite3")
-        with sqlite3.connect(snapshot) as destination:
+        with closing(sqlite3.connect(snapshot)) as destination, destination:
             runtime.db.backup(destination)
         prepared = {
             "case_id": case_id,
@@ -189,7 +190,7 @@ def revalidate_case(directory: Path, case: dict) -> dict:
             raise ValueError("native_wire_digest_changed")
     baseline = variants["baseline"]["annotated_messages"]
     candidate = variants["candidate"]["annotated_messages"]
-    with sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=8) as db:
+    with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=8)) as db, db:
         receipt = capture_native_history(db, scope, baseline)
         if digest(asdict(receipt)) != case["receipt_sha256"]:
             raise ValueError("native_receipt_changed")

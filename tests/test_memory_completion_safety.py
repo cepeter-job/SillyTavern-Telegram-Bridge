@@ -5,7 +5,7 @@ import threading
 
 import pytest
 from application_test_setup import make_test_memory_service, make_test_provider_port
-from settings_test_support import make_test_settings
+from session_test_support import session_db as session_db
 
 from bridge import (
     codex_transport,
@@ -35,19 +35,6 @@ def forbid_real_external_clients(monkeypatch):
 
 def classified_summary(text):
     return json.dumps({"blocks": [{"text": text, "visibility": "shared", "known_by": []}]})
-
-
-@pytest.fixture
-def session_db(tmp_path):
-    settings = make_test_settings(home=tmp_path, db_file=tmp_path / "db.sqlite3")
-    settings.native_persona_settings_file.parent.mkdir(parents=True, exist_ok=True)
-    settings.native_persona_settings_file.write_text(
-        json.dumps({"power_user": {"personas": {}, "persona_descriptions": {}}})
-    )
-    db = db_connect(app_settings=settings)
-    session = create_session(db, "chat", "dummy::model", session_id="s1", app_settings=settings)
-    yield settings, db, session
-    db.close()
 
 
 def add_rows(db, count, size=2000):

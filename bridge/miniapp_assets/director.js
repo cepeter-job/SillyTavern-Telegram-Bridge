@@ -85,7 +85,11 @@ async function renderDirector() {
       el('div',{class:'decision-list'},...decisions.slice(3))));
     const views=[sessionContext(data.session),intro,operation,history];
     if(data.mutable) {
-      intro.append(mutationButton('Reassess now',target=>runJob('/director/reassess',body({confirm:true}),target),
+      intro.append(mutationButton('Reassess now',async target=>{
+        const result=await runJob('/director/reassess',body({confirm:true}),target);
+        if(result?.accepted===false)throw new Error(result.message||'Director reassessment was not accepted. Review the latest decision and try again.');
+        return result;
+      },
         result=>result.message||'Director reassessment completed.',
         'Ask the Director model to reassess the current story? This uses the configured provider.'));
       const guidance=el('details',{class:'director-controls',open:true},el('summary',{},'Guide this story'));

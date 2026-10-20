@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 
 import pytest
-from test_memory_completion_safety import session_db as session_db
+from session_test_support import session_db as session_db
 from test_simulation_trackers import _assistant_row
 
 from bridge.npc_service import NpcService

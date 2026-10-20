@@ -10,6 +10,7 @@ import os
 import sqlite3
 import sys
 import tempfile
+from contextlib import closing
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -97,7 +98,7 @@ def build_live_metadata(database: Path, settings) -> dict:
 
     database = database.resolve(strict=True)
     cases = []
-    with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True, timeout=8) as db:
+    with closing(sqlite3.connect(database.as_uri() + "?mode=ro", uri=True, timeout=8)) as db, db:
         if db.execute("PRAGMA quick_check").fetchone()[0] != "ok":
             raise ValueError("hybrid_live_database_integrity_failed")
         scopes = db.execute(

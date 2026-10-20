@@ -1,7 +1,7 @@
 """Restored NPC field history and tracker ownership share the same rewind boundary."""
 
 import pytest
-from test_memory_completion_safety import session_db as session_db
+from session_test_support import session_db as session_db
 from test_npc_service import _group, _op
 from test_simulation_projection import npc
 from test_simulation_trackers import _assistant_row

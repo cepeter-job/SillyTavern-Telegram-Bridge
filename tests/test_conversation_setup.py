@@ -179,3 +179,158 @@ def test_setup_callbacks_advance_without_changing_current_session(setup, monkeyp
     assert handled
     assert panels[-1]["stage"] == "strategy"
     assert conversation_state(db, "chat", "story").mode == "normal"
+
+
+@pytest.mark.parametrize("error_type", [TimeoutError, RuntimeError])
+@pytest.mark.parametrize("error_stage", ["notice", "ack"])
+def test_setup_apply_notice_failure_does_not_report_expired(setup, monkeypatch, caplog, error_type, error_stage):
+    import json
+
+    from bridge import conversation_setup_callbacks as callbacks
+    from bridge.callback_tokens import dynamic_callback_token
+    from bridge.conversation_setup_state import setup_key
+    from bridge.metadata import get_meta
+    from bridge.request_types import RequestContext
+
+    db, session, service, state = setup
+    ready(setup, "lightnovel")
+    data = "setup:" + dynamic_callback_token(
+        "conversation_setup",
+        json.dumps({"nonce": state["nonce"], "stage": "review", "action": "apply"}),
+        "chat",
+        db=db,
+    )
+    attempted_notices, acknowledgements = [], []
+
+    def send_notice(token, chat_id, text):
+        attempted_notices.append(text)
+        if error_stage == "notice" and text.startswith("Session configured:"):
+            raise error_type("private transport detail")
+
+    def answer(token, callback_id, text):
+        acknowledgements.append(text)
+        if error_stage == "ack":
+            raise error_type("private transport detail")
+
+    monkeypatch.setattr(callbacks, "close_panel_message", lambda *a: None)
+    monkeypatch.setattr(callbacks, "send_text", send_notice)
+    caplog.set_level("INFO", logger="bridge.events")
+    handled = callbacks.handle_setup_callback(
+        db,
+        "token",
+        {"id": "callback", "_queued": True},
+        answer,
+        data,
+        "chat",
+        {"message_id": 55},
+        session,
+        persona_service=service.persona_service,
+        request_context=RequestContext(db, "story", "owner", app_settings=service.app_settings),
+    )
+
+    assert handled
+    assert acknowledgements == ["Setup updated"]
+    assert len(attempted_notices) == 1
+    assert attempted_notices[0].startswith("Session configured:")
+    assert get_meta(db, setup_key("chat", "owner"), "") == ""
+    assert db.execute("SELECT character_file FROM sessions WHERE session_id='story'").fetchone() == ("Alice.png",)
+    mode = conversation_state(db, "chat", "story")
+    assert (mode.mode, mode.strategy, mode.started) == ("lightnovel", "b", False)
+    failures = [
+        record.diagnostic_fields
+        for record in caplog.records
+        if getattr(record, "diagnostic_fields", {}).get("event") == "conversation_setup.notification_failed"
+    ]
+    assert failures == [
+        {
+            "event": "conversation_setup.notification_failed",
+            "phase": "applied",
+            "error_type": error_type.__name__,
+        }
+    ]
+    assert "private transport detail" not in caplog.text
+
+
+def test_applied_setup_notice_failure_completes_durable_job_without_replay(setup, tmp_path, monkeypatch):
+    import json
+    from unittest.mock import Mock
+
+    from application_test_setup import make_test_application_services
+
+    from bridge import conversation_setup_callbacks as callbacks
+    from bridge import job_store, worker_orchestration
+    from bridge.callback_tokens import dynamic_callback_token
+    from bridge.composition import BackgroundRuntime, BridgeServices, TelegramRuntime
+    from bridge.job_service import JobService
+    from bridge.panel_bindings import bind_panel_session
+    from bridge.sqlite_store import db_connect
+
+    db, session, service, state = setup
+    ready(setup, "lightnovel")
+    service.back(db, "chat", session, "owner", state["nonce"])
+    choose(setup, "session", "$new")
+    service.set_title(db, "chat", session, "owner", "A new adventure")
+    data = "setup:" + dynamic_callback_token(
+        "conversation_setup",
+        json.dumps({"nonce": state["nonce"], "stage": "review", "action": "apply"}),
+        "chat",
+        db=db,
+    )
+    callback = {
+        "id": "callback",
+        "data": data,
+        "from": {"id": "owner"},
+        "message": {"chat": {"id": "chat"}, "message_id": 55},
+        "_queued": True,
+    }
+    bind_panel_session(db, "chat", 55, "story", "owner")
+    job_id = job_store.enqueue_job(db, 1, "chat", "story", 55, "callback", {"actor_id": "owner", "callback": callback})
+    job_store.mark_job_scheduled(db, job_id)
+    notices, failures = [], []
+
+    def send_notice(token, chat_id, text):
+        notices.append(text)
+        raise TimeoutError("private transport detail")
+
+    monkeypatch.setattr(callbacks, "close_panel_message", lambda *a: None)
+    monkeypatch.setattr(callbacks, "send_text", send_notice)
+    services = BridgeServices(
+        **vars(make_test_application_services(app_settings=service.app_settings, persona=service.persona_service)),
+        db_factory=lambda: db_connect(tmp_path / "novel.sqlite3", app_settings=service.app_settings),
+        jobs=JobService(
+            job_store.enqueue_job,
+            job_store.store_job_payload,
+            job_store.job_actor_id,
+            job_store.mark_job_scheduled,
+            job_store.mark_job_running,
+            job_store.finish_job,
+            job_store.recover_jobs,
+            Mock(return_value=True),
+        ),
+        telegram=TelegramRuntime(
+            request=lambda *a, **k: {},
+            send_text=lambda *a, **k: failures.append(a) or [],
+            download_file=lambda *a, **k: b"",
+        ),
+        background=BackgroundRuntime(
+            submit_chat=Mock(return_value=True),
+            submit=Mock(return_value=True),
+            register_backlog_dispatcher=lambda callback: None,
+            begin_shutdown=lambda: None,
+        ),
+    )
+
+    worker_orchestration.process_callback_job(services, "chat", callback, job_id)
+
+    assert db.execute("SELECT state,attempts FROM jobs WHERE job_id=?", (job_id,)).fetchone() == ("done", 1)
+    assert len(notices) == 1 and notices[0].startswith("Session configured:")
+    assert not failures
+    configured_sessions = db.execute("SELECT * FROM sessions ORDER BY session_id").fetchall()
+    assert len(configured_sessions) == 2
+
+    worker_orchestration.process_callback_job(services, "chat", callback, job_id)
+
+    assert db.execute("SELECT * FROM sessions ORDER BY session_id").fetchall() == configured_sessions
+    assert db.execute("SELECT state,attempts FROM jobs WHERE job_id=?", (job_id,)).fetchone() == ("done", 1)
+    assert len(notices) == 1
+    assert not failures

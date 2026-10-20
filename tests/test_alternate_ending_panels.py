@@ -5,9 +5,9 @@ import json
 import pytest
 from application_test_setup import make_test_application_services
 from miniapp_test_support import identity
+from session_test_support import session_db as session_db
 from test_alternate_ending import close_story
 from test_director_panels import dispatch
-from test_memory_completion_safety import session_db as session_db
 
 from bridge import director_callbacks, miniapp_director, miniapp_jobs
 from bridge.callback_tokens import resolve_dynamic_callback_token

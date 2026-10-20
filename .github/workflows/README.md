@@ -12,6 +12,8 @@ tests and the size ratchet.
 | `pr-title.yml` | `pull_request` lifecycle | `pr-title` | No, advisory |
 | `pr-size-labeler.yml` | `pull_request_target` lifecycle | `size-label` | No, advisory |
 | `scheduled-audit.yml` | weekly schedule; manual dispatch | `advisory-audit` | No, advisory |
+| `python314-compatibility.yml` | Python 3.14 migration file changes; manual dispatch | `voice-enabled-native-preflight`, `full-regression`, `resource-owner-trace`, `native-debugger` | Official CTranslate2 4.8.3 promotion gates (strict failing checks); combined native imports and full regression inherit developer mode and ResourceWarning errors; optional targeted trace and historical debugger are manual-only and never count as the full-suite gate |
+| `python314-candidate-pr500.yml` | PR500-only pull-request updates from its trusted migration branch | `candidate-validation` | Strict historical 4.8.2 candidate evidence only: exact PR head/base and pinned unreleased wheel; native exit, full regression, security coverage and freshness must pass; official 4.8.3 published-wheel promotion remains separate |
 | `python315-experimental.yml` | manual dispatch only | `full-dependency-preflight`, `core-smoke-and-benchmarks`, `stable-final-core-regression` | No, experimental; a missing 3.15 native wheel blocks migration, not Python 3.11 delivery |
 
 ## Required result and independent jobs
@@ -122,8 +124,13 @@ matches the image version and its engine binary exists under `/ms-playwright`.
 There is no separate browser-cache action or per-run browser/system-library
 installation. Each matrix job has a 20-minute timeout. Dependency caches and
 bundled binaries never skip tests or security scans.
-Only the external provider response is synthetic; the summary handler, utility
-executor, API adapter and SQLite records are real. Browser emulation does not
+The standalone DOM smoke child additionally opts into a test-support HTTP clock:
+reserved rate windows advance without a real-minute sleep. Production
+rate-limit logic and authentication stay active; dedicated HTTP tests prove the
+120-request boundary, rejected unauthorized clock changes, expiry and default
+absence of the fixture control. The Chromium/WebKit fixtures keep real clocks.
+The summary handler, utility executor, API adapter and SQLite records are real;
+provider responses remain synthetic. Browser emulation does not
 claim native Telegram Android/iOS acceptance. See
 [`docs/miniapp-browser-validation.md`](../../docs/miniapp-browser-validation.md).
 
@@ -261,3 +268,10 @@ coverage. Consolidate duplicated setup when its behavior is demonstrably equal;
 retire an architectural guard only after identifying its protected invariant and
 retaining equivalent enforcement. Avoid replacing readable, local fixtures with
 a broad shared fixture that couples otherwise independent test domains.
+
+## 2026-10-16 audit disposition
+
+The [completion report](../../docs/audits/2026-10-16-regression-audit-completion.md)
+records three baseline and three candidate runs, exact retained inventories and
+reviewed test-fixture changes. Keep four whole-file shards and current protected
+checks; this comparison does not justify another allocation policy or workflow.

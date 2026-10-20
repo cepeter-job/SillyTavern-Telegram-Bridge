@@ -4,8 +4,8 @@ import json
 import sqlite3
 
 import pytest
+from session_test_support import session_db as session_db
 from test_ending_state import goal, ready, ready_case
-from test_memory_completion_safety import session_db as session_db
 from test_narrative_reconciliation import add_story
 
 from bridge import narrative_checkpoints as checkpoints

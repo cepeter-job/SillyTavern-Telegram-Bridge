@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 from application_test_setup import make_test_delivery_port, make_test_provider_port
-from test_memory_completion_safety import session_db as session_db
+from session_test_support import session_db as session_db
 
 
 def _context(settings):

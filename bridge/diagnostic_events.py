@@ -59,7 +59,9 @@ _TEXT_FIELDS = frozenset(
         "prefix_scope",
         "section_attribution",
         "rejection_code",
+        "audience_rejection_code",
         "npc_rejection_code",
+        "npc_audience_rejection_code",
         "simulation_rejection_code",
         "root_type",
         "state_type",
@@ -129,6 +131,62 @@ _BOOL_FIELDS = frozenset(
         "output_cap_reached",
     }
 )
+# These fields need finite vocabularies: a private identifier can pass _VALUE.
+VALIDATION_FIELDS = frozenset(
+    {
+        "output",
+        "schema_version",
+        "story_phase",
+        "scene",
+        "scene.scene_id",
+        "scene.thread_id",
+        "scene.viewpoint_character",
+        "scene.pov_mode",
+        "scene.user_present",
+        "scene.purpose",
+        "scene.transition_type",
+        "threads",
+        "threads.thread_id",
+        "threads.title",
+        "threads.status",
+        "threads.summary",
+        "arcs",
+        "arcs.arc_id",
+        "arcs.title",
+        "arcs.status",
+        "arcs.phase",
+        "arcs.importance",
+        "arcs.summary",
+        "arcs.open_questions",
+        "arcs.related_threads",
+        "arcs.evidence",
+        "arcs.evidence.rowid",
+        "arcs.evidence.quote",
+        "evidence",
+        "evidence.rowid",
+        "evidence.quote",
+        "resolution",
+        "resolution.resolved",
+        "resolution.evidence",
+        "resolution.evidence.rowid",
+        "resolution.evidence.quote",
+    }
+)
+VALIDATION_CODES = frozenset(
+    {
+        "invalid_type",
+        "invalid_enum",
+        "invalid_identifier",
+        "unsupported_version",
+        "empty",
+        "too_long",
+        "too_many_items",
+        "duplicate",
+        "out_of_range",
+        "storage_limit",
+        "malformed_json",
+    }
+)
 
 
 def configure_identity(secret: str) -> None:
@@ -152,6 +210,10 @@ def clean_fields(fields: Mapping[str, object]) -> dict[str, object]:
             if isinstance(value, (str, int)) and str(value):
                 kind = key.removesuffix("_id")
                 result[kind + "_ref"] = scope_reference(kind, value)
+        elif key == "validation_field" and type(value) is str and value in VALIDATION_FIELDS:
+            result[key] = value
+        elif key == "validation_code" and type(value) is str and value in VALIDATION_CODES:
+            result[key] = value
         elif key in _TEXT_FIELDS and isinstance(value, str) and _VALUE.fullmatch(value):
             result[key] = value
         elif key in _NUMBER_FIELDS and type(value) is int and 0 <= value <= 2**63 - 1:

@@ -5,7 +5,7 @@ from dataclasses import fields
 from pathlib import Path
 
 import pytest
-from test_memory_completion_safety import session_db as session_db
+from session_test_support import session_db as session_db
 from test_narrative_reconciliation import add_story, run_reconciliation
 
 from bridge.director_goals import director_goal_policy, set_director_goal

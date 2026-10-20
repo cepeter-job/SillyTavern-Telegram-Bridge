@@ -3,9 +3,9 @@
 from unittest.mock import patch
 
 import pytest
+from session_test_support import session_db as session_db
 from test_epilogue_service import complete, producer_for
 from test_finale_resolution import resolved_packet
-from test_memory_completion_safety import session_db as session_db
 from test_narrative_checkpoints import enter, prepared
 from test_narrative_reconciliation import add_story, run_reconciliation
 

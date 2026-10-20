@@ -3,7 +3,7 @@
 from dataclasses import asdict, replace
 
 import pytest
-from test_memory_completion_safety import session_db as session_db
+from session_test_support import session_db as session_db
 from test_narrative_arcs import arc, packet
 from test_narrative_reconciliation import add_story, run_reconciliation
 

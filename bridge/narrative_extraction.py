@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from bridge.ending_reconciliation import ResolutionEvidence, parse_resolution_evidence
+from bridge.extraction_validation import ExtractionValidationError
 from bridge.json_fences import unfence_json
 from bridge.narrative_arcs import NarrativeArc, parse_arc_updates
 from bridge.narrative_values import NarrativeScene, NarrativeThread
@@ -24,20 +25,31 @@ NARRATIVE_EXTRACTION_INSTRUCTION = (
     "scene:{scene_id,thread_id,viewpoint_character,pov_mode,user_present,purpose,transition_type}, "
     "threads:[{thread_id,title,status,summary}], "
     "arcs:[{arc_id,title,status,phase,importance,summary,open_questions,related_threads,evidence}]. "
-    "Use at most 8 thread updates and 8 changed arc updates; omit unchanged arcs. "
+    "Use at most 8 thread updates and 8 changed arc updates. Omit unchanged arcs, including previously resolved "
+    "or abandoned arcs; omission preserves their accepted state and evidence. Do not repeat an earlier outcome "
+    "merely because it appears in prior state. "
     "Arc status is planned/active/dormant/resolved/abandoned, importance is major/minor. "
     "Arc phase is setup/development/escalation/climax/resolution. Each arc has at most 8 short open questions "
-    "and 8 established thread IDs. A resolved or abandoned arc MUST cite evidence from the newly supplied "
+    "and 8 established thread IDs. For planned, active or dormant arc updates, use evidence:[]; descriptive "
+    "updates do not need outcome citations. A resolved or abandoned arc MUST cite evidence from the newly supplied "
     "committed transcript rows: evidence:[{rowid,quote}] with 1–4 exact quotes of at most 500 characters. "
+    "Copy the shortest contiguous passage that establishes the outcome directly from the cited row's content, "
+    "preserving wording, punctuation, whitespace and line breaks. Do not paraphrase, translate, join separate "
+    "passages or add ellipses. Copy that row's integer rowid, not a turn number or a row from prior state. "
+    "Escape quotations correctly as JSON. "
     "A plan, rumor or expectation is not evidence that its intended outcome happened. "
     "When ending_lifecycle is finale, additionally return resolution:{resolved:boolean,evidence:[{rowid,quote}]}. "
     "Set resolved true only when the latest committed assistant turn actually resolves the central conflict, "
     "all required major arcs have established outcomes, and no major unresolved arc remains. "
     "Resolution evidence must quote the latest committed assistant turn exactly; do not use user intent or "
     "a suggested future ending as evidence. A finale may need many turns; normally resolved is false until "
-    "the story itself establishes its resolution. Do not generate epilogue prose in this extraction. "
-    "Keep existing IDs stable. New scenes need new IDs and an explicit cut/pov_switch/time_jump/thread_switch; "
-    "continue preserves the scene, thread and viewpoint. IDs use letters, numbers, underscore or hyphen. "
+    "the story itself establishes its resolution. When resolution.resolved is false, use resolution.evidence:[]. "
+    "Do not generate epilogue prose in this extraction. "
+    "For the same scene, preserve its exact scene_id, thread_id, viewpoint_character and pov_mode. "
+    "An observed thread, viewpoint or POV change requires a new scene_id and explicit "
+    "cut/pov_switch/time_jump/thread_switch. Selected narrative policy does not change observed scene facts. "
+    "Every new scene needs a new ID and an explicit transition, never continue. "
+    "Keep other existing IDs stable. IDs use letters, numbers, underscore or hyphen. "
     "POV is first_person/third_person_user/third_person_rotating/omniscient/cinematic. "
     "user_present is true/false/null based only on evidence. Thread status is active/offscreen/dormant/resolved. "
     "The current scene needs an established thread; a committed resolution may close that thread. "
@@ -52,7 +64,7 @@ NARRATIVE_EXTRACTION_INSTRUCTION = (
     "Each encoded open_questions or related_threads array is at most 4000 characters; each encoded evidence "
     "array is at most 4096 characters. Evidence rowid must be an integer in 1..9223372036854775807, "
     "not a string or boolean. "
-    "Use concise values well below these limits and empty evidence arrays when no outcome is established. "
+    "Use concise values well below these limits. "
 )
 
 
@@ -65,49 +77,77 @@ class NarrativeExtraction:
     resolution: ResolutionEvidence | None = None
 
 
+_FIELD_LABELS = {
+    "story_phase": "phase",
+    "scene.scene_id": "scene identifier",
+    "scene.thread_id": "thread identifier",
+    "scene.viewpoint_character": "viewpoint",
+    "scene.pov_mode": "POV",
+    "scene.purpose": "scene purpose",
+    "scene.transition_type": "transition",
+    "threads.thread_id": "thread identifier",
+    "threads.title": "thread title",
+    "threads.status": "thread status",
+    "threads.summary": "thread summary",
+}
+
+
 def _text(value: Any, field: str, maximum: int, *, required: bool = False) -> str:
-    if not isinstance(value, str) or len(value) > maximum or (required and not value.strip()):
-        raise ValueError(f"Invalid narrative {field}")
+    message = f"Invalid narrative {_FIELD_LABELS[field]}"
+    if not isinstance(value, str):
+        raise ExtractionValidationError(message, field, "invalid_type")
+    if len(value) > maximum:
+        raise ExtractionValidationError(message, field, "too_long")
+    if required and not value.strip():
+        raise ExtractionValidationError(message, field, "empty")
     return value.strip()
 
 
 def _identifier(value: Any, field: str) -> str:
     value = _text(value, field, 100, required=True)
     if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}", value) is None:
-        raise ValueError(f"Invalid narrative {field}")
+        raise ExtractionValidationError(f"Invalid narrative {_FIELD_LABELS[field]}", field, "invalid_identifier")
     return value
 
 
 def _choice(value: Any, field: str, allowed: set[str]) -> str:
     if not isinstance(value, str) or value not in allowed:
-        raise ValueError(f"Invalid narrative {field}")
+        code = "invalid_enum" if isinstance(value, str) else "invalid_type"
+        raise ExtractionValidationError(f"Invalid narrative {_FIELD_LABELS[field]}", field, code)
     return value
 
 
 def parse_narrative_extraction(raw: str, *, allow_epilogue: bool = False) -> NarrativeExtraction:
     if not isinstance(raw, str) or len(raw) > MAX_RECONCILIATION_OUTPUT:
-        raise ValueError("Narrative extraction exceeds its size limit")
+        code = "too_long" if isinstance(raw, str) else "invalid_type"
+        raise ExtractionValidationError("Narrative extraction exceeds its size limit", "output", code)
     data = json.loads(unfence_json(raw))
-    if not isinstance(data, dict) or type(data.get("schema_version")) is not int or data["schema_version"] != 1:
-        raise ValueError("Unsupported narrative extraction version")
+    if not isinstance(data, dict):
+        raise ExtractionValidationError("Unsupported narrative extraction version", "output", "invalid_type")
+    if type(data.get("schema_version")) is not int or data["schema_version"] != 1:
+        code = "unsupported_version" if type(data.get("schema_version")) is int else "invalid_type"
+        raise ExtractionValidationError("Unsupported narrative extraction version", "schema_version", code)
     phases = {"setup", "development", "escalation", "climax", "resolution"}
     if allow_epilogue:
         phases.add("epilogue")
-    phase = _choice(data.get("story_phase"), "phase", phases)
+    phase = _choice(data.get("story_phase"), "story_phase", phases)
     scene = data.get("scene")
     threads = data.get("threads")
-    if not isinstance(scene, dict) or not isinstance(threads, list) or len(threads) > MAX_THREAD_UPDATES:
-        raise ValueError("Invalid narrative scene or thread updates")
+    if not isinstance(scene, dict):
+        raise ExtractionValidationError("Invalid narrative scene or thread updates", "scene", "invalid_type")
+    if not isinstance(threads, list) or len(threads) > MAX_THREAD_UPDATES:
+        code = "too_many_items" if isinstance(threads, list) else "invalid_type"
+        raise ExtractionValidationError("Invalid narrative scene or thread updates", "threads", code)
     present = scene.get("user_present")
     if present is not None and type(present) is not bool:
-        raise ValueError("Invalid narrative user presence")
+        raise ExtractionValidationError("Invalid narrative user presence", "scene.user_present", "invalid_type")
     parsed_scene = NarrativeScene(
-        scene_id=_identifier(scene.get("scene_id"), "scene identifier"),
-        thread_id=_identifier(scene.get("thread_id"), "thread identifier"),
-        viewpoint_character=_text(scene.get("viewpoint_character", ""), "viewpoint", 200),
+        scene_id=_identifier(scene.get("scene_id"), "scene.scene_id"),
+        thread_id=_identifier(scene.get("thread_id"), "scene.thread_id"),
+        viewpoint_character=_text(scene.get("viewpoint_character", ""), "scene.viewpoint_character", 200),
         pov_mode=_choice(
             scene.get("pov_mode"),
-            "POV",
+            "scene.pov_mode",
             {
                 "first_person",
                 "third_person_user",
@@ -117,10 +157,10 @@ def parse_narrative_extraction(raw: str, *, allow_epilogue: bool = False) -> Nar
             },
         ),
         user_present=present,
-        purpose=_text(scene.get("purpose", ""), "scene purpose", 1000),
+        purpose=_text(scene.get("purpose", ""), "scene.purpose", 1000),
         transition_type=_choice(
             scene.get("transition_type"),
-            "transition",
+            "scene.transition_type",
             {
                 "continue",
                 "cut",
@@ -134,17 +174,17 @@ def parse_narrative_extraction(raw: str, *, allow_epilogue: bool = False) -> Nar
     seen = set()
     for thread in threads:
         if not isinstance(thread, dict):
-            raise ValueError("Invalid narrative thread")
-        identifier = _identifier(thread.get("thread_id"), "thread identifier")
+            raise ExtractionValidationError("Invalid narrative thread", "threads", "invalid_type")
+        identifier = _identifier(thread.get("thread_id"), "threads.thread_id")
         if identifier in seen:
-            raise ValueError("Duplicate narrative thread identifier")
+            raise ExtractionValidationError("Duplicate narrative thread identifier", "threads.thread_id", "duplicate")
         seen.add(identifier)
         parsed_threads.append(
             NarrativeThread(
                 thread_id=identifier,
-                title=_text(thread.get("title"), "thread title", 200, required=True),
-                status=_choice(thread.get("status"), "thread status", {"active", "offscreen", "dormant", "resolved"}),
-                summary=_text(thread.get("summary", ""), "thread summary", 2000),
+                title=_text(thread.get("title"), "threads.title", 200, required=True),
+                status=_choice(thread.get("status"), "threads.status", {"active", "offscreen", "dormant", "resolved"}),
+                summary=_text(thread.get("summary", ""), "threads.summary", 2000),
             )
         )
     return NarrativeExtraction(

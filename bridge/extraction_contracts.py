@@ -74,6 +74,38 @@ NPC_EXTRACTION_CONTRACT = (
 )
 
 
+_NPC_AUDIENCE_REPAIR_GUIDANCE = {
+    "visibility_type_invalid": (
+        'visibility must be the JSON string "shared" or "restricted", never null, a number, array or object. '
+    ),
+    "visibility_value_invalid": (
+        'Use only visibility="shared" or visibility="restricted"; recover the established audience from '
+        "canonical source and accepted prior state. "
+    ),
+    "known_by_type_invalid": "known_by must be a JSON array of exact knower name strings, even for one knower. ",
+    "known_by_limit_exceeded": (
+        "known_by allows at most 8 exact knower strings. Do not drop or merge distinct knowers to fit the limit "
+        "or broaden visibility. "
+    ),
+    "known_by_entry_invalid": (
+        "Every known_by entry must be a nonempty name string; do not coerce null, numbers or unnamed entries "
+        "into names. "
+    ),
+    "shared_with_knowers": (
+        "A shared fact cannot carry named knowers. Re-establish its audience from canonical source and accepted "
+        "prior state; never clear knowers simply to make it shared. "
+    ),
+    "restricted_without_knowers": (
+        "A restricted fact needs at least one explicitly established knower. Do not switch it to shared or invent "
+        "a knower to satisfy the schema. "
+    ),
+    "secrets_not_restricted": (
+        "Secrets always require restricted visibility and explicit exact nonempty knowers; "
+        "never publish secrets shared. "
+    ),
+}
+
+
 _SIMULATION_REPAIR_GUIDANCE = {
     "simulation_type_invalid": (
         "Use an object for simulation/actor and an array for each plural group and actor change list. "
@@ -103,6 +135,10 @@ _SIMULATION_REPAIR_GUIDANCE = {
 
 def safe_rejection_code(code: object) -> str:
     return code if isinstance(code, str) and code in REJECTION_CODES else "work_failed"
+
+
+def safe_npc_audience_code(code: object) -> str:
+    return code if isinstance(code, str) and code in _NPC_AUDIENCE_REPAIR_GUIDANCE else ""
 
 
 def parser_rejection_code(error: ValueError) -> str:
@@ -139,7 +175,9 @@ def extraction_root_fields(raw: str, kind: Literal["scene", "tracker"]) -> dict[
     return fields
 
 
-def tracker_repair_instruction(npc_code: str, simulation_code: str, *, repair_npcs: bool) -> str:
+def tracker_repair_instruction(
+    npc_code: str, simulation_code: str, *, repair_npcs: bool, npc_audience_code: object = ""
+) -> str:
     rejection = (
         "Contract rejection: NPC="
         + safe_rejection_code(npc_code)
@@ -153,7 +191,10 @@ def tracker_repair_instruction(npc_code: str, simulation_code: str, *, repair_np
             "partial output is not accepted state. Use concise values without dropping established changes. "
         )
     rejection += _SIMULATION_REPAIR_GUIDANCE.get(simulation_code, "")
-    if npc_code == "invalid_audience":
+    audience_code = safe_npc_audience_code(npc_audience_code)
+    if audience_code:
+        rejection += "NPC audience rejection: " + audience_code + ". " + _NPC_AUDIENCE_REPAIR_GUIDANCE[audience_code]
+    if npc_code == "invalid_audience" or audience_code:
         rejection += (
             "Use explicit shared visibility with known_by=[] or restricted visibility with a nonempty array "
             "of exact knower strings. Secrets must be restricted. Never broaden or guess audiences. "
@@ -173,10 +214,19 @@ def tracker_repair_instruction(npc_code: str, simulation_code: str, *, repair_np
 
 
 def record_tracker_contract(
-    raw: str, kind: Literal["npc", "simulation"], valid: bool, code: str, diagnostics: dict[str, Any] | None
+    raw: str,
+    kind: Literal["npc", "simulation"],
+    valid: bool,
+    code: str,
+    diagnostics: dict[str, Any] | None,
+    *,
+    audience_code: object = "",
 ) -> None:
     fields = extraction_root_fields(raw, "tracker")
     fields["rejection_code"] = safe_rejection_code(code)
+    if kind == "npc" and not valid and (safe_audience := safe_npc_audience_code(audience_code)):
+        fields["audience_rejection_code"] = safe_audience
     if diagnostics is not None:
+        diagnostics.pop("audience_rejection_code", None)
         diagnostics.update(fields)
     event(kind + ".contract_parsed", accepted=valid, **fields)

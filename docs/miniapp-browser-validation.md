@@ -1,7 +1,7 @@
 # Mini App browser validation
 
 `tests/miniapp-browser/` runs the current Mini App in pinned Chromium and WebKit
-engines through Playwright 1.63.0. The npm lock pins Playwright and its engine
+engines through Playwright 1.64.0. The npm lock pins Playwright and its engine
 revisions independently of runtime dependencies. These are development tests;
 the installed bridge does not require Node, Playwright or browser binaries.
 
@@ -75,7 +75,7 @@ and keep the production polling/backoff intervals. The child releases blocked
 provider calls, drains its executor and closes its server on SIGTERM. Each
 Playwright context and process is isolated from the next test.
 
-Normal `miniapp-smoke` CI uses the digest-pinned Playwright 1.63.0 Noble container
+Normal `miniapp-smoke` CI uses the digest-pinned Playwright 1.64.0 Noble container
 declared in [ci.yml](../.github/workflows/ci.yml). Its Chromium and WebKit binaries
 and system libraries are already installed. Each engine runs in its own matrix
 job, which verifies the package version and bundled binary before testing; the

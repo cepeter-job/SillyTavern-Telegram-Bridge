@@ -117,7 +117,7 @@ the scheduling input. Compare complete exact-head job and step measurements befo
 changing allocation. Startup and the slowest indivisible file can limit scaling.
 
 `setup-uv` and `setup-node` already cache lockfile-keyed Python and npm downloads.
-`miniapp-smoke` uses the digest-pinned Playwright 1.63.0 Noble container declared
+`miniapp-smoke` uses the digest-pinned Playwright 1.64.0 Noble container declared
 in `ci.yml`, with Chromium/WebKit binaries and their OS libraries already
 installed. Each engine's matrix job verifies that the locked Playwright package
 matches the image version and its engine binary exists under `/ms-playwright`.

@@ -83,9 +83,9 @@ Do not recreate or alter the running Python 3.11 .venv.
 
 The independent Python 3.14 locks are requirements-py314.lock
 and requirements-dev-py314.lock. The Python 3.11 requirements.lock
-and requirements-dev.lock are unchanged for rollback.
+and requirements-dev.lock remain the separate Python 3.11 rollback baseline.
 
-Use uv **0.12.23** for the reviewed regeneration procedure. Reconcile
+Use uv **0.13.0** for the reviewed regeneration procedure. Reconcile
 constraints with the current reviewed baseline first; the combined development
 resolution also uses the exact Python 3.14 runtime lock:
 

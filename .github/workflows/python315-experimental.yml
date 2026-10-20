@@ -37,9 +37,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
-          version: "0.12.23"
+          version: "0.13.0"
           enable-cache: true
       - name: Test complete native dependency install on Python 3.15
         id: native-dependency-install
@@ -82,9 +82,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Install uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
-          version: "0.12.23"
+          version: "0.13.0"
           enable-cache: true
       - name: Prepare isolated Python 3.11 and 3.15 runtimes
         run: |
@@ -141,7 +141,7 @@ jobs:
           PY
       - name: Retain synthetic benchmark evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python315-experimental-benchmarks
           path: runtime-benchmarks/*.json
@@ -168,9 +168,9 @@ jobs:
             libffi-dev libsqlite3-dev libreadline-dev libncurses-dev \
             libgdbm-dev libexpat1-dev libzstd-dev
       - name: Install pinned uv
-        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
-          version: "0.12.23"
+          version: "0.13.0"
           enable-cache: true
       - name: Build verified upstream CPython 3.15.0 FINAL outside repository
         run: |
@@ -274,7 +274,7 @@ jobs:
           echo "Source build is not PGO or JIT optimized; do not compare its CPU time to a production interpreter." >> "$GITHUB_STEP_SUMMARY"
       - name: Upload core-only final-release regression evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python315-final-core-regression
           path: |

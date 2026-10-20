@@ -8,6 +8,7 @@ tests and the size ratchet.
 
 | File | Trigger | Jobs | Protected |
 | --- | --- | --- | --- |
+| `dependency-consolidation.yml` | Push to `chore/consolidate-dependencies-20261020` only | `generate-dependency-evidence`, `transfer-dependency-evidence` | Temporary, read-only hosted generation for dependency PRs #545–549; exact source and byte receipts; remove entry, script and workflow before final review |
 | `ci.yml` | `pull_request`; `push` to `main` | `python-test-shards`, `python-tests`, `miniapp-smoke`, `secret-scan`, `dependency-audit`, `static-analysis`, `test` | Yes: the `test` aggregate is the branch-protected check |
 | `pr-title.yml` | `pull_request` lifecycle | `pr-title` | No, advisory |
 | `pr-size-labeler.yml` | `pull_request_target` lifecycle | `size-label` | No, advisory |

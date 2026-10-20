@@ -44,7 +44,7 @@ def test_python314_runtime_and_development_locks_preserve_cpu_baseline():
     assert "numpy==2.3.5" in (ROOT / "requirements-dev-py314.lock").read_text()
     constraint = (ROOT / "config/python314-constraints.txt").read_text()
     assert "numpy==2.3.5" in constraint.splitlines()
-    assert "hindsight-client==0.10.2" in constraint.splitlines()
+    assert "hindsight-client==0.10.3" in constraint.splitlines()
     assert "httpx==0.28.1" in constraint.splitlines()
 
 

@@ -51,3 +51,36 @@ def test_plan_refuses_mutated_reference_prompt_even_with_old_saved_proof(native_
     copied["variants"]["candidate"]["messages"][0]["content"] += " Invent consent."
     with pytest.raises(ValueError):
         revalidate_case(directory, copied)
+
+
+@pytest.mark.parametrize("invalid_receipt", [False, True])
+def test_revalidation_closes_snapshot_connection_on_success_and_error(native_plan, monkeypatch, invalid_receipt):
+    import sqlite3
+
+    from tools import evaluate_native_context
+
+    directory, plan = native_plan
+    case = json.loads(json.dumps(plan["cases"][0]))
+    if invalid_receipt:
+        case["receipt_sha256"] = "0" * 64
+    original_connect = sqlite3.connect
+    opened = []
+
+    def connect(*args, **kwargs):
+        connection = original_connect(*args, **kwargs)
+        opened.append(connection)
+        return connection
+
+    monkeypatch.setattr(evaluate_native_context.sqlite3, "connect", connect)
+    try:
+        if invalid_receipt:
+            with pytest.raises(ValueError, match="native_receipt_changed"):
+                revalidate_case(directory, case)
+        else:
+            assert revalidate_case(directory, case)["all_source_evidence_preserved"]
+        assert len(opened) == 1
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            opened[0].execute("SELECT 1")
+    finally:
+        for connection in opened:
+            connection.close()

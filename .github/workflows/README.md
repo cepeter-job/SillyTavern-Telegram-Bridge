@@ -8,7 +8,6 @@ tests and the size ratchet.
 
 | File | Trigger | Jobs | Protected |
 | --- | --- | --- | --- |
-| `dependency-consolidation.yml` | Push to `chore/consolidate-dependencies-20261020` only | `generate-dependency-evidence`, `transfer-dependency-evidence` | Temporary, read-only hosted generation for dependency PRs #545–549; exact source and byte receipts; remove entry, script and workflow before final review |
 | `ci.yml` | `pull_request`; `push` to `main` | `python-test-shards`, `python-tests`, `miniapp-smoke`, `secret-scan`, `dependency-audit`, `static-analysis`, `test` | Yes: the `test` aggregate is the branch-protected check |
 | `pr-title.yml` | `pull_request` lifecycle | `pr-title` | No, advisory |
 | `pr-size-labeler.yml` | `pull_request_target` lifecycle | `size-label` | No, advisory |
@@ -118,7 +117,7 @@ the scheduling input. Compare complete exact-head job and step measurements befo
 changing allocation. Startup and the slowest indivisible file can limit scaling.
 
 `setup-uv` and `setup-node` already cache lockfile-keyed Python and npm downloads.
-`miniapp-smoke` uses the digest-pinned Playwright 1.63.0 Noble container declared
+`miniapp-smoke` uses the digest-pinned Playwright 1.64.0 Noble container declared
 in `ci.yml`, with Chromium/WebKit binaries and their OS libraries already
 installed. Each engine's matrix job verifies that the locked Playwright package
 matches the image version and its engine binary exists under `/ms-playwright`.

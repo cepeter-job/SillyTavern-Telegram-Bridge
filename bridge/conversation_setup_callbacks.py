@@ -11,6 +11,7 @@ from bridge.callbacks import close_panel_message
 from bridge.conversation_setup import ConversationSetupService, SetupExpiredError
 from bridge.conversation_setup_panels import send_setup_panel
 from bridge.conversation_setup_state import setup_key, setup_panel_markup
+from bridge.diagnostic_events import event
 from bridge.metadata import get_meta
 from bridge.persona_service import PersonaService
 from bridge.request_types import RequestContext
@@ -56,9 +57,20 @@ def handle_setup_callback(
         elif action == "apply":
             result = service.apply(db, chat_id, session, request_context.actor_id, nonce)
             close_panel_message(db, token, chat_id, {"message": message})
-            send_text(
-                token, chat_id, f"Session configured: {result['title']}. Use /start to choose the opening message."
-            )
+            # Apply already committed and cleared the draft; notification failure must not invite replay.
+            # Notice failure must not prevent the callback acknowledgement.
+            try:
+                send_text(
+                    token, chat_id, f"Session configured: {result['title']}. Use /start to choose the opening message."
+                )
+            except (OSError, RuntimeError) as exc:
+                event("conversation_setup.notification_failed", phase="applied", error_type=type(exc).__name__)
+            # Acknowledgement failure must not retry mutation, rerun apply, or report expiry.
+            try:
+                answer_callback(token, str(callback.get("id") or ""), "Setup updated")
+            except (OSError, RuntimeError) as exc:
+                event("conversation_setup.notification_failed", phase="applied", error_type=type(exc).__name__)
+            return True
         else:
             if action == "back":
                 state = service.back(db, chat_id, session, request_context.actor_id, nonce)

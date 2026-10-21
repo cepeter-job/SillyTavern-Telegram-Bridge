@@ -3,6 +3,8 @@
 import importlib.util
 import json
 
+import tools.extractive_live_replay as live
+
 
 def report_builder():
     assert importlib.util.find_spec("tools.evaluate_extractive_context") is not None, "report not implemented"
@@ -65,7 +67,6 @@ def test_live_reconstruction_is_readonly_closed_and_never_full_prompt(tmp_path, 
 
     import pytest
 
-    import tools.extractive_live_replay as live
     from bridge.settings import load_app_settings
     from tools.hybrid_context_fixture import native_fixture
 
@@ -106,7 +107,6 @@ def test_live_local_core_reconstruction_keeps_private_sources_local(tmp_path):
     from miniapp_test_support import card_bytes
 
     from bridge.settings import load_app_settings
-    from tools.extractive_live_replay import build_live_report
     from tools.hybrid_context_fixture import native_fixture
 
     settings = load_app_settings({}, home=tmp_path)
@@ -125,7 +125,7 @@ def test_live_local_core_reconstruction_keeps_private_sources_local(tmp_path):
         destination.close()
         db.close()
     before = hashlib.sha256(database.read_bytes()).hexdigest()
-    report = build_live_report(database, settings)
+    report = live.build_live_report(database, settings)
     assert report["estimated"]["all_local_core_denominators_available"] is True
     assert report["cases"][0]["reason"] == "insufficient_older_history"
     assert report["cases"][0]["baseline_tokens"] > 0

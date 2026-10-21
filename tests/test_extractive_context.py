@@ -5,10 +5,10 @@ import importlib.util
 
 import pytest
 
+import tools.hybrid_context_fixture as fixtures
 from bridge.context_hybrid_types import HISTORY_MARKER, SHADOW_MARKER
 from bridge.context_selection_runtime import choose_context_messages
 from bridge.settings import load_app_settings
-from tools.hybrid_context_fixture import native_fixture
 
 
 def evaluator():
@@ -20,7 +20,7 @@ def evaluator():
 
 @pytest.fixture
 def story(tmp_path):
-    db, scope, messages, rows = native_fixture(tmp_path, variant="commitment_dense")
+    db, scope, messages, rows = fixtures.native_fixture(tmp_path, variant="commitment_dense")
     yield db, scope, messages, rows
     db.close()
 
@@ -79,7 +79,7 @@ def test_unsafe_source_never_produces_a_candidate(story, damage):
 
 @pytest.mark.parametrize("variant,count", [("short_history", 8), ("unsupported_script", 44)])
 def test_negative_controls_remain_in_denominator(tmp_path, variant, count):
-    db, scope, baseline, _ = native_fixture(tmp_path, count=count, variant=variant)
+    db, scope, baseline, _ = fixtures.native_fixture(tmp_path, count=count, variant=variant)
     try:
         result = evaluator()(db, scope, baseline, query="astrolabe")
         assert result.candidate_messages == baseline
@@ -108,8 +108,6 @@ def test_report_never_exports_transcript_or_scope(story):
 
 @pytest.mark.parametrize("protected", ['"The violet lantern glows."', "  The <scene> remains misty.  "])
 def test_quote_or_unparseable_source_is_never_silently_discarded(tmp_path, monkeypatch, protected):
-    import tools.hybrid_context_fixture as fixtures
-
     monkeypatch.setitem(fixtures.ANCHORS, 5, protected)
     db, scope, baseline, _ = fixtures.native_fixture(tmp_path)
     try:

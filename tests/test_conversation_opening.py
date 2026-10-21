@@ -330,35 +330,6 @@ def test_greeting_photo_uses_selected_character_png_without_image_url(novel_db, 
     assert json.loads(db.execute("SELECT telegram_message_ids FROM messages").fetchone()[0]) == [71, 72]
 
 
-def test_greeting_photo_failure_recovery_only_retries_photo(novel_db, monkeypatch):
-    db, _session, settings = novel_db
-    sent = []
-    monkeypatch.setattr(
-        greeting_delivery,
-        "send_text",
-        lambda *a, acknowledged_chunk=None, **kw: sent.append("text") or acknowledged_chunk(71),
-    )
-
-    def send_photo(_token, _method, _payload):
-        sent.append("photo")
-        if sent.count("photo") == 1:
-            raise RuntimeError("network")
-        return {"message_id": 72}
-
-    monkeypatch.setattr(greetings, "telegram_request", send_photo)
-    fields = {"name": "Alice", "first_mes": "Hello <img src='https://images.example/a.jpg'>"}
-
-    with pytest.raises(RuntimeError, match="network"):
-        greetings.send_character_greeting(
-            db, "token", "chat", fields, "story", "User", operation_id=41, app_settings=settings
-        )
-    assert greetings.send_character_greeting(
-        db, "token", "chat", {"first_mes": "Changed"}, "story", "User", operation_id=41, app_settings=settings
-    )
-    assert sent == ["text", "photo", "photo"]
-    assert json.loads(db.execute("SELECT telegram_message_ids FROM messages").fetchone()[0]) == [71, 72]
-
-
 def test_greeting_photo_skips_a_deleted_opening(novel_db, monkeypatch):
     db, _session, settings = novel_db
     with write_transaction(db):

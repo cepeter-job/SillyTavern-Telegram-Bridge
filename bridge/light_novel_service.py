@@ -19,6 +19,7 @@ from bridge.job_store import enqueue_job
 from bridge.light_novel_format import (
     CHOICE_MATURITY_POLICY,
     CHOICE_MOTIVE_POLICY,
+    MAX_CHOICE_CHARS,
     light_novel_response_shape,
     parse_choice_response,
     validate_choices,
@@ -86,8 +87,12 @@ def _choice_failure_reason(exc: BaseException, stage: str) -> str:
                 return "invalid_choice_count"
             if "distinct" in detail:
                 return "duplicate_choices"
-            if "short narrative actions" in detail:
-                return "invalid_choice_action"
+            if detail == "Choice must not be empty":
+                return "empty_choice"
+            if detail == "Choice exceeds the character limit":
+                return "choice_too_long"
+            if detail == "Choice must not start with a command prefix":
+                return "command_like_choice"
             if "control characters" in detail:
                 return "control_character"
             if "must be text" in detail:
@@ -339,7 +344,7 @@ def ensure_choices(
     try:
         choice_reasoning = 0
         if record.strategy == "b":
-            model = task_model_for_session(db, record.chat_id, session, "utility", app_settings=app_settings)
+            model = task_model_for_session(db, record.chat_id, record.session_id, "utility", app_settings=app_settings)
             choice_reasoning = utility_reasoning_for_session(db, record.chat_id, record.session_id)
         context = build_choice_context_snapshot(
             db,
@@ -361,7 +366,9 @@ def ensure_choices(
                     f"Generate exactly {record.requested_count} distinct next choices suited to the current scene. "
                     "Follow the Narrative choice policy: in-world user actions require the user's presence; "
                     "off-screen scenes use narrative steering of threads, focus, or scene transitions. "
-                    f"Return only JSON: {example}. Each action must be 1–160 characters. "
+                    f"Return only JSON: {example}. Each action must be 1–{MAX_CHOICE_CHARS} characters. "
+                    "Aim for 60–120 characters: one short clause, without explanations. "
+                    "Never begin a choice with / or @. "
                     "For an in-world user action, use the user persona, not the assistant character. "
                     "Do not continue or rewrite the story, "
                     "reveal future outcomes, repeat equivalent actions, or generate bot commands. "

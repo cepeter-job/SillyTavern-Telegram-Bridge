@@ -34,7 +34,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = c6c70f8956dfa2d500b8b612c71bf2573bd5b5bf
+          test "$(git rev-parse HEAD^)" = 699cce08810db56910fb962a1b77560698b627f4
           python - <<'PY'
           import json
           import pathlib
@@ -70,12 +70,6 @@ jobs:
               expected = {'certifi'} if output == 'requirements.lock' else {'certifi', 'uv'}
               assert set(changed) == expected, changed
               print(output, json.dumps(changed, sort_keys=True))
-          for path in pathlib.Path('.github/workflows').glob('*.yml'):
-              if path.name == 'pr551-lock-recovery.yml':
-                  continue
-              text = path.read_text()
-              if 'astral-sh/setup-uv@' in text:
-                  path.write_text(text.replace('"0.13.0"', '"0.13.4"').replace("'0.13.0'", "'0.13.4'"))
           PY
           uv pip install --system --python python --require-hashes -r requirements-dev.lock
           python -m pip check
@@ -98,7 +92,7 @@ jobs:
           git diff --stat
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add requirements.lock requirements-dev.lock requirements-dev.txt .github/workflows
+          git add requirements.lock requirements-dev.lock requirements-dev.txt
           git commit -m 'chore(deps): remove compromised CA trust from certifi and uv'
           git push origin HEAD:refs/heads/agent/pr551-security-locks-20261021
           git archive --format=tar.gz --output=pr551-reviewed-source.tar.gz HEAD

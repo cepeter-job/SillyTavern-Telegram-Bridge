@@ -17,6 +17,7 @@ from bridge.conversation_lifecycle import (
     mark_started,
 )
 from bridge.delivery_progress import delivery_complete
+from bridge.diagnostic_events import event
 from bridge.greeting_media import first_image_url
 from bridge.light_novel_service import attach_turn, prepare_turn
 from bridge.limits import CARD_FIELD_MAX_CHARS
@@ -92,15 +93,12 @@ def _deliver_greeting_photo(
         "SELECT 1 FROM messages WHERE rowid=? AND chat_id=? AND session_id=? AND role='assistant'",
         (rowid, chat_id, session_id),
     ).fetchone()
-    if row is None:
-        return
     key = f"greeting_photo:{rowid}"
-    if get_meta(db, key, ""):
+    if row is None or get_meta(db, key, ""):
         return
     url = get_meta(db, f"greeting_photo_url:{rowid}", "") or first_image_url(greeting)
-    if url:
-        result = telegram_request(token, "sendPhoto", {"chat_id": chat_id, "photo": url})
-    else:
+    path = None
+    if not url:
         session = load_session_row(db, chat_id, session_id)
         path = (
             safe_character_path(str(session.get("character_file") or ""), app_settings=app_settings)
@@ -110,14 +108,46 @@ def _deliver_greeting_photo(
         if path is None:
             logging.warning("Greeting character PNG is unavailable for session %s", session_id)
             return
-        result = send_panel_photo(
-            token,
-            chat_id,
-            path,
-            caption="",
-            reply_markup={},
-            request_context=RequestContext(db, "", app_settings=app_settings),
+    with write_transaction(db):
+        row = db.execute(
+            "SELECT 1 FROM messages WHERE rowid=? AND chat_id=? AND session_id=? AND role='assistant'",
+            (rowid, chat_id, session_id),
+        ).fetchone()
+        if row is None or get_meta(db, key, ""):
+            return
+        # Telegram cannot deduplicate sendPhoto after an uncertain acknowledgement.
+        # Claim before I/O: a crash can omit optional media, but cannot resend it.
+        set_meta(db, key, "attempted")
+    started = time.monotonic()
+    try:
+        if url:
+            result = telegram_request(token, "sendPhoto", {"chat_id": chat_id, "photo": url})
+        else:
+            if path is None:
+                return
+            result = send_panel_photo(
+                token,
+                chat_id,
+                path,
+                caption="",
+                reply_markup={},
+                request_context=RequestContext(db, "", app_settings=app_settings),
+            )
+    except (OSError, RuntimeError) as exc:
+        # The opening text is already acknowledged. Keep database and text failures
+        # outside this optional transport boundary; never log URLs or exception text.
+        event(
+            "greeting.photo_failed",
+            level=logging.WARNING,
+            chat_id=chat_id,
+            session_id=session_id,
+            source_message_id=rowid,
+            status="skipped",
+            reason="transport_failure",
+            error_type=type(exc).__name__,
+            elapsed_ms=max(0, int((time.monotonic() - started) * 1000)),
         )
+        return
     message_id = int(result["message_id"])
     with write_transaction(db):
         row = db.execute(

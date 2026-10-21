@@ -8,6 +8,12 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+### Greeting media resilience and choice diagnostics
+
+- Keep a successfully delivered opening and its started session valid when the optional greeting photo transport fails. Persist the photo attempt before network I/O so interruption recovery cannot automatically duplicate an uncertain upload; required text and database failures remain recoverable errors. A process exit after the attempt checkpoint may omit the optional photo.
+- Distinguish empty, overlength and command-prefixed Light Novel choices in content-free diagnostics and bounded repair guidance. Encourage shorter choices while retaining the 160-character hard limit, exact 3–4 count and two-call maximum.
+- Update Python 3.11/3.14 runtime/development locks and migration constraints to certifi 2026.10.19 and uv 0.13.4, and update workflow uv bootstrap pins, following the compromised-CA trust advisories. Other resolved package versions remain unchanged.
+
 ## [0.3.031] - 2026-10-18
 
 ### Field-specific narrative validation diagnostics

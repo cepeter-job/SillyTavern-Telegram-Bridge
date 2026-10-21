@@ -43,8 +43,12 @@ def validate_choices(value: object, requested_count: int) -> list[str]:
         if not isinstance(item, str):
             raise ValueError("Choices must be text")
         text = " ".join(telegram_safe_output(item).split())
-        if not text or len(text) > MAX_CHOICE_CHARS or text.startswith(("/", "@")):
-            raise ValueError("Choices must be short narrative actions, not commands")
+        if not text:
+            raise ValueError("Choice must not be empty")
+        if len(text) > MAX_CHOICE_CHARS:
+            raise ValueError("Choice exceeds the character limit")
+        if text.startswith(("/", "@")):
+            raise ValueError("Choice must not start with a command prefix")
         if any(unicodedata.category(char).startswith("C") for char in text):
             raise ValueError("Choice contains control characters")
         choices.append(text)
@@ -120,8 +124,12 @@ def _choice_validation_result(value: object, requested_count: int) -> tuple[list
             reason = "invalid_choice_count"
         elif "must be text" in message:
             reason = "non_text_choice"
-        elif "short narrative actions" in message:
-            reason = "invalid_choice_action"
+        elif message == "Choice must not be empty":
+            reason = "empty_choice"
+        elif message == "Choice exceeds the character limit":
+            reason = "choice_too_long"
+        elif message == "Choice must not start with a command prefix":
+            reason = "command_like_choice"
         elif "control characters" in message:
             reason = "control_character"
         elif "distinct" in message:

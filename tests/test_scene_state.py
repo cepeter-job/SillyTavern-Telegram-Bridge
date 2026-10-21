@@ -17,6 +17,7 @@ import bridge.memory_curator as _m_memory_curator
 import bridge.message_commands as _m_message_commands
 import bridge.scene_state as _m_scene_state
 import bridge.session_naming as _m_session_naming
+from bridge.background import drain_background_jobs
 from bridge.memory_artifact_store import read_scene_block
 from bridge.memory_scope_store import resolve_memory_scope
 
@@ -38,6 +39,9 @@ class SceneStateEngineTests(SettingsTestCase):
         _owner_model_selection.set_task_model(self.db, "chat", self.session["session_id"], "utility::model")
 
     def tearDown(self):
+        # Post-retain also schedules narrative work; its SQLite handles must finish
+        # before this test closes and removes the database directory.
+        self.assertTrue(drain_background_jobs(timeout=15.0), "Scene test left background work running")
         self.db.close()
         self.app_settings_builder.db_file = self.old_db
         self.tmp.cleanup()

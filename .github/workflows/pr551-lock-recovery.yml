@@ -1,0 +1,117 @@
+name: PR551 isolated security lock generation
+
+on:
+  push:
+    branches: [agent/pr551-security-locks-20261021]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr551-security-lock-generation
+  cancel-in-progress: false
+
+jobs:
+  generate-reviewed-locks:
+    if: github.repository == 'cepeter-job/SillyTavern-Telegram-Bridge'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 2
+          persist-credentials: true
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884
+        with:
+          version: '0.13.4'
+          enable-cache: false
+      - name: Generate only the affected security updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = c6c70f8956dfa2d500b8b612c71bf2573bd5b5bf
+          python - <<'PY'
+          import json
+          import pathlib
+          import re
+          import subprocess
+
+          def pins(path):
+              return dict(re.findall(r'^([A-Za-z0-9_.-]+)==([^\s;\\]+)', pathlib.Path(path).read_text(), re.M))
+
+          old = {name: pins(name) for name in ('requirements.lock', 'requirements-dev.lock')}
+          constraints = dict(old['requirements-dev.lock'])
+          constraints.update(certifi='2026.10.19', uv='0.13.4')
+          pathlib.Path('/tmp/pr551-security-constraints.txt').write_text(
+              '\n'.join(f'{name}=={version}' for name, version in sorted(constraints.items())) + '\n'
+          )
+          manifest = pathlib.Path('requirements-dev.txt')
+          content = manifest.read_text()
+          assert 'uv==0.13.0' in content
+          manifest.write_text(content.replace('uv==0.13.0', 'uv==0.13.4'))
+          for output, inputs in (
+              ('requirements.lock', ['requirements.txt']),
+              ('requirements-dev.lock', ['requirements.txt', 'requirements-dev.txt']),
+          ):
+              subprocess.run([
+                  'uv', 'pip', 'compile', *inputs,
+                  '--constraint', '/tmp/pr551-security-constraints.txt',
+                  '--python-version', '3.11', '--generate-hashes', '--no-header',
+                  '--output-file', output,
+              ], check=True)
+              current = pins(output)
+              assert set(current) == set(old[output]), 'Unexpected dependency set change'
+              changed = {name: [old[output][name], current[name]] for name in current if current[name] != old[output][name]}
+              expected = {'certifi'} if output == 'requirements.lock' else {'certifi', 'uv'}
+              assert set(changed) == expected, changed
+              print(output, json.dumps(changed, sort_keys=True))
+          for path in pathlib.Path('.github/workflows').glob('*.yml'):
+              if path.name == 'pr551-lock-recovery.yml':
+                  continue
+              text = path.read_text()
+              if 'astral-sh/setup-uv@' in text:
+                  path.write_text(text.replace('"0.13.0"', '"0.13.4"').replace("'0.13.0'", "'0.13.4'"))
+          PY
+          uv pip install --system --python python --require-hashes -r requirements-dev.lock
+          python -m pip check
+          python tools/check_dependency_lock.py
+          python -m ruff check .
+          python -m ruff format --check .
+          git diff --check
+      - name: Verify security and focused behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          python tools/audit_dependencies.py --output-dir dependency-audit-reports
+          python -m pytest -q -n 2 --dist=loadfile tests/test_greeting_photo_resilience.py tests/test_choice_validation_details.py tests/test_conversation_opening.py tests/test_light_novel_recovery.py tests/test_light_novel_flow.py tests/test_greeting_media.py 2>&1 | tee pr551-focused-tests.log
+      - name: Publish generated files to this helper branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = agent/pr551-security-locks-20261021
+          test "$(git ls-remote origin refs/heads/agent/pr551-security-locks-20261021 | cut -f1)" = "$GITHUB_SHA"
+          git diff --stat
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add requirements.lock requirements-dev.lock requirements-dev.txt .github/workflows
+          git commit -m 'chore(deps): remove compromised CA trust from certifi and uv'
+          git push origin HEAD:refs/heads/agent/pr551-security-locks-20261021
+          git archive --format=tar.gz --output=pr551-reviewed-source.tar.gz HEAD
+      - name: Preserve generation and test evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: pr551-security-lock-evidence
+          retention-days: 7
+          path: |
+            pr551-reviewed-source.tar.gz
+            pr551-focused-tests.log
+            dependency-audit-reports/
+            requirements.lock
+            requirements-dev.lock
+            requirements-dev.txt

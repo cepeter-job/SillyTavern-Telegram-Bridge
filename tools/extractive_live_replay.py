@@ -45,6 +45,12 @@ class LocalPersona:
             power = json.loads(path.read_text(encoding="utf-8"))["power_user"]
             self.personas = power["personas"]
             self.descriptions = power["persona_descriptions"]
+            if (
+                not isinstance(self.personas, dict)
+                or not isinstance(self.descriptions, dict)
+                or not isinstance(self.descriptions.get(persona_id, {}), dict)
+            ):
+                raise ValueError("persona_metadata_shape")
             if persona_id not in self.personas:
                 raise ValueError("persona_unavailable")
 

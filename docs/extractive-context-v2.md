@@ -38,6 +38,16 @@ in the dispatch baseline. Authentic source receipts therefore never set
 `all_source_evidence_preserved`, `semantic_continuity_proven`, or
 `production_activation_allowed` to true.
 
+The offline live-replay reader also rejects malformed persona catalogs and
+description records with a fixed unavailable-sample reason, rather than aborting
+the report or exposing private metadata. Missing optional descriptions remain
+valid. This follow-up does not alter the frozen evaluation artifacts or the
+excerpt-selection algorithm.
+
+Implementation fingerprints identify the repository files read during evaluation;
+they are not process-memory attestations. Reproduce results from an immutable,
+reviewed checkout, without changing source files during a run.
+
 ### Production rollout remains a separate gate
 
 Before production activation, preserve source/reader/branch and causal guards;

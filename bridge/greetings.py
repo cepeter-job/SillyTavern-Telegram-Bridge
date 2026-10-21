@@ -7,6 +7,8 @@ import logging
 import random
 import sqlite3
 import time
+from pathlib import Path
+from typing import cast
 
 from bridge.card_content import replace_macros, safe_character_path
 from bridge.conversation_lifecycle import (
@@ -123,12 +125,10 @@ def _deliver_greeting_photo(
         if url:
             result = telegram_request(token, "sendPhoto", {"chat_id": chat_id, "photo": url})
         else:
-            if path is None:
-                return
             result = send_panel_photo(
                 token,
                 chat_id,
-                path,
+                cast(Path, path),
                 caption="",
                 reply_markup={},
                 request_context=RequestContext(db, "", app_settings=app_settings),

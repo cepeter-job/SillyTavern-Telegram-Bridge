@@ -344,7 +344,7 @@ def ensure_choices(
     try:
         choice_reasoning = 0
         if record.strategy == "b":
-            model = task_model_for_session(db, record.chat_id, record.session_id, "utility", app_settings=app_settings)
+            model = task_model_for_session(db, record.chat_id, session, "utility", app_settings=app_settings)
             choice_reasoning = utility_reasoning_for_session(db, record.chat_id, record.session_id)
         context = build_choice_context_snapshot(
             db,

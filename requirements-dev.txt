@@ -6,4 +6,4 @@ pytest-cov==7.1.0
 coverage==7.16.2
 packaging==26.3
 pip-audit==2.10.1
-uv==0.13.0
+uv==0.13.4

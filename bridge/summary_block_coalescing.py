@@ -7,15 +7,13 @@ coalesced; no text, audience or ordering is silently dropped or rewritten.
 
 from __future__ import annotations
 
-from itertools import pairwise
 from typing import Any
 
 from bridge.limits import SUMMARY_MAX_CHARS
 from bridge.memory_artifact_store import parse_classified_blocks
+from bridge.memory_block_coalescing import MAX_ARTIFACT_BLOCKS, MAX_SINGLE_BLOCK_CHARS, coalesce_adjacent_blocks
 
 MAX_RAW_SUMMARY_BLOCKS = 64
-MAX_ARTIFACT_BLOCKS = 32
-MAX_SINGLE_BLOCK_CHARS = 5000
 
 # Prefer headroom so accepting one source part does not immediately saturate
 # the next update. The unchanged hard limit stays in the artifact validator.
@@ -87,22 +85,8 @@ def coalesce_summary_response(payload: dict[str, Any]) -> dict[str, Any]:
     if sum(len(item["text"]) for item in packed) + len(packed) - 1 > SUMMARY_MAX_CHARS:
         raise ValueError("Classified summary requires bounded, nonempty output")
 
-    while len(packed) > MAX_ARTIFACT_BLOCKS:
-        eligible = [
-            (len(left["text"]) + 1 + len(right["text"]), index)
-            for index, (left, right) in enumerate(pairwise(packed))
-            if left["visibility"] == right["visibility"]
-            and left["known_by"] == right["known_by"]
-            and len(left["text"]) + 1 + len(right["text"]) <= MAX_SINGLE_BLOCK_CHARS
-        ]
-        if not eligible:
-            raise ValueError("Memory classification requires at most 32 explicit blocks")
-        _, index = min(eligible)
-        packed[index] = {
-            "text": packed[index]["text"] + "\n" + packed[index + 1]["text"],
-            "visibility": packed[index]["visibility"],
-            "known_by": packed[index]["known_by"],
-        }
-        del packed[index + 1]
+    coalesced = coalesce_adjacent_blocks(packed)
+    if coalesced is None:
+        raise ValueError("Memory classification requires at most 32 explicit blocks")
     # One last independent validator enforces the immutable 32-block contract.
-    return dict(payload, blocks=parse_classified_blocks(packed))
+    return dict(payload, blocks=parse_classified_blocks(coalesced))

@@ -37,7 +37,7 @@ def git(path: Path, *args: str) -> str:
 
 
 @pytest.fixture
-def release_tree(tmp_path):
+def release_tree(tmp_path, request):
     remote = tmp_path / "remote"
     remote.mkdir()
     git(remote, "init", "-b", "main")
@@ -49,6 +49,8 @@ def release_tree(tmp_path):
     (remote / "sillytavern_telegram_bridge.py").write_text('print("fixture")\n')
     (remote / "CHANGELOG.md").write_text("## [0.0.1]\n")
     (remote / "requirements.lock").write_text("# no external packages in fixture\n")
+    if getattr(request, "param", True):
+        (remote / "requirements-py314.lock").write_text("# no external packages in Python 3.14 fixture\n")
     git(remote, "add", ".")
     git(remote, "commit", "-m", "baseline")
     source = tmp_path / "source"

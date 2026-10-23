@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import base64
 import binascii
-import hashlib
 import json
 import logging
 import os
@@ -35,6 +34,7 @@ from bridge.database_backup import create_database_backup
 from bridge.deployment_payload import APPLICATION, CANONICAL_REPOSITORY, MARKER
 from bridge.deployment_payload import live_matches_release as _live_matches_release
 from bridge.deployment_payload import prepare_payload as _prepare_payload
+from bridge.runtime_dependencies import runtime_dependency_locks_match
 from bridge.subprocess_security import minimal_subprocess_environment
 
 CANONICAL_GIT_URL = f"https://github.com/{CANONICAL_REPOSITORY}.git"
@@ -445,15 +445,10 @@ def apply_update(plan: UpdatePlan, *, before_restart: Callable[[UpdateOutcome], 
                 raise UpdateRefused("ancestry") from None
             phase = "prepare"
             release = _extract_release(bare, commit, workspace, tools["git"])
+            if not runtime_dependency_locks_match(plan.source, release, sys.version_info[:2]):
+                raise UpdateRefused("dependencies")
             if old == commit and _live_matches_release(plan.live, release, plan.release_version, commit):
                 return UpdateOutcome(UpdateStatus.ALREADY_LATEST, plan.release_version, commit)
-            if (
-                hashlib.sha256((release / "requirements.lock").read_bytes()).digest()
-                != hashlib.sha256(
-                    (plan.source / "requirements.lock").read_bytes(),
-                ).digest()
-            ):
-                raise UpdateRefused("dependencies")
             payload = workspace / "payload"
             _prepare_payload(release, payload, commit, plan.release_version)
             _run([sys.executable, "-I", "-m", "compileall", "-q", str(payload)])

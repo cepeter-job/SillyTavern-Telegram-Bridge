@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
+from http.client import HTTPException
 
 from bridge.composition import BridgeServices
+from bridge.diagnostic_events import event
 from bridge.help_details import handle_help_callback, is_help_callback
 from bridge.job_service import JobSubmission
 from bridge.light_novel_callbacks import route_light_novel_callback
@@ -15,9 +18,22 @@ from bridge.panel_singleflight import (
     remember_panel_busy_state,
 )
 from bridge.request_types import RequestContext
-from bridge.telegram import answer_callback
+from bridge.telegram import TelegramRequestError, answer_callback
 from bridge.topic_scope import topic_scope_from_message
 from bridge.worker_orchestration import process_callback_job, process_message_job
+
+
+def _answer_decided_callback(token: str, callback_id: str, text: str) -> None:
+    """A notification cannot undo durable admission or a terminal rejection."""
+    try:
+        answer_callback(token, callback_id, text)
+    except (TelegramRequestError, OSError, HTTPException):
+        event(
+            "telegram.callback_ack_failed",
+            level=logging.WARNING,
+            method="answerCallbackQuery",
+            reason="notification_failed",
+        )
 
 
 def route_callback_update(
@@ -44,7 +60,7 @@ def route_callback_update(
 
     data = str(callback.get("data") or "")
     if data == BUSY_CALLBACK_DATA:
-        answer_callback(token, str(callback.get("id", "")), "Already processing…")
+        _answer_decided_callback(token, str(callback.get("id", "")), "Already processing…")
         return
 
     if route_light_novel_callback(
@@ -59,7 +75,7 @@ def route_callback_update(
             db,
             token,
             callback,
-            answer_callback,
+            _answer_decided_callback,
             str(callback.get("data") or ""),
             callback_chat_id,
             callback_message,
@@ -75,7 +91,7 @@ def route_callback_update(
     if callback_message_id:
         owner = panel_owner_for_message(db, callback_chat_id, callback_message_id)
         if owner and owner != sender:
-            answer_callback(token, str(callback.get("id", "")), "This panel belongs to another user")
+            _answer_decided_callback(token, str(callback.get("id", "")), "This panel belongs to another user")
             return
 
     callback["_queued"] = True
@@ -97,7 +113,7 @@ def route_callback_update(
         },
     )
     if job_id is None:
-        answer_callback(token, str(callback.get("id", "")), "Already processing…")
+        _answer_decided_callback(token, str(callback.get("id", "")), "Already processing…")
         return
     mark_panel_busy(services.telegram.request, token, callback_chat_id, callback)
     services.jobs.submit(
@@ -114,7 +130,7 @@ def route_callback_update(
             ),
         ),
     )
-    answer_callback(
+    _answer_decided_callback(
         token,
         str(callback.get("id", "")),
         "Processing…",

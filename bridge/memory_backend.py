@@ -21,6 +21,7 @@ from bridge.hindsight_client_runtime import hindsight_client as hindsight_client
 from bridge.hindsight_diagnostics import (
     handle_hindsight_retain_failure,
     hindsight_retain_scope,
+    report_hindsight_cleanup,
     report_hindsight_completion,
 )
 from bridge.hindsight_endpoint import (
@@ -38,10 +39,13 @@ from bridge.memory_identity import (
 from bridge.memory_identity import (
     hindsight_session_prefix as hindsight_session_prefix,
 )
-from bridge.memory_retirement_store import RETIREMENT_SCOPE_UNPAUSED
+from bridge.memory_retirement_store import (
+    RETIREMENT_SCOPE_UNPAUSED,
+    record_retirement_attempt,
+    retirement_would_delete_current_source,
+)
 from bridge.memory_scope_store import eligible_fact, ranked_fact_block, resolve_memory_scope, scope_is_current
 from bridge.memory_store import (
-    ARCHIVAL_PENDING,
     archival_attempts_outstanding,
     purge_external_memory,
     reconcile_archival_attempts,
@@ -273,21 +277,6 @@ async def _delete_retired_with_client(client: Any, bank_id: str, documents: list
                 raise
 
 
-def _retirement_would_delete_current_source(db: sqlite3.Connection, document_id: str) -> bool:
-    return bool(
-        db.execute(
-            "SELECT 1 FROM memory_segments g JOIN sessions s ON s.chat_id=g.chat_id AND s.session_id=g.session_id "
-            "AND s.created_at=g.session_created_at WHERE g.document_id=? AND g.valid IN (1,?) AND g.layer<>'hindsight'",
-            (document_id, ARCHIVAL_PENDING),
-        ).fetchone()
-        or db.execute(
-            "SELECT 1 FROM memory_fact_index f JOIN sessions s ON s.chat_id=f.chat_id AND s.session_id=f.session_id "
-            "AND s.created_at=f.session_created_at WHERE f.document_id=? AND f.state<>'retired'",
-            (document_id,),
-        ).fetchone()
-    )
-
-
 def cleanup_retired_memory_documents(
     db: sqlite3.Connection,
     chat_id: str,
@@ -327,6 +316,7 @@ def cleanup_retired_memory_documents(
             )
     try:
         for (document_id,) in rows:
+            started = time.monotonic()
             succeeded = False
             with hindsight_session_lock(chat_id, session_id), write_transaction(db):
                 row = db.execute(
@@ -343,7 +333,7 @@ def cleanup_retired_memory_documents(
                     "WHERE chat_id=? AND session_id=? AND deleted=0 AND lease_token=?",
                     (time.time() + 900, chat_id, session_id, token),
                 )
-                eligible = not _retirement_would_delete_current_source(db, document_id)
+                eligible = not retirement_would_delete_current_source(db, document_id)
             if eligible:
                 try:
                     with hindsight_client_scope(app_settings=app_settings) as client:
@@ -355,26 +345,27 @@ def cleanup_retired_memory_documents(
                     logging.warning("Retired memory document cleanup deferred")
             with hindsight_session_lock(chat_id, session_id), write_transaction(db):
                 terminal = succeeded and not outstanding_at_start and not archival_attempts_outstanding(db, document_id)
-                db.execute(
-                    "UPDATE memory_retired_documents SET deleted=?,attempts=attempts+1,"
-                    "next_attempt_at=CASE WHEN ? THEN 0 "
-                    "WHEN ? THEN ?+MIN(3600,300*(1 << MIN(attempts/4,4))) "
-                    "ELSE ?+MIN(3600,5*(1 << MIN(attempts,10))) END "
-                    "WHERE chat_id=? AND session_id=? AND document_id=? AND deleted=0 AND lease_token=? "
-                    "AND retirement_revision=?",
-                    (
-                        int(terminal),
-                        int(terminal),
-                        int(succeeded),
-                        time.time(),
-                        time.time(),
-                        chat_id,
-                        session_id,
-                        document_id,
-                        token,
-                        revision,
-                    ),
+                recorded = record_retirement_attempt(
+                    db,
+                    chat_id,
+                    session_id,
+                    document_id,
+                    token=token,
+                    revision=revision,
+                    terminal=terminal,
+                    succeeded=succeeded,
+                    now=time.time(),
                 )
+            report_hindsight_cleanup(
+                chat_id,
+                session_id,
+                document_id,
+                started=started,
+                eligible=eligible,
+                succeeded=succeeded,
+                terminal=terminal,
+                recorded=recorded,
+            )
             if not succeeded:
                 return False
         return not db.execute(

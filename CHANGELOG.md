@@ -8,11 +8,30 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+## [0.3.032] - 2026-10-23
+
+### Dependency security
+
+- Update only pypdf from 6.19.0 to 6.21.2 across Python 3.11/3.14 runtime/development locks and migration constraints, addressing the reported PDF parsing advisories and upstream file-load/xref resource limits. Retain every other resolved package version and hash, with no audit exclusions.
+
 ### Greeting media resilience and choice diagnostics
 
 - Keep a successfully delivered opening and its started session valid when the optional greeting photo transport fails. Persist the photo attempt before network I/O so interruption recovery cannot automatically duplicate an uncertain upload; required text and database failures remain recoverable errors. A process exit after the attempt checkpoint may omit the optional photo.
 - Distinguish empty, overlength and command-prefixed Light Novel choices in content-free diagnostics and bounded repair guidance. Encourage shorter choices while retaining the 160-character hard limit, exact 3–4 count and two-call maximum.
 - Update Python 3.11/3.14 runtime/development locks and migration constraints to certifi 2026.10.19 and uv 0.13.4, and update workflow uv bootstrap pins, following the compromised-CA trust advisories. Other resolved package versions remain unchanged.
+
+### Callback, provider and memory recovery
+
+- Treat expected Telegram acknowledgement failures as best effort after durable callback admission or a known terminal routing decision. Keep unknown application errors visible. Give callback answers and reply-markup edits a five-second socket timeout and record content-free transport outcomes; this is not a hard end-to-end deadline.
+- Preserve typed provider failures from automatic action adjudication so existing recovery can report the actual provider category. Correct the recovery guidance to open `/check` and choose Manual. Provider selection and the existing opt-in Utility fallback configuration remain unchanged.
+- Recover bounded scene block overflow by finding a lossless contiguous partition of identical-audience blocks. Validate every original block and retain all text and ordering within the existing 32-block, 5,000-character per-block and 32,000-character aggregate limits. Reject incompatible audiences or excess capacity without advancing accepted coverage; add fixed capacity codes and raw block counts.
+- Distinguish Hindsight cleanup failures, successful deletion, continuing late-write watches, current-source skips and stale retirement outcomes. A successful delete can still require a safety watch; retry counts are not failure counts. Preserve unresolved dispatch ledgers and existing retirement guards.
+- Preserve `output_capped` in memory claim completion diagnostics instead of replacing it with `work_failed`.
+
+### Python 3.14 compatibility and update safety
+
+- Require both the baseline runtime lock and the Python 3.14 runtime lock to match before a running Python 3.14 signed updater accepts an update, including an already-installed release. Missing, unreadable or symlinked required locks fail closed. The installer default remains Python 3.11.
+- Document the operator-requested Python 3.14.8 migration using a separate official CTranslate2 4.8.3 / NumPy 2.3.5 environment, exact-source CI, backup verification and reversible cutover. The October 23 preparation evidence does not establish live canary acceptance, a 5% CPU improvement, story-quality acceptance or a speedup.
 
 ## [0.3.031] - 2026-10-18
 

@@ -25,6 +25,7 @@ from bridge.action_repository import (
 from bridge.closed_session_guard import guard_story_mutation
 from bridge.metadata import get_meta, set_meta
 from bridge.narrative_values import NARRATIVE_STEERING_PREFIX
+from bridge.provider_errors import ProviderRequestError
 from bridge.provider_port import ProviderPort
 from bridge.repository_contracts import require_active_transaction
 from bridge.settings import AppSettings
@@ -46,7 +47,7 @@ def action_mode(db: sqlite3.Connection, chat_id: str, session_id: str) -> str:
 
 def set_action_mode(db: sqlite3.Connection, chat_id: str, session_id: str, mode: str) -> None:
     if mode not in {"auto", "director", "manual"}:
-        raise ValueError("Use /check mode auto, director, or manual.")
+        raise ValueError("Open /check and choose Auto, Director, or Manual.")
     set_meta(db, f"action_checks:{chat_id}:{session_id}", mode)
 
 
@@ -183,7 +184,7 @@ def prepare_action_turn(
             return ActionTurn()
         if len(action.encode()) > 12000:
             raise ValueError(
-                "Automatic checks accept at most 12000 bytes; shorten this turn or use /check mode manual."
+                "Automatic checks accept at most 12000 bytes; shorten this turn or open /check and choose Manual."
             )
         effects = _effects(db, chat_id, session_id, context_cutoff(db, chat_id, session_id, cutoff))
         reserve_preflight(db, chat_id, session_id, request_key, scope[2], _digest(action), token, time.time())
@@ -200,9 +201,11 @@ def prepare_action_turn(
                 app_settings=app_settings,
                 effects=effects,
             )
+        except ProviderRequestError:
+            raise
         except Exception:
             raise ValueError(
-                "Action evaluation is unavailable. Retry this turn or choose /check mode manual."
+                "Action evaluation is unavailable. Retry this turn or open /check and choose Manual."
             ) from None
         proposal = parse_action_proposal(raw, evidence)
         with write_transaction(db):

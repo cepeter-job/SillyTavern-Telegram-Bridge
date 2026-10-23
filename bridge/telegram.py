@@ -11,8 +11,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
+from http.client import HTTPException
 from pathlib import Path
 
+from bridge.diagnostic_events import event
 from bridge.limits import MAX_TELEGRAM_LENGTH, SYNC_MAX_BYTES
 from bridge.metadata import get_meta, set_meta
 from bridge.panel_bindings import (
@@ -26,6 +28,28 @@ from bridge.request_types import RequestContext
 from bridge.settings import AppSettings
 from bridge.text_units import utf16_length
 from bridge.topic_scope import parse_topic_scope
+
+_SHORT_REQUEST_METHODS = frozenset({"answerCallbackQuery", "editMessageReplyMarkup"})
+_DIAGNOSTIC_METHODS = _SHORT_REQUEST_METHODS | frozenset(
+    {
+        "deleteMessage",
+        "editMessageText",
+        "getFile",
+        "getMe",
+        "getUpdates",
+        "sendChatAction",
+        "sendDocument",
+        "sendMessage",
+        "sendPhoto",
+        "sendVoice",
+        "setChatMenuButton",
+        "setMyCommands",
+    }
+)
+
+
+class TelegramRequestError(RuntimeError):
+    """An explicit Telegram API rejection, distinct from an application failure."""
 
 
 def allowed_users(*, app_settings: AppSettings) -> set[str]:
@@ -53,31 +77,60 @@ def telegram_request(token: str, method: str, payload: dict | None = None) -> di
         data = json.dumps(request_payload).encode("utf-8")
         headers["Content-Type"] = "application/json"
     req = urllib.request.Request(url, data=data, headers=headers, method="POST" if data else "GET")
+    timeout = 5 if method in _SHORT_REQUEST_METHODS else 65
     for attempt in range(3 if method == "sendMessage" else 1):
+        started = time.monotonic()
+        status, reason = "failed", "unexpected_error"
+        http_status = None
         try:
-            with urllib.request.urlopen(req, timeout=65) as response:  # noqa: S310 -- fixed Telegram HTTPS endpoint; token is not a URL
-                result = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
             try:
-                detail = json.loads(exc.read().decode("utf-8")).get("description") or exc.reason
-            except (OSError, ValueError, json.JSONDecodeError):
-                detail = exc.reason
-            finally:
-                exc.close()
-            if method == "sendMessage" and exc.code == 404 and attempt < 2:
-                logging.warning("Telegram sendMessage returned 404; retrying (attempt %s/3)", attempt + 2)
-                time.sleep(0.5 * (attempt + 1))
-                continue
-            raise RuntimeError(f"Telegram {method} failed: {detail}") from exc
-        if not result.get("ok"):
-            detail = result.get("description") or "unknown Telegram error"
-            if method == "sendMessage" and detail == "Not Found" and attempt < 2:
-                logging.warning("Telegram sendMessage returned Not Found; retrying (attempt %s/3)", attempt + 2)
-                time.sleep(0.5 * (attempt + 1))
-                continue
-            raise RuntimeError(f"Telegram {method} failed: {detail}")
-        break
-    return result["result"]
+                with urllib.request.urlopen(req, timeout=timeout) as response:  # noqa: S310 -- fixed Telegram HTTPS endpoint
+                    http_status = getattr(response, "status", None)
+                    result = json.loads(response.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                reason, http_status = "http_error", exc.code
+                try:
+                    detail = json.loads(exc.read().decode("utf-8")).get("description") or exc.reason
+                except (OSError, ValueError, json.JSONDecodeError):
+                    detail = exc.reason
+                finally:
+                    exc.close()
+                if method == "sendMessage" and exc.code == 404 and attempt < 2:
+                    logging.warning("Telegram sendMessage returned 404; retrying (attempt %s/3)", attempt + 2)
+                    time.sleep(0.5 * (attempt + 1))
+                    continue
+                raise TelegramRequestError(f"Telegram {method} failed: {detail}") from exc
+            if not result.get("ok"):
+                reason = "api_error"
+                detail = result.get("description") or "unknown Telegram error"
+                if method == "sendMessage" and detail == "Not Found" and attempt < 2:
+                    logging.warning("Telegram sendMessage returned Not Found; retrying (attempt %s/3)", attempt + 2)
+                    time.sleep(0.5 * (attempt + 1))
+                    continue
+                raise TelegramRequestError(f"Telegram {method} failed: {detail}")
+            result = result["result"]
+            status, reason = "succeeded", "ok"
+            break
+        except TimeoutError:
+            reason = "timeout"
+            raise
+        except (OSError, HTTPException):
+            reason = "transport_error"
+            raise
+        except (ValueError, KeyError, TypeError):
+            reason = "invalid_response"
+            raise
+        finally:
+            event(
+                "telegram.request_finish",
+                method=method if method in _DIAGNOSTIC_METHODS else "other",
+                status=status,
+                reason=reason,
+                http_status=http_status if type(http_status) is int and 100 <= http_status <= 599 else None,
+                elapsed_ms=max(0, int((time.monotonic() - started) * 1000)),
+                attempt=attempt + 1,
+            )
+    return result
 
 
 def delete_pending_input_prompts(token: str, chat_id: str, state: dict) -> None:

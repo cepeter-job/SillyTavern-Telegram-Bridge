@@ -5,8 +5,10 @@ The previous Python 3.15 track (#487) was superseded by the
 criteria and the operator-requested compatibility migration procedure. At the
 October 23 preparation checkpoint, the live runtime was still **Python 3.11.16**;
 the separate 3.14 environment was ready for exact-source validation and supervised
-cutover. Live canary acceptance was pending. Preparation or an operator request
-does not establish that the performance and quality criteria below have passed.
+cutover. The subsequent v0.3.032 canary and successful return to Python 3.11 are
+recorded below. Final Python 3.14 promotion remains pending the v0.3.033 startup
+fix and follow-up validation. Preparation or an operator request does not establish
+that the performance and quality criteria below have passed.
 
 ## Native dependencies and actual production CPU
 
@@ -112,10 +114,40 @@ traffic, a live-service rollback or a completed canary. Refresh the backup at th
 cutover boundary and preserve post-backup writes during any recovery.
 
 The preparation establishes compatibility and snapshot-rehearsal evidence only.
-Exact final-source strict CI, supervised cutover, live canary and running-source
-verification still require their own evidence. No **5% CPU improvement**, human
+At that checkpoint, exact final-source strict CI, supervised cutover, live canary
+and running-source verification still required their own evidence. No **5% CPU improvement**, human
 story-quality acceptance, latency improvement or general speedup is claimed.
 The historical measurements and promotion criteria below remain unchanged.
+
+## v0.3.032 canary and rollback: October 23, 2026
+
+The supervised v0.3.032 canary used Python **3.14.8** at source
+[`409e475f019fdce6fc86d8f588c101de988289f8`](https://github.com/cepeter-job/SillyTavern-Telegram-Bridge/commit/409e475f019fdce6fc86d8f588c101de988289f8).
+It completed **two polls**, but optional Hindsight recall did not become available.
+The Python 3.14 process subsequently exited cleanly, and the recorded Python
+**3.11** runtime and service configuration were successfully restored. These
+observations establish the exercised shutdown and rollback path; the canary did
+not pass memory-readiness acceptance.
+
+Separate reproduction on the actual VPS measured startup at **1.51–1.52 seconds**
+with `accepting=False`, both before and after compiling the SDK bytecode cache.
+Cache repair did not resolve the failure. The recall owner applied its
+1.5-second wait to SDK initialization and began shutdown when that wait elapsed,
+so a slow import could leave optional recall permanently unavailable for that
+process.
+
+The v0.3.033 follow-up keeps the bounded startup wait and allows initialization to
+continue asynchronously on the same owner. Recall remains unavailable until
+client readiness opens admission. It preserves the **1.5-second per-call deadline**,
+in-flight capacity, cooldown and shutdown fencing; slow startup does not grant a
+larger recall budget or permit work after shutdown begins.
+
+Final Python 3.14 promotion remains pending validation of the follow-up revision,
+including exact-source CI, VPS readiness and shutdown checks, and a new supervised
+canary. The historical performance and human narrative-quality gates below retain
+their actual status. Two successful polls, clean interpreter exit and a successful
+rollback do not establish the **5% CPU improvement** target, latency or RSS
+acceptance, or story-quality acceptance.
 
 ## Historical failures and remaining acceptance gates
 

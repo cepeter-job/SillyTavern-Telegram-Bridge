@@ -117,8 +117,9 @@ class HindsightRecallRuntime:
             self._thread = threading.Thread(target=self._run_owner, name="st-hindsight-recall", daemon=False)
             self._thread.start()
         if not self._started.wait(self._timeout):
-            logging.warning("Optional Hindsight recall startup deadline exceeded")
-            self.begin_shutdown()
+            # SDK imports may exceed the caller budget; admission stays closed
+            # until this owner is ready, unless actual shutdown fences it first.
+            logging.info("Optional Hindsight recall initialization continuing in background")
 
     def _run_owner(self) -> None:
         try:
@@ -149,9 +150,12 @@ class HindsightRecallRuntime:
             )
             with self._lock:
                 self._accepting = not self._stopping
+                ready = self._accepting
                 if self._stopping:
                     self._stop.set()
             self._started.set()
+            if ready:
+                logging.info("Optional Hindsight recall ready")
             await self._stop.wait()
         finally:
             with self._lock:

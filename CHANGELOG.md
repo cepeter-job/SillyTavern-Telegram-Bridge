@@ -8,6 +8,13 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [Unreleased]
 
+## [0.3.033] - 2026-10-23
+
+### Hindsight recall startup
+
+- Let slow Hindsight SDK initialization continue asynchronously on its existing owner after the bounded startup wait. Keep recall unavailable until the client is ready, so a slow import no longer permanently disables optional recall. Emit a fixed, content-free readiness log only when the client opens admission.
+- Preserve the 1.5-second per-call deadline, bounded in-flight capacity, cooldown and shutdown fencing. Record the v0.3.032 Python 3.14 canary and successful Python 3.11 rollback; final migration promotion remains pending follow-up validation.
+
 ## [0.3.032] - 2026-10-23
 
 ### Dependency security

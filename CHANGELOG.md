@@ -10,6 +10,10 @@ The complete previous changelog is preserved byte-for-byte in [CHANGELOG-legacy.
 
 ## [0.3.032] - 2026-10-23
 
+### Dependency security
+
+- Update only pypdf from 6.19.0 to 6.21.2 across Python 3.11/3.14 runtime/development locks and migration constraints, addressing the reported PDF parsing advisories and upstream file-load/xref resource limits. Retain every other resolved package version and hash, with no audit exclusions.
+
 ### Greeting media resilience and choice diagnostics
 
 - Keep a successfully delivered opening and its started session valid when the optional greeting photo transport fails. Persist the photo attempt before network I/O so interruption recovery cannot automatically duplicate an uncertain upload; required text and database failures remain recoverable errors. A process exit after the attempt checkpoint may omit the optional photo.

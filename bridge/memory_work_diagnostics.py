@@ -15,6 +15,7 @@ _REASONS = frozenset(_STATUS) | {
     "work_failed",
     "configuration",
     "malformed_json",
+    "output_capped",
     "invalid_shape",
     "invalid_audience",
     "invalid_npc_output",

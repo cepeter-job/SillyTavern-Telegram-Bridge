@@ -25,6 +25,52 @@ def reopen_retirement(db: sqlite3.Connection, chat_id: str, session_id: str, doc
     )
 
 
+def record_retirement_attempt(
+    db: sqlite3.Connection,
+    chat_id: str,
+    session_id: str,
+    document_id: str,
+    *,
+    token: str,
+    revision: int,
+    terminal: bool,
+    succeeded: bool,
+    now: float,
+) -> bool:
+    """Record a fenced pass; the attempt count includes successful late-write watches."""
+    if not db.in_transaction:
+        raise RuntimeError("Retirement outcome requires an active transaction")
+    return (
+        db.execute(
+            "UPDATE memory_retired_documents SET deleted=?,attempts=attempts+1,"
+            "next_attempt_at=CASE WHEN ? THEN 0 "
+            "WHEN ? THEN ?+MIN(3600,300*(1 << MIN(attempts/4,4))) "
+            "ELSE ?+MIN(3600,5*(1 << MIN(attempts,10))) END "
+            "WHERE chat_id=? AND session_id=? AND document_id=? AND deleted=0 AND lease_token=? "
+            "AND retirement_revision=?",
+            (int(terminal), int(terminal), int(succeeded), now, now, chat_id, session_id, document_id, token, revision),
+        ).rowcount
+        == 1
+    )
+
+
+def retirement_would_delete_current_source(db: sqlite3.Connection, document_id: str) -> bool:
+    from bridge.memory_store import ARCHIVAL_PENDING
+
+    return bool(
+        db.execute(
+            "SELECT 1 FROM memory_segments g JOIN sessions s ON s.chat_id=g.chat_id AND s.session_id=g.session_id "
+            "AND s.created_at=g.session_created_at WHERE g.document_id=? AND g.valid IN (1,?) AND g.layer<>'hindsight'",
+            (document_id, ARCHIVAL_PENDING),
+        ).fetchone()
+        or db.execute(
+            "SELECT 1 FROM memory_fact_index f JOIN sessions s ON s.chat_id=f.chat_id AND s.session_id=f.session_id "
+            "AND s.created_at=f.session_created_at WHERE f.document_id=? AND f.state<>'retired'",
+            (document_id,),
+        ).fetchone()
+    )
+
+
 def queue_session_memory_cleanup(db: sqlite3.Connection, chat_id: str, session_id: str) -> None:
     """Atomically fence the old generation before the caller removes canonical rows."""
     from bridge.memory_store import purge_external_memory

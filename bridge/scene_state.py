@@ -40,6 +40,7 @@ from bridge.memory_response import generate_memory_response
 from bridge.memory_store import enqueue_memory, retire_derived_layer
 from bridge.model_selection import task_model_for_session, utility_reasoning_for_session
 from bridge.provider_port import ProviderPort
+from bridge.scene_block_coalescing import coalesce_scene_response
 from bridge.scene_panel import scene_panel
 from bridge.scene_repository import delete_scene_state as _repo_delete_scene_state
 from bridge.scene_repository import load_scene_state_row as _repo_load_scene_state_row
@@ -185,12 +186,14 @@ def extract_scene_segment(
         diagnostics = extraction_root_fields(raw, "scene")
         try:
             payload = parse_classified_response(raw)
+            if isinstance(payload.get("blocks"), list):
+                diagnostics["count"] = len(payload["blocks"])
             raw_state = payload.get("state")
             if not isinstance(raw_state, dict):
                 code = "scene_state_type" if "state" in payload else "scene_state_missing"
                 raise SceneContractError("Scene extraction requires an explicit state object", code)
             state = {} if not raw_state else parse_scene_state(json.dumps(raw_state, ensure_ascii=False))
-            blocks = parse_classified_blocks(payload)
+            blocks = parse_classified_blocks(coalesce_scene_response(payload))
             if state is None:
                 raise ValueError("Scene extraction requires valid state")
         except ValueError as error:

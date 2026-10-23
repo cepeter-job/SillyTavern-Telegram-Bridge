@@ -14,6 +14,7 @@ from bridge.memory_artifact_store import read_scene_block
 from bridge.memory_contracts import MemoryFact
 from bridge.memory_curator import get_curated_memory_state
 from bridge.memory_fact_store import accept_source_facts, load_source, remember_local_fact
+from bridge.memory_retirement_store import retirement_would_delete_current_source
 from bridge.memory_scope_store import resolve_memory_scope
 from bridge.memory_store import (
     begin_archival_attempt,
@@ -178,7 +179,7 @@ def test_historical_raw_late_completion_is_retired_without_stale_mapping(legacy_
         remember_local_fact(db, "c", "s", "Bob", "Current incarnation fact.")
         assert run(db, settings) == "complete"
         new_id = archive.retained[-1]["document_id"]
-        assert new_id != source.document_id and memory_backend._retirement_would_delete_current_source(db, new_id)
+        assert new_id != source.document_id and retirement_would_delete_current_source(db, new_id)
 
 
 def test_historical_completion_reopens_after_successful_delete(legacy_runtime):

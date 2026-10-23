@@ -29,6 +29,9 @@ REJECTION_CODES = frozenset(
         "scene_blocks_missing",
         "scene_blocks_type",
         "scene_blocks_invalid",
+        "scene_blocks_raw_limit",
+        "scene_blocks_unmergeable",
+        "scene_total_text_limit",
         "npc_root_missing",
         "npc_root_type",
         "npc_mode_invalid",
@@ -52,6 +55,10 @@ SCENE_REPAIR_CONTRACT = (
     "state must be an object; blocks must be an array of objects with text strings, "
     'visibility="shared" and known_by=[], or visibility="restricted" and known_by=["Exact knower"]. '
     "Use compact JSON and concise values, preserving complete established state and exact audiences. "
+    "Return at most 32 blocks, each with at most 5,000 characters of text and at most 32,000 block-text "
+    "characters in total. Combine adjacent related facts only when visibility and known_by are identical; "
+    "preserve their order, distinct facts, negations, promises and causal links. Never drop facts or widen "
+    "an audience to fit these limits. "
     "Previous state is input, not an alternative output schema. Never return only blocks or only state."
 )
 NPC_EXTRACTION_CONTRACT = (

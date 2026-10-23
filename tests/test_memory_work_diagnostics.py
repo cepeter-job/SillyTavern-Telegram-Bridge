@@ -37,7 +37,13 @@ def test_claim_identity_is_stable_without_leases_and_changes_for_rewrites():
 
 @pytest.mark.parametrize(
     "result,status",
-    [("complete", "succeeded"), ("deferred", "deferred"), ("stale_source", "rejected"), ("malformed_json", "failed")],
+    [
+        ("complete", "succeeded"),
+        ("deferred", "deferred"),
+        ("stale_source", "rejected"),
+        ("malformed_json", "failed"),
+        ("output_capped", "failed"),
+    ],
 )
 def test_claim_execution_is_isolated_and_preserves_domain_result(caplog, result, status):
     from bridge.memory_work_diagnostics import observe_memory_claim

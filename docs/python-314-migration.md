@@ -1,8 +1,12 @@
-# Python 3.14.8 migration — gated promotion
+# Python 3.14.8 migration — compatibility and promotion evidence
 
 The previous Python 3.15 track (#487) was superseded by the
-**Python 3.14.8** migration (#499). Production remains on
-**Python 3.11.16** until the promotion criteria are met.
+**Python 3.14.8** migration (#499). This guide records the historical promotion
+criteria and the operator-requested compatibility migration procedure. At the
+October 23 preparation checkpoint, the live runtime was still **Python 3.11.16**;
+the separate 3.14 environment was ready for exact-source validation and supervised
+cutover. Live canary acceptance was pending. Preparation or an operator request
+does not establish that the performance and quality criteria below have passed.
 
 ## Native dependencies and actual production CPU
 
@@ -85,14 +89,33 @@ The independent Python 3.14 locks are requirements-py314.lock
 and requirements-dev-py314.lock. The Python 3.11 requirements.lock
 and requirements-dev.lock remain the separate Python 3.11 rollback baseline.
 
-Use uv **0.13.0** for the reviewed regeneration procedure. Reconcile
+Use uv **0.13.4** for the reviewed regeneration procedure. Reconcile
 constraints with the current reviewed baseline first; the combined development
 resolution also uses the exact Python 3.14 runtime lock:
 
     uv pip compile requirements.txt --python-version 3.14 --constraint config/python314-constraints.txt --generate-hashes --output-file requirements-py314.lock
     uv pip compile requirements.txt requirements-dev.txt --python-version 3.14 --constraint config/python314-constraints.txt --constraint requirements-py314.lock --generate-hashes --output-file requirements-dev-py314.lock
 
-## Validation and release gates
+## Operational preparation: October 23, 2026
+
+A new, separate Python **3.14.8 final** runtime environment installed **42**
+hash-locked runtime packages, including official **CTranslate2 4.8.3** and
+**NumPy 2.3.5**. Dependency checks and strict native/bridge imports completed with
+clean interpreter exit. The baseline Python 3.11 environment remained intact.
+The reviewed lock refresh also includes certifi **2026.10.19** and uv **0.13.4**;
+use the current reviewed locks rather than recreating the October 15 resolution.
+
+A production database backup and isolated database rehearsal verified
+**77 tables, 108 messages and 3 sessions**. Integrity checks, foreign-key checks
+and data-hash comparisons passed. This records the captured snapshot, not later
+traffic, a live-service rollback or a completed canary. Refresh the backup at the
+cutover boundary and preserve post-backup writes during any recovery.
+
+The preparation establishes compatibility and snapshot-rehearsal evidence only.
+Exact final-source strict CI, supervised cutover, live canary and running-source
+verification still require their own evidence. No **5% CPU improvement**, human
+story-quality acceptance, latency improvement or general speedup is claimed.
+The historical measurements and promotion criteria below remain unchanged.
 
 ## Historical failures and remaining acceptance gates
 
@@ -201,20 +224,44 @@ Before switching the live runtime, the following gates must pass:
 
 ## Production deployment boundary
 
-The live bridge uses signed source under
-~/.local/share/sillytavern-telegram/source, with the
-90-v0320-signed-source.conf systemd user override. It currently
-runs Python 3.11 from the independent development checkout .venv.
-Preserve that executable and override for rollback.
+Use the verified signed source and a separate 3.14 runtime environment for the
+operator-requested migration. Keep machine paths, private settings and service
+override snapshots in the private deployment record. The installer default
+remains Python 3.11; rerunning the default installer is not a 3.14 migration.
 
-Do not restart the live service, replace the virtual environment,
-or mutate story databases until all gates pass. The eventual switch
-must use a separate 3.14 environment with a reversible systemd
-override, and leave the 3.11 environment intact. The development
-checkout contains unrelated uncommitted changes and must not be
-force-reset or deployed as a substitute for signed source.
+1. Verify the immutable source revision and its final-source strict Python 3.14
+   CI, native clean-exit, coverage and security gates. An earlier commit's test
+   result is not evidence for the deployed revision. Retain the historical
+   performance and human-quality criteria above with their actual status.
+2. Record the current running source, interpreter and service configuration.
+   Verify a current database backup and private configuration backup, plus an
+   isolated restore rehearsal. Preserve the original 3.11 interpreter, locked
+   environment, signed source and service overrides for immediate rollback.
+3. Install the reviewed `requirements-py314.lock` with mandatory hashes into a
+   separate Python 3.14.8 environment. Check dependencies and strict native import
+   exit on the target CPU. Keep development packages in the separate test
+   environment; do not replace the live 3.11 environment in place.
+4. At the supervised cutover, stop new work, capture the final backup boundary and
+   apply a reversible service override selecting the verified source and 3.14
+   executable. Run configuration checks before starting the service. Preserve
+   private provider settings and story data.
+5. Verify the actual running interpreter and source revision, polling health and
+   the agreed live canary. Inspect callback delivery, provider failures, accepted
+   memory coverage and native shutdown behavior. A process marked active or a
+   successful import alone does not satisfy live acceptance.
+6. If acceptance fails, stop the service and restore the recorded 3.11 executable,
+   source and service configuration. Verify the running revision after restart.
+   Preserve new writes; restore a database snapshot only under the verified
+   recovery plan rather than discarding traffic received since that snapshot.
 
-This stage is a migration candidate, not production activation.
+On a running Python 3.14 service, signed `/update` now requires both
+`requirements.lock` and `requirements-py314.lock` to match the verified release.
+Missing, unreadable or symlinked required locks fail closed. This guard also runs
+before an already-installed release is reported as current. A lock change needs
+a reviewed manual dependency update; `/update` does not migrate the interpreter.
+
+The October 23 preparation checkpoint is not a production activation record.
+Record final deployment and canary evidence separately against the exact revision.
 
 ### Isolated debugger workflow (Issue #501)
 

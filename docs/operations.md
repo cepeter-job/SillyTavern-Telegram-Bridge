@@ -89,6 +89,14 @@ substitute for checking an authentication, credit or model-availability error.
 See [provider diagnostics](configuration.md#provider-diagnostics-and-catalog-maintenance)
 for the difference between model discovery, manual probes and runtime health.
 
+Automatic action checks preserve typed provider failures for the normal recovery
+path. If you choose to bypass automatic adjudication for a turn, open `/check`
+and choose **Manual**. Utility alternatives use the existing private provider
+YAML `utility_fallbacks` configuration and eligible routing; they are not added
+automatically by these fixes. Check the actual helper purpose and fallback event.
+See [provider fallback](configuration.md#provider-runtime-health-and-fallback)
+for eligible operations and limits; the selected session model is not rewritten.
+
 ### Structured runtime logs
 
 The runtime writes bounded JSON Lines to its configured log and to stderr
@@ -113,6 +121,16 @@ a failed runtime write does not change a saved story or provider outcome.
 Higher log levels omit lower-level events and therefore produce incomplete
 troubleshooting timelines. Keep `INFO` for ordinary operation.
 
+Telegram calls report `telegram.request_finish` with an allowlisted method,
+attempt, status, reason, elapsed time and an HTTP status when available.
+`answerCallbackQuery` and `editMessageReplyMarkup` use a five-second socket
+timeout. Socket timeouts do not guarantee a five-second end-to-end deadline.
+For already-admitted work and known terminal routing decisions, expected
+acknowledgement transport/API failures produce `telegram.callback_ack_failed`
+without reversing the decision. This does not suppress arbitrary application
+errors or make every callback route best effort. Inspect the durable job outcome
+before repeating a button press.
+
 Choice-only failures use `light_novel.choice_failed`: `phase` identifies preparation,
 provider or parsing; `reason` is a fixed failure code; `attempt` and `retryable`
 show the bounded retry decision. `count` is the requested choice count and `kind`
@@ -126,6 +144,47 @@ state, but remain capped. A larger allocation does not validate an incomplete
 response. Repeated `output_capped` failures now follow the existing eight-failure
 autonomous parking rule; manual retry remains available. Check accepted coverage,
 not just provider success, before treating memory processing as complete.
+`memory.claim_finish` preserves `reason=output_capped` when that is the worker's
+outcome; it is not folded into the generic `work_failed` category.
+
+For scene capacity, `scene.contract_parsed` records the raw array length as
+`count`, with fixed `rejection_code` values:
+
+| Rejection code | Meaning |
+|---|---|
+| `scene_blocks_raw_limit` | More than 64 raw blocks; bounded normalization is refused. |
+| `scene_blocks_unmergeable` | No partition into 32 contiguous blocks preserves every audience and the 5,000-character per-block limit. |
+| `scene_total_text_limit` | Required block text, including merge separators, exceeds 32,000 characters. |
+
+Responses with 33–64 blocks can be accepted only after validating every original
+block and combining adjacent text with identical visibility and knowers. No text
+is discarded or reordered. The published artifact still has at most 32 blocks;
+malformed text, wrong shapes and invalid audiences remain rejected. A failed
+repair leaves the accepted scene and source coverage unchanged. Count parser
+attempts separately from `memory.claim_finish`: one claim may include an initial
+extraction and one format repair.
+
+### Hindsight cleanup outcomes
+
+Use `memory.hindsight_cleanup_finish` to interpret each recorded cleanup pass:
+
+| Status / reason | Meaning |
+|---|---|
+| `succeeded` / `deleted` | Deletion succeeded and no outstanding dispatch requires a late-write watch. |
+| `deferred` / `late_write_watch` | Deletion succeeded, but an uncertain dispatch still requires continued watching. |
+| `failed` / `delete_failed` | This pass did not complete deletion. |
+| `skipped` / `current_source` | Deletion would affect current canonical source, so it was not attempted. |
+| `rejected` / `retirement_revised` | The outcome could not be recorded against the captured retirement revision and lease. |
+
+The retirement `attempts` counter counts recorded passes, including successful
+late-write watches. `deleted=0` is not itself proof of a failed DELETE, and an
+archival dispatch with `finished=0` does not prove the upstream retain failed.
+Uncertain remote writes can outlive a timeout or a later successful retry.
+Retain the unresolved dispatch evidence and inspect outcomes before treating
+ledger totals as a failure backlog. These diagnostics do not clear safety
+ledgers, change retry policy or establish historical outcomes that were not logged.
+
+### Other extraction failures
 
 For NPC `invalid_audience` rejections, inspect `audience_rejection_code` on
 `npc.contract_parsed` or `npc_audience_rejection_code` on `tracker.repair_start`
@@ -337,8 +396,14 @@ guarded mirror replacement. Generated Python caches and unrelated notes at the
 mirror root do not trigger replacement; the old mirror remains available in its
 recovery backup when replacement is needed.
 
-Changed `requirements.lock` dependencies require a manual update. Use the table
-below if automatic installation refuses to continue:
+Changed `requirements.lock` dependencies require a manual update. When the
+updater runs on Python 3.14, `requirements-py314.lock` must also match the
+installed source and verified release. Missing, unreadable or symlinked required
+locks are refused, including an already-installed release check. This comparison
+does not install dependencies or switch interpreters. The installer still
+defaults to Python 3.11; use the separate [Python 3.14 migration procedure](python-314-migration.md)
+for an operator-managed runtime change. Use the table below if automatic
+installation refuses to continue:
 
 | Updater code | What to check |
 |---|---|

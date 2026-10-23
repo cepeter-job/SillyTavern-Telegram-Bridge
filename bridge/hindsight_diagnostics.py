@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -92,3 +93,36 @@ def report_hindsight_completion(response: object) -> None:
     event("memory.hindsight_retain_finished", status="returned", **metadata)
     for operation in operations[1:]:
         event("memory.hindsight_server_operation", server_operation_ref=operation)
+
+
+def report_hindsight_cleanup(
+    chat_id: str,
+    session_id: str,
+    document_id: str,
+    *,
+    started: float,
+    eligible: bool,
+    succeeded: bool,
+    terminal: bool,
+    recorded: bool,
+) -> None:
+    """A successful delete may still require a watch for an uncertain late write."""
+    if not recorded:
+        status, reason = "rejected", "retirement_revised"
+    elif not eligible:
+        status, reason = "skipped", "current_source"
+    elif not succeeded:
+        status, reason = "failed", "delete_failed"
+    elif terminal:
+        status, reason = "succeeded", "deleted"
+    else:
+        status, reason = "deferred", "late_write_watch"
+    event(
+        "memory.hindsight_cleanup_finish",
+        chat_id=chat_id,
+        session_id=session_id,
+        document_ref=scope_reference("memory_document", document_id),
+        status=status,
+        reason=reason,
+        elapsed_ms=max(0, int((time.monotonic() - started) * 1000)),
+    )
